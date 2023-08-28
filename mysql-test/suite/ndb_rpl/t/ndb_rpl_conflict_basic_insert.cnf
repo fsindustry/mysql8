@@ -5,3 +5,4 @@
 ndb-metadata-check = false
 #debug=d
 ndb-extra-logging=99
+log-error-verbosity=3

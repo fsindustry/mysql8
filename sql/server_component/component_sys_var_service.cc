@@ -29,10 +29,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/services/log_builtins.h>
 #include "component_sys_var_service_imp.h"
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "map_helpers.h"
 #include "my_compiler.h"
 #include "my_getopt.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
@@ -42,17 +45,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/log_shared.h"
 #include "mysql/components/services/system_variable_source_type.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysql/status_var.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysqld_error.h"
-#include "nulls.h"
 #include "sql/current_thd.h"
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/log.h"
@@ -67,7 +66,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "sql/sys_vars_shared.h"
 #include "sql/thr_malloc.h"
 #include "sql_string.h"
-#include "strxmov.h"
 
 #define FREE_RECORD(sysvar)                                              \
   my_free(const_cast<char *>(                                            \
@@ -316,7 +314,7 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
           down_cast<Sql_cmd_install_component *>(thd->lex->m_sql_cmd);
       /* and has a SET list */
       if (c->m_arg_list && c->m_arg_list_size > 1) {
-        const int saved_opt_count = c->m_arg_list_size;
+        int saved_opt_count = c->m_arg_list_size;
         argv = &c->m_arg_list;
         argc = &c->m_arg_list_size;
         opt_error =
@@ -430,7 +428,7 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
           }
         } err_to_warning;
         thd->push_internal_handler(&err_to_warning);
-        const bool error =
+        bool error =
             pv->set_persisted_options(true, com_sys_var_name, com_sys_var_len);
         thd->pop_internal_handler();
         mysql_mutex_unlock(&LOCK_plugin);
@@ -586,18 +584,17 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::unregister_variable,
        Freeing the value of string variables if they have PLUGIN_VAR_MEMALLOC
        flag enabled while registering variables.
     */
-
-    sys_var_pluginvar *sv_pluginvar =
-        reinterpret_cast<sys_var_pluginvar *>(sysvar);
-
-    const int var_flags = sv_pluginvar->plugin_var->flags;
+    int var_flags =
+        reinterpret_cast<sys_var_pluginvar *>(sysvar)->plugin_var->flags;
     if (((var_flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
         (var_flags & PLUGIN_VAR_MEMALLOC)) {
-      char **value_addr = *(char ***)(sv_pluginvar->plugin_var + 1);
-      char *var_value = *value_addr;
-      if (var_value != nullptr) {
+      char *var_value = **(
+          char ***)(reinterpret_cast<sys_var_pluginvar *>(sysvar)->plugin_var +
+                    1);
+      if (var_value) {
         my_free(var_value);
-        *value_addr = nullptr;
+        **(char ***)(reinterpret_cast<sys_var_pluginvar *>(sysvar)->plugin_var +
+                     1) = nullptr;
       }
     }
 

@@ -400,7 +400,7 @@ class String_error_handler : public IError_handler {
       MY_ATTRIBUTE((format(printf, 2, 3))) {
     va_list va;
     va_start(va, message);
-    const int copied = vsnprintf(m_buffer, m_size - 1, message, va);
+    int copied = vsnprintf(m_buffer, m_size - 1, message, va);
     va_end(va);
     m_buffer[copied] = '\0';
 
@@ -476,9 +476,9 @@ static char *emit(UDF_INIT *initid [[maybe_unused]], UDF_ARGS *args,
                        arg_lengths, false)) < 0)
       return result;
 
-    const std::string key(*arguments, *arg_lengths);
+    std::string key(*arguments, *arg_lengths);
 
-    const std::map<std::string, mysql_event_message_key_value_t>::const_iterator
+    std::map<std::string, mysql_event_message_key_value_t>::const_iterator
         iter = key_values.find(key);
     if (iter != key_values.end()) {
       handler.error("Duplicated key [%d].", args->arg_count - arg_count);
@@ -518,7 +518,7 @@ static char *emit(UDF_INIT *initid [[maybe_unused]], UDF_ARGS *args,
   /**
     Allocate array that is used by the audit api service.
   */
-  const std::unique_ptr<mysql_event_message_key_value_t[]> key_value_map(
+  std::unique_ptr<mysql_event_message_key_value_t[]> key_value_map(
       key_values.size() > 0
           ? new mysql_event_message_key_value_t[key_values.size()]
           : nullptr);

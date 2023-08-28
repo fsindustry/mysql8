@@ -606,7 +606,8 @@ Dbtux::readKeyAttrs(TuxCtx& ctx,
                             tupVersion,
                             keyAttrs32,
                             count,
-                            outputBuffer);
+                            outputBuffer,
+                            false);
   thrjamDebug(ctx.jamBuffer);
   ndbrequire(ret > 0);
   keyData.reset();
@@ -654,13 +655,14 @@ Dbtux::readKeyAttrs(TuxCtx& ctx,
                                tupVersion,
                                keyAttrs32,
                                count,
-                               outputBuffer);
+                               outputBuffer,
+                               false);
   thrjamDebug(ctx.jamBuffer);
   ndbrequire(ret > 0);
 }
 
 void
-Dbtux::readTableHashKey(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
+Dbtux::readTablePk(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
 {
   const TupLoc tupLoc = ent.m_tupLoc;
   int ret = c_tup->tuxReadPk(c_ctx.tupRealFragPtr,
@@ -668,7 +670,7 @@ Dbtux::readTableHashKey(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
                              tupLoc.getPageId(),
                              tupLoc.getPageOffset(),
                              pkData,
-                             /*hash=*/true);
+                             true);
   jamEntry();
   if (unlikely(ret <= 0))
   {

@@ -25,7 +25,6 @@
 #ifndef ConfigSection_H
 #define ConfigSection_H
 
-#include "ndb_types.h"
 #include "util/require.h"
 #include <bitset>
 #include <vector>

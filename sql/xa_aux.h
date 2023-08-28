@@ -22,11 +22,7 @@
 
 #ifndef XA_AUX_H
 #define XA_AUX_H
-
-#include <stdio.h>
-
-#include "dig_vec.h"  // dig_vec_lower
-#include "my_inttypes.h"
+#include "m_string.h"  // _dig_vec_lower
 
 /**
   Function serializes XID which is characterized by by four last arguments
@@ -61,8 +57,8 @@ inline char *serialize_xid(char *buf, long fmt, long gln, long bln,
   *c++ = 'X';
   *c++ = '\'';
   for (i = 0; i < gln; i++) {
-    *c++ = dig_vec_lower[static_cast<uchar>(dat[i]) >> 4];
-    *c++ = dig_vec_lower[static_cast<uchar>(dat[i]) & 0x0f];
+    *c++ = _dig_vec_lower[static_cast<uchar>(dat[i]) >> 4];
+    *c++ = _dig_vec_lower[static_cast<uchar>(dat[i]) & 0x0f];
   }
   *c++ = '\'';
 
@@ -70,8 +66,8 @@ inline char *serialize_xid(char *buf, long fmt, long gln, long bln,
   *c++ = 'X';
   *c++ = '\'';
   for (; i < gln + bln; i++) {
-    *c++ = dig_vec_lower[static_cast<uchar>(dat[i]) >> 4];
-    *c++ = dig_vec_lower[static_cast<uchar>(dat[i]) & 0x0f];
+    *c++ = _dig_vec_lower[static_cast<uchar>(dat[i]) >> 4];
+    *c++ = _dig_vec_lower[static_cast<uchar>(dat[i]) & 0x0f];
   }
   *c++ = '\'';
   sprintf(c, ",%lu", fmt);

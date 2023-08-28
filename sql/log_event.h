@@ -68,8 +68,6 @@
 #include "sql/sql_const.h"
 #include "sql/thr_malloc.h"
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strmake.h"
 #include "typelib.h"  // TYPELIB
 
 class THD;
@@ -199,6 +197,13 @@ int ignored_error_code(int err_code);
    MAX_SIZE_LOG_EVENT_STATUS +                 /* status */                    \
    NAME_LEN +                                                                  \
    1)
+
+/*
+  The new option is added to handle large packets that are sent from the master
+  to the slave. It is used to increase the thd(max_allowed) for both the
+  DUMP thread on the master and the SQL/IO thread on the slave.
+*/
+#define MAX_MAX_ALLOWED_PACKET 1024 * 1024 * 1024
 
 /* slave event post-header (this event is never written) */
 
@@ -873,11 +878,6 @@ class Log_event {
     Returns the human readable name of the given event type.
   */
   static const char *get_type_str(Log_event_type type);
-  /// Get the name of an event type, or "Unknown" if out of range.
-  /// @param type The type as an int
-  /// @retval name of an event type, if it is one
-  /// @retval "Unknown" if the value is out of range
-  static const char *get_type_str(uint type);
   /**
     Returns the human readable name of this event's type.
   */
@@ -2538,7 +2538,7 @@ class Rows_applier_psi_stage {
     /* Estimate if need be. */
     if (estimated == 0) {
       assert(cursor > begin);
-      const ulonglong avg_row_change_size = (cursor - begin) / m_n_rows_applied;
+      ulonglong avg_row_change_size = (cursor - begin) / m_n_rows_applied;
       estimated = (end - begin) / avg_row_change_size;
       mysql_stage_set_work_estimated(m_progress, estimated);
     }

@@ -231,77 +231,6 @@ class ShowWarningsHandler : public QuerySender::Handler {
   bool something_failed_{false};
 };
 
-class SelectSessionCollationConnectionHandler : public QuerySender::Handler {
- public:
-  SelectSessionCollationConnectionHandler(
-      MysqlRoutingClassicConnectionBase *connection)
-      : connection_(connection) {}
-
-  void on_column_count(uint64_t count) override {
-    col_count_ = count;
-
-    if (col_count_ != 1) {
-      something_failed_ = true;
-    }
-  }
-
-  void on_column(
-      const classic_protocol::message::server::ColumnMeta &col) override {
-    if (something_failed_) return;
-
-    if (col.name() != "@@SESSION.collation_connection") {
-      something_failed_ = true;
-    }
-  }
-
-  void on_row(const classic_protocol::message::server::Row &row) override {
-    if (something_failed_) return;
-
-    auto it = row.begin();  // row[0]
-
-    if (!it->has_value()) {
-      something_failed_ = true;
-      return;
-    }
-
-    collation_connection_ = *it;
-  }
-
-  void on_row_end(
-      const classic_protocol::message::server::Eof & /* eof */) override {
-    if (something_failed_) {
-      // something failed when parsing the resultset. Disable sharing for now.
-      connection_->some_state_changed(true);
-    } else {
-      // all rows received,
-      connection_->execution_context().system_variables().set(
-          "collation_connection", collation_connection_);
-
-      connection_->collation_connection_maybe_dirty(false);
-    }
-  }
-
-  void on_ok(const classic_protocol::message::server::Ok & /* ok */) override {
-    // ok, shouldn't happen. Disable sharing for now.
-    connection_->some_state_changed(true);
-  }
-
-  void on_error(
-      const classic_protocol::message::server::Error & /* err */) override {
-    // error, shouldn't happen. Disable sharing for now.
-    connection_->some_state_changed(true);
-  }
-
- private:
-  uint64_t col_count_{};
-  uint64_t col_cur_{};
-  MysqlRoutingClassicConnectionBase *connection_;
-
-  bool something_failed_{false};
-
-  Value collation_connection_{std::nullopt};
-};
-
 /**
  * wait for an read-event from client and server at the same time.
  *
@@ -419,15 +348,6 @@ stdx::expected<Processor::Result, std::error_code> CommandProcessor::command() {
           return Result::Again;
         }
 
-        if (connection()->collation_connection_maybe_dirty()) {
-          connection()->push_processor(std::make_unique<QuerySender>(
-              connection(), "SELECT @@SESSION.collation_connection",
-              std::make_unique<SelectSessionCollationConnectionHandler>(
-                  connection())));
-
-          return Result::Again;
-        }
-
         auto delay = connection()->context().connection_sharing_delay();
         if (!delay.count()) {
           client_idle_timeout();
@@ -514,13 +434,6 @@ stdx::expected<Processor::Result, std::error_code> CommandProcessor::command() {
   // - change-user may have failed.
   // - a reconnect may have failed.
   stage(Stage::IsAuthed);
-
-  // init the command tracer.
-  connection()->events().active(
-      connection()->client_protocol()->trace_commands());
-
-  // The query processor handles SHOW WARNINGS which fetches the events.
-  if (Msg{msg_type} != Msg::Query) connection()->events().clear();
 
   switch (Msg{msg_type}) {
     case Msg::Quit:

@@ -68,13 +68,14 @@ NdbRecAttr::setup(Uint32 byteSize, char* aValue)
   theValue = aValue;
   m_getVarValue = nullptr; // set in getVarValue() only
 
-  delete[] theStorageX;
-  theStorageX = nullptr;
+  if (theStorageX)
+    delete[] theStorageX;
+  theStorageX = nullptr; // "safety first"
   
-  // Check if application provided pointer should be used
-  // NOTE! Neither pointers alignment or length of attribute matters since
-  // memcpy() will be used to copy received data there.
-  if (aValue != nullptr) {
+  // check alignment to signal data
+  // a future version could check alignment per data type as well
+  
+  if (aValue != nullptr && (UintPtr(aValue)&3) == 0 && (byteSize&3) == 0) {
     theRef = aValue;
     return 0;
   }
@@ -152,15 +153,18 @@ NdbRecAttr::receive_data(const Uint32 * data32, Uint32 sz)
       data += 2;
       sz -= 2;
     }
-
-    // Copy received data to destination pointer
-    memcpy(theRef, data, sz);
-
+    if(!copyoutRequired())
+      memcpy(theRef, data, sz);
+    else
+      memcpy(theValue, data, sz);
     m_size_in_bytes= sz;
     return true;
   } 
-
-  return setNULL();
+  else 
+  {
+    return setNULL();
+  }
+  return false;
 }
 
 static const NdbRecordPrintFormat default_print_format;

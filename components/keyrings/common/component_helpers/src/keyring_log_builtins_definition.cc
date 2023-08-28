@@ -28,7 +28,7 @@
 #include <memory>
 #include <sstream>
 
-#include <string_with_len.h>
+#include <m_string.h>
 
 #include <components/keyrings/common/component_helpers/include/keyring_log_builtins_definition.h>
 /** Error structure */
@@ -148,7 +148,7 @@ static log_item_data *kr_line_item_set_with_key(log_line *ll, log_item_type t,
   if ((ll == nullptr) || (ll->count >= LOG_ITEM_MAX)) return nullptr;
 
   log_item *li = &(ll->item[ll->count++]);
-  const int c = log_item_wellknown_by_type(t);
+  int c = log_item_wellknown_by_type(t);
 
   li->alloc = alloc;
   /*
@@ -300,18 +300,18 @@ DEFINE_METHOD(int, Log_builtins_keyring::line_submit, (log_line * ll)) {
 
     if (have_message) {
       char internal_buff[LOG_BUFF_MAX];
-      const size_t buff_size = sizeof(internal_buff);
+      size_t buff_size = sizeof(internal_buff);
       char *buff_line = internal_buff;
 
       const char format[] = "%Y-%m-%d %X";
-      const time_t t(time(nullptr));
-      const tm tm(*localtime(&t));
+      time_t t(time(nullptr));
+      tm tm(*localtime(&t));
 
       const size_t date_length{50};
-      const std::unique_ptr<char[]> date{new char[date_length]};
+      std::unique_ptr<char[]> date{new char[date_length]};
       strftime(date.get(), date_length, format, &tm);
 
-      const std::string time_string = date.get();
+      std::string time_string = date.get();
 
       (void)snprintf(buff_line, buff_size, "%s [%.*s] [MY-%06u] [Keyring] %.*s",
                      time_string.c_str(), (int)label_len, label, errcode,

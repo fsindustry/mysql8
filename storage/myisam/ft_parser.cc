@@ -32,8 +32,6 @@
 #include "storage/myisam/myisamdef.h"
 #include "template_utils.h"
 
-struct CHARSET_INFO;
-
 struct FT_DOCSTAT {
   FT_WORD *list;
   uint uniq;

@@ -27,7 +27,8 @@
 
 #include <assert.h>
 #include <string.h>
-#include "my_byteorder.h"
+
+
 #include "ndb_constants.h"
 #include "ndb_types.h"
 

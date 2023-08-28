@@ -35,15 +35,11 @@ class SetOptionForwarder : public ForwardingProcessor {
     Command,
     Connect,
     Connected,
-    Forward,
-    ForwardDone,
     Response,
     Ok,
     Error,
     Done,
   };
-
-  static std::string_view prefix() { return "mysql/set_option"; }
 
   stdx::expected<Result, std::error_code> process() override;
 
@@ -54,20 +50,11 @@ class SetOptionForwarder : public ForwardingProcessor {
   stdx::expected<Result, std::error_code> command();
   stdx::expected<Result, std::error_code> connect();
   stdx::expected<Result, std::error_code> connected();
-  stdx::expected<Result, std::error_code> forward();
-  stdx::expected<Result, std::error_code> forward_done();
   stdx::expected<Result, std::error_code> response();
   stdx::expected<Result, std::error_code> ok();
   stdx::expected<Result, std::error_code> error();
 
   Stage stage_{Stage::Command};
-
-  uint16_t option_value_{};
-
-  TraceEvent *trace_event_command_{nullptr};
-  TraceEvent *trace_event_connect_and_forward_command_{nullptr};
-  TraceEvent *trace_event_connect_{nullptr};
-  TraceEvent *trace_event_forward_command_{nullptr};
 };
 
 #endif

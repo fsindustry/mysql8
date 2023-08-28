@@ -36,13 +36,13 @@ NdbImportCsv_yyerror(NdbImportCsv::Parse& csvparse, const char* msg);
 #endif
 %}
 
-%define api.pure
+%pure-parser
 %lex-param { NdbImportCsv::Parse& csvparse }
 %parse-param { NdbImportCsv::Parse& csvparse }
 
 %defines
 %verbose
-%define parse.error verbose
+%error-verbose
 
 %union {
   NdbImportCsv::Line* m_line;
@@ -145,7 +145,6 @@ field:
     $$ = field;
   }
   |
-   %empty
   {
     const NdbImportCsv::Buf& buf = csvparse.m_input.m_buf;
     NdbImportCsv::Field* field = csvparse.m_input.alloc_field();

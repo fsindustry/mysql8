@@ -135,11 +135,12 @@ segment or garbage
 @param[in]      len                     buffer length
 @param[in]      start_lsn               buffer start lsn
 @param[out]     group_scanned_lsn       scanning succeeded up to this lsn
+@param[out]     err  error code as returned by recv_init_crash_recovery().
 @retval	true  if limit_lsn has been reached, or not able to scan any
 more in this log group
 @retval false   otherwise */
 bool meb_scan_log_recs(size_t available_memory, const byte *buf, size_t len,
-                       lsn_t start_lsn, lsn_t *group_scanned_lsn);
+                       lsn_t start_lsn, lsn_t *group_scanned_lsn, dberr_t &err);
 
 /** Check the 4-byte checksum to the trailer checksum field of a log
 block.
@@ -672,7 +673,11 @@ constexpr uint32_t RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
 roll-forward */
 #define RECV_SCAN_SIZE (4 * UNIV_PAGE_SIZE)
 
-extern size_t recv_n_frames_for_pages_per_pool_instance;
+/** This many frames must be left free in the buffer pool when we scan
+the log and store the scanned log records in the buffer pool: we will
+use these free frames to read in pages when we start applying the
+log records to the database. */
+extern ulint recv_n_pool_free_frames;
 
 /** A list of tablespaces for which (un)encryption process was not
 completed before crash. */

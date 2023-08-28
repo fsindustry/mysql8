@@ -26,8 +26,7 @@
 #include "mysql/psi/mysql_file.h"  // MYSQL_FILE
 #include "print_version.h"
 #include "sql/time_zone_common.h"
-#include "sql/tzfile.h"  // TZ_MAX_REV_RANGES, tzhead
-#include "strmake.h"
+#include "sql/tzfile.h"                // TZ_MAX_REV_RANGES, tzhead
 #include "welcome_copyright_notice.h"  // ORACLE_WELCOME_COPYRIGHT_NOTICE
 
 /*
@@ -104,10 +103,10 @@ static bool tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage) {
             ttisgmtcnt)             /* ttisgmts */
       return true;
 
-    const size_t start_of_zone_abbrev = sizeof(struct tzhead) +
-                                        sp->timecnt * 4 +      /* ats */
-                                        sp->timecnt +          /* types */
-                                        sp->typecnt * (4 + 2); /* ttinfos */
+    size_t start_of_zone_abbrev = sizeof(struct tzhead) +
+                                  sp->timecnt * 4 +      /* ats */
+                                  sp->timecnt +          /* types */
+                                  sp->typecnt * (4 + 2); /* ttinfos */
 
     /*
       Check that timezone file doesn't contain junk timezone data.
@@ -118,7 +117,7 @@ static bool tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage) {
                          sp->charcnt)))
       return true;
 
-    const size_t abbrs_buf_len = sp->charcnt + 1;
+    size_t abbrs_buf_len = sp->charcnt + 1;
 
     if (!(tzinfo_buf = (char *)storage->Alloc(
               ALIGN_SIZE(sp->timecnt * sizeof(my_time_t)) +

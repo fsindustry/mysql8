@@ -37,6 +37,7 @@
 
 #include "ft_global.h"
 #include "libbinlogevents/include/table_id.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "map_helpers.h"
 #include "mf_wcomp.h"  // wild_one, wild_many
@@ -48,6 +49,7 @@
 #include "my_dbug.h"
 #include "my_dir.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_sqlcommand.h"
@@ -60,7 +62,6 @@
 #include "mysql/components/services/bits/psi_cond_bits.h"
 #include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_file.h"
@@ -70,12 +71,9 @@
 #include "mysql/psi/mysql_thread.h"
 #include "mysql/psi/psi_table.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/thread_type.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
-#include "nulls.h"
-#include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/auth/sql_security_ctx.h"
@@ -102,7 +100,6 @@
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/histograms/histogram.h"
-#include "sql/histograms/table_histograms.h"
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"  // Item_func_eq
 #include "sql/item_func.h"
@@ -124,7 +121,7 @@
 #include "sql/sp.h"               // Sroutine_hash_entry
 #include "sql/sp_cache.h"         // sp_cache_version
 #include "sql/sp_head.h"          // sp_head
-#include "sql/sql_audit.h"        // mysql_event_tracking_table_access_notify
+#include "sql/sql_audit.h"        // mysql_audit_table_access_notify
 #include "sql/sql_backup_lock.h"  // acquire_shared_backup_lock
 #include "sql/sql_class.h"        // THD
 #include "sql/sql_const.h"
@@ -153,8 +150,6 @@
 #include "sql/trigger_chain.h"  // Trigger_chain
 #include "sql/xa.h"
 #include "sql_string.h"
-#include "strmake.h"
-#include "strxnmov.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
 
@@ -265,10 +260,6 @@ class Repair_mrg_table_error_handler : public Internal_error_handler {
      So if a table share is found through a reference its version won't
      change if any of those mutexes are held.
   9) share->m_flush_tickets
-  10) share->m_histograms
-     Inserting, acquiring, and releasing histograms from the collection
-     of histograms on the share is protected by LOCK_open.
-     See the comments in table_histograms.h for further details.
 */
 
 mysql_mutex_t LOCK_open;
@@ -394,7 +385,7 @@ static size_t create_table_def_key(const char *db_name, const char *table_name,
 */
 static size_t create_table_def_key_tmp(const THD *thd, const char *db_name,
                                        const char *table_name, char *key) {
-  const size_t key_length = create_table_def_key(db_name, table_name, key);
+  size_t key_length = create_table_def_key(db_name, table_name, key);
   int4store(key + key_length, thd->server_id);
   int4store(key + key_length + 4, thd->variables.pseudo_thread_id);
   return key_length + TMP_TABLE_KEY_EXTRA;
@@ -411,8 +402,8 @@ static size_t create_table_def_key_tmp(const THD *thd, const char *db_name,
   @param table_name  the table name
   @return the key
 */
-std::string create_table_def_key_secondary(const char *db_name,
-                                           const char *table_name) {
+static std::string create_table_def_key_secondary(const char *db_name,
+                                                  const char *table_name) {
   char key[MAX_DBKEY_LENGTH];
   size_t key_length = create_table_def_key(db_name, table_name, key);
   // Add a single byte to distinguish the secondary table from the
@@ -578,12 +569,8 @@ static TABLE_SHARE *process_found_table_share(THD *thd [[maybe_unused]],
 }
 
 /**
-  Read any existing histogram statistics from the data dictionary and store a
-  copy of them in the TABLE_SHARE.
-
-  This function is called while TABLE_SHARE is being set up and it should
-  therefore be safe to modify the collection of histograms on the share without
-  explicity locking LOCK_open.
+  Read any existing histogram statistics from the data dictionary and
+  store a copy of them in the TABLE_SHARE.
 
   @param thd Thread handler
   @param share The table share where to store the histograms
@@ -596,14 +583,7 @@ static TABLE_SHARE *process_found_table_share(THD *thd [[maybe_unused]],
 static bool read_histograms(THD *thd, TABLE_SHARE *share,
                             const dd::Schema *schema,
                             const dd::Abstract_table *table_def) {
-  assert(share->m_histograms != nullptr);
-  Table_histograms *table_histograms =
-      Table_histograms::create(key_memory_table_share);
-  if (table_histograms == nullptr) return true;
-  auto table_histograms_guard =
-      create_scope_guard([table_histograms]() { table_histograms->destroy(); });
-
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   MDL_request_list mdl_requests;
   for (const auto column : table_def->columns()) {
     if (column->is_se_hidden()) continue;
@@ -633,14 +613,18 @@ static bool read_histograms(THD *thd, TABLE_SHARE *share,
     }
 
     if (histogram != nullptr) {
-      unsigned int field_index = column->ordinal_position() - 1;
-      if (table_histograms->insert_histogram(field_index, histogram))
-        return true;
+      /*
+        Make a clone of the histogram so it survives together with the
+        TABLE_SHARE in case the original histogram is thrown out of the
+        dictionary cache.
+      */
+      const histograms::Histogram *histogram_copy =
+          histogram->clone(&share->mem_root);
+      share->m_histograms->emplace(column->ordinal_position() - 1,
+                                   histogram_copy);
     }
   }
 
-  if (share->m_histograms->insert(table_histograms)) return true;
-  table_histograms_guard.commit();  // Ownership transferred.
   return false;
 }
 
@@ -793,8 +777,7 @@ TABLE_SHARE *get_table_share(THD *thd, const char *db, const char *table_name,
 
   {
     // We must make sure the schema is released and unlocked in the right order.
-    const dd::cache::Dictionary_client::Auto_releaser releaser(
-        thd->dd_client());
+    dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
     const dd::Schema *sch = nullptr;
     const dd::Abstract_table *abstract_table = nullptr;
     open_table_err = true;  // Assume error to simplify code below.
@@ -838,18 +821,14 @@ TABLE_SHARE *get_table_share(THD *thd, const char *db, const char *table_name,
 
       /*
         Read any existing histogram statistics from the data dictionary and
-        store a copy of them in the TABLE_SHARE. We only perform this step for
-        non-temporary tables, since temporary tables have share->m_histograms
-        set to nullptr.
+        store a copy of them in the TABLE_SHARE.
 
         We need to do this outside the protection of LOCK_open, since the data
         dictionary might have to open tables in order to read histogram data
         (such recursion will not work).
       */
-      if (!open_table_err && share->m_histograms != nullptr &&
-          read_histograms(thd, share, sch, abstract_table)) {
-        open_table_err = true;
-      }
+      if (!open_table_err && read_histograms(thd, share, sch, abstract_table))
+        open_table_err = true; /* purecov: deadcode */
     }
   }
 
@@ -1139,11 +1118,7 @@ void intern_close_table(TABLE *table) {  // Free all structures
   DBUG_PRINT("tcache",
              ("table: '%s'.'%s' %p", table->s ? table->s->db.str : "?",
               table->s ? table->s->table_name.str : "?", table));
-  // Release the TABLE's histograms back to the share.
-  if (table->histograms != nullptr) {
-    table->s->m_histograms->release(table->histograms);
-    table->histograms = nullptr;
-  }
+
   free_io_cache(table);
   destroy(table->triggers);
   if (table->file)                // Not true if placeholder
@@ -1507,7 +1482,7 @@ void close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
                                bool remove_from_locked_tables,
                                TABLE *skip_table) {
   char key[MAX_DBKEY_LENGTH];
-  const size_t key_length = share->table_cache_key.length;
+  size_t key_length = share->table_cache_key.length;
 
   memcpy(key, share->table_cache_key.str, key_length);
 
@@ -1520,7 +1495,7 @@ void close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
 void close_all_tables_for_name(THD *thd, const char *db, const char *table_name,
                                bool remove_from_locked_tables) {
   char key[MAX_DBKEY_LENGTH];
-  const size_t key_length = create_table_def_key(db, table_name, key);
+  size_t key_length = create_table_def_key(db, table_name, key);
 
   close_all_tables_for_name(thd, key, key_length, db, table_name,
                             remove_from_locked_tables, nullptr);
@@ -1877,7 +1852,7 @@ bool close_temporary_tables(THD *thd) {
 
   /* Better add "if exists", in case a RESET MASTER has been done */
   const char stub[] = "DROP /*!40005 TEMPORARY */ TABLE IF EXISTS ";
-  const uint stub_len = sizeof(stub) - 1;
+  uint stub_len = sizeof(stub) - 1;
   char buf_trans[256], buf_non_trans[256];
   String s_query_trans =
       String(buf_trans, sizeof(buf_trans), system_charset_info);
@@ -1935,17 +1910,16 @@ bool close_temporary_tables(THD *thd) {
     are going to log. This is important for the binary logging code.
   */
   LEX *lex = thd->lex;
-  const enum_sql_command sav_sql_command = lex->sql_command;
-  const bool sav_drop_temp = lex->drop_temporary;
+  enum_sql_command sav_sql_command = lex->sql_command;
+  bool sav_drop_temp = lex->drop_temporary;
   lex->sql_command = SQLCOM_DROP_TABLE;
   lex->drop_temporary = true;
 
   /* scan sorted tmps to generate sequence of DROP */
   for (table = thd->temporary_tables; table; table = next) {
     if (is_user_table(table) && table->should_binlog_drop_if_temp()) {
-      const bool save_thread_specific_used = thd->thread_specific_used;
-      const my_thread_id save_pseudo_thread_id =
-          thd->variables.pseudo_thread_id;
+      bool save_thread_specific_used = thd->thread_specific_used;
+      my_thread_id save_pseudo_thread_id = thd->variables.pseudo_thread_id;
       /* Set pseudo_thread_id to be that of the processed table */
       thd->variables.pseudo_thread_id = tmpkeyval(table);
       String db;
@@ -2295,7 +2269,7 @@ void update_non_unique_table_error(Table_ref *update, const char *operation,
 
 TABLE *find_temporary_table(THD *thd, const char *db, const char *table_name) {
   char key[MAX_DBKEY_LENGTH];
-  const size_t key_length = create_table_def_key_tmp(thd, db, table_name, key);
+  size_t key_length = create_table_def_key_tmp(thd, db, table_name, key);
   return find_temporary_table(thd, key, key_length);
 }
 
@@ -2786,7 +2760,7 @@ static bool tdc_wait_for_old_version(THD *thd, const char *db,
 */
 
 bool add_view_place_holder(THD *thd, Table_ref *table_list) {
-  const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
   LEX *lex_obj = new (thd->mem_root) st_lex_local;
   if (lex_obj == nullptr) return true;
   table_list->set_view_query(lex_obj);
@@ -2881,8 +2855,7 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
     Note that we allow write locks on log tables as otherwise logging
     to general/slow log would be disabled in read only transactions.
   */
-  if (table_list->mdl_request.is_write_lock_request() &&
-      (thd->tx_read_only && !thd->is_cmd_skip_transaction_read_only()) &&
+  if (table_list->mdl_request.is_write_lock_request() && thd->tx_read_only &&
       !(flags & (MYSQL_LOCK_LOG_TABLE | MYSQL_OPEN_HAS_MDL_LOCK))) {
     my_error(ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION, MYF(0));
     return true;
@@ -2945,8 +2918,8 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
             table->query_id != thd->query_id && /* skip tables already used */
             (thd->locked_tables_mode == LTM_LOCK_TABLES ||
              table->query_id == 0)) {
-          const int distance = ((int)table->reginfo.lock_type -
-                                (int)table_list->lock_descriptor().type);
+          int distance = ((int)table->reginfo.lock_type -
+                          (int)table_list->lock_descriptor().type);
 
           /*
             Find a table that either has the exact lock type requested,
@@ -3002,8 +2975,7 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
         during prelocking process (in this case in theory we still
         should hold shared metadata lock on it).
       */
-      const dd::cache::Dictionary_client::Auto_releaser releaser(
-          thd->dd_client());
+      dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
       const dd::View *view = nullptr;
       if (!thd->dd_client()->acquire(table_list->db, table_list->table_name,
                                      &view) &&
@@ -3352,8 +3324,8 @@ share_found:
         locks pre-acquired. In these cases we still want to use DDL
         deadlock weight.
       */
-      const uint deadlock_weight =
-          ot_ctx->can_back_off() ? MDL_wait_for_subgraph::DEADLOCK_WEIGHT_DML
+      uint deadlock_weight = ot_ctx->can_back_off()
+                                 ? MDL_wait_for_subgraph::DEADLOCK_WEIGHT_DML
                                  : mdl_ticket->get_deadlock_weight();
 
       wait_result =
@@ -3389,8 +3361,7 @@ share_found:
   DEBUG_SYNC(thd, "open_table_found_share");
 
   {
-    const dd::cache::Dictionary_client::Auto_releaser releaser(
-        thd->dd_client());
+    dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
     const dd::Table *table_def = nullptr;
     if (!(flags & MYSQL_OPEN_NO_NEW_TABLE_IN_SE) &&
         thd->dd_client()->acquire(share->db.str, share->table_name.str,
@@ -3540,7 +3511,7 @@ err_lock:
 
 TABLE *find_locked_table(TABLE *list, const char *db, const char *table_name) {
   char key[MAX_DBKEY_LENGTH];
-  const size_t key_length = create_table_def_key(db, table_name, key);
+  size_t key_length = create_table_def_key(db, table_name, key);
 
   for (TABLE *table = list; table; table = table->next) {
     if (table->s->table_cache_key.length == key_length &&
@@ -3725,9 +3696,9 @@ static bool check_and_update_table_version(THD *thd, Table_ref *tables,
 
 static bool check_and_update_routine_version(THD *thd, Sroutine_hash_entry *rt,
                                              sp_head *sp) {
-  const int64 spc_version = sp_cache_version();
+  int64 spc_version = sp_cache_version();
   /* sp is NULL if there is no such routine. */
-  const int64 version = sp ? sp->sp_cache_version() : spc_version;
+  int64 version = sp ? sp->sp_cache_version() : spc_version;
   /*
     If the version in the parse tree is stale,
     or the version in the cache is stale and sp is not used,
@@ -3790,7 +3761,7 @@ static bool tdc_open_view(THD *thd, Table_ref *table_list,
   }
 
   if (share->is_view) {
-    const bool view_open_result = open_and_read_view(thd, share, table_list);
+    bool view_open_result = open_and_read_view(thd, share, table_list);
 
     release_table_share(share);
     mysql_mutex_unlock(&LOCK_open);
@@ -3935,15 +3906,6 @@ static bool auto_repair_table(THD *thd, Table_ref *table_list) {
     closefrm(entry, false);
     result = false;
   }
-
-  // If we acquired histograms when opening the table we have to release them
-  // back to the share before releasing the share itself. This is usually
-  // handled by intern_close_table().
-  if (entry->histograms != nullptr) {
-    mysql_mutex_lock(&LOCK_open);
-    share->m_histograms->release(entry->histograms);
-    mysql_mutex_unlock(&LOCK_open);
-  }
   my_free(entry);
 
   table_cache_manager.lock_all_and_tdc();
@@ -3977,7 +3939,7 @@ class Fix_row_type_error_handler : public Internal_error_handler {
 
 static bool fix_row_type(THD *thd, Table_ref *table_list) {
   const char *cache_key;
-  const size_t cache_key_length = get_table_def_key(table_list, &cache_key);
+  size_t cache_key_length = get_table_def_key(table_list, &cache_key);
 
   thd->clear_error();
 
@@ -4025,7 +3987,7 @@ static bool fix_row_type(THD *thd, Table_ref *table_list) {
   }
 
   int error = 0;
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   dd::Table *table_def = nullptr;
   if (thd->dd_client()->acquire_for_modification(
           share->db.str, share->table_name.str, &table_def))
@@ -4050,7 +4012,7 @@ static bool fix_row_type(THD *thd, Table_ref *table_list) {
   thd->pop_internal_handler();
 
   if (error == 8) {
-    const Disable_autocommit_guard autocommit_guard(thd);
+    Disable_autocommit_guard autocommit_guard(thd);
     HA_CREATE_INFO create_info;
     create_info.row_type = share->row_type;
     create_info.table_options = share->db_options_in_use;
@@ -4058,7 +4020,7 @@ static bool fix_row_type(THD *thd, Table_ref *table_list) {
     handler *file = get_new_handler(share, share->m_part_info != nullptr,
                                     thd->mem_root, share->db_type());
     if (file != nullptr) {
-      const row_type correct_row_type = file->get_real_row_type(&create_info);
+      row_type correct_row_type = file->get_real_row_type(&create_info);
       bool result = dd::fix_row_type(thd, table_def, correct_row_type);
       destroy(file);
 
@@ -4394,7 +4356,7 @@ thr_lock_type read_lock_type_for_table(THD *thd,
     be cleared before executing sub-statement. So instead we have to look
     at THD::variables::sql_log_bin member.
   */
-  const bool log_on = mysql_bin_log.is_open() && thd->variables.sql_log_bin;
+  bool log_on = mysql_bin_log.is_open() && thd->variables.sql_log_bin;
 
   /*
     When we do not write to binlog or when we use row based replication,
@@ -4465,8 +4427,8 @@ static void process_table_fks(THD *thd, Query_tables_list *prelocking_ctx,
     Therefore we need to normalize/lowercase these names while prelocking
     set key is constructing from them.
   */
-  const bool normalize_db_names = (lower_case_table_names == 2);
-  const Sp_name_normalize_type name_normalize_type =
+  bool normalize_db_names = (lower_case_table_names == 2);
+  Sp_name_normalize_type name_normalize_type =
       (lower_case_table_names == 2) ? Sp_name_normalize_type::LOWERCASE_NAME
                                     : Sp_name_normalize_type::LEAVE_AS_IS;
 
@@ -4676,8 +4638,7 @@ static bool open_and_process_routine(
           on behalf of LOCK TABLES.
         */
         enum_mdl_type mdl_lock_type;
-        const bool executing_LT =
-            (prelocking_ctx->sql_command == SQLCOM_LOCK_TABLES);
+        bool executing_LT = (prelocking_ctx->sql_command == SQLCOM_LOCK_TABLES);
 
         if (rt->type() == Sroutine_hash_entry::FK_TABLE_ROLE_PARENT_CHECK ||
             rt->type() == Sroutine_hash_entry::FK_TABLE_ROLE_CHILD_CHECK) {
@@ -4886,7 +4847,7 @@ static bool open_and_process_routine(
           set during PREPARE) is changed between repeated executions of the
           prepared statement.
          */
-        const int64 share_version = share->get_table_ref_version();
+        int64 share_version = share->get_table_ref_version();
 
         if (rt->m_cache_version != share_version) {
           /*
@@ -4909,9 +4870,9 @@ static bool open_and_process_routine(
         }
 
         if (!has_prelocking_list) {
-          const bool is_update =
+          bool is_update =
               (rt->type() == Sroutine_hash_entry::FK_TABLE_ROLE_CHILD_UPDATE);
-          const bool is_delete =
+          bool is_delete =
               (rt->type() == Sroutine_hash_entry::FK_TABLE_ROLE_CHILD_DELETE);
 
           process_table_fks(thd, prelocking_ctx, share, false, is_update,
@@ -5240,32 +5201,12 @@ int run_before_dml_hook(THD *thd) {
   int out_value = 0;
 
   TX_TRACKER_GET(tst);
-
-  /*
-    Track this as DML only if it hasn't already been identified as DDL.
-
-    Some statements such as "CREATE TABLE ... AS SELECT ..."
-    are DDL ("CREATE TABLE ..."), but also pass through here
-    because of the DML part ("SELECT ...").
-
-    For now, a statement has to be one or the other, DDL or DML.
-    In the above example, the statement's sql_cmd_type() would be
-    SQL_CMD_DDL because of the "CREATE TABLE".
-
-    As tracking goes, a statement having only one type is a matter
-    of convention rather than one of necessity; if the convention
-    changes, document that change, and update the assertions in
-    the tracker code.
-  */
-  if ((tst->get_trx_state() & TX_STMT_DDL) == 0)
-    tst->add_trx_state(thd, TX_STMT_DML);
-  else
-    tst = nullptr;
+  tst->add_trx_state(thd, TX_STMT_DML);
 
   (void)RUN_HOOK(transaction, before_dml, (thd, out_value));
 
   if (out_value) {
-    if (tst != nullptr) tst->clear_trx_state(thd, TX_STMT_DML);
+    tst->clear_trx_state(thd, TX_STMT_DML);
     my_error(ER_BEFORE_DML_VALIDATION_ERROR, MYF(0));
   }
 
@@ -5954,8 +5895,7 @@ restart:
     /*
       Iterate through set of tables and generate table access audit events.
     */
-    if (!audit_notified &&
-        mysql_event_tracking_table_access_notify(thd, *start)) {
+    if (!audit_notified && mysql_audit_table_access_notify(thd, *start)) {
       error = true;
       goto err;
     }
@@ -6254,13 +6194,13 @@ bool DML_prelocking_strategy::handle_table(THD *thd,
          prelocking_ctx->sql_command == SQLCOM_LOCK_TABLES ||
          table_list->prelocking_placeholder) &&
         !(table_list->table->s->tmp_table)) {
-      const bool is_insert =
+      bool is_insert =
           (table_list->trg_event_map &
            static_cast<uint8>(1 << static_cast<int>(TRG_EVENT_INSERT)));
-      const bool is_update =
+      bool is_update =
           (table_list->trg_event_map &
            static_cast<uint8>(1 << static_cast<int>(TRG_EVENT_UPDATE)));
-      const bool is_delete =
+      bool is_delete =
           (table_list->trg_event_map &
            static_cast<uint8>(1 << static_cast<int>(TRG_EVENT_DELETE)));
 
@@ -6892,7 +6832,7 @@ bool lock_tables(THD *thd, Table_ref *tables, uint count, uint flags) {
       the same statement.
     */
     thd->lex->lock_tables_state = Query_tables_list::LTS_LOCKED;
-    const int ret = thd->decide_logging_format(tables);
+    int ret = thd->decide_logging_format(tables);
     return ret;
   }
 
@@ -7075,7 +7015,7 @@ bool lock_tables(THD *thd, Table_ref *tables, uint count, uint flags) {
   */
   thd->lex->lock_tables_state = Query_tables_list::LTS_LOCKED;
 
-  const int ret = thd->decide_logging_format(tables);
+  int ret = thd->decide_logging_format(tables);
   return ret;
 }
 
@@ -7535,7 +7475,7 @@ static Field *find_field_in_view(THD *thd, Table_ref *table_list,
           Use own arena for Prepared Statements or data will be freed after
           PREPARE.
         */
-        const Prepared_stmt_arena_holder ps_arena_holder(
+        Prepared_stmt_arena_holder ps_arena_holder(
             thd, register_tree_change &&
                      thd->stmt_arena->is_stmt_prepare_or_first_stmt_execute());
 
@@ -7626,8 +7566,7 @@ static Field *find_field_in_natural_join(THD *thd, Table_ref *table_ref,
     Item *item;
 
     {
-      const Prepared_stmt_arena_holder ps_arena_holder(thd,
-                                                       register_tree_change);
+      Prepared_stmt_arena_holder ps_arena_holder(thd, register_tree_change);
 
       /*
         create_item() may, or may not create a new Item, depending on the
@@ -7878,7 +7817,7 @@ Field *find_field_in_table_ref(THD *thd, Table_ref *table_list,
         assert(ref && *ref && (*ref)->fixed);
         assert(*actual_table == (down_cast<Item_ident *>(*ref))->cached_table);
 
-        const Column_privilege_tracker tracker(thd, want_privilege);
+        Column_privilege_tracker tracker(thd, want_privilege);
         if ((*ref)->walk(&Item::check_column_privileges, enum_walk::PREFIX,
                          (uchar *)thd))
           return WRONG_GRANT;
@@ -7971,7 +7910,7 @@ Field *find_field_in_tables(THD *thd, Item_ident *item, Table_ref *first_table,
   const char *db = item->db_name;
   const char *table_name = item->table_name;
   const char *name = item->field_name;
-  const size_t length = strlen(name);
+  size_t length = strlen(name);
   uint field_index;
   char name_buff[NAME_LEN + 1];
   Table_ref *actual_table;
@@ -8142,48 +8081,74 @@ Field *find_field_in_tables(THD *thd, Item_ident *item, Table_ref *first_table,
   return found;
 }
 
-/**
+/*
   Find Item in list of items (find_field_in_tables analog)
 
-  @param      thd        pointer to current thread
-  @param      find       Item to find
-  @param      items      List of items to search
-  @param[out] found      Returns the pointer to the found item, or nullptr
-                         if the item was not found
-  @param[out] counter    Returns number of found item in list
-  @param[out] resolution Set to the resolution type if the item is found
-                         (it says whether the item is resolved against an
-                          alias, or as a field name without alias, or as a
-                          field hidden by alias, or ignoring alias)
+  TODO
+    is it better return only counter?
 
-  @note "counter" and "resolution" are undefined unless "found" identifies
-        an item.
+  SYNOPSIS
+    find_item_in_list()
+    find			Item to find
+    items			List of items
+    counter			To return number of found item
+    report_error
+      REPORT_ALL_ERRORS		report errors, return 0 if error
+      REPORT_EXCEPT_NOT_FOUND	Do not report 'not found' error and
+                                return not_found_item, report other errors,
+                                return 0
+      IGNORE_ERRORS		Do not report errors, return 0 if error
+    resolution                  Set to the resolution type if the item is found
+                                (it says whether the item is resolved
+                                 against an alias name,
+                                 or as a field name without alias,
+                                 or as a field hidden by alias,
+                                 or ignoring alias)
 
-  @returns true if error, false if success
+  RETURN VALUES
+    0			Item is not found or item is not unique,
+                        error message is reported
+    not_found_item	Function was called with
+                        report_error == REPORT_EXCEPT_NOT_FOUND and
+                        item was not found. No error message was reported
+                        found field
 */
-bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
-                       Item ***found, uint *counter,
-                       enum_resolution_type *resolution) {
-  *found = nullptr;
-  *resolution = NOT_RESOLVED;
 
-  Item **found_unaliased = nullptr;
+/* Special Item pointer to serve as a return value from find_item_in_list(). */
+Item **not_found_item = (Item **)0x1;
+
+Item **find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
+                         uint *counter,
+                         find_item_error_report_type report_error,
+                         enum_resolution_type *resolution) {
+  Item **found = nullptr, **found_unaliased = nullptr;
+  const char *db_name = nullptr;
+  const char *field_name = nullptr;
+  const char *table_name = nullptr;
   bool found_unaliased_non_uniq = false;
+  /*
+    true if the item that we search for is a valid name reference
+    (and not an item that happens to have a name).
+  */
+  bool is_ref_by_name = false;
   uint unaliased_counter = 0;
 
-  Item_ident *const find_ident =
-      find->type() == Item::FIELD_ITEM || find->type() == Item::REF_ITEM
-          ? down_cast<Item_ident *>(find)
-          : nullptr;
+  *resolution = NOT_RESOLVED;
+
+  is_ref_by_name =
+      (find->type() == Item::FIELD_ITEM || find->type() == Item::REF_ITEM);
+  if (is_ref_by_name) {
+    field_name = ((Item_ident *)find)->field_name;
+    table_name = ((Item_ident *)find)->table_name;
+    db_name = ((Item_ident *)find)->db_name;
+  }
 
   int i = 0;
   for (auto it = VisibleFields(*items).begin();
        it != VisibleFields(*items).end(); ++it, ++i) {
     Item *item = *it;
-
-    if (find_ident != nullptr &&
-        item->real_item()->type() == Item::FIELD_ITEM) {
-      Item_ident *item_field = down_cast<Item_ident *>(item);
+    if (field_name && item->real_item()->type() == Item::FIELD_ITEM) {
+      Item_ident *item_field = (Item_ident *)item;
 
       /*
         In case of group_concat() with ORDER BY condition in the QUERY
@@ -8193,7 +8158,7 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
       */
       if (!item_field->item_name.is_set()) continue;
 
-      if (find_ident->table_name != nullptr) {
+      if (table_name) {
         /*
           If table name is specified we should find field 'field_name' in
           table 'table_name'. According to SQL-standard we should ignore
@@ -8202,15 +8167,21 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
           Since we should NOT prefer fields from the select list over
           other fields from the tables participating in this select in
           case of ambiguity we have to do extra check outside this function.
+
+          We use strcmp for table names and database names as these may be
+          case sensitive. In cases where they are not case sensitive, they
+          are always in lower case.
+
+          item_field->field_name and item_field->table_name can be 0x0 if
+          item is not fix_field()'ed yet.
         */
-        if (!my_strcasecmp(system_charset_info, item_field->field_name,
-                           find_ident->field_name) &&
-            (item_field->table_name != nullptr &&
-             !my_strcasecmp(table_alias_charset, item_field->table_name,
-                            find_ident->table_name)) &&
-            (find_ident->db_name == nullptr ||
-             (item_field->db_name != nullptr &&
-              !strcmp(item_field->db_name, find_ident->db_name)))) {
+        if (item_field->field_name && item_field->table_name &&
+            !my_strcasecmp(system_charset_info, item_field->field_name,
+                           field_name) &&
+            !my_strcasecmp(table_alias_charset, item_field->table_name,
+                           table_name) &&
+            (!db_name ||
+             (item_field->db_name && !strcmp(item_field->db_name, db_name)))) {
           if (found_unaliased) {
             if ((*found_unaliased)->eq(item, false)) continue;
             /*
@@ -8218,19 +8189,20 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
               We already can bail out because we are searching through
               unaliased names only and will have duplicate error anyway.
             */
-            my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(), thd->where);
-            return true;
+            if (report_error != IGNORE_ERRORS)
+              my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(),
+                       thd->where);
+            return (Item **)nullptr;
           }
           found_unaliased = &*it;
           unaliased_counter = i;
           *resolution = RESOLVED_IGNORING_ALIAS;
-          if (find_ident->db_name != nullptr) break;  // Perfect match
+          if (db_name) break;  // Perfect match
         }
       } else {
-        const int fname_cmp =
-            my_strcasecmp(system_charset_info, item_field->field_name,
-                          find_ident->field_name);
-        if (item_field->item_name.eq_safe(find_ident->field_name)) {
+        int fname_cmp = my_strcasecmp(system_charset_info,
+                                      item_field->field_name, field_name);
+        if (item_field->item_name.eq_safe(field_name)) {
           /*
             If table name was not given we should scan through aliases
             and non-aliased fields first. We are also checking unaliased
@@ -8238,12 +8210,14 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
             instantly field (hidden by alias) if no suitable alias or
             non-aliased field was found.
           */
-          if (*found != nullptr) {
-            if ((**found)->eq(item, false)) continue;  // Same field twice
-            my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(), thd->where);
-            return true;
+          if (found) {
+            if ((*found)->eq(item, false)) continue;  // Same field twice
+            if (report_error != IGNORE_ERRORS)
+              my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(),
+                       thd->where);
+            return (Item **)nullptr;
           }
-          *found = &*it;
+          found = &*it;
           *counter = i;
           *resolution =
               fname_cmp ? RESOLVED_AGAINST_ALIAS : RESOLVED_WITH_NO_ALIAS;
@@ -8263,26 +8237,25 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
           unaliased_counter = i;
         }
       }
-    } else if (find_ident == nullptr || find_ident->table_name == nullptr) {
+    } else if (!table_name) {
       if (item->type() == Item::FUNC_ITEM &&
           down_cast<const Item_func *>(item)->functype() ==
               Item_func::ROLLUP_GROUP_ITEM_FUNC) {
         item = down_cast<Item_rollup_group_item *>(item)->inner_item();
       }
-      if (find_ident != nullptr && item->item_name.eq_safe(find->item_name)) {
-        *found = &*it;
+      if (is_ref_by_name && item->item_name.eq_safe(find->item_name)) {
+        found = &*it;
         *counter = i;
         *resolution = RESOLVED_AGAINST_ALIAS;
         break;
       } else if (find->eq(item, false)) {
-        *found = &*it;
+        found = &*it;
         *counter = i;
         *resolution = RESOLVED_IGNORING_ALIAS;
         break;
       }
-    } else if (find_ident != nullptr && find_ident->table_name != nullptr &&
-               item->type() == Item::REF_ITEM &&
-               down_cast<Item_ref *>(item)->ref_type() == Item_ref::VIEW_REF) {
+    } else if (table_name && item->type() == Item::REF_ITEM &&
+               ((Item_ref *)item)->ref_type() == Item_ref::VIEW_REF) {
       /*
         TODO:Here we process prefixed view references only. What we should
         really do is process all types of Item_refs. But this will currently
@@ -8295,16 +8268,13 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
         because in the context of views they have the same meaning as
         Item_field for tables.
       */
-      Item_ident *item_ref = down_cast<Item_ident *>(item);
-      if (!my_strcasecmp(system_charset_info, item_ref->field_name,
-                         find_ident->field_name) &&
-          item_ref->table_name != nullptr &&
+      Item_ident *item_ref = (Item_ident *)item;
+      if (item_ref->item_name.eq_safe(field_name) && item_ref->table_name &&
           !my_strcasecmp(table_alias_charset, item_ref->table_name,
-                         find_ident->table_name) &&
-          (find_ident->db_name == nullptr ||
-           (item_ref->db_name != nullptr &&
-            !strcmp(item_ref->db_name, find_ident->db_name)))) {
-        *found = &*it;
+                         table_name) &&
+          (!db_name ||
+           (item_ref->db_name && !strcmp(item_ref->db_name, db_name)))) {
+        found = &*it;
         *counter = i;
         *resolution = RESOLVED_IGNORING_ALIAS;
         break;
@@ -8312,26 +8282,33 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
     } else if (item->type() == Item::FUNC_ITEM &&
                down_cast<const Item_func *>(item)->functype() ==
                    Item_func::ROLLUP_GROUP_ITEM_FUNC) {
-      if (find_ident != nullptr && item->item_name.eq_safe(find->item_name)) {
-        *found = &*it;
+      if (is_ref_by_name && item->item_name.eq_safe(find->item_name)) {
+        found = &*it;
         *counter = i;
         *resolution = RESOLVED_AGAINST_ALIAS;
         break;
       }
     }
   }
-  if (*found == nullptr) {
+  if (!found) {
     if (found_unaliased_non_uniq) {
-      my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(), thd->where);
-      return true;
+      if (report_error != IGNORE_ERRORS)
+        my_error(ER_NON_UNIQ_ERROR, MYF(0), find->full_name(), thd->where);
+      return (Item **)nullptr;
     }
     if (found_unaliased) {
-      *found = found_unaliased;
+      found = found_unaliased;
       *counter = unaliased_counter;
       *resolution = RESOLVED_BEHIND_ALIAS;
     }
   }
-  return false;
+  if (found) return found;
+  if (report_error != REPORT_EXCEPT_NOT_FOUND) {
+    if (report_error == REPORT_ALL_ERRORS)
+      my_error(ER_BAD_FIELD_ERROR, MYF(0), find->full_name(), thd->where);
+    return (Item **)nullptr;
+  } else
+    return not_found_item;
 }
 
 /*
@@ -8354,7 +8331,7 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
 static bool test_if_string_in_list(const char *find, List<String> *str_list) {
   List_iterator<String> str_list_it(*str_list);
   String *curr_str;
-  const size_t find_length = strlen(find);
+  size_t find_length = strlen(find);
   while ((curr_str = str_list_it++)) {
     if (find_length != curr_str->length()) continue;
     if (!my_strcasecmp(system_charset_info, find, curr_str->ptr())) return true;
@@ -8465,7 +8442,7 @@ static bool mark_common_columns(THD *thd, Table_ref *table_ref_1,
              ((using_fields == nullptr) && field->is_hidden_by_user())));
   };
 
-  const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
 
   *found_using_fields = 0;
 
@@ -8679,7 +8656,7 @@ static bool store_natural_using_join_columns(THD *thd,
 
   assert(!natural_using_join->join_columns);
 
-  const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
 
   if (!(non_join_columns = new (thd->mem_root) List<Natural_join_column>) ||
       !(natural_using_join->join_columns =
@@ -8780,7 +8757,7 @@ static bool store_top_level_join_columns(THD *thd, Table_ref *table_ref,
 
   assert(!table_ref->nested_join->natural_join_processed);
 
-  const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
 
   /* Call the procedure recursively for each nested table reference. */
   if (table_ref->nested_join && !table_ref->nested_join->m_tables.empty()) {
@@ -9027,9 +9004,9 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
 
   Query_block *const select = thd->lex->current_query_block();
   const enum_mark_columns save_mark_used_columns = thd->mark_used_columns;
-  const nesting_map save_allow_sum_func = thd->lex->allow_sum_func;
-  const Column_privilege_tracker column_privilege(
-      thd, column_update ? 0 : want_privilege);
+  nesting_map save_allow_sum_func = thd->lex->allow_sum_func;
+  Column_privilege_tracker column_privilege(thd,
+                                            column_update ? 0 : want_privilege);
 
   // Function can only be used to set up one specific operation:
   assert(want_privilege == 0 || want_privilege == SELECT_ACL ||
@@ -9046,7 +9023,7 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
   if (allow_sum_func)
     thd->lex->allow_sum_func |= (nesting_map)1 << select->nest_level;
   thd->where = THD::DEFAULT_WHERE;
-  const bool save_is_item_list_lookup = select->is_item_list_lookup;
+  bool save_is_item_list_lookup = select->is_item_list_lookup;
   select->is_item_list_lookup = false;
 
   /*
@@ -9058,7 +9035,7 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     but it will be slower.
   */
   if (!ref_item_array.is_null()) {
-    const size_t num_visible_fields = CountVisibleFields(*fields);
+    size_t num_visible_fields = CountVisibleFields(*fields);
     assert(ref_item_array.size() >= num_visible_fields);
     memset(ref_item_array.array(), 0, sizeof(Item *) * num_visible_fields);
   }
@@ -9090,11 +9067,6 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     if (!ref.is_null()) {
       ref[0] = item;
       ref.pop_front();
-      /*
-        Items present in ref_array have a positive reference count since
-        removal of unused columns from derived tables depends on this.
-      */
-      item->increment_ref_count();
     }
     Item *typed_item = nullptr;
     if (typed_items != nullptr && typed_it != typed_items->end()) {
@@ -9142,7 +9114,7 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
         /* purecov: end */
       }
       if (want_privilege & (INSERT_ACL | UPDATE_ACL)) {
-        const Column_privilege_tracker column_privilege_tr(thd, want_privilege);
+        Column_privilege_tracker column_privilege_tr(thd, want_privilege);
         if (item->walk(&Item::check_column_privileges, enum_walk::PREFIX,
                        pointer_cast<uchar *>(thd)))
           return true;
@@ -10173,9 +10145,8 @@ bool mysql_rm_tmp_tables(void) {
 
       if (strlen(file->name) > tmp_file_prefix_length &&
           !memcmp(file->name, tmp_file_prefix, tmp_file_prefix_length)) {
-        const size_t filePath_len =
-            snprintf(filePath, sizeof(filePath), "%s%c%s", tmpdir, FN_LIBCHAR,
-                     file->name);
+        size_t filePath_len = snprintf(filePath, sizeof(filePath), "%s%c%s",
+                                       tmpdir, FN_LIBCHAR, file->name);
         file_str = make_lex_string_root(&files_root, filePath, filePath_len);
 
         if (file_str == nullptr || files.push_back(file_str, &files_root)) {
@@ -10424,7 +10395,7 @@ bool init_ftfuncs(THD *thd, Query_block *query_block) {
 
 bool open_trans_system_tables_for_read(THD *thd, Table_ref *table_list) {
   uint counter;
-  const uint flags = MYSQL_OPEN_IGNORE_FLUSH | MYSQL_LOCK_IGNORE_TIMEOUT;
+  uint flags = MYSQL_OPEN_IGNORE_FLUSH | MYSQL_LOCK_IGNORE_TIMEOUT;
 
   DBUG_TRACE;
 
@@ -10533,10 +10504,9 @@ void close_mysql_tables(THD *thd) {
 */
 TABLE *open_log_table(THD *thd, Table_ref *one_table,
                       Open_tables_backup *backup) {
-  const uint flags =
-      (MYSQL_OPEN_IGNORE_GLOBAL_READ_LOCK | MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY |
-       MYSQL_OPEN_IGNORE_FLUSH | MYSQL_LOCK_IGNORE_TIMEOUT |
-       MYSQL_LOCK_LOG_TABLE);
+  uint flags = (MYSQL_OPEN_IGNORE_GLOBAL_READ_LOCK |
+                MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY | MYSQL_OPEN_IGNORE_FLUSH |
+                MYSQL_LOCK_IGNORE_TIMEOUT | MYSQL_LOCK_LOG_TABLE);
   TABLE *table;
   DBUG_TRACE;
 

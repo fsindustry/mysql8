@@ -28,7 +28,6 @@
 #include "portlib/NdbMutex.h"
 #include "portlib/NdbThread.h"
 #include "portlib/ndb_socket_poller.h"
-#include "portlib/ndb_sockaddr.h"
 
 #include <Vector.hpp>
 
@@ -97,7 +96,7 @@ public:
    *  then  close the socket
    * Returns true if succeeding in binding
    */
-  static bool tryBind(ndb_sockaddr serv_addr,
+  static bool tryBind(unsigned short port, const char* intface = nullptr,
                       char* error = nullptr, size_t error_size = 0);
 
   /**
@@ -105,7 +104,8 @@ public:
    *   bind & listen
    * Returns false if no success
    */
-  bool setup(Service *, ndb_sockaddr* addr);
+  bool setup(Service *, unsigned short *port, 
+             const char * pinterface = nullptr);
   
   /**
    * start/stop the server

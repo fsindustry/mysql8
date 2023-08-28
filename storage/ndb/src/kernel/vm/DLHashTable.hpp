@@ -26,7 +26,6 @@
 #define DL_HASHTABLE_HPP
 
 #include <ndb_global.h>
-#include "Pool.hpp"
 
 #define JAM_FILE_ID 313
 

@@ -25,7 +25,6 @@
 
 #include "my_inttypes.h"
 #include "mysql/plugin.h"
-#include "mysql/strings/m_ctype.h"
 #include "storage/innobase/include/fts0tokenize.h"
 
 /* We are following InnoDB coding guidelines. */

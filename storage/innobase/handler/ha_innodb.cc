@@ -46,8 +46,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_config.h"
 #endif /* !UNIV_HOTBACKUP */
 
-#include <cstdint>
-
 #include <auto_thd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -149,10 +147,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_data_lock.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysys_err.h"
-#include "nulls.h"
 #include "os0thread-create.h"
 #include "os0thread.h"
 #include "p_s.h"
@@ -170,7 +165,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0mon.h"
 #include "srv0srv.h"
 #include "srv0start.h"
-#include "string_with_len.h"
 #include "sync0sync.h"
 #ifdef UNIV_DEBUG
 #include "trx0purge.h"
@@ -2324,7 +2318,7 @@ const char *innobase_get_err_msg(int error_code) /*!< in: MySQL error code */
 @param[out] mbminlen Minimum length of a char (in bytes)
 @param[out] mbmaxlen Maximum length of a char (in bytes) */
 void innobase_get_cset_width(ulint cset, ulint *mbminlen, ulint *mbmaxlen) {
-  const CHARSET_INFO *cs = nullptr;
+  CHARSET_INFO *cs;
   ut_ad(cset <= MAX_CHAR_COLL_NUM);
   ut_ad(mbminlen);
   ut_ad(mbmaxlen);
@@ -2538,15 +2532,16 @@ os_fd_t innobase_mysql_tmpfile(const char *path) {
 /** Wrapper around MySQL's copy_and_convert function.
  @return number of bytes copied to 'to' */
 static ulint innobase_convert_string(
-    void *to,                    /*!< out: converted string */
-    ulint to_length,             /*!< in: number of bytes reserved
-                                 for the converted string */
-    const CHARSET_INFO *to_cs,   /*!< in: character set to convert to */
-    const void *from,            /*!< in: string to convert */
-    ulint from_length,           /*!< in: number of bytes to convert */
-    const CHARSET_INFO *from_cs, /*!< in: character set to convert from */
-    uint *errors)                /*!< out: number of errors encountered
-                                 during the conversion */
+    void *to,              /*!< out: converted string */
+    ulint to_length,       /*!< in: number of bytes reserved
+                           for the converted string */
+    CHARSET_INFO *to_cs,   /*!< in: character set to convert to */
+    const void *from,      /*!< in: string to convert */
+    ulint from_length,     /*!< in: number of bytes to convert */
+    CHARSET_INFO *from_cs, /*!< in: character set to convert
+                           from */
+    uint *errors)          /*!< out: number of errors encountered
+                           during the conversion */
 {
   return (copy_and_convert((char *)to, (uint32)to_length, to_cs,
                            (const char *)from, (uint32)from_length, from_cs,
@@ -2571,7 +2566,7 @@ ulint innobase_raw_format(const char *data,   /*!< in: raw data */
 {
   /* XXX we use a hard limit instead of allocating
   but_size bytes from the heap */
-  const CHARSET_INFO *data_cs = nullptr;
+  CHARSET_INFO *data_cs;
   char buf_tmp[8192];
   ulint buf_tmp_used;
   uint num_errors;
@@ -2783,7 +2778,13 @@ trx_t *innobase_trx_allocate(THD *thd) /*!< in: user thread handle */
   MONITOR_ATOMIC_INC(MONITOR_TRX_ALLOCATIONS);
   trx = trx_allocate_for_mysql();
 
-  trx->purge_sys_trx = purge_sys->is_this_a_purge_thread;
+  rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+
+  if (purge_sys->thds.find(thd) != purge_sys->thds.end()) {
+    trx->purge_sys_trx = true;
+  }
+
+  rw_lock_s_unlock(&purge_sys->latch);
 
   trx->mysql_thd = thd;
 
@@ -7795,8 +7796,8 @@ extern size_t innobase_fts_casedn_str(CHARSET_INFO *cs, char *src,
   }
 }
 
-inline bool true_word_char(int c, uint8_t ch) {
-  return ((c & (MY_CHAR_U | MY_CHAR_L | MY_CHAR_NMR)) != 0) || ch == '_';
+inline bool true_word_char(int c, uchar ch) {
+  return c & (_MY_U | _MY_L | _MY_NMR) || ch == '_';
 }
 
 /** Get the next token from the given string and store it in *token.
@@ -17499,18 +17500,21 @@ static uint64_t innodb_get_auto_increment_for_uncached(
   DDTableBuffer *table_buffer = dict_persist->table_buffer;
 
   uint64_t version;
-  const auto readmeta = table_buffer->get(se_private_id, &version);
+  std::string *readmeta = table_buffer->get(se_private_id, &version);
 
-  if (!readmeta.empty()) {
+  if (readmeta->length() != 0) {
     PersistentTableMetadata metadata(se_private_id, version);
 
-    dict_table_read_dynamic_metadata(readmeta.data(), readmeta.size(),
-                                     &metadata);
+    dict_table_read_dynamic_metadata(
+        reinterpret_cast<const byte *>(readmeta->data()), readmeta->length(),
+        &metadata);
 
     meta_autoinc = metadata.get_autoinc();
   }
 
   mutex_exit(&dict_persist->mutex);
+
+  ut::delete_(readmeta);
 
   return (std::max(meta_autoinc, autoinc));
 }
@@ -23851,7 +23855,20 @@ void ha_innobase::mv_key_capacity(uint *num_keys, size_t *keys_length) const {
       static_cast<uint32_t>(free_space), min_mv_key_length, num_keys);
 }
 
-void ib_senderrf(THD *thd, ib_log_level_t level, uint32_t code, ...) {
+/** Use this when the args are passed to the format string from
+ messages_to_clients.txt directly as is.
+
+ Push a warning message to the client, it is a wrapper around:
+
+ void push_warning_printf(
+         THD *thd, Sql_condition::enum_condition_level level,
+         uint code, const char *format, ...);
+ */
+void ib_senderrf(THD *thd,             /*!< in/out: session */
+                 ib_log_level_t level, /*!< in: warning level */
+                 uint32_t code,        /*!< MySQL error code */
+                 ...)                  /*!< Args */
+{
   va_list args;
   char *str = nullptr;
   const char *format = innobase_get_err_msg(code);

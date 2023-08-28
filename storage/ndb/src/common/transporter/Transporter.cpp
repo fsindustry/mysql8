@@ -23,7 +23,6 @@
 */
 
 
-#include "ndb_config.h"
 #include "util/require.h"
 #include <TransporterRegistry.hpp>
 #include <TransporterCallback.hpp>
@@ -34,8 +33,6 @@
 #include <InputStream.hpp>
 #include <OutputStream.hpp>
 #include "util/cstrbuf.h"
-#include "portlib/ndb_sockaddr.h"
-#include "portlib/NdbTCP.h"
 
 #include <EventLogger.hpp>
 
@@ -81,6 +78,7 @@ Transporter::Transporter(TransporterRegistry &t_reg,
     m_bytes_sent(0), m_bytes_received(0),
     m_connect_count(0),
     m_overload_count(0), m_slowdown_count(0),
+    m_connect_address(IN6ADDR_ANY_INIT),
     isMgmConnection(_isMgmConnection),
     m_connected(false),
     m_type(_type),
@@ -292,26 +290,7 @@ Transporter::connect_client()
   }
   else
   {
-    ndb_sockaddr local;
-    if (strlen(localHostName) > 0)
-    {
-      if (Ndb_getAddr(&local, localHostName))
-      {
-        DEBUG_FPRINTF((stderr, "connect_client lookup '%s' failed, node: %u\n",
-                       localHostName, getRemoteNodeId()));
-        DBUG_RETURN(false);
-      }
-    }
-
-    ndb_sockaddr remote_addr;
-    if (Ndb_getAddr(&remote_addr, remoteHostName))
-    {
-      DEBUG_FPRINTF((stderr, "connect_client lookup remote '%s' failed, node: %u\n",
-                     remoteHostName, getRemoteNodeId()));
-      DBUG_RETURN(false);
-    }
-    remote_addr.set_port(port);
-    if (!m_socket_client->init(remote_addr.get_address_family()))
+    if (!m_socket_client->init())
     {
       DEBUG_FPRINTF((stderr, "m_socket_client->init failed, node: %u\n",
                              getRemoteNodeId()));
@@ -327,14 +306,15 @@ Transporter::connect_client()
 
     if (strlen(localHostName) > 0)
     {
-      if (m_socket_client->bind(local) != 0)
+      if (m_socket_client->bind(localHostName, 0) != 0)
       {
         DEBUG_FPRINTF((stderr, "m_socket_client->bind failed, node: %u\n",
                                getRemoteNodeId()));
         DBUG_RETURN(false);
       }
     }
-    m_socket_client->connect(secureSocket, remote_addr);
+
+    m_socket_client->connect(secureSocket, remoteHostName, port);
   }
 
   DBUG_RETURN(connect_client(secureSocket));

@@ -25,7 +25,6 @@
 #include <string>
 
 #include "m_string.h"
-#include "mysql/strings/dtoa.h"
 
 namespace string_to_double_unittest {
 

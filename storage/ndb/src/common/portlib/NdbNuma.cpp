@@ -24,7 +24,6 @@
 
 #include <NdbNuma.h>
 #include <ndb_global.h>
-#include "my_config.h"
 
 #ifdef TEST_NDBNUMA
 static int NDB_TRACE_NUMA = 0;

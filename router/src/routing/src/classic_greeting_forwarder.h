@@ -54,17 +54,14 @@ class ServerGreetor : public ForwardingProcessor {
    * @param in_handshake true if the greeting is part of the initial
    * handshake.
    * @param on_error callback called on failure.
-   * @param parent_event parent span for the TraceEvents
    */
   ServerGreetor(
       MysqlRoutingClassicConnectionBase *conn, bool in_handshake,
       std::function<void(const classic_protocol::message::server::Error &)>
-          on_error,
-      TraceEvent *parent_event)
+          on_error)
       : ForwardingProcessor(conn),
         in_handshake_{in_handshake},
-        on_error_(std::move(on_error)),
-        parent_event_(parent_event) {}
+        on_error_(std::move(on_error)) {}
 
   /**
    * stages of the handshake flow.
@@ -122,12 +119,6 @@ class ServerGreetor : public ForwardingProcessor {
 
   std::function<void(const classic_protocol::message::server::Error &err)>
       on_error_;
-
-  TraceEvent *parent_event_{nullptr};
-  TraceEvent *trace_event_greeting_{nullptr};
-  TraceEvent *trace_event_server_greeting_{nullptr};
-  TraceEvent *trace_event_client_greeting_{nullptr};
-  TraceEvent *trace_event_tls_connect_{nullptr};
 };
 
 /**
@@ -169,10 +160,6 @@ class ServerFirstConnector : public ForwardingProcessor {
   stdx::expected<Result, std::error_code> server_greeted();
 
   Stage stage_{Stage::Connect};
-
-  // start timepoint to calculate the connect-retry-timeout.
-  std::chrono::steady_clock::time_point started_{
-      std::chrono::steady_clock::now()};
 };
 
 /**

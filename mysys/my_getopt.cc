@@ -39,6 +39,7 @@
 #include <bitset>
 #include <type_traits>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -46,16 +47,12 @@
 #include "my_getopt.h"
 #include "my_inttypes.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_version.h"  // MYSQL_PERSIST_CONFIG_NAME
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"
-#include "strmake.h"
 #include "typelib.h"
 
 typedef void (*init_func_p)(const struct my_option *option, void *variable,
@@ -821,7 +818,7 @@ static int setval(const struct my_option *opts, void *value,
                   const char *argument, bool set_maximum_value,
                   bool boolean_as_int) {
   int err = 0, res = 0;
-  const ulong var_type = opts->var_type & GET_TYPE_MASK;
+  ulong var_type = opts->var_type & GET_TYPE_MASK;
 
   if (!argument) argument = enabled_my_option;
 
@@ -910,13 +907,13 @@ static int setval(const struct my_option *opts, void *value,
         };
         break;
       case GET_ENUM: {
-        const int type = find_type(argument, opts->typelib, FIND_TYPE_BASIC);
+        int type = find_type(argument, opts->typelib, FIND_TYPE_BASIC);
         if (type == 0) {
           /*
             Accept an integer representation of the enumerated item.
           */
           char *endptr;
-          const ulong arg = strtoul(argument, &endptr, 10);
+          ulong arg = strtoul(argument, &endptr, 10);
           if (*endptr || arg >= opts->typelib->count) {
             res = EXIT_ARGUMENT_INVALID;
             goto ret;
@@ -934,7 +931,7 @@ static int setval(const struct my_option *opts, void *value,
         if (err) {
           /* Accept an integer representation of the set */
           char *endptr;
-          const ulonglong arg = (ulonglong)strtol(argument, &endptr, 10);
+          ulonglong arg = (ulonglong)strtol(argument, &endptr, 10);
           if (*endptr || (arg >> 1) >= (1ULL << (opts->typelib->count - 1))) {
             res = EXIT_ARGUMENT_INVALID;
             goto ret;
@@ -1188,11 +1185,10 @@ ulonglong max_of_int_range(int var_type) {
 
 longlong getopt_ll_limit_value(longlong num, const struct my_option *optp,
                                bool *fix) {
-  const longlong old = num;
+  longlong old = num;
   bool adjusted = false;
   char buf1[255], buf2[255];
-  const ulonglong block_size =
-      (optp->block_size ? (ulonglong)optp->block_size : 1L);
+  ulonglong block_size = (optp->block_size ? (ulonglong)optp->block_size : 1L);
   const longlong max_of_type =
       (longlong)max_of_int_range(optp->var_type & GET_TYPE_MASK);
 
@@ -1261,7 +1257,7 @@ static ulonglong getopt_ull(const char *arg, bool set_maximum_value,
 ulonglong getopt_ull_limit_value(ulonglong num, const struct my_option *optp,
                                  bool *fix) {
   bool adjusted = false;
-  const ulonglong old = num;
+  ulonglong old = num;
   char buf1[255], buf2[255];
   const ulonglong max_of_type =
       max_of_int_range(optp->var_type & GET_TYPE_MASK);
@@ -1301,7 +1297,7 @@ ulonglong getopt_ull_limit_value(ulonglong num, const struct my_option *optp,
 double getopt_double_limit_value(double num, const struct my_option *optp,
                                  bool *fix) {
   bool adjusted = false;
-  const double old = num;
+  double old = num;
   double min, max;
 
   max = getopt_ulonglong2double(optp->max_value);
@@ -1510,8 +1506,7 @@ static uint print_name(const struct my_option *optp, FILE *file = stdout) {
 */
 
 void my_print_help(const struct my_option *options) {
-  uint col;
-  const uint name_space = 22, comment_space = 57;
+  uint col, name_space = 22, comment_space = 57;
   const char *line_end;
   const struct my_option *optp;
 

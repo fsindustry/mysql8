@@ -30,6 +30,7 @@
 #include <string.h>
 #include <algorithm>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_bitmap.h"
 #include "my_byteorder.h"
@@ -40,7 +41,6 @@
 #include "myisampack.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/bits/psi_mutex_bits.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/current_thd.h"
 #include "sql/field.h"

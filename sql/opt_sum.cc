@@ -103,7 +103,7 @@ static ulonglong get_exact_record_count(Table_ref *tables) {
   ulonglong count = 1;
   for (Table_ref *tl = tables; tl; tl = tl->next_leaf) {
     ha_rows tmp = 0;
-    const int error = tl->table->file->ha_records(&tmp);
+    int error = tl->table->file->ha_records(&tmp);
     if (error != 0) return ULLONG_MAX;
     count *= tmp;
   }
@@ -348,7 +348,7 @@ bool optimize_aggregated_query(THD *thd, Query_block *select,
       using stats.records.
     */
     tables_filled &= !(tl->schema_table || tl->uses_materialization());
-    const ulonglong table_flags = tl->table->file->ha_table_flags();
+    ulonglong table_flags = tl->table->file->ha_table_flags();
     if ((table_flags & HA_STATS_RECORDS_IS_EXACT) && tables_filled &&
         !tl->table->force_index) {
       error = tl->fetch_number_of_rows();
@@ -831,12 +831,12 @@ static bool matching_cond(bool max_fl, Index_lookup *ref, KEY *keyinfo,
       break;  // Found a part of the key for the field
   }
 
-  const bool is_field_part = part == field_part;
+  bool is_field_part = part == field_part;
   if (!(is_field_part || eq_type)) return false;
 
-  const key_part_map org_key_part_used = *key_part_used;
+  key_part_map org_key_part_used = *key_part_used;
   if (eq_type || between || max_fl == less_fl) {
-    const size_t length = (key_ptr - ref->key_buff) + part->store_length;
+    size_t length = (key_ptr - ref->key_buff) + part->store_length;
     if (ref->key_length < length) {
       /* Ultimately ref->key_length will contain the length of the search key */
       ref->key_length = length;
@@ -895,7 +895,7 @@ static bool matching_cond(bool max_fl, Index_lookup *ref, KEY *keyinfo,
         check for TYPE_OK here. analyze_field_constant() does not yet handle
         string constants.
       */
-      const type_conversion_status retval =
+      type_conversion_status retval =
           value->save_in_field_no_warnings(part->field, true);
       if (!(retval == TYPE_OK ||
             (retval == TYPE_NOTE_TRUNCATED && part->field->is_text_key_type() &&

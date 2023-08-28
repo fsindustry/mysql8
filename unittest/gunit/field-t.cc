@@ -24,13 +24,11 @@
 #include <sys/types.h>
 
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
 #include "sql/my_decimal.h"
 #include "sql/protocol.h"
 #include "sql/sql_class.h"
 #include "sql/sql_time.h"
-#include "strings/m_ctype_internals.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/mysys_util.h"
 #include "unittest/gunit/test_utils.h"
@@ -507,8 +505,7 @@ class Mock_charset : public CHARSET_INFO {
  public:
   mutable bool strnxfrm_called;
   Mock_charset() : strnxfrm_called(false) {
-    CHARSET_INFO *ci = get_charset_by_name("latin1_general_ci", MYF(0));
-    cset = ci->cset;
+    cset = &my_charset_8bit_handler;
     coll = &mock_collation;
     mbmaxlen = 1;
     pad_attribute = PAD_SPACE;

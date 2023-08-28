@@ -29,8 +29,8 @@ ADD_CONVENIENCE_LIBRARY(mytime ${MY_TIME_SOURCES})
 SET(MYSYS_SOURCES
   array.cc
   charset.cc
+  charset-def.cc
   dbug.cc
-  decimal.cc
   errors.cc
   lf_alloc-pin.cc
   lf_dynarray.cc
@@ -101,12 +101,8 @@ SET(MYSYS_SOURCES
   print_version.cc
   psi_noop.cc
   ptr_cmp.cc
+  sql_chars.cc
   stacktrace.cc
-  str2int.cc
-  strcont.cc
-  strmake.cc
-  strxmov.cc
-  strxnmov.cc
   thr_cond.cc
   thr_lock.cc
   thr_mutex.cc
@@ -243,9 +239,9 @@ IF(HAVE_BUILD_ID_SUPPORT)
   # Verify that we can read our own build-id:
   ADD_CUSTOM_COMMAND(TARGET build_id_test POST_BUILD
 #   COMMAND ./build_id_test
-#   COMMAND LANG=C ${READELF_EXECUTABLE} -n ./build_id_test | grep "Build ID:"
+#   COMMAND ${READELF_EXECUTABLE} -n ./build_id_test | grep "Build ID:"
     COMMAND ./build_id_test      | egrep -o "[0-9a-f]{40}" > build_id_test_1
-    COMMAND LANG=C ${READELF_EXECUTABLE} -n ./build_id_test | grep "Build ID:" |
+    COMMAND ${READELF_EXECUTABLE} -n ./build_id_test | grep "Build ID:" |
                                    egrep -o "[0-9a-f]{40}" > build_id_test_2
     COMMAND diff build_id_test_1 build_id_test_2
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/runtime_output_directory

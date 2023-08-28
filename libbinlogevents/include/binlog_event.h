@@ -212,9 +212,9 @@ inline void do_server_version_split(const char *version,
 inline uint32_t do_server_version_int(const char *version) {
   unsigned char version_split[3];
   do_server_version_split(version, version_split);
-  const uint32_t ret = static_cast<uint32_t>(version_split[0]) * 10000 +
-                       static_cast<uint32_t>(version_split[1]) * 100 +
-                       static_cast<uint32_t>(version_split[2]);
+  uint32_t ret = static_cast<uint32_t>(version_split[0]) * 10000 +
+                 static_cast<uint32_t>(version_split[1]) * 100 +
+                 static_cast<uint32_t>(version_split[2]);
   return ret;
 }
 
@@ -365,14 +365,6 @@ enum Log_event_type {
 };
 
 /**
- @brief Get the event type as string object
-
-  @param type the event type for which to get a textual representation.
-  @return std::string a text representing the event name.
-*/
-const std::string &get_event_type_as_string(Log_event_type type);
-
-/**
   Struct to pass basic information about a event: type, query, is it ignorable
 */
 struct Log_event_basic_info {
@@ -412,11 +404,6 @@ struct Log_event_basic_info {
 #define ST_COMMON_HEADER_LEN_OFFSET (ST_CREATED_OFFSET + 4)
 
 #define LOG_EVENT_HEADER_LEN 19U /* the fixed header length */
-
-/// The maximum value for MAX_ALLOWED_PACKET.  This is also the
-/// maxmium size of binlog events, and dump threads always use this
-/// value for max_allowed_packet.
-constexpr size_t max_log_event_size = 1024 * 1024 * 1024;
 
 /**
    Fixed header length, where 4.x and 5.0 agree. That is, 5.0 may have a longer

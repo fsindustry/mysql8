@@ -23,9 +23,10 @@
 #include <assert.h>
 #include <gtest/gtest.h>
 
+#include "m_ctype.h"
+
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 
 namespace like_range_unittest {
 
@@ -81,7 +82,8 @@ static const char *charset_list[] = {
 class LikeRangeTest : public ::testing::TestWithParam<const char *> {
  protected:
   void SetUp() override {
-    m_charset = get_charset_by_name(GetParam(), MYF(0));
+    MY_CHARSET_LOADER loader;
+    m_charset = my_collation_get_by_name(&loader, GetParam(), MYF(0));
     assert(m_charset);
   }
   CHARSET_INFO *m_charset;

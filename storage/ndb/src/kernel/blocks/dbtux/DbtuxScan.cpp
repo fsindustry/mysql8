@@ -25,7 +25,6 @@
 #define DBTUX_SCAN_CPP
 #include "Dbtux.hpp"
 #include "my_sys.h"
-#include "../dblqh/Dblqh.hpp"
 
 #define JAM_FILE_ID 371
 
@@ -839,7 +838,7 @@ Dbtux::continue_scan(Signal *signal,
       ndbassert(!m_is_query_block);
       const TreeEnt ent = scan.m_scanEnt;
       // read tuple key
-      readTableHashKey(ent, pkData, pkSize);
+      readTablePk(ent, pkData, pkSize);
       // get read lock or exclusive lock
       AccLockReq* const lockReq = (AccLockReq*)signal->getDataPtrSend();
       lockReq->returnCode = RNIL;
@@ -851,7 +850,9 @@ Dbtux::continue_scan(Signal *signal,
       lockReq->tableId = scan.m_tableId;
       lockReq->fragId = frag.m_fragId;
       lockReq->fragPtrI = frag.m_accTableFragPtrI;
-      lockReq->hashValue = md5_hash(pkData, pkSize);
+      const Uint32* const buf32 = static_cast<Uint32*>(pkData);
+      const Uint64* const buf64 = reinterpret_cast<const Uint64*>(buf32);
+      lockReq->hashValue = md5_hash(buf64, pkSize);
       Uint32 lkey1, lkey2;
       getTupAddr(frag, ent, lkey1, lkey2);
       lockReq->page_id = lkey1;
@@ -1702,6 +1703,7 @@ Dbtux::scanCheck(ScanOp& scan, TreeEnt ent)
                                   keyAttrs32,
                                   count,
                                   outputBuffer,
+                                  false,
                                   tupVersion);
     thrjamDebug(c_ctx.jamBuffer);
     thrjamLineDebug(c_ctx.jamBuffer, count);

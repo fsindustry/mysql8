@@ -73,12 +73,12 @@ v
 -123
 SELECT JSON_VALUE('{"data": 1999}', '$.data' RETURNING YEAR) v;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					v	13	4	4	Y	32928	0	63
+def					v	13	5	4	Y	32896	0	63
 v
 1999
 SELECT JSON_VALUE('{"data": -1999}', '$.data' RETURNING YEAR) v;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					v	13	4	0	Y	32928	0	63
+def					v	13	5	0	Y	32896	0	63
 v
 NULL
 SELECT JSON_VALUE(JSON_OBJECT('data', 1.0e0/3), '$.data' RETURNING FLOAT) v;
@@ -1847,12 +1847,3 @@ DEFAULT 1111111111111111 ON EMPTY)
 AS DECIMAL(20,2)) AS v;
 v
 1111111126482944.00
-#
-# Bug#35206138: Assigning json_value output to user defined
-#               variable will return NULL or empty string if
-#               input is empty string
-#
-SET @x = JSON_VALUE('{"x": ""}', '$.x');
-SELECT @x;
-@x
-

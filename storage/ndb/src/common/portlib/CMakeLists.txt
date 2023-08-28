@@ -62,7 +62,6 @@ ADD_CONVENIENCE_LIBRARY(ndbportlib
   ndb_daemon.cpp
   ndb_file_common.cpp
   ndb_password.cpp
-  ndb_sockaddr.cpp
   ndb_socket_poller.cpp
   ndb_socketpair.cpp
   ndb_stacktrace.cpp
@@ -82,4 +81,4 @@ NDB_ADD_TEST(NdbHW-t NdbHW.cpp LIBS ndbmgmapi ndbgeneral ndbportlib)
 
 NDB_ADD_TEST(NdbDir-t NdbDir.cpp LIBS ndbmgmapi ndbgeneral ndbportlib)
 
-NDB_ADD_TEST(NdbGetInAddr-t NdbTCP.cpp LIBS ndbgeneral ${LIBSOCKET} ${LIBNSL})
+NDB_ADD_TEST(NdbGetInAddr-t NdbTCP.cpp LIBS ${LIBSOCKET} ${LIBNSL})

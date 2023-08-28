@@ -29,12 +29,11 @@
  * Win32 Implementation of AsyncFile interface
  */
 
+#include <kernel_types.h>
 #include "AsyncFile.hpp"
 
 #define JAM_FILE_ID 395
 
-class Ndbfs;
-class Request;
 
 class Win32AsyncFile : public AsyncFile
 {

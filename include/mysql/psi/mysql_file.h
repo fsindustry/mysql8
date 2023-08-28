@@ -48,7 +48,6 @@
 
 /* For MY_STAT */
 #include "my_dir.h"
-#include "my_inttypes.h"
 /* For my_chsize */
 #include "my_sys.h"
 #include "mysql/psi/psi_file.h"

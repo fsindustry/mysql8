@@ -28,7 +28,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "mysql/strings/m_ctype.h"  // NOLINT(build/include_subdir)
+#include "m_ctype.h"  // NOLINT(build/include_subdir)
 
 #include "plugin/x/src/ngs/protocol/column_info_builder.h"
 

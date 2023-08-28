@@ -27,7 +27,6 @@
 
 #include <sstream>
 
-#include "nulls.h"                                    // NullS
 #include "sql/sql_class.h"                            // THD
 #include "storage/ndb/include/ndbapi/Ndb.hpp"         // Ndb
 #include "storage/ndb/plugin/ha_ndbcluster_binlog.h"  // ndbcluster_binlog_setup_table
@@ -443,6 +442,7 @@ void Ndb_metadata_sync::reset_excluded_objects_state() {
 }
 
 void Ndb_metadata_sync::validate_excluded_objects(THD *thd) {
+  ndb_log_info("Validating excluded objects");
   /*
     The validation is done by the change monitor thread at the beginning of
     each detection cycle. There's a possibility that the binlog thread is

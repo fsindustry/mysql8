@@ -26,7 +26,6 @@
 #define NODEJS_ADAPTER_INCLUDE_UNIFIED_DEBUG_H
 
 #include <assert.h>
-#include "adapter_global.h"
 
 /* Unified debugging library for C++ and JavaScript. 
    JavaScript code can control debugging output. 

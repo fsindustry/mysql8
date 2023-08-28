@@ -109,7 +109,6 @@ TODO:
 
 #include "client/client_priv.h"
 #include "compression.h"
-#include "m_string.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_default.h"
@@ -117,7 +116,6 @@ TODO:
 #include "my_io.h"
 #include "my_systime.h"
 #include "mysql/service_mysql_alloc.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "thr_cond.h"
 #include "typelib.h"
@@ -944,7 +942,7 @@ static statement *build_update_string(void) {
   if (num_char_cols)
     for (col_count = 1; col_count <= num_char_cols; col_count++) {
       char rand_buffer[RAND_STRING_SIZE];
-      const size_t buf_len = get_random_string(rand_buffer);
+      size_t buf_len = get_random_string(rand_buffer);
 
       if (snprintf(buf, HUGE_STRING_LENGTH, "charcol%d = '%.*s'", col_count,
                    (int)buf_len, rand_buffer) > HUGE_STRING_LENGTH) {
@@ -1032,7 +1030,7 @@ static statement *build_insert_string(void) {
 
   if (num_char_cols)
     for (col_count = 1; col_count <= num_char_cols; col_count++) {
-      const size_t buf_len = get_random_string(buf);
+      size_t buf_len = get_random_string(buf);
       dynstr_append_mem(&insert_string, "'", 1);
       dynstr_append_mem(&insert_string, buf, buf_len);
       dynstr_append_mem(&insert_string, "'", 1);
@@ -1823,7 +1821,7 @@ int parse_option(const char *origin, option_string **stmt, char delm) {
   const char *ptr = origin;
   option_string **sptr = stmt;
   option_string *tmp;
-  const size_t length = strlen(origin);
+  size_t length = strlen(origin);
   uint count = 0; /* We know that there is always one */
 
   for (tmp = *sptr = (option_string *)my_malloc(
@@ -1909,7 +1907,7 @@ uint parse_delimiter(const char *script, statement **stmt, char delm) {
   const char *ptr = script;
   statement **sptr = stmt;
   statement *tmp;
-  const size_t length = strlen(script);
+  size_t length = strlen(script);
   uint count = 0; /* We know that there is always one */
 
   for (tmp = *sptr =
@@ -2046,7 +2044,7 @@ void statement_cleanup(statement *stmt) {
 
 int slap_connect(MYSQL *mysql) {
   /* Connect to server */
-  static const ulong connection_retry_sleep = 100000; /* Microseconds */
+  static ulong connection_retry_sleep = 100000; /* Microseconds */
   int x, connect_error = 1;
   /* mysql options should be set to worker threads too */
   set_password_options(mysql);

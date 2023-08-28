@@ -25,7 +25,9 @@
 #include "my_byteorder.h"
 #include "mysql_com.h"  // net_store_length, net_length_size
 
-namespace binary_log::codecs::binary {
+namespace binary_log {
+namespace codecs {
+namespace binary {
 
 /**
   This is the decoder member function for the TLV encoded set of
@@ -44,82 +46,83 @@ namespace binary_log::codecs::binary {
  */
 std::pair<std::size_t, bool> Transaction_payload::decode(
     const unsigned char *from, size_t size, Binary_log_event &to) const {
-  BAPI_TRACE;
+  bool result =
+      (to.header()->type_code != binary_log::TRANSACTION_PAYLOAD_EVENT);
   Event_reader reader(reinterpret_cast<const char *>(from), size);
-  bool have_payload_size = false;
-  bool have_compression_type = false;
+  BAPI_ASSERT(!result);
+  if (!result) {
+    Transaction_payload_event &ev = down_cast<Transaction_payload_event &>(to);
 
-  // Compute a return status for the function
-  auto get_return_status = [&](bool error) {
-    return std::make_pair(reader.position(), error);
-  };
+    while (reader.available_to_read()) {
+      uint64_t type{0};
+      uint64_t length{0};
+      uint64_t value{0};
 
-  // Wrong use of this function.
-  if (to.header()->type_code != binary_log::TRANSACTION_PAYLOAD_EVENT) {
-    BAPI_ASSERT(false);
-    return get_return_status(true);
-  }
-
-  Transaction_payload_event &ev = down_cast<Transaction_payload_event &>(to);
-
-  while (reader.available_to_read()) {
-    uint64_t type{0};
-    uint64_t length{0};
-    uint64_t value{0};
-
-    // Decode the type of the field.
-    type = reader.net_field_length_ll();
-    if (reader.get_error()) return get_return_status(true);
-
-    // We have reached the end of the payload data header.
-    if (type == OTW_PAYLOAD_HEADER_END_MARK)
-      // For success, the function should have read both payload size
-      // and compression type, and payload size should not be bigger
-      // than the remainder of the event. It's OK to not have
-      // uncompressed size, since that is informational only.
-      return get_return_status(!have_payload_size || !have_compression_type ||
-                               ev.get_payload_size() >
-                                   reader.available_to_read());
-
-    // Decode the size of the field.
-    length = reader.net_field_length_ll();
-    if (reader.get_error()) return get_return_status(true);
-
-    switch (type) {
-      case OTW_PAYLOAD_SIZE_FIELD:
-        // Decode the payload size.
+      /* read the type of the field. */
+      if (reader.can_read(UINT_64T_MIN_SIZE)) {
         value = reader.net_field_length_ll();
-        if (reader.get_error()) return get_return_status(true);
-        ev.set_payload_size(value);
-        have_payload_size = true;
-        break;
+        if ((result = reader.get_error())) goto end;
+        type = value;
+      }
 
-      case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
-        // Decode the compression type.
+      // we have reached the end of the header
+      if (type == OTW_PAYLOAD_HEADER_END_MARK) break;
+
+      /* read the size of the field. */
+      if (reader.can_read(UINT_64T_MIN_SIZE)) {
         value = reader.net_field_length_ll();
-        if (reader.get_error()) return get_return_status(true);
-        if (!transaction::compression::type_is_valid(value))
-          return get_return_status(true);
-        ev.set_compression_type(
-            static_cast<transaction::compression::type>(value));
-        have_compression_type = true;
-        break;
+        if ((result = reader.get_error())) goto end;
+        length = value;
+      }
 
-      case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
-        // Decode the uncompressed size.
-        value = reader.net_field_length_ll();
-        if (reader.get_error()) return get_return_status(true);
-        ev.set_uncompressed_size(value);
-        break;
+      switch (type) {
+        case OTW_PAYLOAD_SIZE_FIELD:
+          /* fetch the payload size */
+          if (reader.can_read(UINT_64T_MIN_SIZE)) {
+            value = reader.net_field_length_ll();
+            if ((result = reader.get_error())) goto end;
+            ev.set_payload_size(value);
+          }
+          break;
 
-      default:
-        // Ignore unrecognized fields.
-        reader.forward(length);
-        break;
+        case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
+          /* fetch the compression type */
+          if (reader.can_read(UINT_64T_MIN_SIZE)) {
+            value = reader.net_field_length_ll();
+            if ((result = reader.get_error())) goto end;
+            ev.set_compression_type((transaction::compression::type)value);
+          }
+          break;
+
+        case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
+          /* fetch the uncompressed size */
+          if (reader.can_read(UINT_64T_MIN_SIZE)) {
+            value = reader.net_field_length_ll();
+            if ((result = reader.get_error())) goto end;
+            ev.set_uncompressed_size(value);
+          }
+          break;
+
+        /* purecov: begin inspected */
+        default:
+          /* ignore unrecognized field. */
+          reader.forward(length);
+          break;
+          /* purecov: end */
+      }
     }
+
+    // ----------------------------------------------------
+    // Handle defaults here.
+    // ----------------------------------------------------
+
+    if (ev.get_uncompressed_size() == 0)
+      // default the uncompressed to the payload size
+      ev.set_uncompressed_size(ev.get_payload_size()); /* purecov: inspected */
   }
-  // Reached end of event without seeing an END_MARK
-  return get_return_status(true);
+
+end:
+  return std::make_pair<std::size_t, bool &>(reader.position(), result);
 }
 
 /**
@@ -319,4 +322,6 @@ std::pair<std::size_t, bool> Transaction_payload::encode(
   return std::make_pair<std::size_t, bool &>(ptr - to, result);
 }
 
-}  // namespace binary_log::codecs::binary
+}  // namespace binary
+}  // namespace codecs
+}  // namespace binary_log

@@ -25,7 +25,6 @@
 #ifndef NDB_BITMASK_H
 #define NDB_BITMASK_H
 
-#include "ndb_config.h"
 #include "ndb_global.h"
 
 #if defined(HAVE__BITSCANFORWARD) || defined(HAVE__BITSCANREVERSE)

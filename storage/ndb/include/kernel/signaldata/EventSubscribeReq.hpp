@@ -26,7 +26,6 @@
 #define SD_EVENT_SUB_REQ_H
 
 #include "SignalData.hpp"
-#include "kernel/LogLevel.hpp"
 
 /**
  * Requests change (new, update, delete) of event subscription,

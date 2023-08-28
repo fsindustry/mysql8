@@ -15,13 +15,10 @@
 #               main code went into include/index_merge_ror.inc
 #
 
---source include/elide_costs.inc
-
 --echo #---------------- ROR-index_merge tests -----------------------
 --echo # (Start of test file: index_merge_ror.inc)
 
 eval SET SESSION DEFAULT_STORAGE_ENGINE = $engine_type;
-eval SET SESSION EXPLAIN_FORMAT = tree;
 
 --disable_warnings
 drop table if exists  t0,t1,t2;
@@ -129,17 +126,17 @@ analyze table t1;
 -- enable_query_log
 
 --echo # One row results tests for cases where a single row matches all conditions
---replace_result key2 key1
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select key1,key2 from t1 where key1=100 and key2=100;
 select key1,key2 from t1 where key1=100 and key2=100;
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 # Mask cost values since it varies between runs how much of the indexes
 # are cached in InnoDB's buffer pool
---replace_result key2 key1 key4 key3
---replace_regex /(_rows": )[0-9.]+/\1"#"/ /(_cost": )[\"]*[0-9.]+[\"]*/\1"#"/
+--skip_if_hypergraph  # Depends on the query plan.
+--replace_regex /(_cost": )"[0-9.]+"/\1"#"/
 explain format=json select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 
@@ -154,37 +151,33 @@ analyze table t1;
 -- enable_query_log
 
 --echo #  ROR-intersection, not covering
---replace_result key2 key1
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select key1,key2,filler1 from t1 where key1=100 and key2=100;
 select key1,key2,filler1 from t1 where key1=100 and key2=100;
 
 --echo #  ROR-intersection, covering
---replace_result key2 key1
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select key1,key2 from t1 where key1=100 and key2=100;
 select key1,key2 from t1 where key1=100 and key2=100;
 
 --echo #  ROR-union of ROR-intersections
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 select key1,key2,key3,key4 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 
 --echo #  3-way ROR-intersection
---replace_result key2 key1 key3 key1
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3 from t1 where key1=100 and key2=100 and key3=100;
 select key1,key2,key3 from t1 where key1=100 and key2=100 and key3=100;
 
 --echo #  ROR-union(ROR-intersection, ROR-range)
 insert into t1 (key1,key2,key3,key4,filler1) values (101,101,101,101, 'key1234-101');
---replace_result key2 key1
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=101;
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=101;
 
@@ -202,8 +195,6 @@ select key1,key2,filler1 from t1 where key2=100 and key2=200;
 
 --echo # ROR-union(ROR-intersection) with one of ROR-intersection giving empty
 --echo # results
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 
@@ -218,14 +209,15 @@ analyze table t1;
 --echo # ROR-union with all ROR-intersections giving empty results
 # The relative order of keys inside 
 # "Using union(intersect(keyx,keyx),...)" doesn't matter
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
+--replace_result key2,key1 key1,key2 key4,key3 key3,key4
 explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 
 --echo # ROR-intersection with empty result
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select key1,key2 from t1 where key1=100 and key2=100;
 select key1,key2 from t1 where key1=100 and key2=100;
 
@@ -241,8 +233,6 @@ analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 
@@ -254,8 +244,6 @@ analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 
@@ -267,8 +255,6 @@ analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
---replace_result key2 key1 key4 key3
---replace_regex $elide_costs_and_rows
 explain select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 
@@ -277,7 +263,7 @@ select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=
 --echo ##
 
 --echo # Check that the shortest key is used for ROR-intersection, covering and non-covering.
-if ($engine_type != "InnoDB" )
+if (!$index_merge_random_rows_in_EXPLAIN)
 {
   # Too unstable on InnoDB
   explain select * from t1 where st_a=1 and st_b=1;
@@ -290,41 +276,63 @@ if ($engine_type != "InnoDB" )
 #
 
 # Different value on 32 and 64 bit
---replace_regex $elide_costs_and_rows
 --replace_result sta_swt12a sta_swt21a sta_swt12a, sta_swt12a,
 explain select * from t1 where st_a=1 and swt1a=1 and swt2a=1;
 
---replace_regex $elide_costs_and_rows
 explain select * from t1 where st_b=1 and swt1b=1 and swt2b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1 where st_a=1 and swt1a=1 and swt2a=1 and st_b=1 and swt1b=1 and swt2b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1 ignore index (sta_swt21a, stb_swt1a_2b)
   where st_a=1 and swt1a=1 and swt2a=1 and st_b=1 and swt1b=1 and swt2b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1 ignore index (sta_swt21a, sta_swt12a, stb_swt1a_2b)
   where st_a=1 and swt1a=1 and swt2a=1 and st_b=1 and swt1b=1 and swt2b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1 ignore index (sta_swt21a, sta_swt12a, stb_swt1a_2b, stb_swt1b)
   where st_a=1 and swt1a=1 and swt2a=1 and st_b=1 and swt1b=1 and swt2b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1
   where st_a=1 and swt1a=1 and swt2a=1 and st_b=1 and swt1b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select * from t1
   where st_a=1 and swt1a=1 and st_b=1 and swt1b=1 and swt1b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select st_a from t1
   where st_a=1 and swt1a=1 and st_b=1 and swt1b=1 and swt1b=1;
 
---replace_regex $elide_costs_and_rows
+if ($index_merge_random_rows_in_EXPLAIN)
+{
+  --replace_column 10 # 11 #
+}
 explain select st_a from t1
   where st_a=1 and swt1a=1 and st_b=1 and swt1b=1 and swt1b=1;
 
@@ -364,7 +372,6 @@ analyze table t2;
 
 --echo # BUG#1:
 --replace_result a a_or_b b a_or_b
---replace_regex $elide_costs_and_rows
 explain select count(a) from t2 where a='AAAAAAAA' and b='AAAAAAAA';
 select count(a) from t2 where a='AAAAAAAA' and b='AAAAAAAA';
 select count(a) from t2 ignore index(a,b) where a='AAAAAAAA' and b='AAAAAAAA';
@@ -375,7 +382,6 @@ insert into t2 values ('ab', 'ab', 'uh', 'oh');
 analyze table t2;
 -- enable_result_log
 -- enable_query_log
---replace_regex $elide_costs_and_rows
 explain select a from t2 where a='ab';
 drop table t2;
 

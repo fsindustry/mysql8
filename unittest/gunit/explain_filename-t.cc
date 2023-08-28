@@ -33,8 +33,6 @@
 #include "sql/sql_locale.h"
 #include "sql/sql_table.h"
 
-struct CHARSET_INFO;
-
 namespace explain_filename_unittest {
 
 const int BUFLEN = 1000;

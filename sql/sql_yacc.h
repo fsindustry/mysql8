@@ -30,28 +30,20 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-#ifndef YY_MY_SQL_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_YACC_H_INCLUDED
-# define YY_MY_SQL_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_YACC_H_INCLUDED
+#ifndef YY_MYSQL_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_YACC_H_INCLUDED
+# define YY_MYSQL_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_YACC_H_INCLUDED
 /* Debug traces.  */
-#ifndef MY_SQL_PARSER_DEBUG
-# if defined YYDEBUG
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
 #if YYDEBUG
-#   define MY_SQL_PARSER_DEBUG 1
-#  else
-#   define MY_SQL_PARSER_DEBUG 0
-#  endif
-# else /* ! defined YYDEBUG */
-#  define MY_SQL_PARSER_DEBUG 0
-# endif /* ! defined YYDEBUG */
-#endif  /* ! defined MY_SQL_PARSER_DEBUG */
-#if MY_SQL_PARSER_DEBUG
-extern int my_sql_parser_debug;
+extern int MYSQLdebug;
 #endif
 
 /* Token type.  */
-#ifndef MY_SQL_PARSER_TOKENTYPE
-# define MY_SQL_PARSER_TOKENTYPE
-  enum my_sql_parser_tokentype
+#ifndef YYTOKENTYPE
+# define YYTOKENTYPE
+  enum yytokentype
   {
     ABORT_SYM = 258,
     ACCESSIBLE_SYM = 259,
@@ -848,13 +840,11 @@ extern int my_sql_parser_debug;
     BULK_SYM = 1201,
     URL_SYM = 1202,
     GENERATE_SYM = 1203,
-    DOLLAR_QUOTED_STRING_SYM = 1204,
-    PARSE_TREE_SYM = 1205,
-    KEYWORD_USED_AS_IDENT = 1207,
-    KEYWORD_USED_AS_KEYWORD = 1208,
-    CONDITIONLESS_JOIN = 1209,
-    SUBQUERY_AS_EXPR = 1210,
-    EMPTY_FROM_CLAUSE = 1211
+    KEYWORD_USED_AS_IDENT = 1205,
+    KEYWORD_USED_AS_KEYWORD = 1206,
+    CONDITIONLESS_JOIN = 1207,
+    SUBQUERY_AS_EXPR = 1208,
+    EMPTY_FROM_CLAUSE = 1209
   };
 #endif
 /* Tokens.  */
@@ -1653,32 +1643,30 @@ extern int my_sql_parser_debug;
 #define BULK_SYM 1201
 #define URL_SYM 1202
 #define GENERATE_SYM 1203
-#define DOLLAR_QUOTED_STRING_SYM 1204
-#define PARSE_TREE_SYM 1205
-#define KEYWORD_USED_AS_IDENT 1207
-#define KEYWORD_USED_AS_KEYWORD 1208
-#define CONDITIONLESS_JOIN 1209
-#define SUBQUERY_AS_EXPR 1210
-#define EMPTY_FROM_CLAUSE 1211
+#define KEYWORD_USED_AS_IDENT 1205
+#define KEYWORD_USED_AS_KEYWORD 1206
+#define CONDITIONLESS_JOIN 1207
+#define SUBQUERY_AS_EXPR 1208
+#define EMPTY_FROM_CLAUSE 1209
 
 /* Value type.  */
 
 /* Location type.  */
-#if ! defined MY_SQL_PARSER_LTYPE && ! defined MY_SQL_PARSER_LTYPE_IS_DECLARED
-typedef struct MY_SQL_PARSER_LTYPE MY_SQL_PARSER_LTYPE;
-struct MY_SQL_PARSER_LTYPE
+#if ! defined YYLTYPE && ! defined YYLTYPE_IS_DECLARED
+typedef struct YYLTYPE YYLTYPE;
+struct YYLTYPE
 {
   int first_line;
   int first_column;
   int last_line;
   int last_column;
 };
-# define MY_SQL_PARSER_LTYPE_IS_DECLARED 1
-# define MY_SQL_PARSER_LTYPE_IS_TRIVIAL 1
+# define YYLTYPE_IS_DECLARED 1
+# define YYLTYPE_IS_TRIVIAL 1
 #endif
 
 
 
-int my_sql_parser_parse (class THD *YYTHD, class Parse_tree_root **parse_tree);
+int MYSQLparse (class THD *YYTHD, class Parse_tree_root **parse_tree);
 
-#endif /* !YY_MY_SQL_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_YACC_H_INCLUDED  */
+#endif /* !YY_MYSQL_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_YACC_H_INCLUDED  */

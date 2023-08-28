@@ -30,8 +30,8 @@
 #include <string>
 #include <utility>
 
-#include "my_config.h"              // WORDS_BIGENDIAN
-#include "mysql/strings/m_ctype.h"  // CHARSET_INFO.
+#include "m_ctype.h"    // CHARSET_INFO.
+#include "my_config.h"  // WORDS_BIGENDIAN
 #include "sql/current_thd.h"
 #include "sql/regexp/errors.h"
 #include "sql/sql_class.h"  // THD

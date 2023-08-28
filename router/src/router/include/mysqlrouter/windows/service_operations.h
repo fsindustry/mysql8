@@ -41,12 +41,11 @@ struct ServiceConfOptions {
  *
  * @param arg_handler arg handler object in which the function will register the
  * Windows service related parameters
- * @param conf_opts pointer to the object where the option handler will store
-   the selected option parameters (service operation, name), not stored if
-   nullptr passsed
+ * @param conf_opts object where the option handler will store the selected
+ * option parameters (service operation, name)
  *
  */
 void add_service_options(CmdArgHandler &arg_handler,
-                         ServiceConfOptions *conf_opts = nullptr);
+                         ServiceConfOptions &conf_opts);
 
 #endif  // SRC_ROUTER_INCLUDE_MYSQLROUTER_WINDOWS_SERVICE_OPERATIONS_H_

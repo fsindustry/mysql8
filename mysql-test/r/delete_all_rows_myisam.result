@@ -1,7 +1,5 @@
 CALL mtr.add_suppression('You need to use --log-bin to make --binlog-format work.');
 SET binlog_format= 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 #
 # MyISAM, binlog_format= 'ROW'
 #
@@ -19,8 +17,6 @@ DELETE FROM t1;
 DROP TABLE t1;
 
 SET binlog_format= 'MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 #
 # MyISAM, binlog_format= 'MIXED'
 #
@@ -38,8 +34,6 @@ DELETE FROM t1;
 DROP TABLE t1;
 
 SET binlog_format= 'STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 #
 # MyISAM, binlog_format= 'STATEMENT'
 #

@@ -25,8 +25,9 @@
 #include <assert.h>
 #include <limits>
 
-#include "my_sys.h"  // strmake_root
-#include "mysql/strings/my_strtoll10.h"
+#include "m_string.h"  // my_strtoll10
+
+#include "my_sys.h"              // strmake_root
 #include "sql/dd/types/table.h"  // enum_row_format
 #include "sql/field.h"           // geometry_type
 #include "sql/handler.h"         // row_type

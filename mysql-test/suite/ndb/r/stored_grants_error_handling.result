@@ -1,5 +1,6 @@
 CREATE USER "mcmd"@"localhost";
 GRANT ALL PRIVILEGES ON *.* to "mcmd"@"localhost";
+CALL mtr.add_suppression("NDB: Error 626, Tuple did not exist");
 GRANT ALL PRIVILEGES ON *.* to "mcmd"@"localhost";
 Expect 33
 max_questions

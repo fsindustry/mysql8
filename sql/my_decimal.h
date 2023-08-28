@@ -41,12 +41,11 @@
 #include <algorithm>
 
 #include "decimal.h"
+#include "m_ctype.h"
 
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "my_time_t.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/m_ctype.h"
 
 class String;
 struct MYSQL_TIME;
@@ -194,7 +193,7 @@ inline void max_internal_decimal(my_decimal *to) {
 
 inline int check_result_and_overflow(uint mask, int result, my_decimal *val) {
   if (val->check_result(mask, result) & E_DEC_OVERFLOW) {
-    const bool sign = val->sign();
+    bool sign = val->sign();
     val->sanity_check();
     max_internal_decimal(val);
     val->sign(sign);
@@ -212,7 +211,7 @@ inline uint my_decimal_length_to_precision(uint length, uint scale,
                                            bool unsigned_flag) {
   /* Precision can't be negative thus ignore unsigned_flag when length is 0. */
   assert(length || !scale);
-  const uint retval =
+  uint retval =
       (uint)(length - (scale > 0 ? 1 : 0) - (unsigned_flag || !length ? 0 : 1));
   return retval;
 }
@@ -225,8 +224,8 @@ inline uint32 my_decimal_precision_to_length_no_truncation(uint precision,
     unsigned_flag is ignored in this case.
   */
   assert(precision || !scale);
-  const uint32 retval = (uint32)(precision + (scale > 0 ? 1 : 0) +
-                                 (unsigned_flag || !precision ? 0 : 1));
+  uint32 retval = (uint32)(precision + (scale > 0 ? 1 : 0) +
+                           (unsigned_flag || !precision ? 0 : 1));
   if (retval == 0) return 1;
   return retval;
 }

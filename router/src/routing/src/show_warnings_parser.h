@@ -85,7 +85,7 @@ class ShowWarningsParser : public SqlParser {
                  std::string>
   parse();
 
- protected:
+ private:
   stdx::expected<Limit, std::string> limit();
 
   stdx::expected<ShowWarnings::Verbosity, std::string> warning_count_ident();

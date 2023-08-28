@@ -26,8 +26,6 @@
 #include <my_sys.h>
 #include "client/pattern_matcher.cc"
 
-struct CHARSET_INFO;
-
 namespace mysql_client_test_ns {
 
 class PatternMatcherTest : public ::testing::Test {
@@ -36,7 +34,8 @@ class PatternMatcherTest : public ::testing::Test {
 
  protected:
   void SetUp() override {
-    cs_info = get_charset_by_name("utf8mb4_0900_ai_ci", MYF(0));
+    MY_CHARSET_LOADER loader;
+    cs_info = my_collation_get_by_name(&loader, "utf8mb4_0900_ai_ci", MYF(0));
   }
 };
 

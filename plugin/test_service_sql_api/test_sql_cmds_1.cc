@@ -32,7 +32,6 @@
 #include <mysql/components/services/log_builtins.h>
 #include <mysqld_error.h>
 
-#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"
@@ -42,8 +41,6 @@
 #include "thr_cond.h"
 
 static constexpr int STRING_BUFFER = 1024 * 4;
-
-struct CHARSET_INFO;
 
 static const char *sep =
     "======================================================\n";
@@ -572,9 +569,9 @@ static void *test_session_thread(Test_data *tdata) {
 
   tdata->go();
 
-  const int r = command_service_run_command(
-      tdata->session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
-      CS_TEXT_REPRESENTATION, &cbdata);
+  int r = command_service_run_command(tdata->session, COM_QUERY, &cmd,
+                                      &my_charset_utf8mb3_general_ci, &sql_cbs,
+                                      CS_TEXT_REPRESENTATION, &cbdata);
   WRITE_VAL("Killed run_command return value: %i\n", r);
 
   WRITE_VAL("thread shutdown: %i (%s)\n", cbdata.shutdown,

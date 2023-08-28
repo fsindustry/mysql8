@@ -108,16 +108,11 @@ ADD_LIBRARY(routing SHARED
   classic_query_sender.cc
   classic_quit_sender.cc
   classic_reset_connection_sender.cc
-  classic_set_option_sender.cc
 
   classic_greeting_receiver.cc
 
-  classic_session_tracker.cc
-
   sql_value.cc
   show_warnings_parser.cc
-
-  openssl_msg.cc
 )
 
 TARGET_LINK_LIBRARIES(routing

@@ -35,7 +35,6 @@
 
 #include "my_compiler.h"
 
-#include "m_string.h"
 #include "my_macros.h"
 #include "my_thread.h"
 #include "sql-common/json_dom.h"
@@ -53,8 +52,6 @@
 #include "storage/perfschema/pfs_setup_object.h"
 #include "storage/perfschema/pfs_user.h"
 #include "storage/perfschema/pfs_variable.h"
-
-struct CHARSET_INFO;
 
 /* TINYINT TYPE */
 void set_field_tiny(Field *f, long value) {

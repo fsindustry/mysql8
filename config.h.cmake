@@ -162,6 +162,7 @@
 /* Code tests*/
 #cmakedefine HAVE_CLOCK_GETTIME 1
 #cmakedefine HAVE_CLOCK_REALTIME 1
+#cmakedefine STACK_DIRECTION @STACK_DIRECTION@
 #cmakedefine TIME_WITH_SYS_TIME 1
 #cmakedefine NO_FCNTL_NONBLOCK 1
 #cmakedefine HAVE_PAUSE_INSTRUCTION 1
@@ -220,7 +221,6 @@
 #cmakedefine SCRAM_LIB_CONFIGURED
 #cmakedefine WITH_HYPERGRAPH_OPTIMIZER
 #cmakedefine KERBEROS_LIB_SSPI
-#cmakedefine WITH_SHOW_PARSE_TREE
 
 /* Lock Order */
 #cmakedefine WITH_LOCK_ORDER 1

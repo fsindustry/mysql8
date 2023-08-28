@@ -184,8 +184,6 @@ int ndbd_exit_code_get_next(int index,
                             const char** class_msg,
                             const char** error_msg);
 
-int ndbd_is_software_error(int errorCode);
-
 #endif
 
 #ifdef __cplusplus

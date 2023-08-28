@@ -143,6 +143,8 @@ IF(MSVC)
   STRING_APPEND(CMAKE_CXX_FLAGS " /wd4996")
 ENDIF()
 
+MSVC_CPPCHECK_DISABLE()
+
 IF(WIN32_CLANG)
   STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-unused-function")
 ENDIF()
@@ -174,7 +176,6 @@ SET(ICU_COMMON_SOURCES
   ${ICU_VERSION_DIR}/source/common/dictionarydata.cpp
   ${ICU_VERSION_DIR}/source/common/dtintrv.cpp
   ${ICU_VERSION_DIR}/source/common/edits.cpp
-  ${ICU_VERSION_DIR}/source/common/emojiprops.cpp
   ${ICU_VERSION_DIR}/source/common/errorcode.cpp
   ${ICU_VERSION_DIR}/source/common/filteredbrk.cpp
   ${ICU_VERSION_DIR}/source/common/filterednormalizer2.cpp
@@ -196,9 +197,7 @@ SET(ICU_COMMON_SOURCES
   ${ICU_VERSION_DIR}/source/common/locresdata.cpp
   ${ICU_VERSION_DIR}/source/common/locutil.cpp
   ${ICU_VERSION_DIR}/source/common/lsr.cpp
-  ${ICU_VERSION_DIR}/source/common/lstmbe.cpp
   ${ICU_VERSION_DIR}/source/common/messagepattern.cpp
-  ${ICU_VERSION_DIR}/source/common/mlbe.cpp
   ${ICU_VERSION_DIR}/source/common/normalizer2.cpp
   ${ICU_VERSION_DIR}/source/common/normalizer2impl.cpp
   ${ICU_VERSION_DIR}/source/common/normlzr.cpp
@@ -419,7 +418,6 @@ SET(ICU_I18N_SOURCES
   ${ICU_VERSION_DIR}/source/i18n/decContext.cpp
   ${ICU_VERSION_DIR}/source/i18n/decimfmt.cpp
   ${ICU_VERSION_DIR}/source/i18n/decNumber.cpp
-  ${ICU_VERSION_DIR}/source/i18n/displayoptions.cpp
   ${ICU_VERSION_DIR}/source/i18n/double-conversion-bignum.cpp
   ${ICU_VERSION_DIR}/source/i18n/double-conversion-bignum-dtoa.cpp
   ${ICU_VERSION_DIR}/source/i18n/double-conversion-cached-powers.cpp
@@ -452,7 +450,6 @@ SET(ICU_I18N_SOURCES
   ${ICU_VERSION_DIR}/source/i18n/indiancal.cpp
   ${ICU_VERSION_DIR}/source/i18n/inputext.cpp
   ${ICU_VERSION_DIR}/source/i18n/islamcal.cpp
-  ${ICU_VERSION_DIR}/source/i18n/iso8601cal.cpp
   ${ICU_VERSION_DIR}/source/i18n/japancal.cpp
   ${ICU_VERSION_DIR}/source/i18n/listformatter.cpp
   ${ICU_VERSION_DIR}/source/i18n/measfmt.cpp
@@ -488,7 +485,6 @@ SET(ICU_I18N_SOURCES
   ${ICU_VERSION_DIR}/source/i18n/number_patternstring.cpp
   ${ICU_VERSION_DIR}/source/i18n/number_rounding.cpp
   ${ICU_VERSION_DIR}/source/i18n/number_scientific.cpp
-  ${ICU_VERSION_DIR}/source/i18n/number_simple.cpp
   ${ICU_VERSION_DIR}/source/i18n/number_skeletons.cpp
   ${ICU_VERSION_DIR}/source/i18n/number_symbolswrapper.cpp
   ${ICU_VERSION_DIR}/source/i18n/number_usageprefs.cpp
@@ -607,7 +603,7 @@ SET(ICU_I18N_SOURCES
 )
 
 IF(WIN32)
-  LIST(APPEND ICU_I18N_SOURCES
+  LIST(APPEND ICU_SOURCES
     ${ICU_VERSION_DIR}/source/i18n/windtfmt.cpp
     ${ICU_VERSION_DIR}/source/i18n/winnmfmt.cpp
     ${ICU_VERSION_DIR}/source/i18n/wintzimpl.cpp
@@ -660,10 +656,10 @@ ADD_DEPENDENCIES(icu_all icuuc icui18n icustubdata)
 # ../source/configure --with-data-packaging=files
 # make
 # cd data/out/build
-# tar cvf icudt73l.tar icudt73l/brkitr icudt73l/*.icu
+# tar cvf icudt69l.tar icudt69l/brkitr icudt69l/unames.icu
 #
 # Solaris sparc, same thing, but:
-# tar cvf icudt73b.tar icudt73b/brkitr icudt73b/*.icu
+# tar cvf icudt69b.tar icudt69b/brkitr icudt69b/unames.icu
 #
 # Copy the tarballs, unpack them, and do 'git add'.
 

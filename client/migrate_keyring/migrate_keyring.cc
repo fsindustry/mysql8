@@ -72,10 +72,10 @@ class Migration_setup {
 
 int main(int argc, char **argv) {
   /* Initialization */
-  const Migration_setup migration_setup(argv[0]);
+  Migration_setup migration_setup(argv[0]);
   DBUG_TRACE;
   DBUG_PROCESS(argv[0]);
-  const int exit_status = EXIT_FAILURE;
+  int exit_status = EXIT_FAILURE;
 
   int exit_code;
   if (process_options(&argc, &argv, exit_code) == false) {

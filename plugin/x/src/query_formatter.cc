@@ -31,8 +31,6 @@
 #include "plugin/x/src/xpl_error.h"
 #include "plugin/x/src/xpl_log.h"
 
-struct CHARSET_INFO;
-
 namespace xpl {
 
 enum Block_enum {

@@ -26,7 +26,6 @@
 #include "plugin/group_replication/include/member_info.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "plugin/group_replication/include/ps_information.h"
-#include "string_with_len.h"
 
 using std::string;
 

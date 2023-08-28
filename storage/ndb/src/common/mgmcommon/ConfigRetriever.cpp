@@ -38,7 +38,6 @@
 #include <DnsCache.hpp>
 #include <EventLogger.hpp>
 #include "portlib/NdbTCP.h"
-#include "portlib/ndb_sockaddr.h"
 
 //****************************************************************************
 //****************************************************************************
@@ -345,29 +344,15 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     return false;
   }
 
-  if (hostname && hostname[0] != 0) {
-    ndb_sockaddr addr;
-    if (Ndb_getAddr(&addr, hostname))
-    {
-      BaseString::snprintf(buf, 255,
-                           "The hostname this node should have according "
-                           "to the configuration could not be resolved. "
-                           "Attempt to bind '%s' "
-                           "failed with error: %d '%s'",
-                           hostname, errno, strerror(errno));
-      setError(CR_ERROR, buf);
-      return false;
-    }
-    if (!SocketServer::tryBind(addr)) {
-      BaseString::snprintf(buf, 255,
-                           "The hostname this node should have according "
-                           "to the configuration does not match a local "
-                           "interface. Attempt to bind '%s' "
-                           "failed with error: %d '%s'",
-                           hostname, errno, strerror(errno));
-      setError(CR_ERROR, buf);
-      return false;
-    }
+  if (hostname && hostname[0] != 0 && !SocketServer::tryBind(0, hostname)) {
+    BaseString::snprintf(buf, 255,
+                         "The hostname this node should have according "
+                         "to the configuration does not match a local "
+                         "interface. Attempt to bind '%s' "
+                         "failed with error: %d '%s'",
+                         hostname, errno, strerror(errno));
+    setError(CR_ERROR, buf);
+    return false;
   }
 
   /**
@@ -388,9 +373,8 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
       return false;
     }
 
-    ndb_sockaddr addr(port);
     char msg[150];
-    if (!SocketServer::tryBind(addr, msg, sizeof(msg))) {
+    if (!SocketServer::tryBind(port, nullptr, msg, sizeof(msg))) {
       BaseString::snprintf(buf, 255,
                            "Mgmd node is started on port that is "
                            "already in use. Attempt to bind '*:%d' "
@@ -440,7 +424,7 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     }
 
     const char * name;
-    ndb_sockaddr addr;
+    struct in6_addr addr;
     if(!iter.get(CFG_CONNECTION_HOSTNAME_1, &name) && strlen(name)){
       if(dnsCache.getAddress(&addr, name) != 0){
 	tmp.assfmt("Could not resolve hostname [node %d]: %s", nodeId1, name);

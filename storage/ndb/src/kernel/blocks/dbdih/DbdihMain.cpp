@@ -2088,12 +2088,6 @@ void Dbdih::execNDB_STTOR(Signal* signal)
     
   case ZNDB_SPH4:
     jam();
-    {
-      /* Calculate GCP stop timer now */
-      m_gcp_monitor.m_gcp_save.m_need_max_lag_recalc = true;
-      m_gcp_monitor.m_micro_gcp.m_need_max_lag_recalc = true;
-      setGCPStopTimeouts(signal);
-    }
     cmasterTakeOverNode = ZNIL;
     switch(typestart){
     case NodeState::ST_INITIAL_START:
@@ -2255,12 +2249,10 @@ Dbdih::execNODE_START_REP(Signal* signal)
       c_dictLockSlavePtrI_nodeRestart = RNIL;
     }
   }
-
   // Request max lag recalculation to reflect new cluster scale
   // after a node start
   m_gcp_monitor.m_gcp_save.m_need_max_lag_recalc = true;
   m_gcp_monitor.m_micro_gcp.m_need_max_lag_recalc = true;
-  if (! isMaster()) { setGCPStopTimeouts(signal); }
 }
 
 void
@@ -10148,7 +10140,6 @@ void Dbdih::execNODE_FAILREP(Signal* signal)
   // after a node failure
   m_gcp_monitor.m_gcp_save.m_need_max_lag_recalc = true;
   m_gcp_monitor.m_micro_gcp.m_need_max_lag_recalc = true;
-  if (! isMaster()) { setGCPStopTimeouts(signal); }
 
   /**
    * Need to check if a node failed that was part of LCP. In this
@@ -24924,13 +24915,7 @@ void Dbdih::initCommonData()
       m_micro_gcp.m_master.m_time_between_gcp = tmp;
     }
 
-#ifdef ERROR_INSERT
-    m_gcp_monitor.m_micro_gcp.test_set_max_lag = 0;
-    m_gcp_monitor.m_gcp_save.test_set_max_lag = 0;
-    m_gcp_monitor.m_savedMaxCommitLag = 0;
-#endif
-
-    // These will be set when nodes reach state start phase 4.
+    // These will be set when nodes reach state 'started'.
     m_gcp_monitor.m_micro_gcp.m_max_lag_ms = 0;
     m_gcp_monitor.m_gcp_save.m_max_lag_ms = 0;
   }
@@ -28148,12 +28133,6 @@ Dbdih::execDUMP_STATE_ORD(Signal* signal)
     if (signal->getLength() != 3)
     {
       jam();
-      g_eventLogger->info("Resetting GCP_COMMIT and GCP_SAVE max lag millis");
-#ifdef ERROR_INSERT
-      m_gcp_monitor.m_micro_gcp.test_set_max_lag = false;
-      m_gcp_monitor.m_gcp_save.test_set_max_lag = false;
-#endif
-      setGCPStopTimeouts(signal, true, true);
       return;
     }
     if (signal->theData[1] == 0)
@@ -28179,7 +28158,6 @@ Dbdih::execDUMP_STATE_ORD(Signal* signal)
 #endif
     }
     sendINFO_GCP_STOP_TIMER(signal);
-    return;
   }
 
   if (arg == DumpStateOrd::DihStallLcpStart)

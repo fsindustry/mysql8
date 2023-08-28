@@ -31,8 +31,6 @@
 #include "sql/dd/impl/types/resource_group_impl.h"
 #include "sql/dd/types/resource_group.h"
 
-struct CHARSET_INFO;
-
 namespace dd {
 
 class Raw_record;

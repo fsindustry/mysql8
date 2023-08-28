@@ -29,7 +29,6 @@
 
 #include <algorithm>
 
-#include "m_string.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
@@ -37,8 +36,6 @@
 
 #define MAX_RECORDS 100000U
 #define MAX_KEYS 4
-
-struct CHARSET_INFO;
 
 static int get_options(int argc, char *argv[]);
 static int rnd(int max_value);

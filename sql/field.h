@@ -38,6 +38,7 @@
 #include "field_types.h"  // enum_field_types
 #include "lex_string.h"
 #include "libbinlogevents/export/binary_log_funcs.h"  // my_time_binary_length
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_base.h"  // ha_storage_media
 #include "my_bitmap.h"
@@ -46,8 +47,6 @@
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "my_time.h"  // MYSQL_TIME_NOTE_TRUNCATED
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
@@ -287,7 +286,7 @@ inline uint get_enum_pack_length(int elements) {
 }
 
 inline uint get_set_pack_length(int elements) {
-  const uint len = (elements + 7) / 8;
+  uint len = (elements + 7) / 8;
   return len > 4 ? 8 : len;
 }
 
@@ -1423,7 +1422,7 @@ class Field {
   }
   longlong val_int_offset(ptrdiff_t row_offset) {
     ptr += row_offset;
-    const longlong tmp = val_int();
+    longlong tmp = val_int();
     ptr -= row_offset;
     return tmp;
   }
@@ -3016,7 +3015,7 @@ class Field_timestampf : public Field_temporal_with_date_and_timef {
   uint32 pack_length() const final { return my_timestamp_binary_length(dec); }
   uint pack_length_from_metadata(uint field_metadata) const final {
     DBUG_TRACE;
-    const uint tmp = my_timestamp_binary_length(field_metadata);
+    uint tmp = my_timestamp_binary_length(field_metadata);
     return tmp;
   }
 
@@ -3253,7 +3252,7 @@ class Field_timef final : public Field_time_common {
   uint32 pack_length() const final { return my_time_binary_length(dec); }
   uint pack_length_from_metadata(uint field_metadata) const final {
     DBUG_TRACE;
-    const uint tmp = my_time_binary_length(field_metadata);
+    uint tmp = my_time_binary_length(field_metadata);
     return tmp;
   }
   uint row_pack_length() const final { return pack_length(); }
@@ -3378,7 +3377,7 @@ class Field_datetimef : public Field_temporal_with_date_and_timef {
   uint32 pack_length() const final { return my_datetime_binary_length(dec); }
   uint pack_length_from_metadata(uint field_metadata) const final {
     DBUG_TRACE;
-    const uint tmp = my_datetime_binary_length(field_metadata);
+    uint tmp = my_datetime_binary_length(field_metadata);
     return tmp;
   }
   bool zero_pack() const final { return true; }
@@ -4173,25 +4172,7 @@ class Field_typed_array final : public Field_json {
     SE to be returned to server. They will be filtered by WHERE condition later.
   */
   int key_cmp(const uchar *, const uchar *) const override { return -1; }
-  /**
-   * @brief This function will behave similarly to MEMBER OF json operation,
-   *        unlike regular key_cmp. The key value will be checked against
-   *        members of the array and the presence of the key will be considered
-   *        as the record matching the given key. This particular definition is
-   *        used in descending ref index scans. Descending index scan uses
-   *        handler::ha_index_prev() function to read from the storage engine
-   *        which does not compare the index key with the search key [unlike
-   *        handler::ha_index_next_same()]. Hence each retrieved record needs
-   *        to be validated to find a stop point. Refer key_cmp_if_same() and
-   *        RefIterator<true>::Read() for more details.
-   *
-   * @param   key_ptr         Pointer to the key
-   * @param   key_length      Key length
-   * @return
-   *      0   Key found in the record
-   *      -1  Key not found in the record
-   */
-  int key_cmp(const uchar *key_ptr, uint key_length) const override;
+  int key_cmp(const uchar *, uint) const override { return -1; }
   /**
     Multi-valued index always works only as a pre-filter for actual
     condition check, and the latter always use binary collation, so no point
@@ -4679,15 +4660,14 @@ type_conversion_status store_internal_with_error_check(Field_new_decimal *field,
     indexed expression.
 
   @param thd       Thread handler
-  @param source_item      The item to generate a Create_field from
+  @param item      The item to generate a Create_field from
   @param tmp_table A table object which is used to generate a temporary table
                    field, as described above. This doesn't need to be an
                    existing table.
   @return          A Create_field generated from the input item, or nullptr
                    in case of errors.
 */
-Create_field *generate_create_field(THD *thd, Item *source_item,
-                                    TABLE *tmp_table);
+Create_field *generate_create_field(THD *thd, Item *item, TABLE *tmp_table);
 
 inline bool is_blob(enum_field_types sql_type) {
   return (sql_type == MYSQL_TYPE_BLOB || sql_type == MYSQL_TYPE_MEDIUM_BLOB ||

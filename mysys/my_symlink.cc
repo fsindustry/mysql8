@@ -47,8 +47,6 @@
 #include "my_sys.h"
 #include "my_thread_local.h"
 #include "mysys_err.h"
-#include "nulls.h"
-#include "strmake.h"
 #ifndef _WIN32
 #include <sys/stat.h>
 #endif
@@ -124,7 +122,7 @@ int my_is_symlink(const char *filename, ST_FILE_ID *file_id) {
 
 #else
   (void)file_id;  // maybe_unused
-  const DWORD dwAttr = GetFileAttributes(filename);
+  DWORD dwAttr = GetFileAttributes(filename);
   return (dwAttr != INVALID_FILE_ATTRIBUTES) &&
          (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT);
 #endif
@@ -160,7 +158,7 @@ int my_realpath(char *to, const char *filename, myf MyFlags) {
   }
   return result;
 #else
-  const int ret = GetFullPathName(filename, FN_REFLEN, to, NULL);
+  int ret = GetFullPathName(filename, FN_REFLEN, to, NULL);
   if (ret == 0 || ret > FN_REFLEN) {
     set_my_errno((ret > FN_REFLEN) ? ENAMETOOLONG : GetLastError());
     if (MyFlags & MY_WME) {

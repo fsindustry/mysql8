@@ -57,8 +57,6 @@
 
 class Json_wrapper;
 
-struct CHARSET_INFO;
-
 namespace dd_unittest {
 
 using ::testing::_;

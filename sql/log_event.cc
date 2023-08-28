@@ -34,7 +34,6 @@
 #include <sys/time.h>
 #endif
 #include <algorithm>
-#include <iterator>
 #include <map>
 #include <memory>
 #include <string>
@@ -46,12 +45,13 @@
 #include "libbinlogevents/include/debug_vars.h"
 #include "libbinlogevents/include/table_id.h"
 #include "libbinlogevents/include/wrapper_functions.h"
-#include "m_string.h"
+#include "m_ctype.h"
 #include "my_bitmap.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_systime.h"
 #include "my_table_map.h"
@@ -60,23 +60,17 @@
 #include "mysql/components/services/bits/psi_statement_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_time.h"
-#include "nulls.h"
 #include "psi_memory_key.h"
 #include "query_options.h"
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/binlog_reader.h"
 #include "sql/field_common_properties.h"
-#include "sql/my_decimal.h"               // my_decimal
-#include "sql/raii/thread_stage_guard.h"  // NAMED_THD_STAGE_GUARD
-#include "sql/rpl_handler.h"              // RUN_HOOK
+#include "sql/my_decimal.h"   // my_decimal
+#include "sql/rpl_handler.h"  // RUN_HOOK
 #include "sql/rpl_tblmap.h"
 #include "sql/sql_show_processlist.h"  // pfs_processlist_enabled
 #include "sql/system_variables.h"
@@ -84,8 +78,6 @@
 #include "sql/xa/sql_cmd_xa.h"  // Sql_cmd_xa_*
 #include "sql_const.h"
 #include "sql_string.h"
-#include "strmake.h"
-#include "strxmov.h"
 #include "template_utils.h"
 
 #ifndef MYSQL_SERVER
@@ -165,7 +157,6 @@
 #include "sql/transaction.h"  // trans_rollback_stmt
 #include "sql/transaction_info.h"
 #include "sql/tztime.h"  // Time_zone
-#include "string_with_len.h"
 #include "thr_lock.h"
 #define window_size Log_throttle::LOG_THROTTLE_WINDOW_SIZE
 Error_log_throttle slave_ignored_err_throttle(
@@ -177,7 +168,7 @@ Error_log_throttle slave_ignored_err_throttle(
 
 #include "libbinlogevents/include/codecs/binary.h"
 #include "libbinlogevents/include/codecs/factory.h"
-#include "libbinlogevents/include/compression/payload_event_buffer_istream.h"
+#include "libbinlogevents/include/compression/iterator.h"
 #include "mysqld_error.h"
 #include "sql/rpl_gtid.h"
 #include "sql/rpl_record.h"  // enum_row_image_type, Bit_reader
@@ -192,8 +183,6 @@ PSI_memory_key key_memory_Rows_query_log_event_rows_query;
 
 using std::max;
 using std::min;
-
-#define ILLEGAL_CHARSET_INFO_NUMBER (~0U)
 
 /**
   BINLOG_CHECKSUM variable.
@@ -871,13 +860,79 @@ time_t Log_event::get_time() {
 
 #endif
 
-const char *Log_event::get_type_str(uint type) {
-  if (type > binary_log::ENUM_END_EVENT) return "Unknown";
-  return get_type_str(Log_event_type(type));
-}
+/**
+  @return
+  returns the human readable name of the event's type
+*/
 
 const char *Log_event::get_type_str(Log_event_type type) {
-  return binary_log::get_event_type_as_string(type).c_str();
+  switch (type) {
+    case binary_log::STOP_EVENT:
+      return "Stop";
+    case binary_log::QUERY_EVENT:
+      return "Query";
+    case binary_log::ROTATE_EVENT:
+      return "Rotate";
+    case binary_log::INTVAR_EVENT:
+      return "Intvar";
+    case binary_log::APPEND_BLOCK_EVENT:
+      return "Append_block";
+    case binary_log::DELETE_FILE_EVENT:
+      return "Delete_file";
+    case binary_log::RAND_EVENT:
+      return "RAND";
+    case binary_log::XID_EVENT:
+      return "Xid";
+    case binary_log::USER_VAR_EVENT:
+      return "User var";
+    case binary_log::FORMAT_DESCRIPTION_EVENT:
+      return "Format_desc";
+    case binary_log::TABLE_MAP_EVENT:
+      return "Table_map";
+    case binary_log::WRITE_ROWS_EVENT_V1:
+      return "Write_rows_v1";
+    case binary_log::UPDATE_ROWS_EVENT_V1:
+      return "Update_rows_v1";
+    case binary_log::DELETE_ROWS_EVENT_V1:
+      return "Delete_rows_v1";
+    case binary_log::BEGIN_LOAD_QUERY_EVENT:
+      return "Begin_load_query";
+    case binary_log::EXECUTE_LOAD_QUERY_EVENT:
+      return "Execute_load_query";
+    case binary_log::INCIDENT_EVENT:
+      return "Incident";
+    case binary_log::IGNORABLE_LOG_EVENT:
+      return "Ignorable";
+    case binary_log::ROWS_QUERY_LOG_EVENT:
+      return "Rows_query";
+    case binary_log::WRITE_ROWS_EVENT:
+      return "Write_rows";
+    case binary_log::UPDATE_ROWS_EVENT:
+      return "Update_rows";
+    case binary_log::DELETE_ROWS_EVENT:
+      return "Delete_rows";
+    case binary_log::GTID_LOG_EVENT:
+      return "Gtid";
+    case binary_log::ANONYMOUS_GTID_LOG_EVENT:
+      return "Anonymous_Gtid";
+    case binary_log::PREVIOUS_GTIDS_LOG_EVENT:
+      return "Previous_gtids";
+    case binary_log::HEARTBEAT_LOG_EVENT:
+    case binary_log::HEARTBEAT_LOG_EVENT_V2:
+      return "Heartbeat";
+    case binary_log::TRANSACTION_CONTEXT_EVENT:
+      return "Transaction_context";
+    case binary_log::VIEW_CHANGE_EVENT:
+      return "View_change";
+    case binary_log::XA_PREPARE_LOG_EVENT:
+      return "XA_prepare";
+    case binary_log::PARTIAL_UPDATE_ROWS_EVENT:
+      return "Update_rows_partial";
+    case binary_log::TRANSACTION_PAYLOAD_EVENT:
+      return "Transaction_payload";
+    default:
+      return "Unknown"; /* impossible */
+  }
 }
 
 const char *Log_event::get_type_str() const {
@@ -1219,11 +1274,8 @@ uint32 Log_event::write_header_to_memory(uchar *buf) {
   int4store(buf, timestamp);
   buf[EVENT_TYPE_OFFSET] = get_type_code();
   int4store(buf + SERVER_ID_OFFSET, server_id);
-  uint32 event_size = static_cast<uint32>(common_header->data_written);
-  DBUG_EXECUTE_IF("set_query_log_event_size_to_5", {
-    if (get_type_code() == binary_log::QUERY_EVENT) event_size = 5;
-  });
-  int4store(buf + EVENT_LEN_OFFSET, event_size);
+  int4store(buf + EVENT_LEN_OFFSET,
+            static_cast<uint32>(common_header->data_written));
   int4store(buf + LOG_POS_OFFSET, static_cast<uint32>(common_header->log_pos));
   int2store(buf + FLAGS_OFFSET, common_header->flags);
 
@@ -1321,7 +1373,7 @@ void Log_event::print_header(IO_CACHE *file, PRINT_EVENT_INFO *print_event_info,
   if (print_event_info->hexdump_from) {
     my_b_printf(file, "\n");
     uchar *ptr = (uchar *)temp_buf;
-    const my_off_t size =
+    my_off_t size =
         uint4korr(ptr + EVENT_LEN_OFFSET) - LOG_EVENT_MINIMAL_HEADER_LEN;
     my_off_t i;
 
@@ -1488,12 +1540,10 @@ static bool my_b_write_quoted(IO_CACHE *file, const uchar *ptr, uint length) {
   @param[in] nbits             Number of bits
 */
 static void my_b_write_bit(IO_CACHE *file, const uchar *ptr, uint nbits) {
-  const uint nbits8 = ((nbits + 7) / 8) * 8;
-  const uint skip_bits = nbits8 - nbits;
-  uint bitnum;
+  uint bitnum, nbits8 = ((nbits + 7) / 8) * 8, skip_bits = nbits8 - nbits;
   my_b_printf(file, "b'");
   for (bitnum = skip_bits; bitnum < nbits8; bitnum++) {
-    const int is_set = (ptr[(bitnum) / 8] >> (7 - bitnum % 8)) & 0x01;
+    int is_set = (ptr[(bitnum) / 8] >> (7 - bitnum % 8)) & 0x01;
     my_b_write(file, (const uchar *)(is_set ? "1" : "0"), 1);
   }
   my_b_printf(file, "'");
@@ -1602,16 +1652,16 @@ static const char *print_json_diff(IO_CACHE *out, const uchar *data,
   const uchar *p = data;
 
   const uchar *start_p = p;
-  const size_t start_length = length;
+  size_t start_length = length;
 
   // Read the list of operations.
   std::vector<const char *> operation_names;
   while (length) {
     // read operation
-    const int operation_int = *p;
+    int operation_int = *p;
     if (operation_int >= JSON_DIFF_OPERATION_COUNT)
       return "reading operation type (invalid operation code)";
-    const enum_json_diff_operation operation =
+    enum_json_diff_operation operation =
         static_cast<enum_json_diff_operation>(operation_int);
     p++;
     length--;
@@ -1674,7 +1724,7 @@ static const char *print_json_diff(IO_CACHE *out, const uchar *data,
   int diff_i = 0;
   while (length) {
     // Read operation
-    const enum_json_diff_operation operation = (enum_json_diff_operation)*p;
+    enum_json_diff_operation operation = (enum_json_diff_operation)*p;
     p++;
     length--;
 
@@ -1702,7 +1752,7 @@ static const char *print_json_diff(IO_CACHE *out, const uchar *data,
       /* purecov: deadcode */  // already checked in loop above
 
       // Read value
-      const json_binary::Value value =
+      json_binary::Value value =
           json_binary::parse_binary((const char *)p, value_length);
       p += value_length;
       length -= value_length;
@@ -1763,8 +1813,8 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
 
   if (type == MYSQL_TYPE_STRING) {
     if (meta >= 256) {
-      const uint byte0 = meta >> 8;
-      const uint byte1 = meta & 0xFF;
+      uint byte0 = meta >> 8;
+      uint byte1 = meta & 0xFF;
 
       if ((byte0 & 0x30) != 0x30) {
         /* a long CHAR() field: see #37426 */
@@ -1780,8 +1830,8 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_LONG: {
       snprintf(typestr, typestr_length, "INT");
       if (!ptr) return my_b_printf(file, "NULL");
-      const int32 si = sint4korr(ptr);
-      const uint32 ui = uint4korr(ptr);
+      int32 si = sint4korr(ptr);
+      uint32 ui = uint4korr(ptr);
       my_b_write_sint32_and_uint32(file, si, ui);
       return 4;
     }
@@ -1806,8 +1856,8 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_INT24: {
       snprintf(typestr, typestr_length, "MEDIUMINT");
       if (!ptr) return my_b_printf(file, "NULL");
-      const int32 si = sint3korr(ptr);
-      const uint32 ui = uint3korr(ptr);
+      int32 si = sint3korr(ptr);
+      uint32 ui = uint3korr(ptr);
       my_b_write_sint32_and_uint32(file, si, ui);
       return 3;
     }
@@ -1816,11 +1866,11 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       snprintf(typestr, typestr_length, "LONGINT");
       if (!ptr) return my_b_printf(file, "NULL");
       char tmp[64];
-      const longlong si = sint8korr(ptr);
+      longlong si = sint8korr(ptr);
       longlong10_to_str(si, tmp, -10);
       my_b_printf(file, "%s", tmp);
       if (si < 0) {
-        const ulonglong ui = uint8korr(ptr);
+        ulonglong ui = uint8korr(ptr);
         longlong10_to_str((longlong)ui, tmp, 10);
         my_b_printf(file, " (%s)", tmp);
       }
@@ -1832,7 +1882,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       uint decimals = meta & 0xFF;
       snprintf(typestr, typestr_length, "DECIMAL(%d,%d)", precision, decimals);
       if (!ptr) return my_b_printf(file, "NULL");
-      const uint bin_size = my_decimal_get_binary_size(precision, decimals);
+      uint bin_size = my_decimal_get_binary_size(precision, decimals);
       my_decimal dec;
       binary2my_decimal(E_DEC_FATAL_ERROR, pointer_cast<const uchar *>(ptr),
                         &dec, precision, decimals);
@@ -1846,7 +1896,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_FLOAT: {
       snprintf(typestr, typestr_length, "FLOAT");
       if (!ptr) return my_b_printf(file, "NULL");
-      const float fl = float4get(ptr);
+      float fl = float4get(ptr);
       char tmp[320];
       sprintf(tmp, "%-20g", (double)fl);
       my_b_printf(file, "%s", tmp); /* my_b_printf doesn't support %-20g */
@@ -1856,7 +1906,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_DOUBLE: {
       strcpy(typestr, "DOUBLE");
       if (!ptr) return my_b_printf(file, "NULL");
-      const double dbl = float8get(ptr);
+      double dbl = float8get(ptr);
       char tmp[320];
       sprintf(tmp, "%-.20g", dbl); /* my_b_printf doesn't support %-20g */
       my_b_printf(file, "%s", tmp);
@@ -1865,7 +1915,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
 
     case MYSQL_TYPE_BIT: {
       /* Meta-data: bit_len, bytes_in_rec, 2 bytes */
-      const uint nbits = ((meta >> 8) * 8) + (meta & 0xFF);
+      uint nbits = ((meta >> 8) * 8) + (meta & 0xFF);
       snprintf(typestr, typestr_length, "BIT(%d)", nbits);
       if (!ptr) return my_b_printf(file, "NULL");
       length = (nbits + 7) / 8;
@@ -1876,7 +1926,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_TIMESTAMP: {
       snprintf(typestr, typestr_length, "TIMESTAMP");
       if (!ptr) return my_b_printf(file, "NULL");
-      const uint32 i32 = uint4korr(ptr);
+      uint32 i32 = uint4korr(ptr);
       my_b_printf(file, "%d", i32);
       return 4;
     }
@@ -1896,7 +1946,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       snprintf(typestr, typestr_length, "DATETIME");
       if (!ptr) return my_b_printf(file, "NULL");
       size_t d, t;
-      const uint64 i64 = uint8korr(ptr); /* YYYYMMDDhhmmss */
+      uint64 i64 = uint8korr(ptr); /* YYYYMMDDhhmmss */
       d = static_cast<size_t>(i64 / 1000000);
       t = i64 % 1000000;
       my_b_printf(file, "%04d-%02d-%02d %02d:%02d:%02d",
@@ -1912,9 +1962,9 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       if (!ptr) return my_b_printf(file, "NULL");
       char buf[MAX_DATE_STRING_REP_LENGTH];
       MYSQL_TIME ltime;
-      const longlong packed = my_datetime_packed_from_binary(ptr, meta);
+      longlong packed = my_datetime_packed_from_binary(ptr, meta);
       TIME_from_longlong_datetime_packed(&ltime, packed);
-      const int buflen = my_datetime_to_str(ltime, buf, meta);
+      int buflen = my_datetime_to_str(ltime, buf, meta);
       my_b_write_quoted(file, (uchar *)buf, buflen);
       return my_datetime_binary_length(meta);
     }
@@ -1922,7 +1972,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_TIME: {
       snprintf(typestr, typestr_length, "TIME");
       if (!ptr) return my_b_printf(file, "NULL");
-      const uint32 i32 = uint3korr(ptr);
+      uint32 i32 = uint3korr(ptr);
       my_b_printf(file, "'%02d:%02d:%02d'", i32 / 10000, (i32 % 10000) / 100,
                   i32 % 100);
       return 3;
@@ -1933,9 +1983,9 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       if (!ptr) return my_b_printf(file, "NULL");
       char buf[MAX_DATE_STRING_REP_LENGTH];
       MYSQL_TIME ltime;
-      const longlong packed = my_time_packed_from_binary(ptr, meta);
+      longlong packed = my_time_packed_from_binary(ptr, meta);
       TIME_from_longlong_time_packed(&ltime, packed);
-      const int buflen = my_time_to_str(ltime, buf, meta);
+      int buflen = my_time_to_str(ltime, buf, meta);
       my_b_write_quoted(file, (uchar *)buf, buflen);
       return my_time_binary_length(meta);
     }
@@ -1943,7 +1993,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_NEWDATE: {
       snprintf(typestr, typestr_length, "DATE");
       if (!ptr) return my_b_printf(file, "NULL");
-      const uint32 tmp = uint3korr(ptr);
+      uint32 tmp = uint3korr(ptr);
       int part;
       char buf[11];
       char *pos = &buf[10];  // start from '\0' to the beginning
@@ -1973,7 +2023,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
     case MYSQL_TYPE_YEAR: {
       snprintf(typestr, typestr_length, "YEAR");
       if (!ptr) return my_b_printf(file, "NULL");
-      const uint32 i32 = *ptr;
+      uint32 i32 = *ptr;
       my_b_printf(file, "%04d", i32 + 1900);
       return 1;
     }
@@ -1988,7 +2038,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
         case 2: {
           snprintf(typestr, typestr_length, "ENUM(2 bytes)");
           if (!ptr) return my_b_printf(file, "NULL");
-          const int32 i32 = uint2korr(ptr);
+          int32 i32 = uint2korr(ptr);
           my_b_printf(file, "%d", i32);
           return 2;
         }
@@ -2057,7 +2107,7 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
         if (error != nullptr)
           my_b_printf(file, "Error %s while printing JSON diff\n", error);
       } else {
-        const json_binary::Value value =
+        json_binary::Value value =
             json_binary::parse_binary((const char *)ptr, length);
         if (value.type() == json_binary::Value::ERROR) {
           if (my_b_printf(
@@ -2144,14 +2194,13 @@ size_t Rows_log_event::print_verbose_one_row(
       the partial_bits bitmap has a bit for every JSON column
       regardless of whether it is included in the bitmap or not.
     */
-    const bool is_partial = (value_options & PARTIAL_JSON_UPDATES) != 0 &&
-                            row_image_type == enum_row_image_type::UPDATE_AI &&
-                            td->type(i) == MYSQL_TYPE_JSON &&
-                            partial_bits.get();
+    bool is_partial = (value_options & PARTIAL_JSON_UPDATES) != 0 &&
+                      row_image_type == enum_row_image_type::UPDATE_AI &&
+                      td->type(i) == MYSQL_TYPE_JSON && partial_bits.get();
 
     if (bitmap_is_set(cols_bitmap, i) == 0) continue;
 
-    const bool is_null = null_bits.get();
+    bool is_null = null_bits.get();
 
     my_b_printf(file, "###   @%d=", static_cast<int>(i + 1));
     if (!is_null) {
@@ -2168,7 +2217,7 @@ size_t Rows_log_event::print_verbose_one_row(
     }
     char col_name[256];
     sprintf(col_name, "@%lu", (unsigned long)i + 1);
-    const size_t size = log_event_print_value(
+    size_t size = log_event_print_value(
         file, is_null ? nullptr : value, td->type(i), td->field_metadata(i),
         typestr, sizeof(typestr), col_name, is_partial);
     if (!size) return 0;
@@ -2205,9 +2254,9 @@ void Rows_log_event::print_verbose(IO_CACHE *file,
   Table_map_log_event *map;
   table_def *td;
   const char *sql_command, *sql_clause1, *sql_clause2;
-  const Log_event_type general_type_code = get_general_type_code();
+  Log_event_type general_type_code = get_general_type_code();
 
-  const enum_row_image_type row_image_type =
+  enum_row_image_type row_image_type =
       get_general_type_code() == binary_log::WRITE_ROWS_EVENT
           ? enum_row_image_type::WRITE_AI
           : get_general_type_code() == binary_log::DELETE_ROWS_EVENT
@@ -2216,7 +2265,7 @@ void Rows_log_event::print_verbose(IO_CACHE *file,
 
   if (m_extra_row_info.have_ndb_info() ||
       DBUG_EVALUATE_IF("simulate_error_in_ndb_info_print", 1, 0)) {
-    const int extra_row_ndb_info_payload_len =
+    int extra_row_ndb_info_payload_len =
         m_extra_row_info.get_ndb_length() - EXTRA_ROW_INFO_HEADER_LENGTH;
 
     if (m_extra_row_info.get_ndb_length() < EXTRA_ROW_INFO_HEADER_LENGTH) {
@@ -2324,7 +2373,7 @@ end:
 void Log_event::print_base64(IO_CACHE *file, PRINT_EVENT_INFO *print_event_info,
                              bool more) const {
   const uchar *ptr = (const uchar *)temp_buf;
-  const uint32 size = uint4korr(ptr + EVENT_LEN_OFFSET);
+  uint32 size = uint4korr(ptr + EVENT_LEN_OFFSET);
   DBUG_TRACE;
 
   uint64 const tmp_str_sz = base64_needed_encoded_length((uint64)size);
@@ -2351,10 +2400,9 @@ void Log_event::print_base64(IO_CACHE *file, PRINT_EVENT_INFO *print_event_info,
 
   if (print_event_info->verbose) {
     Rows_log_event *ev = nullptr;
-    const Log_event_type et = (Log_event_type)ptr[EVENT_TYPE_OFFSET];
+    Log_event_type et = (Log_event_type)ptr[EVENT_TYPE_OFFSET];
 
-    const enum_binlog_checksum_alg ev_checksum_alg =
-        common_footer->checksum_alg;
+    enum_binlog_checksum_alg ev_checksum_alg = common_footer->checksum_alg;
     Format_description_event fd_evt =
         Format_description_event(BINLOG_VERSION, server_version);
     fd_evt.footer()->checksum_alg = ev_checksum_alg;
@@ -2407,7 +2455,7 @@ void Log_event::print_timestamp(IO_CACHE *file, time_t *ts) const {
     Let's use a temporary time_t variable to execute localtime()
     with a correct argument type.
   */
-  const time_t ts_tmp = ts ? *ts : (ulong)common_header->when.tv_sec;
+  time_t ts_tmp = ts ? *ts : (ulong)common_header->when.tv_sec;
   DBUG_TRACE;
   struct tm tm_tmp;
   localtime_r(&ts_tmp, (res = &tm_tmp));
@@ -3348,7 +3396,6 @@ bool Query_log_event::write(Basic_ostream *ostream) {
     SET PSEUDO_THREAD_ID=
     for each query using temp tables.
   */
-
   int4store(buf + Q_THREAD_ID_OFFSET, slave_proxy_id);
   int4store(buf + Q_EXEC_TIME_OFFSET, exec_time);
   buf[Q_DB_LEN_OFFSET] = (char)db_len;
@@ -4053,8 +4100,8 @@ Query_log_event::Query_log_event(
   slave_proxy_id = thread_id;
   exec_time = query_exec_time;
 
-  const ulong buf_len = catalog_len + 1 + time_zone_len + 1 + user_len + 1 +
-                        host_len + 1 + data_len + 1;
+  ulong buf_len = catalog_len + 1 + time_zone_len + 1 + user_len + 1 +
+                  host_len + 1 + data_len + 1;
 
   if (!(data_buf = (Log_event_header::Byte *)my_malloc(key_memory_log_event,
                                                        buf_len, MYF(MY_WME)))) {
@@ -4085,8 +4132,8 @@ Query_log_event::Query_log_event(
   @return The length of the string containing the converted timestamp
 */
 inline size_t microsecond_timestamp_to_str(ulonglong timestamp, char *buf) {
-  const time_t seconds = (time_t)(timestamp / 1000000);
-  const int useconds = (int)(timestamp % 1000000);
+  time_t seconds = (time_t)(timestamp / 1000000);
+  int useconds = (int)(timestamp % 1000000);
   struct tm time_struct;
   localtime_r(&seconds, &time_struct);
   size_t length = strftime(buf, 255, "%F %T", &time_struct);
@@ -5123,7 +5170,7 @@ size_t Query_log_event::get_query(const char *buf, size_t length,
   int checksum_size = 0;    /* size of trailing checksum */
   const char *end_of_query;
 
-  const uint common_header_len = fd_event->common_header_len;
+  uint common_header_len = fd_event->common_header_len;
   uint query_header_len =
       fd_event->post_header_len[binary_log::QUERY_EVENT - 1];
 
@@ -6622,8 +6669,8 @@ void User_var_log_event::print(FILE *,
       case DECIMAL_RESULT: {
         char str_buf[DECIMAL_MAX_STR_LENGTH + 1];
         int str_len = sizeof(str_buf);
-        const int precision = (int)val[0];
-        const int scale = (int)val[1];
+        int precision = (int)val[0];
+        int scale = (int)val[1];
         decimal_digit_t dec_buf[10];
         decimal_t dec;
         dec.len = 10;
@@ -7603,8 +7650,8 @@ static const uchar *set_extra_data(uchar *arr, int reset_limit) {
 */
 static void check_extra_row_ndb_info(uchar *extra_row_ndb_info) {
   assert(extra_row_ndb_info);
-  const size_t len = extra_row_ndb_info[EXTRA_ROW_INFO_LEN_OFFSET];
-  const size_t val = len - EXTRA_ROW_INFO_HEADER_LENGTH;
+  size_t len = extra_row_ndb_info[EXTRA_ROW_INFO_LEN_OFFSET];
+  size_t val = len - EXTRA_ROW_INFO_HEADER_LENGTH;
   assert(extra_row_ndb_info[EXTRA_ROW_INFO_FORMAT_OFFSET] == val);
   for (size_t i = 0; i < val; i++) {
     assert(extra_row_ndb_info[EXTRA_ROW_INFO_HEADER_LENGTH + i] == val);
@@ -7977,7 +8024,7 @@ size_t Rows_log_event::get_data_size() {
                          (m_rows_cur - m_rows_buf););
 
   int data_size = 0;
-  const bool is_v2_event =
+  bool is_v2_event =
       common_header->type_code > binary_log::DELETE_ROWS_EVENT_V1;
   if (is_v2_event) {
     data_size = Binary_log_event::ROWS_HEADER_LEN_V2;
@@ -10390,8 +10437,9 @@ bool Rows_log_event::write_data_body(Basic_ostream *ostream) {
 
 int Rows_log_event::pack_info(Protocol *protocol) {
   char buf[256];
-  size_t bytes = snprintf(buf, sizeof(buf), "table_id: %llu%s", m_table_id.id(),
-                          get_enum_flag_string().c_str());
+  char const *const flagstr = get_flags(STMT_END_F) ? " flags: STMT_END_F" : "";
+  size_t bytes =
+      snprintf(buf, sizeof(buf), "table_id: %llu%s", m_table_id.id(), flagstr);
   protocol->store_string(buf, bytes, &my_charset_bin);
   return 0;
 }
@@ -10406,8 +10454,7 @@ void Rows_log_event::print_helper(FILE *,
     bool const last_stmt_event = get_flags(STMT_END_F);
     print_header(head, print_event_info, !last_stmt_event);
     my_b_printf(head, "\t%s: table id %llu%s\n", get_type_str(),
-                m_table_id.id(), get_enum_flag_string().c_str());
-
+                m_table_id.id(), last_stmt_event ? " flags: STMT_END_F" : "");
     print_base64(body, print_event_info, !last_stmt_event);
   }
 }
@@ -11383,8 +11430,8 @@ void Table_map_log_event::print(FILE *,
                   has_generated_invisible_primary_key());
 
     if (print_event_info->print_table_metadata) {
-      const Optional_metadata_fields fields(m_optional_metadata,
-                                            m_optional_metadata_len);
+      Optional_metadata_fields fields(m_optional_metadata,
+                                      m_optional_metadata_len);
 
       if (m_optional_metadata) assert(fields.is_valid);
       print_columns(&print_event_info->head_cache, fields);
@@ -11485,13 +11532,13 @@ static void get_type_name(uint type, unsigned char **meta_ptr,
       (*meta_ptr) += 2;
       break;
     case MYSQL_TYPE_BLOB: {
-      const bool is_text = (cs && cs->number != my_charset_bin.number);
+      bool is_text = (cs && cs->number != my_charset_bin.number);
       const char *names[5][2] = {{"INVALID_BLOB(%d)", "INVALID_TEXT(%d)"},
                                  {"TINYBLOB", "TINYTEXT"},
                                  {"BLOB", "TEXT"},
                                  {"MEDIUMBLOB", "MEDIUMTEXT"},
                                  {"LONGBLOB", "LONGTEXT"}};
-      const unsigned char size = **meta_ptr;
+      unsigned char size = **meta_ptr;
 
       if (size == 0 || size > 4)
         snprintf(typestr, typestr_length, names[0][is_text], size);
@@ -11512,9 +11559,9 @@ static void get_type_name(uint type, unsigned char **meta_ptr,
       (*meta_ptr) += 2;
       break;
     case MYSQL_TYPE_STRING: {
-      const uint byte0 = (*meta_ptr)[0];
-      const uint byte1 = (*meta_ptr)[1];
-      const uint len = (((byte0 & 0x30) ^ 0x30) << 4) | byte1;
+      uint byte0 = (*meta_ptr)[0];
+      uint byte1 = (*meta_ptr)[1];
+      uint len = (((byte0 & 0x30) ^ 0x30) << 4) | byte1;
 
       if (cs && cs->number != my_charset_bin.number)
         snprintf(typestr, typestr_length, "CHAR(%d)", len / cs->mbmaxlen);
@@ -11698,8 +11745,7 @@ void Table_map_log_event::print_columns(
     my_b_printf(file, "%s", type_name);
 
     // Print UNSIGNED for numeric column
-    const enum_field_types field_type_code =
-        static_cast<enum_field_types>(real_type);
+    enum_field_types field_type_code = static_cast<enum_field_types>(real_type);
     if (has_signedess_information_type(field_type_code) &&
         signedness_it != fields.m_signedness.end()) {
       if (*signedness_it == true &&
@@ -13248,9 +13294,8 @@ int Gtid_log_event::do_apply_event(Relay_log_info const *rli) {
     if (thd->rpl_thd_ctx.binlog_group_commit_ctx()
             .get_session_ticket()
             .is_set()) {
-      assert(
-          !(bgc_group_ticket >
-            thd->rpl_thd_ctx.binlog_group_commit_ctx().get_session_ticket()));
+      assert(thd->rpl_thd_ctx.binlog_group_commit_ctx().get_session_ticket() ==
+             bgc_group_ticket);
     }
 #endif
     /*
@@ -13314,7 +13359,7 @@ void Gtid_log_event::set_trx_length_by_cache_size(ulonglong cache_size,
     more bytes, so the correct transaction length must be in fact 253.
   */
 #ifndef NDEBUG
-  const ulonglong size_without_transaction_length = transaction_length;
+  ulonglong size_without_transaction_length = transaction_length;
 #endif
   // transaction_length will use at least TRANSACTION_LENGTH_MIN_LENGTH
   transaction_length += TRANSACTION_LENGTH_MIN_LENGTH;
@@ -13405,7 +13450,7 @@ void Previous_gtids_log_event::print(FILE *,
 int Previous_gtids_log_event::add_to_set(Gtid_set *target) const {
   DBUG_TRACE;
   size_t end_pos = 0;
-  const size_t add_size = DBUG_EVALUATE_IF("gtid_has_extra_data", 10, 0);
+  size_t add_size = DBUG_EVALUATE_IF("gtid_has_extra_data", 10, 0);
   /* Silently ignore additional unknown data at the end of the encoding */
   PROPAGATE_REPORTED_ERROR_INT(
       target->add_gtid_encoding(buf, buf_size + add_size, &end_pos));
@@ -13421,7 +13466,7 @@ char *Previous_gtids_log_event::get_str(
   DBUG_PRINT("info", ("temp_buf=%p buf=%p", temp_buf, buf));
   if (set.add_gtid_encoding(buf, buf_size) != RETURN_STATUS_OK) return nullptr;
   set.dbug_print("set");
-  const size_t length = set.get_string_length(string_format);
+  size_t length = set.get_string_length(string_format);
   DBUG_PRINT("info", ("string length= %lu", (ulong)length));
   char *str = (char *)my_malloc(key_memory_log_event, length + 1, MYF(MY_WME));
   if (str != nullptr) {
@@ -13652,7 +13697,7 @@ bool Transaction_context_log_event::read_snapshot_version() {
   assert(snapshot_version->is_empty());
 
   global_sid_lock->wrlock();
-  const enum_return_status return_status = global_sid_map->copy(sid_map);
+  enum_return_status return_status = global_sid_map->copy(sid_map);
   global_sid_lock->unlock();
   if (return_status != RETURN_STATUS_OK) return true;
 
@@ -13663,7 +13708,7 @@ bool Transaction_context_log_event::read_snapshot_version() {
 
 size_t Transaction_context_log_event::get_snapshot_version_size() {
   DBUG_TRACE;
-  const size_t result = snapshot_version->get_encoded_length();
+  size_t result = snapshot_version->get_encoded_length();
   return result;
 }
 
@@ -13943,24 +13988,25 @@ uint8 Transaction_payload_log_event::mts_number_dbs() {
 
 int Transaction_payload_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_TRACE;
-  using Istream_t =
-      binary_log::transaction::compression::Payload_event_buffer_istream;
-  Istream_t istream(*this);
-  NAMED_THD_STAGE_GUARD(stage_guard, thd, stage_binlog_transaction_decompress);
-  Istream_t::Buffer_ptr_t buffer;
-  while (istream >> buffer) {
-    stage_guard.set_old_stage();
-    /// @todo Use Decompressing_event_object_istream instead
-    if (apply_payload_event(rli, (const uchar *)buffer->data())) return 1;
-    stage_guard.set_new_stage();
-  }
-  if (istream.has_error()) {
-    LogErr(ERROR_LEVEL, ER_RPL_REPLICA_ERROR_READING_RELAY_LOG_EVENTS,
-           rli->get_for_channel_str(), istream.get_error_str().c_str());
-    return 1;
-  }
+  int res = 0;
+  PSI_stage_info old_stage;
 
-  return 0;
+  /* apply events in the payload */
+
+  binary_log::transaction::compression::Iterable_buffer it(
+      m_payload, m_payload_size, m_uncompressed_size, m_compression_type);
+
+  thd->enter_stage(&stage_binlog_transaction_decompress, &old_stage, __func__,
+                   __FILE__, __LINE__);
+  for (auto ptr : it) {
+    THD_STAGE_INFO(thd, old_stage);
+    if ((res = apply_payload_event(rli, (const uchar *)ptr))) break;
+    thd->enter_stage(&stage_binlog_transaction_decompress, &old_stage, __func__,
+                     __FILE__, __LINE__);
+  }
+  THD_STAGE_INFO(thd, old_stage);
+
+  return res;
 }
 
 static bool shall_delete_event_after_apply(Log_event *ev) {
@@ -14086,32 +14132,21 @@ Log_event::enum_skip_reason Transaction_payload_log_event::do_shall_skip(
 bool Transaction_payload_log_event::write(Basic_ostream *ostream) {
   DBUG_TRACE;
   auto codec = binary_log::codecs::Factory::build_codec(header()->type_code);
-  unsigned char all_headers_buffer[max_length_of_all_headers];
-  auto result =
-      codec->encode(*this, all_headers_buffer, max_length_of_all_headers);
-  if (result.second) return true;
+  auto buffer_size = MAX_DATA_LENGTH + LOG_EVENT_HEADER_LEN;
+  unsigned char buffer[MAX_DATA_LENGTH + LOG_EVENT_HEADER_LEN];
+  auto result = codec->encode(*this, buffer, buffer_size);
   size_t data_size = result.first + m_payload_size;
 
-  // header + post-header
-  if (write_header(ostream, data_size) ||
-      wrapper_my_b_safe_write(ostream, (uchar *)all_headers_buffer,
-                              result.first))
-    return true;
+  if (result.second == true) goto end;
 
-  // data
-  if (m_payload == nullptr) {
-    for (auto &buffer_view : *m_buffer_sequence_view) {
-      if (wrapper_my_b_safe_write(ostream, buffer_view.data(),
-                                  buffer_view.size()))
-        return true;
-    }
-  } else if (wrapper_my_b_safe_write(ostream,
-                                     reinterpret_cast<const uchar *>(m_payload),
-                                     m_payload_size))
-    return true;
-
-  // footer
-  return write_footer(ostream);
+  return write_header(ostream, data_size) ||
+         wrapper_my_b_safe_write(ostream, (uchar *)buffer, result.first) ||
+         wrapper_my_b_safe_write(ostream,
+                                 reinterpret_cast<const uchar *>(m_payload),
+                                 m_payload_size) ||
+         write_footer(ostream);
+end:
+  return true;
 }
 
 int Transaction_payload_log_event::pack_info(Protocol *protocol) {
@@ -14205,7 +14240,7 @@ size_t my_strmov_quoted_identifier(THD *thd, char *buffer,
 }
 #else
 size_t my_strmov_quoted_identifier(char *buffer, const char *identifier) {
-  const int q = '`';
+  int q = '`';
   return my_strmov_quoted_identifier_helper(q, buffer, identifier, 0);
 }
 
@@ -14267,7 +14302,7 @@ std::pair<bool, binary_log::Log_event_basic_info> extract_log_event_basic_info(
   binary_log::Log_event_basic_info event_info;
   event_info.query_length = 0;
 
-  const uint header_size = fd_event->common_header_len;
+  uint header_size = fd_event->common_header_len;
   const char *query = nullptr;
 
   /* Error if the event content is smaller than header size for the format */

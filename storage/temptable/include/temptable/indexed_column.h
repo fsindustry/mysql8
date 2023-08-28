@@ -28,7 +28,7 @@ TempTable Indexed Column. */
 
 #include <cstddef>
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "sql/field.h"
 #include "sql/key.h"
 #include "storage/temptable/include/temptable/cell_calculator.h"

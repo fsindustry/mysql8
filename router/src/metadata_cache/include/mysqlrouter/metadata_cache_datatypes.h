@@ -90,8 +90,12 @@ inline std::error_code make_error_code(metadata_errc e) noexcept {
   return std::error_code(static_cast<int>(e), metadata_cache_category());
 }
 
+constexpr const bool kNodeTagHiddenDefault{false};
+constexpr const bool kNodeTagDisconnectWhenHiddenDefault{true};
+
 enum class ServerMode { ReadWrite, ReadOnly, Unavailable };
 enum class ServerRole { Primary, Secondary, Unavailable };
+enum class InstanceType { GroupMember, AsyncMember, ReadReplica };
 
 /** @class ManagedInstance
  *
@@ -99,21 +103,19 @@ enum class ServerRole { Primary, Secondary, Unavailable };
  */
 class METADATA_CACHE_EXPORT ManagedInstance {
  public:
-  ManagedInstance(mysqlrouter::InstanceType p_type,
-                  const std::string &p_mysql_server_uuid,
+  ManagedInstance(InstanceType p_type, const std::string &p_mysql_server_uuid,
                   const ServerMode p_mode, const ServerRole p_role,
                   const std::string &p_host, const uint16_t p_port,
                   const uint16_t p_xport);
 
   using TCPAddress = mysql_harness::TCPAddress;
-  explicit ManagedInstance(mysqlrouter::InstanceType p_type);
-  explicit ManagedInstance(mysqlrouter::InstanceType p_type,
-                           const TCPAddress &addr);
+  explicit ManagedInstance(InstanceType p_type);
+  explicit ManagedInstance(InstanceType p_type, const TCPAddress &addr);
   operator TCPAddress() const;
   bool operator==(const ManagedInstance &other) const;
 
   /** @brief Instance type */
-  mysqlrouter::InstanceType type;
+  InstanceType type;
   /** @brief The uuid of the MySQL server */
   std::string mysql_server_uuid;
   /** @brief The mode of the server */
@@ -129,13 +131,11 @@ class METADATA_CACHE_EXPORT ManagedInstance {
   /** Node atributes as a json string from metadata */
   std::string attributes;
   /** Should the node be hidden from the application to use it */
-  bool hidden;
+  bool hidden{kNodeTagHiddenDefault};
   /** Should the Router disconnect existing client sessions to the node when it
    * is hidden */
-  bool disconnect_existing_sessions_when_hidden;
-  /** Should the node be ignored for new and existing connections (for example
-   * due to the read_only_targets option) */
-  bool ignore{false};
+  bool disconnect_existing_sessions_when_hidden{
+      kNodeTagDisconnectWhenHiddenDefault};
 };
 
 using cluster_nodes_list_t = std::vector<ManagedInstance>;

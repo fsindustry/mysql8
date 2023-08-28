@@ -97,7 +97,7 @@ stdx::expected<Processor::Result, std::error_code> CloneForwarder::connect() {
   }
 
   stage(Stage::Connected);
-  return mysql_reconnect_start(nullptr);
+  return mysql_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code> CloneForwarder::connected() {

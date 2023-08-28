@@ -56,7 +56,6 @@
  */
 
 #include <NodeBitmask.hpp>
-#include "ArrayPool.hpp"
 #include "IntrusiveList.hpp"
 #include "VMSignal.hpp"
 

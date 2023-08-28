@@ -479,16 +479,14 @@ dberr_t Merge_file_sort::sort(Builder *builder,
   const auto n_buffers = (m_merge_ctx->m_n_threads * N_WAY_MERGE) + 1;
   const auto io_buffer_size = ctx.merge_io_buffer_size(n_buffers);
 
-  ut::unique_ptr_aligned<byte[]> aligned_buffer =
-      ut::make_unique_aligned<byte[]>(ut::make_psi_memory_key(mem_key_ddl),
-                                      UNIV_SECTOR_SIZE, io_buffer_size);
+  Aligned_buffer aligned_buffer{};
 
-  if (!aligned_buffer) {
+  if (!aligned_buffer.allocate(io_buffer_size)) {
     return DB_OUT_OF_MEMORY;
   }
 
   /* Buffer for writing the merged rows to the output file. */
-  IO_buffer io_buffer{aligned_buffer.get(), io_buffer_size};
+  auto io_buffer = aligned_buffer.io_buffer();
 
   /* This is the output file for the first pass. */
   auto tmpfd = ddl::file_create_low(builder->tmpdir());

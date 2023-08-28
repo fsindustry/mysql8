@@ -1716,11 +1716,11 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
     return query_result->send_eof(thd);
   }
 
-  if (item != nullptr) {
-    item->reset_has_values();
+  if (item) {
+    item->reset_value_registration();
 
-    if (item->is_value_assigned()) {
-      item->reset_value_assigned();  // Prepare for re-execution of this unit
+    if (item->assigned()) {
+      item->assigned(false);  // Prepare for re-execution of this unit
       item->reset();
     }
   }
@@ -1838,7 +1838,7 @@ void Query_expression::cleanup(bool full) {
   cleaned = (full ? UC_CLEAN : UC_PART_CLEAN);
 
   if (full) {
-    clear_root_access_path();
+    m_root_iterator.reset();
   }
 
   m_query_blocks_to_materialize.clear();

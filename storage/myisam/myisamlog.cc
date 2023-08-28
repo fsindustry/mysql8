@@ -31,7 +31,6 @@
 
 #include <algorithm>
 
-#include "m_string.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -39,8 +38,6 @@
 #include "my_io.h"
 #include "my_macros.h"
 #include "my_tree.h"
-#include "mysql/strings/int2str.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "storage/myisam/myisamdef.h"
 #include "welcome_copyright_notice.h"

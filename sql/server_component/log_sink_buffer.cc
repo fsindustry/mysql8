@@ -297,8 +297,7 @@ void log_sink_buffer_flush(enum log_sink_buffer_flush_mode mode) {
     if (mode != LOG_BUFFER_DISCARD_ONLY) {
       // Fetch integer timestamp of when we buffered the event.
       ulonglong now = 0;
-      const int index_buff =
-          log_line_index_by_type(&llp->ll, LOG_ITEM_LOG_BUFFERED);
+      int index_buff = log_line_index_by_type(&llp->ll, LOG_ITEM_LOG_BUFFERED);
 
       if (index_buff >= 0) now = llp->ll.item[index_buff].data.data_integer;
 
@@ -315,7 +314,7 @@ void log_sink_buffer_flush(enum log_sink_buffer_flush_mode mode) {
                               strlen(local_time_buff) + 1, MYF(0));
 
       if (date != nullptr) {
-        const int index_time =
+        int index_time =
             log_line_index_by_type(&llp->ll, LOG_ITEM_LOG_TIMESTAMP);
 
         if (index_time >= 0) {

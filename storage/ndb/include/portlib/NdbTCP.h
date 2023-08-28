@@ -27,7 +27,6 @@
 
 #include "ndb_global.h"
 #include "portlib/ndb_socket.h"
-#include "portlib/ndb_sockaddr.h"
 
 #define NDB_ADDR_STRLEN 512
 
@@ -48,16 +47,17 @@
  */
 void NdbTCP_set_preferred_IP_version(int version);
 
-/*  Lookup host name and convert ip address to socket address
+/*  Convert host name or ip address to in6_addr
     Returns 0 on success, -1 on failure
  */
-int Ndb_getAddr(ndb_sockaddr * dst, const char *host);
+int Ndb_getInAddr6(struct in6_addr * dst, const char *address);
 
-/* src is a socket address.
+/* src is an address of family af, either AF_INET or AF_INET6.
    dst is a character buffer that will hold address in presentation format.
    Returns dst.
  */
-char* Ndb_inet_ntop(const ndb_sockaddr *src,
+char* Ndb_inet_ntop(int af,
+                    const void *src,
                     char *dst,
                     size_t dst_size);
 

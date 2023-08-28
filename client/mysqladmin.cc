@@ -36,7 +36,7 @@
 
 #include "client/client_priv.h"
 #include "compression.h"
-#include "m_string.h"
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -46,17 +46,12 @@
 #include "my_macros.h"
 #include "my_thread.h" /* because of signal()	*/
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "sql_common.h"
-#include "str2int.h"
-#include "strxmov.h"
 #include "typelib.h"
 #include "welcome_copyright_notice.h" /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
-#define MAX_MYSQL_VAR 8192
+#define MAX_MYSQL_VAR 512
 #define SHUTDOWN_DEF_TIMEOUT 3600 /* Wait for shutdown */
 #define MAX_TRUNC_LENGTH 3
 
@@ -477,7 +472,7 @@ int main(int argc, char *argv[]) {
       The following just determines the exit-code we'll give.
     */
 
-    const unsigned int err = mysql_errno(&mysql);
+    unsigned int err = mysql_errno(&mysql);
     if (err >= CR_MIN_ERROR && err <= CR_MAX_ERROR)
       error = 1;
     else {
@@ -881,15 +876,8 @@ static int execute_commands(MYSQL *mysql, int argc, char **argv) {
           return -1;
         }
 
-        if (mysql_num_rows(res) >= MAX_MYSQL_VAR) {
-          my_printf_error(0,
-                          "Too many rows returned: '%llu'. "
-                          "Expecting no more than '%d' rows",
-                          error_flags, (unsigned long long)mysql_num_rows(res),
-                          MAX_MYSQL_VAR);
-          mysql_free_result(res);
-          return -1;
-        }
+        assert(mysql_num_rows(res) < MAX_MYSQL_VAR);
+
         if (!opt_vertical)
           print_header(res);
         else {
@@ -1031,7 +1019,7 @@ static int execute_commands(MYSQL *mysql, int argc, char **argv) {
 
         if (typed_password[0]) {
 #ifdef _WIN32
-          const size_t pw_len = strlen(typed_password);
+          size_t pw_len = strlen(typed_password);
           if (pw_len > 1 && typed_password[0] == '\'' &&
               typed_password[pw_len - 1] == '\'')
             printf(

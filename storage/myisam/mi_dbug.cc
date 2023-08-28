@@ -26,7 +26,6 @@
 
 #include "my_byteorder.h"
 #include "my_inttypes.h"
-#include "mysql/strings/int2str.h"
 #include "storage/myisam/myisamdef.h"
 
 /* Print a key in user understandable format */

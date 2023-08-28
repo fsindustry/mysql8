@@ -25,7 +25,6 @@
 
 #include <string>
 
-class CompanionSet;
 class THD;
 class Item;
 
@@ -33,8 +32,6 @@ class Item;
   For the given condition, to try estimate its filtering selectivity,
   on a 0..1 scale (where 1.0 lets all records through).
  */
-double EstimateSelectivity(THD *thd, Item *condition,
-                           const CompanionSet &companion_set,
-                           std::string *trace);
+double EstimateSelectivity(THD *thd, Item *condition, std::string *trace);
 
 #endif  // SQL_JOIN_OPTIMIZER_ESTIMATE_SELECTIVITY

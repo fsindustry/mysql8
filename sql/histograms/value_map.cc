@@ -42,8 +42,6 @@
 #include "sql_string.h"          // String
 #include "template_utils.h"      // down_cast
 
-struct CHARSET_INFO;
-
 namespace histograms {
 
 // Overloading the Histogram_comparator for various data types.

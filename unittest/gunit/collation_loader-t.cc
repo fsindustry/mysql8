@@ -35,9 +35,8 @@
 #include <thread>
 #include <vector>
 
+#include "m_ctype.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
-#include "template_utils.h"
 #include "unittest/gunit/benchmark.h"
 
 namespace collation_loader_unittest {
@@ -45,11 +44,13 @@ namespace collation_loader_unittest {
 namespace {
 
 CHARSET_INFO *lookup_collation(const char *name) {
-  return get_charset_by_name(name, MYF(0));
+  MY_CHARSET_LOADER loader;
+  return my_collation_get_by_name(&loader, name, MYF(0));
 }
 
 CHARSET_INFO *lookup_charset(const char *name, int flag) {
-  return get_charset_by_csname(name, flag, MYF(0));
+  MY_CHARSET_LOADER loader;
+  return my_charset_get_by_name(&loader, name, flag, MYF(0));
 }
 
 }  // namespace

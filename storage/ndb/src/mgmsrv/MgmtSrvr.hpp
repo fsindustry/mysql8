@@ -33,7 +33,6 @@
 #include <NodeBitmask.hpp>
 #include <ndb_version.h>
 #include <EventLogger.hpp>
-#include "portlib/ndb_sockaddr.h"
 
 #include <SignalSender.hpp>
 
@@ -455,7 +454,7 @@ private:
 
   bool m_need_restart;
 
-  ndb_sockaddr m_connect_address[MAX_NODES];
+  struct in6_addr m_connect_address[MAX_NODES];
   const char *get_connect_address(NodeId node_id,
                                   char *addr_buf,
                                   size_t addr_buf_size);
@@ -576,13 +575,13 @@ private:
                                    BaseString& error_string) const;
   int find_node_type(NodeId nodeid,
                      ndb_mgm_node_type type,
-                     const ndb_sockaddr* client_addr,
+                     const sockaddr_in6* client_addr,
                      const Vector<ConfigNode>& config_nodes,
                      Vector<PossibleNode>& nodes,
                      int& error_code, BaseString& error_string);
   bool alloc_node_id_impl(NodeId& nodeid,
                           ndb_mgm_node_type type,
-                          const ndb_sockaddr* client_addr,
+                          const sockaddr_in6* client_addr,
                           int& error_code, BaseString& error_string,
                           Uint32 timeout_s = 20);
 public:
@@ -605,7 +604,7 @@ public:
    */
   bool alloc_node_id(NodeId& nodeid,
                      ndb_mgm_node_type type,
-                     const ndb_sockaddr* client_addr,
+                     const sockaddr_in6* client_addr,
 		     int& error_code, BaseString& error_string,
                      bool log_event = true,
 		     Uint32 timeout_s = 20);

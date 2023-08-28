@@ -1,7 +1,5 @@
 SET @old_sql_mode=  @@global.sql_mode;
 SET @old_binlog_format=@@session.binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET SESSION sql_mode=8;
 Initialization 
 RESET MASTER;
@@ -41,8 +39,6 @@ DROP VIEW testView;
 DROP TABLE t1;
 SET @@global.sql_mode= @old_sql_mode;
 SET @@session.binlog_format=@old_binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 
 #
 # Test for Bug#12601974 - STORED PROCEDURE SQL_MODE=NO_BACKSLASH_ESCAPES

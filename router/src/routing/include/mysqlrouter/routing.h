@@ -99,39 +99,12 @@ constexpr const std::chrono::milliseconds kDefaultConnectionSharingDelay{1000};
 constexpr const std::chrono::seconds
     kDefaultUnreachableDestinationRefreshInterval{1};
 
-/**
- * Default SSL session cache mode.
- */
-constexpr const bool kDefaultSslSessionCacheMode{true};
-
-/**
- * Default SSL session cache size.
- */
-constexpr const unsigned int kDefaultSslSessionCacheSize{1024};
-
-/**
- * Default SSL session cache timeout.
- */
-constexpr const std::chrono::seconds kDefaultSslSessionCacheTimeout{300};
-
-/**
- * Default Connect Retry timeout.
- */
-constexpr const std::chrono::seconds kDefaultConnectRetryTimeout{7};
-
 /** @brief Modes supported by Routing plugin */
-enum class RoutingMode {
+enum class AccessMode {
   kUndefined = 0,
   kReadWrite = 1,
   kReadOnly = 2,
 };
-
-// the declaration of RoutingMode and then renaming to Mode works around a bug
-// in doxygen which otherwise reports:
-//
-// storage/innobase/include/buf0dblwr.h:365: warning:
-// documented symbol 'bool dblwr::Mode::is_atomic' was not declared or defined.
-using Mode = RoutingMode;
 
 /** @brief Routing strategies supported by Routing plugin */
 enum class RoutingStrategy {
@@ -142,32 +115,31 @@ enum class RoutingStrategy {
   kRoundRobinWithFallback = 4,
 };
 
-/**
- * Get comma separated list of all access mode names.
- */
-std::string ROUTING_EXPORT get_mode_names();
-
-/**
- * Returns Mode for its literal representation.
+/** @brief Get comma separated list of all access mode names
  *
- * If no Mode is found for given string,
- * Mode::kUndefined is returned.
+ */
+std::string ROUTING_EXPORT get_access_mode_names();
+
+/** @brief Returns AccessMode for its literal representation
+ *
+ * If no AccessMode is found for given string,
+ * AccessMode::kUndefined is returned.
  *
  * @param value literal representation of the access mode
- * @return Mode for the given string or Mode::kUndefined
+ * @return AccessMode for the given string or AccessMode::kUndefined
  */
-Mode ROUTING_EXPORT get_mode(const std::string &value);
+AccessMode ROUTING_EXPORT get_access_mode(const std::string &value);
 
-/**
- * Returns literal name of given access mode.
+/** @brief Returns literal name of given access mode
  *
  * Returns literal name of given access mode as a std:string. When
  * the access mode is not found, empty string is returned.
  *
- * @param access_mode  mode to look up
+ * @param access_mode Access mode to look up
  * @return Name of access mode as std::string or empty string
  */
-std::string ROUTING_EXPORT get_mode_name(Mode access_mode) noexcept;
+std::string ROUTING_EXPORT
+get_access_mode_name(AccessMode access_mode) noexcept;
 
 /** @brief Get comma separated list of all routing stategy names
  *         for a given routing type (metadata cache or static)

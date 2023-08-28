@@ -62,8 +62,6 @@ using namespace std::string_literals;
 using namespace std::chrono_literals;
 using namespace std::string_view_literals;
 
-using ::testing::ElementsAre;
-
 static constexpr const std::string_view kDisabled{"DISABLED"};
 static constexpr const std::string_view kRequired{"REQUIRED"};
 static constexpr const std::string_view kPreferred{"PREFERRED"};
@@ -73,50 +71,6 @@ static constexpr const std::string_view kAsClient{"AS_CLIENT"};
 std::ostream &operator<<(std::ostream &os, MysqlError e) {
   os << e.sql_state() << " (" << e.value() << ") " << e.message();
   return os;
-}
-
-/**
- * convert a multi-resultset into a simple container which can be EXPECTed
- * against.
- */
-static std::vector<std::vector<std::vector<std::string>>> result_as_vector(
-    const MysqlClient::Statement::Result &results) {
-  std::vector<std::vector<std::vector<std::string>>> resultsets;
-
-  for (const auto &result : results) {
-    std::vector<std::vector<std::string>> res_;
-
-    const auto field_count = result.field_count();
-
-    for (const auto &row : result.rows()) {
-      std::vector<std::string> row_;
-      row_.reserve(field_count);
-
-      for (unsigned int ndx = 0; ndx < field_count; ++ndx) {
-        auto fld = row[ndx];
-
-        row_.emplace_back(fld == nullptr ? "<NULL>" : fld);
-      }
-
-      res_.push_back(std::move(row_));
-    }
-    resultsets.push_back(std::move(res_));
-  }
-
-  return resultsets;
-}
-
-static stdx::expected<std::vector<std::vector<std::string>>, MysqlError>
-query_one_result(MysqlClient &cli, std::string_view stmt) {
-  auto cmd_res = cli.query(stmt);
-  if (!cmd_res) return stdx::make_unexpected(cmd_res.error());
-
-  auto results = result_as_vector(*cmd_res);
-  if (results.size() != 1) {
-    return stdx::make_unexpected(MysqlError{1, "Too many results", "HY000"});
-  }
-
-  return results.front();
 }
 
 /*
@@ -598,7 +552,6 @@ class SharedRouter {
                         SSL_TEST_DATA_DIR "/server-key-sha512.pem"},
                        {"client_ssl_cert",
                         SSL_TEST_DATA_DIR "/server-cert-sha512.pem"},
-                       {"connect_retry_timeout", "0"},
                    })
           .section("routing:x_" + param.testname,
                    {
@@ -717,6 +670,8 @@ class ReuseConnectionTest
     // shared_server_ may be null if TestWithSharedServer::SetUpTestSuite threw?
     if (shared_server_ == nullptr || shared_server_->mysqld_failed_to_start()) {
       GTEST_SKIP() << "failed to start mysqld";
+    } else {
+      shared_server_->flush_prileges();
     }
   }
 
@@ -923,9 +878,6 @@ TEST_P(ReuseConnectionTest, classic_protocol_change_user_native) {
 }
 
 TEST_P(ReuseConnectionTest, classic_protocol_change_user_caching_sha2_empty) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// connecting to server");
   MysqlClient cli;
 
@@ -947,9 +899,6 @@ TEST_P(ReuseConnectionTest, classic_protocol_change_user_caching_sha2_empty) {
 }
 
 TEST_P(ReuseConnectionTest, classic_protocol_change_user_caching_sha2) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// connecting to server");
   MysqlClient cli;
 
@@ -1466,30 +1415,30 @@ TEST_P(ReuseConnectionTest, classic_protocol_prepare_append_data_execute) {
   // longdata: c_string with len
   {
     auto append_res = stmt.append_param_data(0, "a", 1);
-    ASSERT_NO_ERROR(append_res);
+    EXPECT_NO_ERROR(append_res) << append_res.error();
   }
 
   // longdata: string_view
   {
     auto append_res = stmt.append_param_data(0, "b"sv);
-    ASSERT_NO_ERROR(append_res);
+    EXPECT_NO_ERROR(append_res) << append_res.error();
   }
 
   // longdata: string_view from std::string
   {
     auto append_res = stmt.append_param_data(0, std::string("c"));
-    ASSERT_NO_ERROR(append_res);
+    EXPECT_NO_ERROR(append_res) << append_res.error();
   }
 
   // longdata: string_view from c-string
   {
     auto append_res = stmt.append_param_data(0, "d");
-    ASSERT_NO_ERROR(append_res);
+    EXPECT_NO_ERROR(append_res) << append_res.error();
   }
 
   {
     auto exec_res = stmt.execute();
-    ASSERT_NO_ERROR(exec_res) << exec_res.error();
+    EXPECT_NO_ERROR(exec_res) << exec_res.error();
 
     // may contain multi-resultset
     size_t results{0};
@@ -1522,7 +1471,7 @@ TEST_P(ReuseConnectionTest, classic_protocol_prepare_append_data_execute) {
   // execute again
   {
     auto exec_res = stmt.execute();
-    ASSERT_NO_ERROR(exec_res);
+    EXPECT_NO_ERROR(exec_res) << exec_res.error();
   }
 }
 
@@ -1871,9 +1820,6 @@ TEST_P(ReuseConnectionTest, classic_protocol_native_user_with_pass) {
 //
 
 TEST_P(ReuseConnectionTest, classic_protocol_caching_sha2_password_with_pass) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   auto account = shared_server_->caching_sha2_password_account();
 
   std::string username(account.username);
@@ -1936,9 +1882,6 @@ TEST_P(ReuseConnectionTest, classic_protocol_caching_sha2_password_with_pass) {
 }
 
 TEST_P(ReuseConnectionTest, classic_protocol_caching_sha2_password_no_pass) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   auto account = shared_server_->caching_sha2_empty_password_account();
 
   std::string username(account.username);
@@ -2005,9 +1948,6 @@ TEST_P(ReuseConnectionTest,
   if (GetParam().client_ssl_mode == kRequired) {
     GTEST_SKIP() << "test requires plaintext connection.";
   }
-
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
 
   auto account = shared_server_->caching_sha2_single_use_password_account();
 
@@ -2364,7 +2304,7 @@ TEST_P(ReuseConnectionTest, x_protocol_crud_find) {
     EXPECT_EQ(exec_res->get_warnings(), xcl::XQuery_result::Warnings{});
     EXPECT_EQ(exec_res->has_resultset(), true);
 
-    const auto *row = exec_res->get_next_row();
+    auto row = exec_res->get_next_row();
     std::string string_v;
     ASSERT_TRUE(row->get_string(0, &string_v));
     // content is {_id: "0000027323879689"}
@@ -3783,9 +3723,6 @@ TEST_P(ReuseConnectionTest,
 
 TEST_P(ReuseConnectionTest,
        x_protocol_session_authenticate_start_caching_sha2_password_empty) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// connect");
   auto sess_res = xsess(GetParam());
   ASSERT_NO_ERROR(sess_res);
@@ -3811,9 +3748,6 @@ TEST_P(ReuseConnectionTest,
 
 TEST_P(ReuseConnectionTest,
        x_protocol_session_authenticate_start_caching_sha2_password) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// connect");
   auto sess_res = xsess(GetParam());
   ASSERT_NO_ERROR(sess_res);
@@ -3877,9 +3811,6 @@ TEST_P(ReuseConnectionTest, x_protocol_connect_native) {
 }
 
 TEST_P(ReuseConnectionTest, x_protocol_connect_sha256_password_empty) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// setup");
   auto sess = xcl::create_session();
   auto account = shared_server_->sha256_empty_password_account();
@@ -3903,9 +3834,6 @@ TEST_P(ReuseConnectionTest, x_protocol_connect_sha256_password_empty) {
 }
 
 TEST_P(ReuseConnectionTest, x_protocol_connect_sha256_password) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   auto sess = xcl::create_session();
   auto account = shared_server_->sha256_password_account();
 
@@ -3928,9 +3856,6 @@ TEST_P(ReuseConnectionTest, x_protocol_connect_sha256_password) {
 }
 
 TEST_P(ReuseConnectionTest, x_protocol_connect_caching_sha2_password_empty) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// setup");
 
   auto sess = xcl::create_session();
@@ -3963,9 +3888,6 @@ TEST_P(ReuseConnectionTest, x_protocol_connect_caching_sha2_password_empty) {
 }
 
 TEST_P(ReuseConnectionTest, x_protocol_connect_caching_sha2_password) {
-  // reset auth-cache for caching-sha2-password
-  shared_server_->flush_prileges();
-
   SCOPED_TRACE("// setup");
   auto sess = xcl::create_session();
 
@@ -3993,29 +3915,6 @@ TEST_P(ReuseConnectionTest, x_protocol_connect_caching_sha2_password) {
     } else {
       ASSERT_EQ(xerr.error(), 0) << xerr;
     }
-  }
-}
-
-TEST_P(ReuseConnectionTest, classic_protocol_charset_after_connect) {
-  MysqlClient cli;
-
-  auto account = shared_server_->native_empty_password_account();
-
-  cli.username(account.username);
-  cli.password(account.password);
-
-  cli.set_option(MysqlClient::CharsetName("latin1"));
-
-  ASSERT_NO_ERROR(
-      cli.connect(shared_router_->host(), shared_router_->port(GetParam())));
-
-  {
-    auto cmd_res = query_one_result(
-        cli, "select @@character_set_client, @@collation_connection");
-    ASSERT_NO_ERROR(cmd_res);
-
-    EXPECT_THAT(*cmd_res,
-                ElementsAre(ElementsAre("latin1", "latin1_swedish_ci")));
   }
 }
 

@@ -41,6 +41,7 @@
 
 #include "ft_global.h"
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
@@ -52,9 +53,6 @@
 #include "my_sqlcommand.h"
 #include "my_sys.h"
 #include "my_thread_local.h"
-#include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_acls.h"
@@ -99,7 +97,6 @@
 #include "sql/table_function.h"  // Table_function
 #include "sql/visible_fields.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 #include "template_utils.h"
 
 class Opt_trace_context;
@@ -848,8 +845,7 @@ bool Explain_setop_result::explain_table_name() {
       m_query_term->m_children.back()->query_block();
   ;
   // # characters needed to print select_number of last select
-  const int last_length =
-      (int)log10((double)last_query_block->select_number) + 1;
+  int last_length = (int)log10((double)last_query_block->select_number) + 1;
 
   char table_name_buffer[NAME_LEN];
   const char *op_type;
@@ -1019,7 +1015,7 @@ bool Explain_table_base::explain_extra_common(int range_scan_type, uint keyno) {
       }
     }
     if (pushed_root == table) {
-      const uint pushed_count = table->file->number_of_pushed_joins();
+      uint pushed_count = table->file->number_of_pushed_joins();
       len = snprintf(buf, sizeof(buf) - 1, "Parent of %d pushed join@%d",
                      pushed_count, pushed_id);
     } else {
@@ -1552,7 +1548,7 @@ bool Explain_join::explain_rows_and_filtered() {
             : 0.0f);
 
     // Print cost-related info
-    const double prefix_rows = pos->prefix_rowcount;
+    double prefix_rows = pos->prefix_rowcount;
     ulonglong prefix_rows_ull =
         static_cast<ulonglong>(std::min(prefix_rows, ULLONG_MAX_DOUBLE));
     fmt->entry()->col_prefix_rows.set(prefix_rows_ull);
@@ -1563,7 +1559,7 @@ bool Explain_join::explain_rows_and_filtered() {
     fmt->entry()->col_prefix_cost.set(pos->prefix_cost);
     // Calculate amount of data from this table per query
     char data_size_str[32];
-    const double data_size = prefix_rows * tab->table()->s->rec_buff_length;
+    double data_size = prefix_rows * tab->table()->s->rec_buff_length;
     human_readable_num_bytes(data_size_str, sizeof(data_size_str), data_size);
     fmt->entry()->col_data_size_query.set(data_size_str);
   }
@@ -1798,7 +1794,7 @@ bool Explain_table::explain_rows_and_filtered() {
       fmt->entry()->mod_type == MT_REPLACE)
     return false;
 
-  const ha_rows examined_rows =
+  ha_rows examined_rows =
       query_thd->query_plan.get_modification_plan()->examined_rows;
   fmt->entry()->col_rows.set(static_cast<long long>(examined_rows));
 
@@ -1906,10 +1902,9 @@ bool explain_single_table_modification(THD *explain_thd, const THD *query_thd,
                                        const Modification_plan *plan,
                                        Query_block *select) {
   DBUG_TRACE;
+  Query_result_send result;
   const bool other = (query_thd != explain_thd);
   bool ret;
-  const bool is_explain_into =
-      explain_thd->lex->explain_format->is_explain_into();
 
   if (explain_thd->lex->explain_format->is_iterator_based()) {
     // These kinds of queries don't have a JOIN with an iterator tree.
@@ -1934,20 +1929,10 @@ bool explain_single_table_modification(THD *explain_thd, const THD *query_thd,
     manually.
   */
   mem_root_deque<Item *> dummy(explain_thd->mem_root);
-  Query_result_send *result = new (explain_thd->mem_root) Query_result_send();
-  if (result == nullptr) return true;
-
-  if (is_explain_into) {
-    result = new (explain_thd->mem_root) Query_result_explain_into_var(
-        explain_thd->lex->unit, result,
-        explain_thd->lex->explain_format->explain_into_variable_name());
-    if (result == nullptr) return true;
-  }
-
-  if (result->prepare(explain_thd, dummy, explain_thd->lex->unit))
+  if (result.prepare(explain_thd, dummy, explain_thd->lex->unit))
     return true; /* purecov: inspected */
 
-  explain_thd->lex->explain_format->send_headers(result);
+  explain_thd->lex->explain_format->send_headers(&result);
 
   /*
     Optimize currently non-optimized subqueries when needed, but
@@ -1987,9 +1972,9 @@ bool explain_single_table_modification(THD *explain_thd, const THD *query_thd,
             explain_thd->is_error();
   }
   if (ret)
-    result->abort_result_set(explain_thd);
+    result.abort_result_set(explain_thd);
   else {
-    if (!other && !is_explain_into) {
+    if (!other) {
       StringBuffer<1024> str;
       query_thd->lex->unit->print(
           explain_thd, &str,
@@ -1999,7 +1984,7 @@ bool explain_single_table_modification(THD *explain_thd, const THD *query_thd,
       push_warning(explain_thd, Sql_condition::SL_NOTE, ER_YES, str.ptr());
     }
 
-    result->send_eof(explain_thd);
+    result.send_eof(explain_thd);
   }
   return ret;
 }
@@ -2018,10 +2003,10 @@ bool explain_query_specification(THD *explain_thd, const THD *query_thd,
                                  enum_parsing_context ctx) {
   Query_block *query_block = query_term->query_block();
   Opt_trace_context *const trace = &explain_thd->opt_trace;
-  const Opt_trace_object trace_wrapper(trace);
+  Opt_trace_object trace_wrapper(trace);
   Opt_trace_object trace_exec(trace, "join_explain");
   trace_exec.add_select_number(query_block->select_number);
-  const Opt_trace_array trace_steps(trace, "steps");
+  Opt_trace_array trace_steps(trace, "steps");
   JOIN *join = query_block->join;
   const bool other = (query_thd != explain_thd);
 
@@ -2103,20 +2088,12 @@ bool explain_query_specification(THD *explain_thd, const THD *query_thd,
 
 static bool ExplainIterator(THD *ethd, const THD *query_thd,
                             Query_expression *unit) {
-  Query_result_send *result = nullptr;
-  if (ethd->lex->explain_format->is_explain_into()) {
-    result = new (ethd->mem_root) Query_result_explain_into_var(
-        unit, result, ethd->lex->explain_format->explain_into_variable_name());
-  } else {
-    result = new (ethd->mem_root) Query_result_send();
-  }
-  if (result == nullptr) return true;
-
+  Query_result_send result;
   {
     mem_root_deque<Item *> field_list(ethd->mem_root);
     Item *item = new Item_empty_string("EXPLAIN", 78, system_charset_info);
     field_list.push_back(item);
-    if (result->send_result_set_metadata(
+    if (result.send_result_set_metadata(
             ethd, field_list, Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF)) {
       return true;
     }
@@ -2137,11 +2114,11 @@ static bool ExplainIterator(THD *ethd, const THD *query_thd,
       ethd->raise_warning(ER_QUERY_INTERRUPTED);
     }
 
-    if (result->send_data(ethd, field_list)) {
+    if (result.send_data(ethd, field_list)) {
       return true;
     }
   }
-  return result->send_eof(ethd);
+  return result.send_eof(ethd);
 }
 
 /**
@@ -2246,9 +2223,6 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
   const bool secondary_engine = SecondaryEngineHandlerton(query_thd) != nullptr;
 
   LEX *lex = explain_thd->lex;
-
-  const bool is_explain_into = lex->explain_format->is_explain_into();
-
   if (lex->explain_format->is_iterator_based()) {
     if (lex->is_explain_analyze) {
       if (secondary_engine) {
@@ -2311,6 +2285,8 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
                          ? unit->query_result()
                          : unit->first_query_block()->query_result();
 
+  Query_result_explain explain_wrapper(unit, explain_result);
+
   if (other) {
     if (!((explain_result = new (explain_thd->mem_root) Query_result_send())))
       return true; /* purecov: inspected */
@@ -2319,18 +2295,8 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
       return true; /* purecov: inspected */
   } else {
     assert(unit->is_optimized());
-    if (is_explain_into) {
-      explain_result =
-          new (explain_thd->mem_root) Query_result_explain_into_var(
-              unit, explain_result,
-              lex->explain_format->explain_into_variable_name());
-      if (explain_result == nullptr) return true;
-    }
-    if (explain_result->need_explain_interceptor()) {
-      explain_result = new (explain_thd->mem_root)
-          Query_result_explain(unit, explain_result);
-      if (explain_result == nullptr) return true;
-    }
+    if (explain_result->need_explain_interceptor())
+      explain_result = &explain_wrapper;
   }
 
   explain_thd->lex->explain_format->send_headers(explain_result);
@@ -2347,7 +2313,7 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
           : mysql_explain_query_expression(explain_thd, query_thd, unit);
 
   // Skip this if applicable. See print_query_for_explain() comments.
-  if (!res && !other && !is_explain_into) {
+  if (!res && !other) {
     StringBuffer<1024> str;
     print_query_for_explain(query_thd, unit, &str);
     str.append('\0');
@@ -2358,6 +2324,8 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
     explain_result->abort_result_set(explain_thd);
   else
     explain_result->send_eof(explain_thd);
+
+  if (other) destroy(explain_result);
 
   return res;
 }
@@ -2632,20 +2600,4 @@ Modification_plan::~Modification_plan() {
     thd->query_plan.set_modification_plan(nullptr);
     thd->unlock_query_plan();
   }
-}
-
-bool Query_result_explain_into_var::send_data(
-    THD *thd, const mem_root_deque<Item *> &items) {
-  assert(items.size() == 1);
-  Item_func_set_user_var *suv = new Item_func_set_user_var(
-      Name_string(m_variable_name.data(), m_variable_name.length()), items[0]);
-  if (suv->fix_fields(thd, nullptr)) return true;
-  suv->save_item_result(items[0]);
-  if (suv->update()) return true;
-  return false;
-}
-
-bool Query_result_explain_into_var::send_eof(THD *thd) {
-  my_ok(thd);
-  return false;
 }

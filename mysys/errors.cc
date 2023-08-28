@@ -30,7 +30,7 @@
 */
 
 #include "my_config.h"
-#include "mysql/my_loglevel.h"
+#include "my_loglevel.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

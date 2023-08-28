@@ -26,10 +26,8 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/item.h"
 #include "sql/opt_costmodel.h"
-#include "string_with_len.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/test_utils.h"
 

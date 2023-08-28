@@ -27,11 +27,9 @@
 #include "classic_connection_base.h"
 #include "classic_frame.h"
 #include "classic_lazy_connect.h"
-#include "hexify.h"
 #include "mysql/harness/stdx/expected.h"
 #include "mysql/harness/tls_error.h"
 #include "mysqld_error.h"  // mysql-server error-codes
-#include "mysqlrouter/classic_protocol_codec_error.h"
 
 stdx::expected<Processor::Result, std::error_code>
 SetOptionForwarder::process() {
@@ -42,10 +40,6 @@ SetOptionForwarder::process() {
       return connect();
     case Stage::Connected:
       return connected();
-    case Stage::Forward:
-      return forward();
-    case Stage::ForwardDone:
-      return forward_done();
     case Stage::Response:
       return response();
     case Stage::Ok:
@@ -61,62 +55,19 @@ SetOptionForwarder::process() {
 
 stdx::expected<Processor::Result, std::error_code>
 SetOptionForwarder::command() {
-  auto *socket_splicer = connection()->socket_splicer();
-  auto *src_channel = socket_splicer->client_channel();
-  auto *src_protocol = connection()->client_protocol();
-
-  auto msg_res = ClassicFrame::recv_msg<
-      classic_protocol::borrowed::message::client::SetOption>(src_channel,
-                                                              src_protocol);
-  if (!msg_res) {
-    // all codec-errors should result in a Malformed Packet error..
-    if (msg_res.error().category() !=
-        make_error_code(classic_protocol::codec_errc::not_enough_input)
-            .category()) {
-      return recv_client_failed(msg_res.error());
-    }
-
-    discard_current_msg(src_channel, src_protocol);
-
-    auto send_msg =
-        ClassicFrame::send_msg<classic_protocol::message::server::Error>(
-            src_channel, src_protocol,
-            {ER_MALFORMED_PACKET, "Malformed communication packet", "HY000"});
-    if (!send_msg) send_client_failed(send_msg.error());
-
-    stage(Stage::Done);
-
-    return Result::SendToClient;
-  }
-
-  option_value_ = msg_res->option();
-
   if (auto &tr = tracer()) {
-    tr.trace(Tracer::Event().stage("set_option::command: " +
-                                   std::to_string(option_value_)));
+    tr.trace(Tracer::Event().stage("set_option::command"));
   }
-
-  // reset the warnings from the previous statements.
-  connection()->execution_context().diagnostics_area().warnings().clear();
-
-  trace_event_command_ = trace_command(prefix());
-
-  trace_event_connect_and_forward_command_ =
-      trace_connect_and_forward_command(trace_event_command_);
 
   auto &server_conn = connection()->socket_splicer()->server_conn();
   if (!server_conn.is_open()) {
-    trace_event_connect_ =
-        trace_connect(trace_event_connect_and_forward_command_);
-
     stage(Stage::Connect);
+    return Result::Again;
   } else {
-    trace_event_forward_command_ =
-        trace_forward_command(trace_event_connect_and_forward_command_);
+    stage(Stage::Response);
 
-    stage(Stage::Forward);
+    return forward_client_to_server();
   }
-  return Result::Again;
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -126,7 +77,7 @@ SetOptionForwarder::connect() {
   }
 
   stage(Stage::Connected);
-  return mysql_reconnect_start(trace_event_connect_);
+  return mysql_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -148,10 +99,6 @@ SetOptionForwarder::connected() {
       tr.trace(Tracer::Event().stage("set_option::connect::error"));
     }
 
-    trace_span_end(trace_event_connect_);
-    trace_span_end(trace_event_connect_and_forward_command_);
-    trace_command_end(trace_event_command_);
-
     stage(Stage::Done);
     return reconnect_send_error_msg(src_channel, src_protocol);
   }
@@ -159,28 +106,8 @@ SetOptionForwarder::connected() {
   if (auto &tr = tracer()) {
     tr.trace(Tracer::Event().stage("set_option::connected"));
   }
-
-  trace_span_end(trace_event_connect_);
-  trace_forward_command(trace_event_connect_and_forward_command_);
-
-  stage(Stage::Forward);
-  return Result::Again;
-}
-
-stdx::expected<Processor::Result, std::error_code>
-SetOptionForwarder::forward() {
-  stage(Stage::ForwardDone);
-  return forward_client_to_server();
-}
-
-stdx::expected<Processor::Result, std::error_code>
-SetOptionForwarder::forward_done() {
   stage(Stage::Response);
-
-  trace_span_end(trace_event_forward_command_);
-  trace_span_end(trace_event_connect_and_forward_command_);
-
-  return Result::Again;
+  return forward_client_to_server();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -217,71 +144,14 @@ SetOptionForwarder::response() {
 }
 
 stdx::expected<Processor::Result, std::error_code> SetOptionForwarder::ok() {
-  auto *socket_splicer = connection()->socket_splicer();
-  auto *src_channel = socket_splicer->server_channel();
-  auto *src_protocol = connection()->server_protocol();
-  auto *dst_channel = socket_splicer->client_channel();
-  auto *dst_protocol = connection()->client_protocol();
-
-  auto msg_res =
-      ClassicFrame::recv_msg<classic_protocol::borrowed::message::server::Eof>(
-          src_channel, src_protocol);
-  if (!msg_res) {
-    auto ec = msg_res.error();
-    if (ec.category() ==
-        make_error_code(classic_protocol::codec_errc::invalid_input)
-            .category()) {
-      if (auto &tr = tracer()) {
-        tr.trace(Tracer::Event().stage(
-            "set_option::eof failed\n" +
-            mysql_harness::hexify(src_channel->recv_plain_view())));
-      }
-    }
-
-    return recv_server_failed(msg_res.error());
+  if (auto &tr = tracer()) {
+    tr.trace(Tracer::Event().stage("set_option::ok"));
   }
 
-  auto msg = *msg_res;
-
-  auto cap = classic_protocol::capabilities::pos::multi_statements;
-
-  switch (option_value_) {
-    case MYSQL_OPTION_MULTI_STATEMENTS_OFF:
-
-      src_protocol->client_capabilities(
-          src_protocol->client_capabilities().reset(cap));
-
-      dst_protocol->client_capabilities(
-          dst_protocol->client_capabilities().reset(cap));
-      break;
-    case MYSQL_OPTION_MULTI_STATEMENTS_ON:
-
-      src_protocol->client_capabilities(
-          src_protocol->client_capabilities().set(cap));
-
-      dst_protocol->client_capabilities(
-          dst_protocol->client_capabilities().set(cap));
-      break;
-  }
-
-  dst_protocol->status_flags(msg.status_flags());
-
-  trace_command_end(trace_event_command_);
-
-  if (msg.warning_count() > 0) connection()->diagnostic_area_changed(true);
+  // don't pool the connection.
+  connection()->some_state_changed(true);
 
   stage(Stage::Done);
-
-  if (!connection()->events().empty()) {
-    msg.warning_count(msg.warning_count() + 1);
-
-    auto send_res = ClassicFrame::send_msg(dst_channel, dst_protocol, msg);
-    if (!send_res) return stdx::make_unexpected(send_res.error());
-
-    discard_current_msg(src_channel, src_protocol);
-
-    return Result::SendToClient;
-  }
 
   return forward_server_to_client();
 }
@@ -290,10 +160,6 @@ stdx::expected<Processor::Result, std::error_code> SetOptionForwarder::error() {
   if (auto &tr = tracer()) {
     tr.trace(Tracer::Event().stage("set_option::error"));
   }
-
-  trace_command_end(trace_event_command_, TraceEvent::StatusCode::kError);
-
-  connection()->diagnostic_area_changed(true);
 
   stage(Stage::Done);
 

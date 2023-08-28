@@ -37,7 +37,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "debug_sync.h"
 #include "mysqld.h"
-#include "string_with_len.h"
 
 #include "dict0dd.h"
 #include "fsp0fsp.h"

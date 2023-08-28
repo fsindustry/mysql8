@@ -45,14 +45,13 @@ class DestMetadataCacheGroup final
   enum ServerRole { Primary, Secondary, PrimaryAndSecondary };
 
   /** @brief Constructor */
-  DestMetadataCacheGroup(net::io_context &io_ctx_,
-                         const std::string &metadata_cache,
-                         const routing::RoutingStrategy routing_strategy,
-                         const mysqlrouter::URIQuery &query,
-                         const Protocol::Type protocol,
-                         const routing::Mode mode = routing::Mode::kUndefined,
-                         metadata_cache::MetadataCacheAPIBase *cache_api =
-                             metadata_cache::MetadataCacheAPI::instance());
+  DestMetadataCacheGroup(
+      net::io_context &io_ctx_, const std::string &metadata_cache,
+      const routing::RoutingStrategy routing_strategy,
+      const mysqlrouter::URIQuery &query, const Protocol::Type protocol,
+      const routing::AccessMode access_mode = routing::AccessMode::kUndefined,
+      metadata_cache::MetadataCacheAPIBase *cache_api =
+          metadata_cache::MetadataCacheAPI::instance());
 
   /** @brief Copy constructor */
   DestMetadataCacheGroup(const DestMetadataCacheGroup &other) = delete;
@@ -172,7 +171,7 @@ class DestMetadataCacheGroup final
 
   routing::RoutingStrategy routing_strategy_;
 
-  routing::Mode mode_;
+  routing::AccessMode access_mode_;
 
   ServerRole server_role_;
 

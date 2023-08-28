@@ -39,8 +39,6 @@
 #ifndef _t_ctype_h
 #define _t_ctype_h
 
-#include <cstdint>
-
 typedef unsigned char tchar;
 
 #define TOT_LEVELS 5
@@ -252,7 +250,6 @@ enum level_symbols { L_UPRUPR = TOT_LEVELS, L_UPPER, L_MIDDLE, L_LOWER };
 #define isdiacrt(c) (_is(c) & _diacrt)
 
 /* Function prototype called by sql/field.cc */
-void ThNormalize(uint8_t *ptr, unsigned field_length, const uint8_t *from,
-                 unsigned length);
+void ThNormalize(uchar *ptr, uint field_length, const uchar *from, uint length);
 
 #endif

@@ -23,7 +23,6 @@
 */
 
 #include "util/require.h"
-#include "my_config.h"
 #include "ndb_config.h"
 
 #ifdef _WIN32

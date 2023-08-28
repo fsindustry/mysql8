@@ -61,8 +61,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=2 gtid_next=AUTOMATIC
@@ -100,8 +98,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -137,8 +133,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -245,8 +239,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=2 gtid_next=ANONYMOUS
@@ -284,8 +276,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -321,8 +311,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -397,8 +385,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=2 gtid_next=GTID
@@ -436,8 +422,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -473,8 +457,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -582,8 +564,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=1 gtid_next=AUTOMATIC
@@ -621,8 +601,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -658,8 +636,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -766,8 +742,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=1 gtid_next=ANONYMOUS
@@ -805,8 +779,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -842,8 +814,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -918,8 +888,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=1 gtid_next=GTID
@@ -957,8 +925,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -994,8 +960,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1103,8 +1067,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=0 gtid_next=AUTOMATIC
@@ -1142,8 +1104,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -1179,8 +1139,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1287,8 +1245,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=0 gtid_mode=0 gtid_next=ANONYMOUS
@@ -1326,8 +1282,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -1363,8 +1317,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1476,8 +1428,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=3 gtid_next=AUTOMATIC
@@ -1515,8 +1465,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -1552,8 +1500,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1628,8 +1574,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=3 gtid_next=GTID
@@ -1667,8 +1611,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -1704,8 +1646,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1813,8 +1753,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=2 gtid_next=AUTOMATIC
@@ -1852,8 +1790,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -1889,8 +1825,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -1997,8 +1931,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=2 gtid_next=ANONYMOUS
@@ -2036,8 +1968,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2073,8 +2003,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -2149,8 +2077,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=2 gtid_next=GTID
@@ -2188,8 +2114,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2225,8 +2149,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -2334,8 +2256,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=1 gtid_next=AUTOMATIC
@@ -2373,8 +2293,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2410,8 +2328,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -2518,8 +2434,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=1 gtid_next=ANONYMOUS
@@ -2557,8 +2471,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2594,8 +2506,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -2670,8 +2580,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=1 gtid_next=GTID
@@ -2709,8 +2617,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2746,8 +2652,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -2855,8 +2759,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=0 gtid_next=AUTOMATIC
@@ -2894,8 +2796,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -2931,8 +2831,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3039,8 +2937,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=1 gtid_mode=0 gtid_next=ANONYMOUS
@@ -3078,8 +2974,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -3115,8 +3009,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3227,8 +3119,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=2 gtid_next=AUTOMATIC
@@ -3266,8 +3156,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -3303,8 +3191,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3411,8 +3297,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=2 gtid_next=ANONYMOUS
@@ -3450,8 +3334,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -3487,8 +3369,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3563,8 +3443,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=2 gtid_next=GTID
@@ -3602,8 +3480,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -3639,8 +3515,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3748,8 +3622,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=1 gtid_next=AUTOMATIC
@@ -3787,8 +3659,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -3824,8 +3694,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -3932,8 +3800,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=1 gtid_next=ANONYMOUS
@@ -3971,8 +3837,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -4008,8 +3872,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -4084,8 +3946,6 @@ SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=1 gtid_next=GTID
@@ -4123,8 +3983,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -4160,8 +4018,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -4269,8 +4125,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=0 gtid_next=AUTOMATIC
@@ -4308,8 +4162,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -4345,8 +4197,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;
@@ -4453,8 +4303,6 @@ Warning	1196	Some non-transactional changed tables couldn't be rolled back
 SET GTID_NEXT = 'AUTOMATIC';
 include/assert.inc [Both counters should be 0]
 SET SESSION BINLOG_FORMAT = MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format=mix ----
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 # enforce_gtid_consistency=2 gtid_mode=0 gtid_next=ANONYMOUS
@@ -4492,8 +4340,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = 'ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 ---- InnoDB followed by temp MyISAM in one trx, binlog_format='row' ----
@@ -4529,8 +4375,6 @@ include/assert.inc [Both counters should be 0]
 DROP TRIGGER trig;
 DROP TEMPORARY TABLE tmp_myisam1, tmp_myisam2;
 SET BINLOG_FORMAT = #;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TEMPORARY TABLE tmp_myisam1 (a INT) ENGINE = MyISAM;
 CREATE TEMPORARY TABLE tmp_myisam2 (a INT) ENGINE = MyISAM;
 SET SQL_LOG_BIN = 0;

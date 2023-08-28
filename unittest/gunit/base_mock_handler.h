@@ -28,7 +28,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "my_inttypes.h"
 #include "sql/handler.h"
 
 /**

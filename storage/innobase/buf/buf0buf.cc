@@ -1424,7 +1424,6 @@ static void buf_pool_free_instance(buf_pool_t *buf_pool) {
 
 /** Frees the buffer pool global data structures. */
 static void buf_pool_free() {
-  btr_search_sys_free();
   ut::delete_(buf_stat_per_index);
 
   ut::delete_(buf_chunk_map_reg);
@@ -4730,7 +4729,7 @@ static void buf_page_init(buf_pool_t *buf_pool, const page_id_t &page_id,
   ut_ad(buf_pool == buf_pool_get(page_id));
 
   ut_ad(mutex_own(buf_page_get_mutex(&block->page)));
-  ut_a(buf_block_get_state(block) == BUF_BLOCK_READY_FOR_USE);
+  ut_a(buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE);
 
   ut_ad(rw_lock_own(buf_page_hash_lock_get(buf_pool, page_id), RW_LOCK_X));
 

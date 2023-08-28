@@ -1,7 +1,6 @@
 
 #echo Suppress expiration warning by the server check: revoked certs test
-call mtr.add_suppression("Failed to validate certificate .*");
-call mtr.add_suppression("Server certificate .* verification has failed. Check logs for more details");
+call mtr.add_suppression("Server SSL certificate doesn't verify");
 
 let $crllen=`select length(trim(coalesce(@@ssl_crl, ''))) + length(trim(coalesce(@@ssl_crlpath, '')))`;
 if (!$crllen)

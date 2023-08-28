@@ -23,10 +23,6 @@
 #ifndef MYSQL_SERVICE_MYSQL_PLUGIN_KEYRING_INCLUDED
 #define MYSQL_SERVICE_MYSQL_PLUGIN_KEYRING_INCLUDED
 
-#ifndef MYSQL_ABI_CHECK
-#include <cstddef>
-#endif
-
 /**
   @file include/mysql/service_mysql_keyring.h
 */

@@ -67,7 +67,7 @@ namespace {
 
 /**
   Returns whether A is already a part of B, ie., whether it is impossible to
-  execute B before A. E.g., for t1 LEFT JOIN (t2 JOIN t3), the t2-t3 join
+  execute A before B. E.g., for t1 LEFT JOIN (t2 JOIN t3), the t2-t3 join
   will be part of the t1-{t2,t3} hyperedge, and this will return true.
 
   Note that this definition is much more lenient than the one in the paper
@@ -429,6 +429,18 @@ bool IsQueryGraphSimpleEnough(THD *thd [[maybe_unused]],
   return !error;
 }
 
+void SetNumberOfSimplifications(int num_simplifications,
+                                GraphSimplifier *simplifier) {
+  while (simplifier->num_steps_done() < num_simplifications) {
+    GraphSimplifier::SimplificationResult error [[maybe_unused]] =
+        simplifier->DoSimplificationStep();
+    assert(error != GraphSimplifier::NO_SIMPLIFICATION_POSSIBLE);
+  }
+  while (simplifier->num_steps_done() > num_simplifications) {
+    simplifier->UndoSimplificationStep();
+  }
+}
+
 struct JoinStatus {
   double cost;
   double num_output_rows;
@@ -452,13 +464,16 @@ struct JoinStatus {
  */
 JoinStatus SimulateJoin(JoinStatus left, JoinStatus right,
                         const JoinPredicate &pred) {
-  // If the build cost per row is higher than the probe cost per row, it is
-  // beneficial to use the smaller table as build table. Reorder to get the
-  // lower cost if the join is commutative and allows reordering.
-  static_assert(kHashBuildOneRowCost >= kHashProbeOneRowCost);
-  if (OperatorIsCommutative(*pred.expr) &&
-      left.num_output_rows < right.num_output_rows) {
-    swap(left, right);
+  static_assert(
+      kHashBuildOneRowCost == kHashBuildOneRowCost,
+      "If build and probe cost factors are different, we'll need to add "
+      "swapping to get the smallest table on the right-hand side here "
+      "(for inner joins)");  // Remove the if (false) below.
+  if (false) {
+    if (pred.expr->type == RelationalExpression::INNER_JOIN &&
+        left.cost < right.cost) {
+      swap(left, right);
+    }
   }
 
   double num_output_rows =
@@ -843,18 +858,15 @@ GraphSimplifier::SimplificationResult GraphSimplifier::DoSimplificationStep() {
 
   SimplificationStep full_step = ConcretizeSimplificationStep(best_step);
 
-  bool added_cycle [[maybe_unused]] =
-      m_cycles.AddEdge(best_step.before_edge_idx, best_step.after_edge_idx);
-  assert(!added_cycle);
+  m_cycles.AddEdge(best_step.before_edge_idx, best_step.after_edge_idx);
   m_graph->graph.ModifyEdge(best_step.after_edge_idx * 2,
                             full_step.new_edge.left, full_step.new_edge.right);
-
-  if (!GraphIsJoinable(*m_graph, m_cycles)) {
+  if (!forced && !GraphIsJoinable(*m_graph, m_cycles)) {
     // The change we did introduced an impossibility; we made the graph
     // unjoinable. This happens very rarely, but it does, since our
     // happens-before join detection is incomplete (see GraphIsJoinable()
-    // and FindJoinDependencies() comments for more details). When this
-    // happens, we need to first undo what we just did:
+    // comments for more details). When this happens, we need to first
+    // undo what we just did:
     m_cycles.DeleteEdge(best_step.before_edge_idx, best_step.after_edge_idx);
     m_graph->graph.ModifyEdge(best_step.after_edge_idx * 2,
                               full_step.old_edge.left,
@@ -896,20 +908,6 @@ void GraphSimplifier::UndoSimplificationStep() {
   // or any of the cardinalities here.
 }
 
-void SetNumberOfSimplifications(int num_simplifications,
-                                GraphSimplifier *simplifier) {
-  assert(simplifier->num_steps_done() + simplifier->num_steps_undone() >=
-         num_simplifications);
-  while (simplifier->num_steps_done() < num_simplifications) {
-    GraphSimplifier::SimplificationResult error [[maybe_unused]] =
-        simplifier->DoSimplificationStep();
-    assert(error != GraphSimplifier::NO_SIMPLIFICATION_POSSIBLE);
-  }
-  while (simplifier->num_steps_done() > num_simplifications) {
-    simplifier->UndoSimplificationStep();
-  }
-}
-
 /**
   Repeatedly apply simplifications (in the order of most to least safe) to the
   given hypergraph, until it is below “subgraph_pair_limit” subgraph pairs
@@ -928,22 +926,22 @@ void SetNumberOfSimplifications(int num_simplifications,
   afresh.
  */
 void SimplifyQueryGraph(THD *thd, int subgraph_pair_limit,
-                        JoinHypergraph *graph, GraphSimplifier *simplifier,
-                        string *trace) {
+                        JoinHypergraph *graph, string *trace) {
   if (trace != nullptr) {
     *trace +=
         "\nQuery became too complicated, doing heuristic graph "
         "simplification.\n";
   }
 
+  GraphSimplifier simplifier(graph, thd->mem_root);
   MEM_ROOT counting_mem_root;
 
   int lower_bound = 0, upper_bound = 1;
   int num_subgraph_pairs_upper = -1;
   for (;;) {  // Termination condition within loop.
     bool hit_upper_limit = false;
-    while (simplifier->num_steps_done() < upper_bound) {
-      if (simplifier->DoSimplificationStep() ==
+    while (simplifier.num_steps_done() < upper_bound) {
+      if (simplifier.DoSimplificationStep() ==
           GraphSimplifier::NO_SIMPLIFICATION_POSSIBLE) {
         if (!IsQueryGraphSimpleEnough(thd, *graph, subgraph_pair_limit,
                                       &counting_mem_root,
@@ -959,7 +957,7 @@ void SimplifyQueryGraph(THD *thd, int subgraph_pair_limit,
           return;
         }
 
-        upper_bound = simplifier->num_steps_done();
+        upper_bound = simplifier.num_steps_done();
         hit_upper_limit = true;
         break;
       }
@@ -994,7 +992,7 @@ void SimplifyQueryGraph(THD *thd, int subgraph_pair_limit,
   // is enough.
   while (upper_bound - lower_bound > 1) {
     int mid = (lower_bound + upper_bound) / 2;
-    SetNumberOfSimplifications(mid, simplifier);
+    SetNumberOfSimplifications(mid, &simplifier);
     if (IsQueryGraphSimpleEnough(thd, *graph, subgraph_pair_limit,
                                  &counting_mem_root,
                                  &num_subgraph_pairs_upper)) {
@@ -1005,7 +1003,7 @@ void SimplifyQueryGraph(THD *thd, int subgraph_pair_limit,
   }
 
   // Now upper_bound is the correct number of steps to use.
-  SetNumberOfSimplifications(upper_bound, simplifier);
+  SetNumberOfSimplifications(upper_bound, &simplifier);
 
   if (trace != nullptr) {
     *trace += StringPrintf(

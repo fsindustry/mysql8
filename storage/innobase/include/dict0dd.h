@@ -64,8 +64,6 @@ Data dictionary interface */
 class THD;
 class MDL_ticket;
 
-struct CHARSET_INFO;
-
 /** DD functions return false for success and true for failure
 because that is the way the server functions are defined. */
 constexpr bool DD_SUCCESS = false;

@@ -50,7 +50,9 @@
 #include <openssl/decoder.h>     // OSSL_DECODER...
 #endif
 
-#include <dh_ecdh_config.h>
+#if OPENSSL_VERSION_NUMBER < ROUTER_OPENSSL_VERSION(3, 0, 0)
+#include <dh_keys.h>
+#endif
 
 // type == decltype(BN_num_bits())
 #if OPENSSL_VERSION_NUMBER >= ROUTER_OPENSSL_VERSION(1, 0, 2)
@@ -270,33 +272,66 @@ stdx::expected<void, std::error_code> set_dh_params_from_filename(
  * set auto DH params at SSL_CTX.
  */
 stdx::expected<void, std::error_code> set_auto_dh_params(SSL_CTX *ssl_ctx) {
-  if (false != set_dh(ssl_ctx)) {
+#if OPENSSL_VERSION_NUMBER >= ROUTER_OPENSSL_VERSION(3, 0, 0)
+  SSL_CTX_set_dh_auto(ssl_ctx, 1);
+#else
+#if OPENSSL_VERSION_NUMBER >= ROUTER_OPENSSL_VERSION(1, 1, 0)
+  int sec_level = SSL_CTX_get_security_level(ssl_ctx);
+
+  assert(sec_level <= kMaxSecurityLevel);
+
+  /* current range for security level is [1,5] */
+  if (sec_level > kMaxSecurityLevel)
+    sec_level = kMaxSecurityLevel;
+  else if (sec_level <= 1)
+    sec_level = 2;
+
+  static_assert(dh_keys.size() >= 5);
+
+  OsslUniquePtr<BIO> bio_storage{
+      BIO_new_mem_buf(const_cast<char *>(dh_keys[sec_level].data()),
+                      dh_keys[sec_level].size())};
+  auto *bio = bio_storage.get();
+
+  OsslUniquePtr<DH> dh_storage(PEM_read_bio_DHparams(bio, NULL, NULL, NULL));
+#else
+  const int default_sec_level = 2;
+
+  static_assert(dh_keys.size() >= 5);
+
+  OsslUniquePtr<BIO> bio_storage{
+      BIO_new_mem_buf(const_cast<char *>(dh_keys[default_sec_level].data()),
+                      dh_keys[default_sec_level].size())};
+  auto *bio = bio_storage.get();
+
+  OsslUniquePtr<DH> dh_storage(PEM_read_bio_DHparams(bio, NULL, NULL, NULL));
+#endif
+  DH *dh = dh_storage.get();
+
+  if (1 != SSL_CTX_set_tmp_dh(ssl_ctx, dh)) {
     return stdx::make_unexpected(make_tls_error());
   }
+#endif
 
   return {};
 }
 }  // namespace
 
-TlsServerContext::TlsServerContext(TlsVersion min_ver, TlsVersion max_ver,
-                                   bool session_cache_mode,
-                                   size_t session_cache_size,
-                                   unsigned int session_cache_timeout)
+TlsServerContext::TlsServerContext(TlsVersion min_ver, TlsVersion max_ver)
     : TlsContext(server_method) {
   version_range(min_ver, max_ver);
-  (void)set_ecdh(ssl_ctx_.get());
+#if OPENSSL_VERSION_NUMBER >= ROUTER_OPENSSL_VERSION(1, 0, 2)
+  (void)SSL_CTX_set_ecdh_auto(ssl_ctx_.get(), 1);
+#elif OPENSSL_VERSION_NUMBER >= ROUTER_OPENSSL_VERSION(1, 0, 1)
+  // openssl 1.0.1 has no ecdh_auto(), and needs an explicit EC curve set
+  // to make ECDHE ciphers work out of the box.
+  {
+    OsslUniquePtr<EC_KEY> curve(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
+    if (curve) SSL_CTX_set_tmp_ecdh(ssl_ctx_.get(), curve.get());
+  }
+#endif
   SSL_CTX_set_options(ssl_ctx_.get(), SSL_OP_NO_COMPRESSION);
   cipher_list("ALL");  // ALL - unacceptable ciphers
-
-  const auto cache_mode =
-      session_cache_mode ? SSL_SESS_CACHE_SERVER : SSL_SESS_CACHE_OFF;
-  SSL_CTX_set_session_cache_mode(ssl_ctx_.get(), cache_mode);
-  if (cache_mode == SSL_SESS_CACHE_OFF) {
-    SSL_CTX_set_options(ssl_ctx_.get(), SSL_OP_NO_TICKET);
-  } else {
-    SSL_CTX_sess_set_cache_size(ssl_ctx_.get(), session_cache_size);
-    SSL_CTX_set_timeout(ssl_ctx_.get(), session_cache_timeout);
-  }
 }
 
 stdx::expected<void, std::error_code> TlsServerContext::load_key_and_cert(
@@ -315,21 +350,13 @@ stdx::expected<void, std::error_code> TlsServerContext::load_key_and_cert(
   // internal pointer, don't free
   if (X509 *x509 = SSL_CTX_get0_certificate(ssl_ctx_.get())) {
     auto key_size_res = get_rsa_key_size(x509);
-    if (!key_size_res) {
-      auto ec = key_size_res.error();
+    if (!key_size_res) return stdx::make_unexpected(key_size_res.error());
 
-      if (ec != TlsCertErrc::kNoRSACert) {
-        return stdx::make_unexpected(key_size_res.error());
-      }
+    const auto key_size = *key_size_res;
 
-      // if it isn't a RSA Key ... just continue.
-    } else {
-      const auto key_size = *key_size_res;
-
-      if (key_size < kMinRsaKeySize) {
-        return stdx::make_unexpected(
-            make_error_code(TlsCertErrc::kRSAKeySizeToSmall));
-      }
+    if (key_size < kMinRsaKeySize) {
+      return stdx::make_unexpected(
+          make_error_code(TlsCertErrc::kRSAKeySizeToSmall));
     }
   } else {
     // doesn't exist
@@ -412,36 +439,77 @@ std::vector<std::string> TlsServerContext::default_ciphers() {
   // as TLSv1.2 is the minimum version, only TLSv1.2+ ciphers are set by
   // default
 
-  return {
-      // Mandatory Ciphers (P1)
-      //
-      // TLSv1.2 with PFS, SHA2, AES with GCM
+  // TLSv1.2 with PFS using SHA2, encrypted by AES in GCM or CBC mode
+  const std::vector<std::string> mandatory_p1{
       "ECDHE-ECDSA-AES128-GCM-SHA256",  //
       "ECDHE-ECDSA-AES256-GCM-SHA384",  //
       "ECDHE-RSA-AES128-GCM-SHA256",    //
+      "ECDHE-ECDSA-AES128-SHA256",      //
+      "ECDHE-RSA-AES128-SHA256",
+  };
 
-      // Approved Ciphers (A1)
-      //
-      // TLSv1.2+ with PFS, SHA2, AES with GCM or other AEAD algo's.
-
+  // TLSv1.2+ with PFS using SHA2, encrypted by AES in GCM or CBC mode
+  const std::vector<std::string> optional_p1{
       // TLSv1.3
       "TLS_AES_128_GCM_SHA256",
       "TLS_AES_256_GCM_SHA384",
       "TLS_CHACHA20_POLY1305_SHA256",
       "TLS_AES_128_CCM_SHA256",
+      "TLS_AES_128_CCM_8_SHA256",
 
       // TLSv1.2
       "ECDHE-RSA-AES256-GCM-SHA384",
+      "ECDHE-RSA-AES256-SHA384",
+      "ECDHE-ECDSA-AES256-SHA384",
+      "DHE-RSA-AES128-GCM-SHA256",
+      "DHE-DSS-AES128-GCM-SHA256",
+      "DHE-RSA-AES128-SHA256",
+      "DHE-DSS-AES128-SHA256",
+      "DHE-DSS-AES256-GCM-SHA384",
+      "DHE-RSA-AES256-SHA256",
+      "DHE-DSS-AES256-SHA256",
+      "DHE-RSA-AES256-GCM-SHA384",
       "ECDHE-ECDSA-CHACHA20-POLY1305",
       "ECDHE-RSA-CHACHA20-POLY1305",
-      "ECDHE-ECDSA-AES256-CCM",
-      "ECDHE-ECDSA-AES128-CCM",
-      "DHE-RSA-AES128-GCM-SHA256",
-      "DHE-RSA-AES256-GCM-SHA384",
-      "DHE-RSA-AES128-CCM",
-      "DHE-RSA-AES256-CCM",
-      "DHE-RSA-CHACHA20-POLY1305",
   };
+
+  // TLSv1.2+ with DH, ECDH, RSA using SHA2
+  // encrypted by AES in GCM or CBC mode
+  const std::vector<std::string> optional_p2{
+      "DH-DSS-AES128-GCM-SHA256",
+      "ECDH-ECDSA-AES128-GCM-SHA256",
+      "DH-DSS-AES256-GCM-SHA384",
+      "ECDH-ECDSA-AES256-GCM-SHA384",
+      "AES128-GCM-SHA256",
+      "AES256-GCM-SHA384",
+      "AES128-SHA256",
+      "DH-DSS-AES128-SHA256",
+      "ECDH-ECDSA-AES128-SHA256",
+      "AES256-SHA256",
+      "DH-DSS-AES256-SHA256",
+      "ECDH-ECDSA-AES256-SHA384",
+      "DH-RSA-AES128-GCM-SHA256",
+      "ECDH-RSA-AES128-GCM-SHA256",
+      "DH-RSA-AES256-GCM-SHA384",
+      "ECDH-RSA-AES256-GCM-SHA384",
+      "DH-RSA-AES128-SHA256",
+      "ECDH-RSA-AES128-SHA256",
+      "DH-RSA-AES256-SHA256",
+      "ECDH-RSA-AES256-SHA384",
+  };
+
+  // required by RFC5246, but quite likely removed by the !SSLv3 filter
+  const std::vector<std::string> optional_p3{"AES128-SHA"};
+
+  std::vector<std::string> out(mandatory_p1.size() + optional_p1.size() +
+                               optional_p2.size() + optional_p3.size());
+  for (const std::vector<std::string> &a :
+       std::vector<std::vector<std::string>>{mandatory_p1, optional_p1,
+                                             optional_p2, optional_p3}) {
+    out.insert(out.end(), a.begin(), a.end());
+  }
+
+  return out;
 }
 
 int TlsServerContext::security_level() const {

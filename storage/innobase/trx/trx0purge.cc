@@ -220,6 +220,7 @@ void trx_purge_sys_mem_create() {
   new (&purge_sys->iter) purge_iter_t;
   new (&purge_sys->limit) purge_iter_t;
   new (&purge_sys->undo_trunc) undo::Truncate;
+  new (&purge_sys->thds) ut::unordered_set<THD *>;
   new (&purge_sys->rsegs_queue) std::vector<trx_rseg_t *>;
 #ifdef UNIV_DEBUG
   new (&purge_sys->done) purge_iter_t;
@@ -300,6 +301,7 @@ void trx_purge_sys_close() {
 
   ut::delete_(purge_sys->rseg_iter);
 
+  call_destructor(&purge_sys->thds);
   call_destructor(&purge_sys->undo_trunc);
   call_destructor(&purge_sys->rsegs_queue);
 
@@ -2423,23 +2425,40 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
   /* Fetch the UNDO recs that need to be purged. */
   n_pages_handled = trx_purge_attach_undo_recs(n_purge_threads, batch_size);
 
-  /* Submit the tasks to the work queue. */
-  for (ulint i = 0; i < n_purge_threads - 1; ++i) {
-    thr = que_fork_scheduler_round_robin(purge_sys->query, thr);
+  /* Do we do an asynchronous purge or not ? */
+  if (n_purge_threads > 1) {
+    /* Submit the tasks to the work queue. */
+    for (ulint i = 0; i < n_purge_threads - 1; ++i) {
+      thr = que_fork_scheduler_round_robin(purge_sys->query, thr);
 
+      ut_a(thr != nullptr);
+
+      srv_que_task_enqueue_low(thr);
+    }
+
+    thr = que_fork_scheduler_round_robin(purge_sys->query, thr);
     ut_a(thr != nullptr);
 
-    srv_que_task_enqueue_low(thr);
+    purge_sys->n_submitted += n_purge_threads - 1;
+
+    goto run_synchronously;
+
+    /* Do it synchronously. */
+  } else {
+    thr = que_fork_scheduler_round_robin(purge_sys->query, nullptr);
+    ut_ad(thr);
+
+  run_synchronously:
+    ++purge_sys->n_submitted;
+
+    que_run_threads(thr);
+
+    purge_sys->n_completed.fetch_add(1);
+
+    if (n_purge_threads > 1) {
+      trx_purge_wait_for_workers_to_complete();
+    }
   }
-
-  thr = que_fork_scheduler_round_robin(purge_sys->query, thr);
-  ut_a(thr != nullptr);
-
-  purge_sys->n_submitted += n_purge_threads - 1;
-
-  que_run_threads(thr);
-
-  trx_purge_wait_for_workers_to_complete();
 
   ut_a(purge_sys->n_submitted == purge_sys->n_completed);
 

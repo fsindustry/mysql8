@@ -47,7 +47,6 @@
 
 #include <algorithm>
 
-#include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"

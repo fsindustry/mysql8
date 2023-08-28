@@ -186,12 +186,13 @@ static ulint recv_previous_parsed_rec_offset;
 /** The 'multi' flag of the previous parsed redo log record */
 static ulint recv_previous_parsed_rec_is_multi;
 
-/** This many blocks must be left in each Buffer Pool instance to be managed by
-the LRU when we scan the log and store the scanned log records in a hashmap
-allocated in the Buffer Pool in frames of non-LRU managed blocks. We will use
-these free blocks to read in pages when we start applying the log records to the
-database. */
-size_t recv_n_frames_for_pages_per_pool_instance;
+/** This many frames must be left free in the buffer pool when we scan
+the log and store the scanned log records in the buffer pool: we will
+use these free frames to read in pages when we start applying the
+log records to the database.
+This is the default value. If the actual size of the buffer pool is
+larger than 10 MB we'll set this value to 512. */
+ulint recv_n_pool_free_frames;
 
 /** The maximum lsn we see for a page during the recovery process. If this
 is bigger than the lsn we are able to scan up to, that is an indication that
@@ -224,7 +225,7 @@ static lsn_t recv_read_log_seg(log_t &log, byte *buf, lsn_t start_lsn,
 
 /** Initialize crash recovery environment. Can be called iff
 recv_needed_recovery == false. */
-static void recv_init_crash_recovery();
+static dberr_t recv_init_crash_recovery();
 #endif /* !UNIV_HOTBACKUP */
 
 /** Calculates the new value for lsn when more data is added to the log.
@@ -301,30 +302,22 @@ byte *MetadataRecover::parseMetadataLog(table_id_t id, uint64_t version,
   ut_ad(dict_persist->persisters != nullptr);
 
   Persister *persister = dict_persist->persisters->get(type);
-  if (persister == nullptr) {
-    recv_sys->found_corrupt_log = true;
-    return ptr;
-  }
-
-  ptr++;
-
   PersistentTableMetadata *metadata = getMetadata(id);
 
-  PersistentTableMetadata new_entry{id, version};
   bool corrupt;
-  ulint consumed = persister->read(new_entry, ptr, end - ptr, &corrupt);
+  ulint consumed = persister->read(*metadata, ptr, end - ptr, &corrupt);
 
   if (corrupt) {
     recv_sys->found_corrupt_log = true;
-    return ptr + consumed;
+  } else if (consumed != 0) {
+    metadata->set_version(version);
   }
 
   if (consumed == 0) {
     return nullptr;
+  } else {
+    return ptr + consumed;
   }
-
-  persister->aggregate(*metadata, new_entry);
-  return ptr + consumed;
 }
 
 /** Creates the recovery system. */
@@ -456,6 +449,7 @@ void recv_sys_var_init() {
   recv_previous_parsed_rec_type = MLOG_SINGLE_REC_FLAG;
   recv_previous_parsed_rec_offset = 0;
   recv_previous_parsed_rec_is_multi = 0;
+  recv_n_pool_free_frames = 256;
   recv_max_page_lsn = 0;
 }
 #endif /* !UNIV_HOTBACKUP */
@@ -1047,7 +1041,7 @@ static ulint recv_read_in_area(const page_id_t &page_id) {
   if (n > 0) {
     /* There are pages that need to be read. Go ahead and read them
     for recovery. */
-    buf_read_recv_pages(page_id.space(), &page_nos[0], n);
+    buf_read_recv_pages(false, page_id.space(), &page_nos[0], n);
   }
 
   return n;
@@ -2784,7 +2778,8 @@ void recv_recover_page_func(
 
   /* Make sure that committing mtr does not change the modification
   LSN values of page */
-  ut_a(mtr.get_log_mode() == MTR_LOG_NONE);
+
+  mtr.discard_modifications();
 
   mtr_commit(&mtr);
 
@@ -3355,6 +3350,7 @@ automatically when the hash table becomes full.
 @param[in]      len             buffer length
 @param[in]      start_lsn       buffer start lsn
 @param[out]  read_upto_lsn  scanning succeeded up to this lsn
+@param[out]  err             DB_SUCCESS when no dblwr corruptions.
 @return true if not able to scan any more in this log */
 #ifndef UNIV_HOTBACKUP
 static bool recv_scan_log_recs(log_t &log,
@@ -3362,11 +3358,13 @@ static bool recv_scan_log_recs(log_t &log,
 bool meb_scan_log_recs(
 #endif /* !UNIV_HOTBACKUP */
                                size_t max_memory, const byte *buf, size_t len,
-                               lsn_t start_lsn, lsn_t *read_upto_lsn) {
+                               lsn_t start_lsn, lsn_t *read_upto_lsn,
+                               dberr_t &err) {
   const byte *log_block = buf;
   lsn_t scanned_lsn = start_lsn;
   bool finished = false;
   bool more_data = false;
+  err = DB_SUCCESS;
 
   ut_ad(start_lsn % OS_FILE_LOG_BLOCK_SIZE == 0);
   ut_ad(len % OS_FILE_LOG_BLOCK_SIZE == 0);
@@ -3489,7 +3487,10 @@ bool meb_scan_log_recs(
 
         ib::info(ER_IB_MSG_722, ulonglong{recv_sys->scanned_lsn});
 
-        recv_init_crash_recovery();
+        err = recv_init_crash_recovery();
+        if (err != DB_SUCCESS) {
+          return true;
+        }
       }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -3656,7 +3657,7 @@ Parses and hashes the log records if new data found.
                                         already applied to tablespace files)
                                         until which all redo log has been
                                         scanned */
-static void recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
+static dberr_t recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
   mutex_enter(&recv_sys->mutex);
 
   recv_sys->len = 0;
@@ -3688,40 +3689,11 @@ static void recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
   recv_previous_parsed_rec_is_multi = 0;
   ut_ad(recv_max_page_lsn == 0);
 
-  const auto pages_to_be_kept_free = std::min(
-      size_t{buf_pool_get_n_pages()} / 2,
-      /* This value should be greater than the number of pages we want
-      to apply redo records for concurrently. This should be greater
-      than number of concurrent IOs we want to sustain. We should also keep in
-      mind that the limit for the deltas hashmap is not strictly enforced and
-      this number includes the not-well specified safety margin. */
-      size_t{256} * srv_buf_pool_instances);
-  const size_t delta_hashmap_max_mem =
-      UNIV_PAGE_SIZE * (buf_pool_get_n_pages() - pages_to_be_kept_free);
-
-  if (log_test == nullptr) {
-    recv_n_frames_for_pages_per_pool_instance =
-        pages_to_be_kept_free / srv_buf_pool_instances;
-    /* We need at least 2 pages for IO, to allow a loop in
-    `buf_read_recv_pages()` to be able to break. Currently, the Buffer Pool
-    chunk, and thus the Buffer Pool instance, will have at least 16 pages (of
-    size of 64KB), so half of that, 8, will easily satisfy that, but we
-    nevertheless don't assume current implementation and assert the real
-    requirements. */
-    ut_a(2 <= recv_n_frames_for_pages_per_pool_instance);
-    /* We need at least a page for the redo deltas hashmap. */
-    ut_a(0 < delta_hashmap_max_mem);
-    /* Currently the hashmap memory limit is not strictly enforced, and we need
-    some not well defined safety margin. Currently the Buffer Pool minimum size
-    is no less than 80 pages (of size of 64KB). With at least half of that
-    allocated to pages_to_be_kept_free, it should contain enough margin, which
-    we approximate to 10 pages. */
-    ut_a(10 < pages_to_be_kept_free);
-  } else {
-    recv_n_frames_for_pages_per_pool_instance = 0;
-  }
-
   mutex_exit(&recv_sys->mutex);
+
+  ulint max_mem =
+      UNIV_PAGE_SIZE * (buf_pool_get_n_pages() -
+                        (recv_n_pool_free_frames * srv_buf_pool_instances));
 
   lsn_t start_lsn =
       ut_uint64_align_down(checkpoint_lsn, OS_FILE_LOG_BLOCK_SIZE);
@@ -3738,19 +3710,25 @@ static void recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
       break;
     }
 
-    finished =
-        recv_scan_log_recs(log, delta_hashmap_max_mem, log.buf,
-                           end_lsn - start_lsn, start_lsn, &log.m_scanned_lsn);
+    dberr_t err;
+
+    finished = recv_scan_log_recs(log, max_mem, log.buf, end_lsn - start_lsn,
+                                  start_lsn, &log.m_scanned_lsn, err);
+
+    if (err != DB_SUCCESS) {
+      return err;
+    }
 
     start_lsn = end_lsn;
   }
 
   DBUG_PRINT("ib_log", ("scan " LSN_PF " completed", log.m_scanned_lsn));
+  return DB_SUCCESS;
 }
 
 /** Initialize crash recovery environment. Can be called iff
 recv_needed_recovery == false. */
-static void recv_init_crash_recovery() {
+static dberr_t recv_init_crash_recovery() {
   ut_ad(!srv_read_only_mode);
   ut_a(!recv_needed_recovery);
 
@@ -3759,7 +3737,7 @@ static void recv_init_crash_recovery() {
   ib::info(ER_IB_MSG_726);
   ib::info(ER_IB_MSG_727);
 
-  recv_sys->dblwr->recover();
+  dberr_t err = recv_sys->dblwr->recover();
 
   if (srv_force_recovery < SRV_FORCE_NO_LOG_REDO) {
     /* Spawn the background thread to flush dirty pages
@@ -3770,6 +3748,8 @@ static void recv_init_crash_recovery() {
 
     srv_threads.m_recv_writer.start();
   }
+
+  return err;
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -3874,11 +3854,17 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
         return DB_ERROR;
       }
 
-      recv_init_crash_recovery();
+      err = recv_init_crash_recovery();
+      if (err != DB_SUCCESS) {
+        return err;
+      }
     }
   }
 
-  recv_recovery_begin(log, checkpoint_lsn);
+  err = recv_recovery_begin(log, checkpoint_lsn);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
 
   if (srv_read_only_mode && log.m_scanned_lsn > checkpoint_lsn) {
     ib::error(ER_IB_MSG_RECOVERY_IN_READ_ONLY);

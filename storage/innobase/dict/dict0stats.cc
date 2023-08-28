@@ -41,7 +41,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dyn0buf.h"
 #include "ha_prototypes.h"
 #include "lob0lob.h"
-#include "m_string.h"
 #include "pars0pars.h"
 #include "row0sel.h"
 #include "trx0trx.h"

@@ -100,6 +100,8 @@ bool Gcs_message_data::report_allocate_memory(size_t size [[maybe_unused]]) {
                                     &owner) == PSI_NOT_INSTRUMENTED) {
     return true;
   }
+  /* This instrument is flagged global, so there should be no thread owner. */
+  assert(owner == nullptr);
 #endif /* HAVE_PSI_MEMORY_INTERFACE */
   return false;
 }

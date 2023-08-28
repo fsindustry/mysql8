@@ -25,9 +25,6 @@
 #ifndef NdbInfoRecAttr_H
 #define NdbInfoRecAttr_H
 
-#include <assert.h>
-#include <string.h>
-
 class NdbInfoRecAttr {
 public:
   const void* ptr() const {

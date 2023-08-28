@@ -31,8 +31,6 @@
 #include "sql/spatial.h"
 #include "unittest/gunit/test_utils.h"  // Server_initializer
 
-struct CHARSET_INFO;
-
 namespace gis_algo_unittest {
 
 /*

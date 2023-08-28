@@ -42,6 +42,7 @@
 #include <algorithm>
 
 #include "decimal.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_base.h"
 #include "my_compiler.h"
@@ -49,8 +50,6 @@
 #include "my_sqlcommand.h"
 #include "my_sys.h"
 #include "my_systime.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/my_decimal.h"

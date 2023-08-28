@@ -30,7 +30,6 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include "channel.h"
@@ -38,13 +37,11 @@
 #include "connection.h"  // MySQLRoutingConnectionBase
 #include "mysql/harness/net_ts/executor.h"
 #include "mysql/harness/net_ts/timer.h"
-#include "mysqlrouter/classic_protocol_constants.h"
 #include "mysqlrouter/classic_protocol_message.h"
 #include "mysqlrouter/classic_protocol_session_track.h"
 #include "mysqlrouter/connection_pool.h"
 #include "processor.h"
 #include "sql_exec_context.h"
-#include "trace_span.h"
 #include "tracer.h"
 
 /**
@@ -169,26 +166,6 @@ class ClassicProtocolState : public ProtocolStateBase {
   }
   PreparedStatements &prepared_statements() { return prepared_stmts_; }
 
-  classic_protocol::status::value_type status_flags() const {
-    return status_flags_;
-  }
-
-  void status_flags(classic_protocol::status::value_type val) {
-    status_flags_ = val;
-  }
-
-  /**
-   * trace the events of the commands.
-   *
-   * - enabled by ROUTER SET trace = 1
-   * - disabled by ROUTER SET trace = 0, change-user or reset-connection.
-   *
-   * @retval true if 'ROUTER SET trace' is '1'
-   * @retval false if 'ROUTER SET trace' is '0'
-   */
-  bool trace_commands() const { return trace_commands_; }
-  void trace_commands(bool val) { trace_commands_ = val; }
-
  private:
   classic_protocol::capabilities::value_type server_caps_{};
   classic_protocol::capabilities::value_type client_caps_{};
@@ -211,12 +188,6 @@ class ClassicProtocolState : public ProtocolStateBase {
   std::string auth_method_data_;
 
   PreparedStatements prepared_stmts_;
-
-  // status flags of the last statement.
-  classic_protocol::status::value_type status_flags_{};
-
-  // if commands shall be traced.
-  bool trace_commands_{false};
 };
 
 class MysqlRoutingClassicConnectionBase
@@ -473,11 +444,6 @@ class MysqlRoutingClassicConnectionBase
    */
   void connection_sharing_allowed_reset();
 
-  /**
-   * @return a string representing the reason why sharing is blocked.
-   */
-  std::string connection_sharing_blocked_by() const;
-
  private:
   int active_work_{0};
 
@@ -511,14 +477,6 @@ class MysqlRoutingClassicConnectionBase
   RouteDestination *destinations() { return route_destination_; }
   Destinations &current_destinations() { return destinations_; }
 
-  void collation_connection_maybe_dirty(bool val) {
-    collation_connection_maybe_dirty_ = val;
-  }
-
-  bool collation_connection_maybe_dirty() const {
-    return collation_connection_maybe_dirty_;
-  }
-
  private:
   RouteDestination *route_destination_;
   Destinations destinations_;
@@ -536,8 +494,6 @@ class MysqlRoutingClassicConnectionBase
   std::optional<classic_protocol::session_track::TransactionCharacteristics>
       trx_characteristics_;
   bool some_state_changed_{false};
-
-  bool collation_connection_maybe_dirty_{false};
 
   bool requires_tls_{true};
 
@@ -568,9 +524,6 @@ class MysqlRoutingClassicConnectionBase
   }
   bool diagnostic_area_changed() const { return diagnostic_area_changed_; }
 
-  const TraceSpan &events() const { return events_; }
-  TraceSpan &events() { return events_; }
-
   enum class FromEither {
     None,
     Started,
@@ -591,9 +544,6 @@ class MysqlRoutingClassicConnectionBase
   bool diagnostic_area_changed_{};
 
   FromEither recv_from_either_{FromEither::None};
-
-  // events for router.trace.
-  TraceSpan events_;
 };
 
 #endif

@@ -34,8 +34,6 @@
 
 class THD;
 
-struct CHARSET_INFO;
-
 namespace dd {
 class Object_key;
 }  // namespace dd

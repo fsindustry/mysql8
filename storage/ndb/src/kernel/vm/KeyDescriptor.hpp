@@ -31,7 +31,6 @@
 
 #define JAM_FILE_ID 259
 
-struct CHARSET_INFO;
 
 struct KeyDescriptor
 {
@@ -48,7 +47,7 @@ struct KeyDescriptor
   struct KeyAttr 
   {
     Uint32 attributeDescriptor;
-    const CHARSET_INFO* charsetInfo;
+    CHARSET_INFO* charsetInfo;
   } keyAttr[MAX_ATTRIBUTES_IN_INDEX];
 };
 

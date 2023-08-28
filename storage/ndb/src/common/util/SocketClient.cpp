@@ -25,7 +25,6 @@
 
 #include <ndb_global.h>
 
-#include <cassert>
 #include "SocketClient.hpp"
 #include "SocketAuthenticator.hpp"
 #include "portlib/ndb_socket_poller.h"
@@ -54,13 +53,12 @@ SocketClient::~SocketClient()
 }
 
 bool
-SocketClient::init(int af)
+SocketClient::init()
 {
-  assert(!ndb_socket_valid(m_sockfd));
   if (ndb_socket_valid(m_sockfd))
     ndb_socket_close(m_sockfd);
 
-  m_sockfd= ndb_socket_create(af);
+  m_sockfd= ndb_socket_create_dual_stack(SOCK_STREAM, 0);
   if (!ndb_socket_valid(m_sockfd)) {
     return false;
   }
@@ -69,17 +67,28 @@ SocketClient::init(int af)
 }
 
 int
-SocketClient::bind(ndb_sockaddr local)
+SocketClient::bind(const char* local_hostname,
+                   unsigned short local_port)
 {
-  const bool no_local_port = (local.get_port() == 0);
-
   if (!ndb_socket_valid(m_sockfd))
     return -1;
 
+  struct sockaddr_in6 local;
+  memset(&local, 0, sizeof(local));
+  local.sin6_family = AF_INET6;
+  local.sin6_port = htons(local_port);
+  if (local_port == 0 &&
+      m_last_used_port != 0)
   {
     // Try to bind to the same port as last successful connect instead of
     // any ephemeral port. Intention is to reuse any previous TIME_WAIT TCB
-    local.set_port(m_last_used_port);
+    local.sin6_port = htons(m_last_used_port);
+  }
+
+  // Resolve local address
+  if (Ndb_getInAddr6(&local.sin6_addr, local_hostname))
+  {
+    return errno ? errno : EINVAL;
   }
 
   if (ndb_socket_reuseaddr(m_sockfd, true) == -1)
@@ -90,14 +99,15 @@ SocketClient::bind(ndb_sockaddr local)
     return ret;
   }
 
-  while (ndb_bind(m_sockfd, &local) == -1)
+  while (ndb_bind_inet(m_sockfd, &local) == -1)
   {
-    if (no_local_port && m_last_used_port != 0)
+    if (local_port == 0 &&
+        m_last_used_port != 0)
     {
       // Failed to bind same port as last, retry with any
       // ephemeral port(as originally requested)
       m_last_used_port = 0; // Reset last used port
-      local.set_port(0); // Try bind with any port
+      local.sin6_port = htons(0); // Try bind with any port
       continue;
     }
 
@@ -117,23 +127,44 @@ SocketClient::bind(ndb_sockaddr local)
 #endif
 
 ndb_socket_t
-SocketClient::connect(ndb_sockaddr server_addr)
+SocketClient::connect(const char* server_hostname,
+                      unsigned short server_port)
 {
-  assert(ndb_socket_valid(m_sockfd));
   NdbSocket sock;
-  connect(sock, server_addr);
+  connect(sock, server_hostname, server_port);
   return sock.ndb_socket();
 }
 
 void
 SocketClient::connect(NdbSocket & secureSocket,
-                      ndb_sockaddr server_addr)
+                      const char* server_hostname,
+                      unsigned short server_port)
 {
-  if (!ndb_socket_valid(m_sockfd))
-    return;
-
   // Reset last used port(in case connect fails)
   m_last_used_port = 0;
+
+  if (!ndb_socket_valid(m_sockfd))
+  {
+    if (!init())
+    {
+      DEBUG_FPRINTF((stderr, "Failed init in connect\n"));
+      return;
+    }
+  }
+
+  struct sockaddr_in6 server_addr;
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin6_family = AF_INET6;
+  server_addr.sin6_port = htons(server_port);
+
+  // Resolve server address
+  if (Ndb_getInAddr6(&server_addr.sin6_addr, server_hostname))
+  {
+    DEBUG_FPRINTF((stderr, "Failed Ndb_getInAddr in connect\n"));
+    ndb_socket_close(m_sockfd);
+    ndb_socket_invalidate(&m_sockfd);
+    return;
+  }
 
   // Set socket non blocking
   if (ndb_socket_nonblock(m_sockfd, true) < 0)
@@ -144,14 +175,9 @@ SocketClient::connect(NdbSocket & secureSocket,
     return;
   }
 
-  if (server_addr.need_dual_stack())
-  {
-    [[maybe_unused]] bool ok = ndb_socket_dual_stack(m_sockfd, 1);
-  }
-
   // Start non blocking connect
   DEBUG_FPRINTF((stderr, "Connect to %s:%u\n", server_hostname, server_port));
-  int r = ndb_connect(m_sockfd, &server_addr);
+  int r = ndb_connect_inet6(m_sockfd, &server_addr);
   if (r == 0)
     goto done; // connected immediately.
 

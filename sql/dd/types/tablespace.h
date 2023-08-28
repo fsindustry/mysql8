@@ -25,7 +25,6 @@
 
 #include <vector>
 
-#include "lex_string.h"
 #include "my_inttypes.h"
 #include "sql/dd/collection.h"            // dd::Collection
 #include "sql/dd/impl/raw/object_keys.h"  // IWYU pragma: keep

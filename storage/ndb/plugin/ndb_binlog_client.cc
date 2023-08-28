@@ -193,7 +193,8 @@ void Ndb_binlog_client::log_warning(uint code, const char *fmt, ...) const {
     push_warning_printf(m_thd, Sql_condition::SL_WARNING, code, "%s", buf);
   } else {
     // Print the warning to log file
-    ndb_log_warning("Binlog: [%s.%s] %d: %s", m_dbname, m_tabname, code, buf);
+    ndb_log_warning("NDB Binlog: [%s.%s] %d: %s", m_dbname, m_tabname, code,
+                    buf);
   }
 }
 

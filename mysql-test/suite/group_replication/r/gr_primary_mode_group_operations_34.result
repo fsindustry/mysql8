@@ -22,10 +22,11 @@ KILL QUERY CONNECTION_ID;
 # 5. Unblock the debug point with "signal.action_stop_continue"
 SET DEBUG_SYNC= "now SIGNAL signal.action_stop_continue";
 
-# 6. Check the action returns successfully.
+# 6. Check the action returns and it says: Despite being killed, the
+#    operation still completed successfully.
 [connection server1]
 group_replication_switch_to_single_primary_mode("MEMBER1_UUID")
-Mode switched to single-primary successfully.
+Mode switched to single-primary successfully. Despite being killed, the operation was still completed.
 include/gr_assert_primary_member.inc
 [connection server2]
 include/gr_assert_secondary_member.inc
@@ -33,5 +34,4 @@ include/gr_assert_secondary_member.inc
 # 7. Cleanup
 [connection server1]
 SET @@GLOBAL.DEBUG= '-d,group_replication_block_group_action_stop';
-SET DEBUG_SYNC='RESET';
 include/group_replication_end.inc

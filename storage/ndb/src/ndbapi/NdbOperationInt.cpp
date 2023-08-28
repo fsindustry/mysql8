@@ -88,6 +88,7 @@ NdbOperation::incCheck(const NdbColumnImpl* tNdbColumnImpl)
     if (tNdbColumnImpl == nullptr)
       goto inc_check_error1;
     if ((tNdbColumnImpl->getInterpretableType() != true) ||
+        (tNdbColumnImpl->m_pk != false) ||
         (tNdbColumnImpl->m_nullable))
       goto inc_check_error2;
     if (theStatus == ExecInterpretedValue) {
@@ -117,6 +118,10 @@ NdbOperation::incCheck(const NdbColumnImpl* tNdbColumnImpl)
   return -1;
   
  inc_check_error2:
+  if (tNdbColumnImpl->m_pk){
+    setErrorCodeAbort(4202);
+    return -1;
+  }//if
   if (!tNdbColumnImpl->getInterpretableType()){
     setErrorCodeAbort(4217);
     return -1;
@@ -141,7 +146,8 @@ NdbOperation::write_attrCheck(const NdbColumnImpl* tNdbColumnImpl)
   if (theInterpretIndicator == 1) {
     if (tNdbColumnImpl == nullptr)
       goto write_attr_check_error1;
-    if (tNdbColumnImpl->getInterpretableType() == false)
+    if ((tNdbColumnImpl->getInterpretableType() == false) ||
+        (tNdbColumnImpl->m_pk))
       goto write_attr_check_error2;
     if (theStatus == ExecInterpretedValue) {
       ; // Simply continue with interpretation
@@ -167,6 +173,10 @@ write_attr_check_error1:
   return -1;
 
 write_attr_check_error2:
+  if (tNdbColumnImpl->m_pk) {
+    setErrorCodeAbort(4202);
+    return -1;
+  }//if
   if (tNdbColumnImpl->getInterpretableType() == false){
     setErrorCodeAbort(4217);
     return -1;

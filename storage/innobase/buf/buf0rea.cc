@@ -49,7 +49,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h"
-#include "ut0new.h"
 
 /** There must be at least this many pages in buf_pool in the area to start
 a random read-ahead */
@@ -589,34 +588,20 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
   ut_a(n_stored < UNIV_PAGE_SIZE);
 #endif /* UNIV_IBUF_DBUG */
 
-  ut::unordered_map<space_id_t, fil_space_t *> acquired_spaces;
-
   for (ulint i = 0; i < n_stored; i++) {
     const page_id_t page_id(space_ids[i], page_nos[i]);
 
     buf_pool_t *buf_pool = buf_pool_get(page_id);
 
-    fil_space_t *space = nullptr;
-    /* Acquire the space once for the pages belongs to it */
-    const auto space_itr = acquired_spaces.find(space_ids[i]);
-    if (space_itr != acquired_spaces.end()) {
-      space = space_itr->second;
-    } else {
-      /* If the space is deleted then fil_space_acquire_silent() returns
-      nullptr. Cache that information as well so that we remove the subsequent
-      ibuf entries for that space without trying to acquire it again. It is safe
-      operation to do since the space once deleted will not be available ever.*/
-      space = fil_space_acquire_silent(space_ids[i]);
-      acquired_spaces.emplace(space_ids[i], space);
-    }
+    bool found;
+    const page_size_t page_size(fil_space_get_page_size(space_ids[i], &found));
 
-    if (space == nullptr) {
-      /* The tablespace was not found, remove the entries for that page */
+    if (!found) {
+      /* The tablespace was not found, remove the
+      entries for that page */
       ibuf_merge_or_delete_for_page(nullptr, page_id, nullptr, false);
       continue;
     }
-
-    const page_size_t page_size(space->flags);
 
     os_rmb;
     while (buf_pool->n_pend_reads >
@@ -637,13 +622,6 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
     }
   }
 
-  /* Release the acquired spaces */
-  for (const auto &space_entry : acquired_spaces) {
-    if (space_entry.second) {
-      fil_space_release(space_entry.second);
-    }
-  }
-
   os_aio_simulated_wake_handler_threads();
 
   if (n_stored) {
@@ -652,8 +630,8 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
   }
 }
 
-void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
-                         ulint n_stored) {
+void buf_read_recv_pages(bool sync, space_id_t space_id,
+                         const page_no_t *page_nos, ulint n_stored) {
   ulint count;
   fil_space_t *space = fil_space_get(space_id);
 
@@ -700,8 +678,7 @@ void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
     buf_pool = buf_pool_get(cur_page_id);
     os_rmb;
 
-    while (buf_pool->n_pend_reads >=
-           recv_n_frames_for_pages_per_pool_instance / 2) {
+    while (buf_pool->n_pend_reads >= recv_n_pool_free_frames / 2) {
       os_aio_simulated_wake_handler_threads();
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
@@ -716,8 +693,13 @@ void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
 
     dberr_t err;
 
-    buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
-                      cur_page_id, page_size, true);
+    if ((i + 1 == n_stored) && sync) {
+      buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, cur_page_id,
+                        page_size, true);
+    } else {
+      buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
+                        cur_page_id, page_size, true);
+    }
   }
 
   os_aio_simulated_wake_handler_threads();

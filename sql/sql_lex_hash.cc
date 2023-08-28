@@ -86,18 +86,18 @@ const SYMBOL *Lex_hash::get_hash_symbol(const char *s, unsigned int len) const {
   uint32 cur_struct = uint4korr(hash_map + ((len - 1) * 4));
 
   for (;;) {
-    const uchar first_char = (uchar)cur_struct;
+    uchar first_char = (uchar)cur_struct;
 
     if (first_char == 0) {
-      const uint16 ires = (uint16)(cur_struct >> 16);
+      uint16 ires = (uint16)(cur_struct >> 16);
       if (ires == array_elements(symbols)) return nullptr;
       const SYMBOL *res = symbols + ires;
-      const uint count = (uint)(cur_str - s);
+      uint count = (uint)(cur_str - s);
       return lex_casecmp(cur_str, res->name + count, len - count) ? nullptr
                                                                   : res;
     }
 
-    const uchar cur_char = (uchar)to_upper_lex[(uchar)*cur_str];
+    uchar cur_char = (uchar)to_upper_lex[(uchar)*cur_str];
     if (cur_char < first_char) return nullptr;
     cur_struct >>= 8;
     if (cur_char > (uchar)cur_struct) return nullptr;

@@ -53,16 +53,16 @@ template <class T>
 class Bucket {
  private:
   /// Lower inclusive value contained in this bucket.
-  T m_lower_inclusive;
+  const T m_lower_inclusive;
 
   /// Upper inclusive value contained in this bucket.
-  T m_upper_inclusive;
+  const T m_upper_inclusive;
 
   /// The cumulative frequency. 0.0 <= m_cumulative_frequency <= 1.0.
-  double m_cumulative_frequency;
+  const double m_cumulative_frequency;
 
   /// Number of distinct values in this bucket.
-  ha_rows m_num_distinct;
+  const ha_rows m_num_distinct;
 
   /**
     Add values to a JSON bucket.

@@ -45,6 +45,7 @@
 #include <mysql/components/services/page_track_service.h>
 #include "ft_global.h"  // ft_hints
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_alloc.h"
 #include "my_base.h"
@@ -59,7 +60,6 @@
 #include "my_table_map.h"
 #include "my_thread_local.h"  // my_errno
 #include "mysql/components/services/bits/psi_table_bits.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/object_id.h"  // dd::Object_id
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
@@ -68,7 +68,6 @@
 #include "sql/sql_const.h"       // SHOW_COMP_OPTION
 #include "sql/sql_list.h"        // SQL_I_List
 #include "sql/sql_plugin_ref.h"  // plugin_ref
-#include "string_with_len.h"     // STRING_WITH_LEN
 #include "thr_lock.h"            // thr_lock_type
 #include "typelib.h"
 
@@ -2428,72 +2427,6 @@ using compare_secondary_engine_cost_t = bool (*)(THD *thd, const JOIN &join,
 using secondary_engine_modify_access_path_cost_t = bool (*)(
     THD *thd, const JoinHypergraph &hypergraph, AccessPath *access_path);
 
-/**
-  Looks up and returns a specific secondary engine query offload or exec
-  failure reason as a string given a thread context (representing the query)
-  when the offloaded query fails in the secondary storage engine.
-
-  @param thd thread context.
-
-  @retval const char * as the offload failure reason.
-          The memory pointed to is managed by the handlerton and may be freed
-          when the statement completes.
-*/
-using get_secondary_engine_offload_or_exec_fail_reason_t =
-    const char *(*)(THD *thd);
-
-/**
-  Sets a specific secondary engine offload failure reason for a query
-  represented by the thread context when the offloaded query fails in
-  the secondary storage engine.
-
-  @param thd thread context.
-
-  @param const char * as the offload failure reason.
-*/
-using set_secondary_engine_offload_fail_reason_t = void (*)(THD *thd,
-                                                            const char *);
-enum class SecondaryEngineGraphSimplificationRequest {
-  /** Continue optimization phase with current hypergraph. */
-  kContinue = 0,
-  /** Trigger restart of hypergraph with provided number of subgraph pairs. */
-  kRestart = 1,
-};
-
-struct SecondaryEngineGraphSimplificationRequestParameters {
-  /** Optimizer request from the secondary engine. */
-  SecondaryEngineGraphSimplificationRequest secondary_engine_optimizer_request;
-  /** Subgraph pairs requested by the secondary engine. */
-  int subgraph_pair_limit;
-};
-
-/**
-  Hook for secondary engine to evaluate the current hypergraph optimization
-  state, and returns the state that hypergraph should transition to. Usually
-  invoked after secondary_engine_modify_access_path_cost_t is invoked via
-  the optimizer.  The state is returned as object of type
-  SecondaryEngineGraphSimplificationRequestParameters, and can lead to
-  simplification of hypergraph search space, or resetting the graph and starting
-  search afresh.
-
-  @param thd The thread context.
-  @param hypergraph The hypergraph that represents the search space.
-  @param access_path The AccessPath to evaluate.
-  @param current_subgraph_pairs Count of subgraph pairs explored so far.
-  @param current_subgraph_pairs_limit Limit for current hypergraph.
-  @param is_root_access_path Indicating if access_path is root.
-  @param trace Optimizer trace string.
-
-  @returns instance of SecondaryEngineGraphSimplificationRequestParameters which
-  contains description of the state hypergraph optimizer should transition to.
-*/
-using secondary_engine_check_optimizer_request_t =
-    SecondaryEngineGraphSimplificationRequestParameters (*)(
-        THD *thd, const JoinHypergraph &hypergraph,
-        const AccessPath *access_path, int current_subgraph_pairs,
-        int current_subgraph_pairs_limit, bool is_root_access_path,
-        std::string *trace);
-
 // Capabilities (bit flags) for secondary engines.
 using SecondaryEngineFlags = uint64_t;
 enum class SecondaryEngineFlag : SecondaryEngineFlags {
@@ -2873,30 +2806,6 @@ struct handlerton {
   secondary_engine_modify_access_path_cost_t
       secondary_engine_modify_access_path_cost;
 
-  /// Pointer to a function that returns the query offload or exec failure
-  /// reason as a string given a thread context (representing the query) when
-  /// the offloaded query failed in a secondary storage engine.
-  ///
-  /// @see get_secondary_engine_offload_or_exec_fail_reason_t for function
-  /// signature.
-  get_secondary_engine_offload_or_exec_fail_reason_t
-      get_secondary_engine_offload_or_exec_fail_reason;
-
-  /// Pointer to a function that sets the offload failure reason as a string
-  /// for a thread context (representing the query) when the offloaded query
-  /// failed in a secondary storage engine.
-  ///
-  /// @see set_secondary_engine_offload_fail_reason_t for function signature.
-  set_secondary_engine_offload_fail_reason_t
-      set_secondary_engine_offload_fail_reason;
-
-  /// Pointer to function that checks secondary engine request for updating
-  /// hypergraph join optimization.
-  ///
-  /// @see secondary_engine_check_optimizer_request_t for function signature.
-  secondary_engine_check_optimizer_request_t
-      secondary_engine_check_optimizer_request;
-
   se_before_commit_t se_before_commit;
   se_after_commit_t se_after_commit;
   se_before_rollback_t se_before_rollback;
@@ -3085,9 +2994,7 @@ enum enum_stats_auto_recalc : int {
   HA_STATS_AUTO_RECALC_OFF
 };
 
-/**
-  Struct to hold information about the table that should be created.
- */
+/* struct to hold information about the table that should be created */
 struct HA_CREATE_INFO {
   const CHARSET_INFO *table_charset{nullptr};
   const CHARSET_INFO *default_table_charset{nullptr};
@@ -3119,8 +3026,6 @@ struct HA_CREATE_INFO {
    * Is nullptr if no secondary engine defined.
    */
   LEX_CSTRING secondary_engine{nullptr, 0};
-  /** Secondary engine load status */
-  bool secondary_load{false};
 
   const char *data_file_name{nullptr};
   const char *index_file_name{nullptr};
@@ -4645,7 +4550,7 @@ class handler {
      @returns true if it was started.
   */
   bool end_psi_batch_mode_if_started() {
-    const bool rc = m_psi_batch_mode;
+    bool rc = m_psi_batch_mode;
     if (rc) end_psi_batch_mode();
     return rc;
   }
@@ -5448,7 +5353,7 @@ class handler {
   virtual int index_read_map(uchar *buf, const uchar *key,
                              key_part_map keypart_map,
                              enum ha_rkey_function find_flag) {
-    const uint key_len = calculate_key_len(table, active_index, keypart_map);
+    uint key_len = calculate_key_len(table, active_index, keypart_map);
     return index_read(buf, key, key_len, find_flag);
   }
   /**
@@ -5479,7 +5384,6 @@ class handler {
 
   /// @see index_read_map().
   virtual int index_next_same(uchar *buf, const uchar *key, uint keylen);
-
   /**
     The following functions works like index_read, but it find the last
     row with the current key value or prefix.
@@ -5487,7 +5391,7 @@ class handler {
   */
   virtual int index_read_last_map(uchar *buf, const uchar *key,
                                   key_part_map keypart_map) {
-    const uint key_len = calculate_key_len(table, active_index, keypart_map);
+    uint key_len = calculate_key_len(table, active_index, keypart_map);
     return index_read_last(buf, key, key_len);
   }
 
@@ -7006,19 +6910,6 @@ class handler {
   void ha_mv_key_capacity(uint *num_keys, size_t *keys_length) const {
     return mv_key_capacity(num_keys, keys_length);
   }
-
-  /**
-    Propagates the secondary storage engine offload failure reason for a query
-    to the external engine when the offloaded query fails in the secondary
-    storage engine.
-  */
-  virtual void set_external_table_offload_error(const char * /*reason*/) {}
-
-  /**
-    Identifies and throws the propagated external engine query offload or exec
-    failure reason given by the external engine handler.
-  */
-  virtual void external_table_offload_error() const {}
 
  private:
   /**

@@ -29,9 +29,9 @@
 #include <new>
 #include <unordered_map>
 
+#include "m_string.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
-#include "strmake.h"
 
 #include "my_inttypes.h"
 #include "my_psi_config.h"
@@ -535,10 +535,10 @@ struct MDL_key {
     end = strmake(start, name, NAME_LEN);
     m_object_name_length = static_cast<uint16>(end - start);
 
-    const size_t col_len = strlen(column_name);
+    size_t col_len = strlen(column_name);
     assert(col_len <= NAME_LEN);
     start = end + 1;
-    const size_t remaining =
+    size_t remaining =
         MAX_MDLKEY_LENGTH - m_db_name_length - m_object_name_length - 3;
     uint16 extra_length = 0;
 
@@ -710,10 +710,9 @@ struct MDL_key {
     m_object_name_length = m_length - m_db_name_length - 3;
   }
   void mdl_key_init(const MDL_key *rhs) {
-    const uint16 copy_length =
-        rhs->use_normalized_object_name()
-            ? rhs->m_length + rhs->m_object_name_length + 1
-            : rhs->m_length;
+    uint16 copy_length = rhs->use_normalized_object_name()
+                             ? rhs->m_length + rhs->m_object_name_length + 1
+                             : rhs->m_length;
     memcpy(m_ptr, rhs->m_ptr, copy_length);
     m_length = rhs->m_length;
     m_db_name_length = rhs->m_db_name_length;
@@ -1742,5 +1741,38 @@ const int32 MDL_LOCKS_UNUSED_LOCKS_LOW_WATER_DEFAULT = 1000;
 const double MDL_LOCKS_UNUSED_LOCKS_MIN_RATIO = 0.25;
 
 int32 mdl_get_unused_locks_count();
+
+/**
+  Inspect if MDL_context is owned by any thread.
+*/
+class MDL_lock_is_owned_visitor : public MDL_context_visitor {
+ public:
+  MDL_lock_is_owned_visitor() : m_exists(false) {}
+
+  /**
+    Collects relevant information about the MDL lock owner.
+
+    This function is only called by MDL_context::find_lock_owner() when
+    searching for MDL lock owners to collect extra information about the
+    owner. As we only need to know that the MDL lock is owned, setting
+    m_exists to true is enough.
+  */
+
+  void visit_context(const MDL_context *ctx [[maybe_unused]]) override {
+    m_exists = true;
+  }
+
+  /**
+    Returns if an owner for the MDL lock being inspected exists.
+
+    @return true when MDL lock is owned, false otherwise.
+  */
+
+  bool exists() const { return m_exists; }
+
+ private:
+  /* holds information about MDL being owned by any thread */
+  bool m_exists;
+};
 
 #endif

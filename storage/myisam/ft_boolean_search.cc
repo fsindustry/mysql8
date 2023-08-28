@@ -72,8 +72,6 @@
 #include "storage/myisam/myisamdef.h"
 #include "template_utils.h"
 
-struct CHARSET_INFO;
-
 /* search with boolean queries */
 
 static double _wghts[11] = {

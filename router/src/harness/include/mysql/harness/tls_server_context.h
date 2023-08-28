@@ -49,18 +49,15 @@ class HARNESS_TLS_EXPORT TlsServerContext : public TlsContext {
    *
    * they are filtered out if set through cipher_list()
    */
-  static constexpr std::array<const char *, 12> unacceptable_cipher_spec{
-      "!aNULL", "!eNULL", "!EXPORT", "!LOW", "!MD5", "!DES",
-      "!3DES",  "!RC2",   "!RC4",    "!PSK", "!kDH", "!SSLv3"};
+  static constexpr std::array<const char *, 9> unacceptable_cipher_spec{
+      "!aNULL", "!eNULL", "!EXPORT", "!MD5",  "!DES",
+      "!RC2",   "!RC4",   "!PSK",    "!SSLv3"};
 
   /**
    * construct a TLS Context for server-side.
    */
   TlsServerContext(TlsVersion min_version = TlsVersion::TLS_1_2,
-                   TlsVersion max_version = TlsVersion::AUTO,
-                   bool session_cache_mode = false,
-                   size_t session_cache_size = 0,
-                   unsigned int session_cache_timeout = 0);
+                   TlsVersion max_version = TlsVersion::AUTO);
 
   /**
    * load key and cert.

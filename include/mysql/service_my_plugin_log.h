@@ -31,8 +31,6 @@
 
 #ifndef MYSQL_ABI_CHECK
 #include <stdarg.h>
-
-#include "mysql/plugin.h"
 #endif
 
 /* keep in sync with the loglevel enum in my_sys.h */

@@ -25,21 +25,24 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <algorithm>
-#include <cassert>
-#include <cstdint>
-#include <cstring>
+#include <assert.h>
+#include <string.h>
+#include <sys/types.h>
 
-#include "m_string.h"  // skip_trailing_space
+#include <algorithm>
+
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_compiler.h"
-#include "mysql/strings/m_ctype.h"
-#include "strings/m_ctype_internals.h"
+
+#include "my_inttypes.h"
+#include "my_macros.h"
 #include "strings/str_uca_type.h"
 #include "template_utils.h"
 
 size_t my_caseup_str_mb(const CHARSET_INFO *cs, char *str) {
-  uint32_t l = 0;
-  const uint8_t *map = cs->to_upper;
+  uint32 l;
+  const uchar *map = cs->to_upper;
   char *str_orig = str;
 
   while (*str) {
@@ -47,7 +50,7 @@ size_t my_caseup_str_mb(const CHARSET_INFO *cs, char *str) {
     if ((l = my_ismbchar(cs, str, str + cs->mbmaxlen)))
       str += l;
     else {
-      *str = (char)map[(uint8_t)*str];
+      *str = (char)map[(uchar)*str];
       str++;
     }
   }
@@ -55,8 +58,8 @@ size_t my_caseup_str_mb(const CHARSET_INFO *cs, char *str) {
 }
 
 size_t my_casedn_str_mb(const CHARSET_INFO *cs, char *str) {
-  uint32_t l = 0;
-  const uint8_t *map = cs->to_lower;
+  uint32 l;
+  const uchar *map = cs->to_lower;
   char *str_orig = str;
 
   while (*str) {
@@ -64,7 +67,7 @@ size_t my_casedn_str_mb(const CHARSET_INFO *cs, char *str) {
     if ((l = my_ismbchar(cs, str, str + cs->mbmaxlen)))
       str += l;
     else {
-      *str = (char)map[(uint8_t)*str];
+      *str = (char)map[(uchar)*str];
       str++;
     }
   }
@@ -72,7 +75,7 @@ size_t my_casedn_str_mb(const CHARSET_INFO *cs, char *str) {
 }
 
 static inline const MY_UNICASE_CHARACTER *get_case_info_for_ch(
-    const CHARSET_INFO *cs, unsigned page, unsigned offs) {
+    const CHARSET_INFO *cs, uint page, uint offs) {
   const MY_UNICASE_CHARACTER *p;
   return cs->caseinfo ? ((p = cs->caseinfo->page[page]) ? &p[offs] : nullptr)
                       : nullptr;
@@ -84,9 +87,9 @@ static inline const MY_UNICASE_CHARACTER *get_case_info_for_ch(
 size_t my_caseup_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
                     char *dst [[maybe_unused]],
                     size_t dstlen [[maybe_unused]]) {
-  uint32_t l = 0;
+  uint32 l;
   char *srcend = src + srclen;
-  const uint8_t *map = cs->to_upper;
+  const uchar *map = cs->to_upper;
 
   assert(cs->caseup_multiply == 1);
   assert(src == dst && srclen == dstlen);
@@ -95,13 +98,13 @@ size_t my_caseup_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
   while (src < srcend) {
     if ((l = my_ismbchar(cs, src, srcend))) {
       const MY_UNICASE_CHARACTER *ch;
-      if ((ch = get_case_info_for_ch(cs, (uint8_t)src[0], (uint8_t)src[1]))) {
+      if ((ch = get_case_info_for_ch(cs, (uchar)src[0], (uchar)src[1]))) {
         *src++ = ch->toupper >> 8;
         *src++ = ch->toupper & 0xFF;
       } else
         src += l;
     } else {
-      *src = (char)map[(uint8_t)*src];
+      *src = (char)map[(uchar)*src];
       src++;
     }
   }
@@ -111,9 +114,9 @@ size_t my_caseup_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
 size_t my_casedn_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
                     char *dst [[maybe_unused]],
                     size_t dstlen [[maybe_unused]]) {
-  uint32_t l = 0;
+  uint32 l;
   char *srcend = src + srclen;
-  const uint8_t *map = cs->to_lower;
+  const uchar *map = cs->to_lower;
 
   assert(cs->casedn_multiply == 1);
   assert(src == dst && srclen == dstlen);
@@ -122,13 +125,13 @@ size_t my_casedn_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
   while (src < srcend) {
     if ((l = my_ismbchar(cs, src, srcend))) {
       const MY_UNICASE_CHARACTER *ch;
-      if ((ch = get_case_info_for_ch(cs, (uint8_t)src[0], (uint8_t)src[1]))) {
+      if ((ch = get_case_info_for_ch(cs, (uchar)src[0], (uchar)src[1]))) {
         *src++ = ch->tolower >> 8;
         *src++ = ch->tolower & 0xFF;
       } else
         src += l;
     } else {
-      *src = (char)map[(uint8_t)*src];
+      *src = (char)map[(uchar)*src];
       src++;
     }
   }
@@ -147,7 +150,7 @@ size_t my_casedn_mb(const CHARSET_INFO *cs, char *src, size_t srclen,
 static size_t my_casefold_mb_varlen(const CHARSET_INFO *cs, char *src,
                                     size_t srclen, char *dst,
                                     size_t dstlen [[maybe_unused]],
-                                    const uint8_t *map, size_t is_upper) {
+                                    const uchar *map, size_t is_upper) {
   char *srcend = src + srclen, *dst0 = dst;
 
   assert(cs->mbmaxlen == 2);
@@ -156,7 +159,7 @@ static size_t my_casefold_mb_varlen(const CHARSET_INFO *cs, char *src,
     size_t mblen = my_ismbchar(cs, src, srcend);
     if (mblen) {
       const MY_UNICASE_CHARACTER *ch;
-      if ((ch = get_case_info_for_ch(cs, (uint8_t)src[0], (uint8_t)src[1]))) {
+      if ((ch = get_case_info_for_ch(cs, (uchar)src[0], (uchar)src[1]))) {
         int code = is_upper ? ch->toupper : ch->tolower;
         src += 2;
         if (code > 0xFF) *dst++ = code >> 8;
@@ -166,7 +169,7 @@ static size_t my_casefold_mb_varlen(const CHARSET_INFO *cs, char *src,
         *dst++ = *src++;
       }
     } else {
-      *dst++ = (char)map[(uint8_t)*src++];
+      *dst++ = (char)map[(uchar)*src++];
     }
   }
   return (size_t)(dst - dst0);
@@ -191,8 +194,8 @@ size_t my_caseup_mb_varlen(const CHARSET_INFO *cs, char *src, size_t srclen,
  */
 
 int my_strcasecmp_mb(const CHARSET_INFO *cs, const char *s, const char *t) {
-  uint32_t l = 0;
-  const uint8_t *map = cs->to_upper;
+  uint32 l;
+  const uchar *map = cs->to_upper;
 
   while (*s && *t) {
     /* Pointing after the '\0' is safe here. */
@@ -200,7 +203,7 @@ int my_strcasecmp_mb(const CHARSET_INFO *cs, const char *s, const char *t) {
       while (l--)
         if (*s++ != *t++) return 1;
     } else if (my_mbcharlen(cs, *t) != 1 ||
-               map[(uint8_t)*s++] != map[(uint8_t)*t++])
+               map[(uchar)*s++] != map[(uchar)*t++])
       return 1;
   }
   /* At least one of '*s' and '*t' is zero here. */
@@ -218,17 +221,17 @@ int my_strcasecmp_mb(const CHARSET_INFO *cs, const char *s, const char *t) {
 #define INC_PTR(cs, A, B) \
   A += (my_ismbchar(cs, A, B) ? my_ismbchar(cs, A, B) : 1)
 
-#define likeconv(s, A) (uint8_t)(s)->sort_order[(uint8_t)(A)]
+#define likeconv(s, A) (uchar)(s)->sort_order[(uchar)(A)]
 
 static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
                               const char *str_end, const char *wildstr_arg,
                               const char *wildend_arg, int escape, int w_one,
                               int w_many, int recurse_level) {
   int result = -1; /* Not found, using wildcards */
-  const uint8_t *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
-  const uint8_t *wildend = pointer_cast<const uint8_t *>(wildend_arg);
+  const uchar *wildstr = pointer_cast<const uchar *>(wildstr_arg);
+  const uchar *wildend = pointer_cast<const uchar *>(wildend_arg);
 
-  if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return -1;
+  if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return 1;
   while (wildstr != wildend) {
     while (*wildstr != w_many && *wildstr != w_one) {
       int l;
@@ -253,7 +256,9 @@ static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
       if (wildstr == wildend) break;
     }
     if (*wildstr == w_many) { /* Found w_many */
-      uint8_t cmp = 0;
+      uchar cmp;
+      const uchar *mb = wildstr;
+      int mb_len = 0;
 
       wildstr++;
       /* Remove any '%' and '_' from the wild search string */
@@ -272,14 +277,14 @@ static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
       if ((cmp = *wildstr) == escape && wildstr + 1 != wildend)
         cmp = *++wildstr;
 
-      const uint8_t *mb = wildstr;
-      unsigned mb_len = my_ismbchar(cs, wildstr, wildend);
+      mb = wildstr;
+      mb_len = my_ismbchar(cs, wildstr, wildend);
       INC_PTR(cs, wildstr, wildend); /* This is compared through cmp */
       cmp = likeconv(cs, cmp);
       do {
         for (;;) {
           if (str >= str_end) return -1;
-          if (mb_len > 0) {
+          if (mb_len) {
             if (str + mb_len <= str_end && memcmp(str, mb, mb_len) == 0) {
               str += mb_len;
               break;
@@ -315,7 +320,7 @@ size_t my_numchars_mb(const CHARSET_INFO *cs, const char *pos,
                       const char *end) {
   size_t count = 0;
   while (pos < end) {
-    unsigned mb_len = 0;
+    uint mb_len;
     pos += (mb_len = my_ismbchar(cs, pos, end)) ? mb_len : 1;
     count++;
   }
@@ -327,7 +332,7 @@ size_t my_charpos_mb3(const CHARSET_INFO *cs, const char *pos, const char *end,
   const char *start = pos;
 
   while (length && pos < end) {
-    unsigned mb_len = 0;
+    uint mb_len;
     pos += (mb_len = my_ismbchar(cs, pos, end)) ? mb_len : 1;
     length--;
   }
@@ -342,8 +347,8 @@ size_t my_well_formed_len_mb(const CHARSET_INFO *cs, const char *b,
     my_wc_t wc;
     int mb_len;
 
-    if ((mb_len = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(b),
-                                  pointer_cast<const uint8_t *>(e))) <= 0) {
+    if ((mb_len = cs->cset->mb_wc(cs, &wc, pointer_cast<const uchar *>(b),
+                                  pointer_cast<const uchar *>(e))) <= 0) {
       *error = b < e ? 1 : 0;
       break;
     }
@@ -353,9 +358,9 @@ size_t my_well_formed_len_mb(const CHARSET_INFO *cs, const char *b,
   return (size_t)(b - b_start);
 }
 
-unsigned my_instr_mb(const CHARSET_INFO *cs, const char *b, size_t b_length,
-                     const char *s, size_t s_length, my_match_t *match,
-                     unsigned nmatch) {
+uint my_instr_mb(const CHARSET_INFO *cs, const char *b, size_t b_length,
+                 const char *s, size_t s_length, my_match_t *match,
+                 uint nmatch) {
   const char *end, *b0;
   int res = 0;
 
@@ -375,16 +380,16 @@ unsigned my_instr_mb(const CHARSET_INFO *cs, const char *b, size_t b_length,
     while (b < end) {
       int mb_len;
 
-      if (!cs->coll->strnncoll(cs, pointer_cast<const uint8_t *>(b), s_length,
-                               pointer_cast<const uint8_t *>(s), s_length,
+      if (!cs->coll->strnncoll(cs, pointer_cast<const uchar *>(b), s_length,
+                               pointer_cast<const uchar *>(s), s_length,
                                false)) {
         if (nmatch) {
           match[0].beg = 0;
-          match[0].end = (unsigned)(b - b0);
+          match[0].end = (uint)(b - b0);
           match[0].mb_len = res;
           if (nmatch > 1) {
             match[1].beg = match[0].end;
-            match[1].end = match[0].end + (unsigned)s_length;
+            match[1].end = match[0].end + (uint)s_length;
             match[1].mb_len = 0; /* Not computed */
           }
         }
@@ -401,9 +406,9 @@ unsigned my_instr_mb(const CHARSET_INFO *cs, const char *b, size_t b_length,
 
 /* BINARY collations handlers for MB charsets */
 
-int my_strnncoll_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                        const uint8_t *s, size_t slen, const uint8_t *t,
-                        size_t tlen, bool t_is_prefix) {
+int my_strnncoll_mb_bin(const CHARSET_INFO *cs [[maybe_unused]], const uchar *s,
+                        size_t slen, const uchar *t, size_t tlen,
+                        bool t_is_prefix) {
   size_t len = std::min(slen, tlen);
   int cmp = len == 0 ? 0 : memcmp(s, t, len);
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
@@ -432,12 +437,13 @@ int my_strnncoll_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
 */
 
 int my_strnncollsp_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                          const uint8_t *a, size_t a_length, const uint8_t *b,
+                          const uchar *a, size_t a_length, const uchar *b,
                           size_t b_length) {
-  size_t length = 0;
-  int res = 0;
+  const uchar *end;
+  size_t length;
+  int res;
 
-  const uint8_t *end = a + (length = std::min(a_length, b_length));
+  end = a + (length = std::min(a_length, b_length));
   while (a < end) {
     if (*a++ != *b++) return ((int)a[-1] - (int)b[-1]);
   }
@@ -492,13 +498,13 @@ int my_strnncollsp_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
   characters having multibyte weights *equal* to their codes:
   cp932, euckr, gb2312, sjis, eucjpms, ujis.
 */
-size_t my_strnxfrm_mb(const CHARSET_INFO *cs, uint8_t *dst, size_t dstlen,
-                      unsigned nweights, const uint8_t *src, size_t srclen,
-                      unsigned flags) {
-  uint8_t *d0 = dst;
-  uint8_t *de = dst + dstlen;
-  const uint8_t *se = src + srclen;
-  const uint8_t *sort_order = cs->sort_order;
+size_t my_strnxfrm_mb(const CHARSET_INFO *cs, uchar *dst, size_t dstlen,
+                      uint nweights, const uchar *src, size_t srclen,
+                      uint flags) {
+  uchar *d0 = dst;
+  uchar *de = dst + dstlen;
+  const uchar *se = src + srclen;
+  const uchar *sort_order = cs->sort_order;
 
   assert(cs->mbmaxlen <= 4);
 
@@ -557,9 +563,9 @@ int my_strcasecmp_mb_bin(const CHARSET_INFO *cs [[maybe_unused]], const char *s,
 }
 
 void my_hash_sort_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                         const uint8_t *key, size_t len, uint64_t *nr1,
-                         uint64_t *nr2) {
-  const uint8_t *pos = key;
+                         const uchar *key, size_t len, uint64 *nr1,
+                         uint64 *nr2) {
+  const uchar *pos = key;
 
   /*
      Remove trailing spaces. We have to do this to be able to compare
@@ -569,8 +575,7 @@ void my_hash_sort_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
 
   for (; pos < key; pos++) {
     nr1[0] ^=
-        (uint64_t)((((unsigned)nr1[0] & 63) + nr2[0]) * ((unsigned)*pos)) +
-        (nr1[0] << 8);
+        (uint64)((((uint)nr1[0] & 63) + nr2[0]) * ((uint)*pos)) + (nr1[0] << 8);
     nr2[0] += 3;
   }
 }
@@ -595,7 +600,7 @@ void my_hash_sort_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
 */
 static void pad_max_char(const CHARSET_INFO *cs, char *str, char *end) {
   char buf[10];
-  int buflen = 0;
+  char buflen;
 
   if (!(cs->state & MY_CS_UNICODE)) {
     if (cs->max_sort_char <= 255) {
@@ -615,9 +620,8 @@ static void pad_max_char(const CHARSET_INFO *cs, char *str, char *end) {
       buflen = 4;
     }
   } else {
-    buflen =
-        cs->cset->wc_mb(cs, cs->max_sort_char, pointer_cast<uint8_t *>(buf),
-                        pointer_cast<uint8_t *>(buf) + sizeof(buf));
+    buflen = cs->cset->wc_mb(cs, cs->max_sort_char, (uchar *)buf,
+                             (uchar *)buf + sizeof(buf));
   }
 
   assert(buflen > 0);
@@ -657,7 +661,7 @@ bool my_like_range_mb(const CHARSET_INFO *cs, const char *ptr,
                       size_t ptr_length, char escape, char w_one, char w_many,
                       size_t res_length, char *min_str, char *max_str,
                       size_t *min_length, size_t *max_length) {
-  unsigned mb_len = 0;
+  uint mb_len;
   const char *end = ptr + ptr_length;
   char *min_org = min_str;
   char *min_end = min_str + res_length;
@@ -729,10 +733,10 @@ bool my_like_range_mb(const CHARSET_INFO *cs, const char *ptr,
         'ab\min\min\min\min' and 'ab\max\max\max\max'.
 
       */
-      const MY_UCA_INFO::flags_type *contraction_flags = nullptr;
+      const char *contraction_flags = nullptr;
       if (cs->uca) contraction_flags = cs->uca->contraction_flags;
       if (contraction_flags && ptr + 1 < end &&
-          my_uca_can_be_contraction_head(contraction_flags, (uint8_t)*ptr)) {
+          my_uca_can_be_contraction_head(contraction_flags, (uchar)*ptr)) {
         /* Ptr[0] is a contraction head. */
 
         if (ptr[1] == w_one || ptr[1] == w_many) {
@@ -752,10 +756,9 @@ bool my_like_range_mb(const CHARSET_INFO *cs, const char *ptr,
           is not a contraction, then we put only ptr[0],
           and continue with ptr[1] on the next loop.
         */
-        if (my_uca_can_be_contraction_tail(contraction_flags,
-                                           (uint8_t)ptr[1]) &&
+        if (my_uca_can_be_contraction_tail(contraction_flags, (uchar)ptr[1]) &&
             my_uca_contraction2_weight(cs->uca->contraction_nodes,
-                                       (uint8_t)ptr[0], ptr[1])) {
+                                       (uchar)ptr[0], ptr[1])) {
           /* Contraction found */
           if (maxcharlen == 1 || min_str + 1 >= min_end) {
             /* Both contraction parts don't fit, quit */
@@ -818,8 +821,8 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
   for (; charlen > 0; charlen--) {
     my_wc_t wc, wc2;
     int res;
-    if ((res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(ptr),
-                               pointer_cast<const uint8_t *>(end))) <= 0) {
+    if ((res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uchar *>(ptr),
+                               pointer_cast<const uchar *>(end))) <= 0) {
       if (res == MY_CS_ILSEQ) /* Bad sequence */
         return true;          /* min_length and max_length are not important */
       break;                  /* End of the string */
@@ -827,8 +830,8 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
     ptr += res;
 
     if (wc == (my_wc_t)escape) {
-      if ((res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(ptr),
-                                 pointer_cast<const uint8_t *>(end))) <= 0) {
+      if ((res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uchar *>(ptr),
+                                 pointer_cast<const uchar *>(end))) <= 0) {
         if (res == MY_CS_ILSEQ)
           return true; /* min_length and max_length are not important */
                        /*
@@ -840,26 +843,24 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
         ptr += res;
 
       /* Put escape character to min_str and max_str  */
-      if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(min_str),
-                                 pointer_cast<uint8_t *>(min_end))) <= 0)
+      if ((res = cs->cset->wc_mb(cs, wc, (uchar *)min_str, (uchar *)min_end)) <=
+          0)
         goto pad_set_lengths; /* No space */
       min_str += res;
 
-      if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(max_str),
-                                 pointer_cast<uint8_t *>(max_end))) <= 0)
+      if ((res = cs->cset->wc_mb(cs, wc, (uchar *)max_str, (uchar *)max_end)) <=
+          0)
         goto pad_set_lengths; /* No space */
       max_str += res;
       continue;
     } else if (wc == (my_wc_t)w_one) {
-      if ((res = cs->cset->wc_mb(cs, cs->min_sort_char,
-                                 pointer_cast<uint8_t *>(min_str),
-                                 pointer_cast<uint8_t *>(min_end))) <= 0)
+      if ((res = cs->cset->wc_mb(cs, cs->min_sort_char, (uchar *)min_str,
+                                 (uchar *)min_end)) <= 0)
         goto pad_set_lengths;
       min_str += res;
 
-      if ((res = cs->cset->wc_mb(cs, cs->max_sort_char,
-                                 pointer_cast<uint8_t *>(max_str),
-                                 pointer_cast<uint8_t *>(max_end))) <= 0)
+      if ((res = cs->cset->wc_mb(cs, cs->max_sort_char, (uchar *)max_str,
+                                 (uchar *)max_end)) <= 0)
         goto pad_set_lengths;
       max_str += res;
       continue;
@@ -875,13 +876,13 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
       goto pad_min_max;
     }
 
-    const MY_UCA_INFO::flags_type *contraction_flags = nullptr;
+    const char *contraction_flags = nullptr;
     if (cs->uca) contraction_flags = cs->uca->contraction_flags;
     if (contraction_flags &&
         my_uca_can_be_contraction_head(contraction_flags, wc) &&
-        (res = cs->cset->mb_wc(cs, &wc2, pointer_cast<const uint8_t *>(ptr),
-                               pointer_cast<const uint8_t *>(end))) > 0) {
-      const uint16_t *weight = nullptr;
+        (res = cs->cset->mb_wc(cs, &wc2, pointer_cast<const uchar *>(ptr),
+                               pointer_cast<const uchar *>(end))) > 0) {
+      const uint16 *weight;
       if ((wc2 == (my_wc_t)w_one || wc2 == (my_wc_t)w_many)) {
         /* Contraction head followed by a wildcard */
         *min_length = *max_length = res_length;
@@ -903,13 +904,13 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
         charlen--;
 
         /* Put contraction head */
-        if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(min_str),
-                                   pointer_cast<uint8_t *>(min_end))) <= 0)
+        if ((res = cs->cset->wc_mb(cs, wc, (uchar *)min_str,
+                                   (uchar *)min_end)) <= 0)
           goto pad_set_lengths;
         min_str += res;
 
-        if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(max_str),
-                                   pointer_cast<uint8_t *>(max_end))) <= 0)
+        if ((res = cs->cset->wc_mb(cs, wc, (uchar *)max_str,
+                                   (uchar *)max_end)) <= 0)
           goto pad_set_lengths;
         max_str += res;
         wc = wc2; /* Prepare to put contraction tail */
@@ -917,12 +918,12 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
     }
 
     /* Normal character, or contraction tail */
-    if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(min_str),
-                               pointer_cast<uint8_t *>(min_end))) <= 0)
+    if ((res = cs->cset->wc_mb(cs, wc, (uchar *)min_str, (uchar *)min_end)) <=
+        0)
       goto pad_set_lengths;
     min_str += res;
-    if ((res = cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(max_str),
-                               pointer_cast<uint8_t *>(max_end))) <= 0)
+    if ((res = cs->cset->wc_mb(cs, wc, (uchar *)max_str, (uchar *)max_end)) <=
+        0)
       goto pad_set_lengths;
     max_str += res;
   }
@@ -958,10 +959,10 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
                                   const char *wildend_arg, int escape,
                                   int w_one, int w_many, int recurse_level) {
   int result = -1; /* Not found, using wildcards */
-  const uint8_t *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
-  const uint8_t *wildend = pointer_cast<const uint8_t *>(wildend_arg);
+  const uchar *wildstr = pointer_cast<const uchar *>(wildstr_arg);
+  const uchar *wildend = pointer_cast<const uchar *>(wildend_arg);
 
-  if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return -1;
+  if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return 1;
   while (wildstr != wildend) {
     while (*wildstr != w_many && *wildstr != w_one) {
       int l;
@@ -970,7 +971,7 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
         if (str + l > str_end || memcmp(str, wildstr, l) != 0) return 1;
         str += l;
         wildstr += l;
-      } else if (str == str_end || *wildstr++ != static_cast<uint8_t>(*str++))
+      } else if (str == str_end || *wildstr++ != static_cast<uchar>(*str++))
         return (1); /* No match */
       if (wildstr == wildend)
         return (str != str_end); /* Match if both are at end */
@@ -986,6 +987,7 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
     }
     if (*wildstr == w_many) { /* Found w_many */
       int cmp;
+      const uchar *mb = wildstr;
       int mb_len = 0;
 
       wildstr++;
@@ -1005,7 +1007,7 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
       if ((cmp = *wildstr) == escape && wildstr + 1 != wildend)
         cmp = *++wildstr;
 
-      const uint8_t *mb = wildstr;
+      mb = wildstr;
       mb_len = my_ismbchar(cs, wildstr, wildend);
       INC_PTR(cs, wildstr, wildend); /* This is compared through cmp */
       do {
@@ -1017,7 +1019,7 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
               break;
             }
           } else if (!my_ismbchar(cs, str, str_end) &&
-                     static_cast<uint8_t>(*str) == cmp) {
+                     static_cast<uchar>(*str) == cmp) {
             str++;
             break;
           }
@@ -1292,9 +1294,9 @@ size_t my_numcells_mb(const CHARSET_INFO *cs, const char *b, const char *e) {
 
   while (b < e) {
     int mb_len;
-    unsigned pg = 0;
-    if ((mb_len = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(b),
-                                  pointer_cast<const uint8_t *>(e))) <= 0 ||
+    uint pg;
+    if ((mb_len = cs->cset->mb_wc(cs, &wc, pointer_cast<const uchar *>(b),
+                                  pointer_cast<const uchar *>(e))) <= 0 ||
         wc > 0xFFFF) {
       /*
         Let's think a wrong sequence takes 1 dysplay cell.
@@ -1318,8 +1320,8 @@ size_t my_numcells_mb(const CHARSET_INFO *cs, const char *b, const char *e) {
   return clen;
 }
 
-int my_mb_ctype_mb(const CHARSET_INFO *cs, int *ctype, const uint8_t *s,
-                   const uint8_t *e) {
+int my_mb_ctype_mb(const CHARSET_INFO *cs, int *ctype, const uchar *s,
+                   const uchar *e) {
   my_wc_t wc;
   int res = cs->cset->mb_wc(cs, &wc, s, e);
   if (res <= 0 || wc > 0xFFFF)

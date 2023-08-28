@@ -46,7 +46,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_prototypes.h"
 #include "lob0lob.h"
 #include "my_dbug.h"
-#include "mysql/strings/m_ctype.h"
 #include "row0sel.h"
 #include "ut0new.h"
 #include "ut0rbt.h"

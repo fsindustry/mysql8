@@ -54,7 +54,6 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/thread_type.h"
 #include "mysqld_error.h"
-#include "scope_guard.h"  // Scope_guard
 #include "sql/binlog.h"
 #include "sql/binlog_reader.h"
 #include "sql/current_thd.h"
@@ -72,8 +71,6 @@
 #include "sql/sql_lex.h"
 #include "sql/table.h"
 #include "sql/transaction_info.h"
-#include "string_with_len.h"
-#include "strmake.h"
 #include "thr_mutex.h"
 
 #ifndef NDEBUG
@@ -1951,17 +1948,13 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
   Relay_log_info *rli = c_rli;
   char file_name[FN_REFLEN + 1];
   uint file_number = start_relay_number;
+  bool error = true;
   bool arrive_end = false;
   Relaylog_file_reader relaylog_file_reader(opt_replica_sql_verify_checksum);
 
   relay_log_number_to_name(start_relay_number, file_name);
 
-#ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_thread *thread = thd_get_psi(rli->info_thd);
-  Scope_guard guard([&] {
-    if (thread != nullptr) PSI_THREAD_CALL(abort_telemetry)(thread);
-  });
-#endif
 
   while (!arrive_end) {
     Log_event *ev = nullptr;
@@ -1972,7 +1965,7 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
       if (relaylog_file_reader.open(file_name, start_relay_pos)) {
         LogErr(ERROR_LEVEL, ER_RPL_FAILED_TO_OPEN_RELAY_LOG, file_name,
                relaylog_file_reader.get_error_str());
-        return true;
+        goto end;
       }
     }
 
@@ -1984,6 +1977,7 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
     if (ev != nullptr) {
       /* It is a event belongs to the transaction */
       if (!ev->is_mts_sequential_exec()) {
+        int ret = 0;
         RLI_current_event_raii current_event_guard{this, ev};
 
         ev->future_event_relay_log_pos = relaylog_file_reader.position();
@@ -1992,21 +1986,19 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
         // event was re-read again, thence context was lost, attach
         // additional context needed, before re-executing (just like in
         // the main loop before exec_relay_log_event)
-        if (rli->current_mts_submode->set_multi_threaded_applier_context(*rli,
-                                                                         *ev)) {
-          return true;
-        }
+        rli->current_mts_submode->set_multi_threaded_applier_context(*rli, *ev);
 
         // we re-assign partitions only on retries
         if (is_mts_db_partitioned(rli) && ev->contains_partition_info(true))
           assign_partition_db(ev);
 
-        int ret = slave_worker_exec_event(ev);
+        ret = slave_worker_exec_event(ev);
         if (ev->worker != nullptr) {
           delete ev;
           ev = nullptr;
         }
-        if (ret != 0) return true;
+
+        if (ret != 0) goto end;
       } else {
         /*
           It is a Rotate_log_event, Format_description_log_event event or other
@@ -2025,12 +2017,12 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
         LogErr(ERROR_LEVEL, ER_RPL_WORKER_CANT_READ_RELAY_LOG,
                rli->get_event_relay_log_name(),
                relaylog_file_reader.position());
-        return true;
+        goto end;
       }
 
       if (rli->relay_log.find_next_relay_log(file_name)) {
         LogErr(ERROR_LEVEL, ER_RPL_WORKER_CANT_FIND_NEXT_RELAY_LOG, file_name);
-        return true;
+        goto end;
       }
 
       file_number = relay_log_name_to_number(file_name);
@@ -2040,7 +2032,14 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
     }
   }
 
-  return false;
+  error = false;
+end:
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  if (thread != nullptr) {
+    PSI_THREAD_CALL(abort_telemetry)(thread);
+  }
+#endif
+  return error;
 }
 
 /*
@@ -2122,15 +2121,9 @@ bool append_item_to_jobs(slave_job_item *job_item, Slave_worker *worker,
     mysql_mutex_unlock(&rli->pending_jobs_lock);
     thd->EXIT_COND(&old_stage);
     if (thd->killed) return true;
-    if (rli->wq_size_waits_cnt % 10 == 1) {
-      time_t my_now = time(nullptr);
-      if ((my_now - rli->mta_coordinator_has_waited_stat) >=
-          mts_online_stat_period) {
-        LogErr(INFORMATION_LEVEL, ER_RPL_MTA_REPLICA_COORDINATOR_HAS_WAITED,
-               rli->wq_size_waits_cnt, ev_size);
-        rli->mta_coordinator_has_waited_stat = my_now;
-      }
-    }
+    if (rli->wq_size_waits_cnt % 10 == 1)
+      LogErr(INFORMATION_LEVEL, ER_RPL_MTA_REPLICA_COORDINATOR_HAS_WAITED,
+             rli->wq_size_waits_cnt, ev_size);
     mysql_mutex_lock(&rli->pending_jobs_lock);
 
     new_pend_size = rli->mts_pending_jobs_size + ev_size;

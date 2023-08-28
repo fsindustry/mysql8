@@ -20,14 +20,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-IF(MSVC AND NOT MY_COMPILER_IS_CLANG)
-  OPTION(MSVC_CPPCHECK "Enable the extra MSVC CppCheck checks"
-    ${MYSQL_MAINTAINER_MODE})
-ELSE()
-  OPTION(MSVC_CPPCHECK "Enable the extra MSVC CppCheck checks"
-    OFF)
-ENDIF()
-
+OPTION(MSVC_CPPCHECK "Enable the extra MSVC CppCheck checks" OFF)
 
 # check https://learn.microsoft.com/en-us/cpp/build/reference/analyze-code-analysis
 
@@ -173,7 +166,7 @@ MACRO(MSVC_CPPCHECK_ADD_ANALYZE)
   ENDIF()
 ENDMACRO()
 
-MACRO(DO_MSVC_CPPCHECK)
+MACRO(MSVC_CPPCHECK)
   MSVC_CPPCHECK_ADD_ANALYZE()
   MSVC_CPPCHECK_ADD_SUPPRESSIONS()
 ENDMACRO()

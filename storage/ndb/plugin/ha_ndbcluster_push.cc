@@ -31,7 +31,6 @@
 
 #include "storage/ndb/plugin/ha_ndbcluster_push.h"
 
-#include "my_config.h"  // WORDS_BIGENDIAN
 #include "my_dbug.h"
 #include "sql/current_thd.h"
 #include "sql/sql_class.h"

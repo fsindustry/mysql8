@@ -27,7 +27,6 @@
 #include <NdbCondition.h>
 #include <NdbMutex.h>
 #include "NdbTick.h"
-#include "ndb_config.h"
 
 #include <EventLogger.hpp>
 

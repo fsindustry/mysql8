@@ -25,6 +25,7 @@
 #include <sys/types.h>
 
 #include "field_types.h"
+#include "m_ctype.h"
 #include "memory_debugging.h"
 #include "mf_wcomp.h"
 #include "my_alloc.h"
@@ -34,7 +35,6 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_table_map.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
@@ -424,7 +424,7 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
         */
         if (and_tree == nullptr) return nullptr;
       }
-      or_tree = tree_or(param, remove_jump_scans, or_tree, and_tree);
+      or_tree = tree_or(param, remove_jump_scans, and_tree, or_tree);
     }
     return or_tree;
   }

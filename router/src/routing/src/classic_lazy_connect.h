@@ -27,7 +27,7 @@
 
 #include <system_error>
 
-#include "forwarding_processor.h"
+#include "processor.h"
 
 /**
  * attach a server connection and initialize it.
@@ -43,7 +43,7 @@
  *
  * - the client's cleartext password must be known.
  */
-class LazyConnector : public ForwardingProcessor {
+class LazyConnector : public Processor {
  public:
   /**
    * create a lazy-connector.
@@ -52,7 +52,6 @@ class LazyConnector : public ForwardingProcessor {
    * @param in_handshake if true, the client connection is in Greeting or
    * ChangeUser right now.
    * @param on_error function that's called if an error happened.
-   * @param parent_event parent event for the tracer
    *
    * If "in_handshake" the LazyConnector may ask the client for a
    * "auth-method-switch" or a "plaintext-password".
@@ -60,25 +59,17 @@ class LazyConnector : public ForwardingProcessor {
   LazyConnector(
       MysqlRoutingClassicConnectionBase *conn, bool in_handshake,
       std::function<void(const classic_protocol::message::server::Error &err)>
-          on_error,
-      TraceEvent *parent_event)
-      : ForwardingProcessor(conn),
+          on_error)
+      : Processor(conn),
         in_handshake_{in_handshake},
-        on_error_(std::move(on_error)),
-        parent_event_(parent_event) {}
+        on_error_(std::move(on_error)) {}
 
   enum class Stage {
     Connect,
     Connected,
     Authenticated,
     SetVars,
-    SetVarsDone,
-    SetServerOption,
-    SetServerOptionDone,
     SetSchema,
-    SetSchemaDone,
-    FetchSysVars,
-    FetchSysVarsDone,
 
     Done,
   };
@@ -93,13 +84,7 @@ class LazyConnector : public ForwardingProcessor {
   stdx::expected<Processor::Result, std::error_code> connected();
   stdx::expected<Processor::Result, std::error_code> authenticated();
   stdx::expected<Processor::Result, std::error_code> set_vars();
-  stdx::expected<Processor::Result, std::error_code> set_vars_done();
-  stdx::expected<Processor::Result, std::error_code> set_server_option();
-  stdx::expected<Processor::Result, std::error_code> set_server_option_done();
   stdx::expected<Processor::Result, std::error_code> set_schema();
-  stdx::expected<Processor::Result, std::error_code> set_schema_done();
-  stdx::expected<Processor::Result, std::error_code> fetch_sys_vars();
-  stdx::expected<Processor::Result, std::error_code> fetch_sys_vars_done();
 
   Stage stage_{Stage::Connect};
 
@@ -107,19 +92,6 @@ class LazyConnector : public ForwardingProcessor {
 
   std::function<void(const classic_protocol::message::server::Error &err)>
       on_error_;
-
-  bool retry_connect_{false};
-
-  // start timepoint to calculate the connect-retry-timeout.
-  std::chrono::steady_clock::time_point started_{
-      std::chrono::steady_clock::now()};
-
-  TraceEvent *parent_event_{};
-  TraceEvent *trace_event_connect_{};
-  TraceEvent *trace_event_authenticate_{};
-  TraceEvent *trace_event_set_vars_{};
-  TraceEvent *trace_event_fetch_sys_vars_{};
-  TraceEvent *trace_event_set_schema_{};
 };
 
 #endif

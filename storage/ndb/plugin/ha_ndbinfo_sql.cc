@@ -811,9 +811,7 @@ static struct lookup {
         "ndb$index_stats",
         "index_id INT UNSIGNED, "
         "index_version INT UNSIGNED, "
-        "sample_version INT UNSIGNED, "
-        "load_time INT UNSIGNED, "
-        "sample_count INT UNSIGNED",
+        "sample_version INT UNSIGNED",
     }};
 
 static constexpr size_t num_lookups = sizeof(lookups) / sizeof(lookups[0]);

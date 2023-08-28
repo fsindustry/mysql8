@@ -27,13 +27,7 @@
 
 class Sql_cmd_ddl : public Sql_cmd {
  public:
-  enum enum_sql_cmd_type sql_cmd_type() const override {
-    /*
-      Somewhat unsurprisingly, anything sub-classed to Sql_cmd_ddl
-      identifies as DDL by default.
-    */
-    return SQL_CMD_DDL;
-  }
+  bool is_dml() const final { return false; }
 };
 
 #endif  // SQL_CMD_DDL_INCLUDED

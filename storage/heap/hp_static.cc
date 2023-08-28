@@ -31,7 +31,6 @@
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "mysql/psi/mysql_memory.h"
-#include "template_utils.h"
 
 LIST *heap_open_list = nullptr, *heap_share_list = nullptr;
 

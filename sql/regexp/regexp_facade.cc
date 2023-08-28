@@ -33,8 +33,6 @@
 #include "sql_string.h"
 #include "template_utils.h"
 
-struct CHARSET_INFO;
-
 namespace regexp {
 
 /**
@@ -84,7 +82,7 @@ static bool EvalExprToCharset(Item *expr, std::u16string *out, int skip = 0) {
     */
     my_error(ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR, MYF(0));
     out->clear();
-    return true;
+    return false;
   }
   if (expr->collation.collation != regexp_lib_charset) {
     // Character set conversion is called for.

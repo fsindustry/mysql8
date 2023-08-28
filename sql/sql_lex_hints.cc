@@ -114,8 +114,8 @@ int Hint_scanner::scan() {
   }
 }
 
-void my_hint_parser_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
-                          PT_hint_list **, const char *msg) {
+void HINT_PARSER_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
+                       PT_hint_list **, const char *msg) {
   if (strcmp(msg, "syntax error") == 0)
     msg = ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR);
   scanner->syntax_warning(msg);
@@ -134,8 +134,8 @@ void my_hint_parser_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
 
 void Hint_scanner::syntax_warning(const char *msg) const {
   /* Push an error into the error stack */
-  const ErrConvString err(raw_yytext, input_buf_end - raw_yytext,
-                          thd->variables.character_set_client);
+  ErrConvString err(raw_yytext, input_buf_end - raw_yytext,
+                    thd->variables.character_set_client);
 
   push_warning_printf(thd, Sql_condition::SL_WARNING, ER_PARSE_ERROR,
                       ER_THD(thd, ER_PARSE_ERROR), msg, err.ptr(),

@@ -563,8 +563,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_default) {
 
       const auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "1"),
-                              ElementsAre("statement/sql/set_option", "2")));
+                  ElementsAre(ElementsAre("statement/sql/set_option", "2")));
     }
 
     {
@@ -589,7 +588,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_default) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "2"),
+                  ElementsAre(ElementsAre("statement/sql/select", "1"),
                               ElementsAre("statement/sql/set_option", "3")));
     }
   }
@@ -675,8 +674,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_zero) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "1"),
-                              ElementsAre("statement/sql/set_option", "2")));
+                  ElementsAre(ElementsAre("statement/sql/set_option", "2")));
     }
 
     {
@@ -700,7 +698,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_zero) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "2"),
+                  ElementsAre(ElementsAre("statement/sql/select", "1"),
                               ElementsAre("statement/sql/set_option", "3")));
     }
   }
@@ -791,8 +789,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_small) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "1"),
-                              ElementsAre("statement/sql/set_option", "2")));
+                  ElementsAre(ElementsAre("statement/sql/set_option", "2")));
     }
 
     // run it again.
@@ -807,7 +804,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_small) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "2"),
+                  ElementsAre(ElementsAre("statement/sql/select", "1"),
                               ElementsAre("statement/sql/set_option", "2")));
     }
 
@@ -834,7 +831,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_small) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "3"),
+                  ElementsAre(ElementsAre("statement/sql/select", "2"),
                               ElementsAre("statement/sql/set_option", "3")));
     }
   }
@@ -884,8 +881,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_large) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "1"),
-                              ElementsAre("statement/sql/set_option", "1")));
+                  ElementsAre(ElementsAre("statement/sql/set_option", "1")));
     }
 
     // run it again without waiting to be pooled.
@@ -900,7 +896,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_large) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "2"),
+                  ElementsAre(ElementsAre("statement/sql/select", "1"),
                               ElementsAre("statement/sql/set_option", "1")));
     }
   }
@@ -990,8 +986,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_per_route) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "1"),
-                              ElementsAre("statement/sql/set_option", "2")));
+                  ElementsAre(ElementsAre("statement/sql/set_option", "2")));
     }
 
     EXPECT_NO_ERROR(wait_for_idle_server_connections(1, 2s));
@@ -1008,7 +1003,7 @@ TEST_F(RoutingSharingConfig, connection_sharing_per_route) {
 
       auto result = results.front();
       EXPECT_THAT(result,
-                  ElementsAre(ElementsAre("statement/sql/select", "2"),
+                  ElementsAre(ElementsAre("statement/sql/select", "1"),
                               ElementsAre("statement/sql/set_option", "3")));
     }
   }

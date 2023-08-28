@@ -27,8 +27,7 @@
 #ifndef NDB_MT_ASM_H
 #define NDB_MT_ASM_H
 
-#include "my_config.h" // HAVE_PAUSE_INSTRUCTION
-#include "ndb_config.h" // HAVE_ATOMIC_H HAVE_ATOMIC_SWAP_32
+#include <config.h>
 
 /**
  * Remove comment on NDB_USE_SPINLOCK if it is desired to use spinlocks

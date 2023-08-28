@@ -336,7 +336,12 @@ struct PT_install_component_set_element {
 
 enum class Set_operator { UNION, EXCEPT, INTERSECT };
 
-union MY_SQL_PARSER_STYPE {
+// Compatibility with Bison 2.3:
+#ifndef YYSTYPE_IS_DECLARED
+#define YYSTYPE_IS_DECLARED 1
+#endif  // YYSTYPE_IS_DECLARED
+
+union YYSTYPE {
   Lexer_yystype lexer;  // terminal values from the lexical scanner
   /*
     Hint parser section (sql_hints.yy)
@@ -714,7 +719,6 @@ union MY_SQL_PARSER_STYPE {
   List<PT_install_component_set_element> *install_component_set_list;
 };
 
-static_assert(sizeof(MY_SQL_PARSER_STYPE) <= 32, "YYSTYPE is too big");
-using MY_HINT_PARSER_STYPE = MY_SQL_PARSER_STYPE;
+static_assert(sizeof(YYSTYPE) <= 32, "YYSTYPE is too big");
 
 #endif  // PARSER_YYSTYPE_INCLUDED

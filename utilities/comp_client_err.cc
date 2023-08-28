@@ -36,7 +36,6 @@
 #include "my_getopt.h"
 #include "my_sys.h"
 #include "print_version.h"
-#include "str2int.h"
 #include "welcome_copyright_notice.h"
 
 static const char *INFILE = "errmsg.h";

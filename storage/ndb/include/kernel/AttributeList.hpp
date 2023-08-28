@@ -25,9 +25,7 @@
 #ifndef ATTRIBUTE_LIST_HPP
 #define ATTRIBUTE_LIST_HPP
 
-#include "kernel/ndb_limits.h"
-#include "ndb_types.h"
-#include "util/Bitmask.hpp"
+#include "ndb_limits.h"
 
 #define JAM_FILE_ID 4
 

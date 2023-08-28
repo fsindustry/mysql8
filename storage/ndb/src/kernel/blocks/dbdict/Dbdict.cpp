@@ -25,7 +25,7 @@
 #include <ndb_global.h>
 #include <cstring>
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 
 #define DBDICT_C
 #include "Dbdict.hpp"
@@ -17092,6 +17092,8 @@ Dbdict::execINDEX_STAT_REP(Signal* signal)
 
   D("index stat: " << copyRope<MAX_TAB_NAME_SIZE>(indexPtr.p->tableName)
     << " request type:" << rep->requestType);
+
+  infoEvent("DICT: index %u stats auto-update requested", rep->indexId);
   indexPtr.p->indexStatBgRequest = rep->requestType;
 }
 
@@ -17142,7 +17144,6 @@ Dbdict::indexStatBg_process(Signal* signal)
       tx_ptr.p->tx_key
     };
     tx_ptr.p->m_callback = c;
-    infoEvent("DICT: index %u stats auto-update starting", c_indexStatBgId);
     beginSchemaTrans(signal, tx_ptr);
     return;
   }

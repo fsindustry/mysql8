@@ -30,8 +30,6 @@
 #include "sql/rpl_io_monitor.h"
 #include "sql/rpl_msr.h"  // channel_map
 #include "sql/rpl_replica.h"
-#include "string_with_len.h"
-#include "strmake.h"
 
 #include <algorithm>
 

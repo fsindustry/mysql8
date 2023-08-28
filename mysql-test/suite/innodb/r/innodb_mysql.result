@@ -1771,8 +1771,6 @@ drop table t1;
 SET SESSION AUTOCOMMIT = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 set binlog_format=mixed;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 # Switch to connection con1
 CREATE TABLE t1 (a INT PRIMARY KEY, b VARCHAR(256))
 ENGINE = InnoDB;
@@ -2062,28 +2060,18 @@ drop table t1, t2;
 #
 SET @save_log_bin= @@sql_log_bin;
 SET @save_binlog_format=@@binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET @@sql_log_bin = 0;
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 select @@session.sql_log_bin, @@session.binlog_format, @@session.transaction_isolation;
 @@session.sql_log_bin	0
 @@session.binlog_format	STATEMENT
 @@session.transaction_isolation	READ-COMMITTED
-Warnings:
-Level	Warning
-Code	1287
-Message	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TABLE t1 ( a INT ) ENGINE=InnoDB;
 INSERT INTO t1 VALUES(1);
 DROP TABLE t1;
 SET @@sql_log_bin=@save_log_bin;
 SET @@binlog_format=@save_binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 #
 # Bug#37284 Crash in Field_string::type()
 #
@@ -2352,10 +2340,13 @@ INSERT INTO t4 VALUES (1),(2),(3),(4),(5);
 INSERT INTO t5 VALUES (1);
 DELETE t5 FROM t4 LEFT JOIN t5 ON t4.a= t5.a;
 DELETE t2, t1 FROM t2 INNER JOIN t1 ON (t2.aid = t1.id) WHERE t2.id = 1;
-Got one of the listed errors
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `t3_ibfk_1` FOREIGN KEY (`bid`) REFERENCES `t2` (`id`))
 DELETE t2, t1 FROM t2 INNER JOIN t1 ON (t2.aid = t1.id) WHERE t2.id = 1;
-Got one of the listed errors
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `t3_ibfk_1` FOREIGN KEY (`bid`) REFERENCES `t2` (`id`))
 DELETE IGNORE t2, t1 FROM t2 INNER JOIN t1 ON (t2.aid = t1.id) WHERE t2.id = 1;
+Warnings:
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `t3_ibfk_1` FOREIGN KEY (`bid`) REFERENCES `t2` (`id`))
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aid`) REFERENCES `t1` (`id`))
 DROP TABLE t3;
 DROP TABLE t2;
 DROP TABLE t1;

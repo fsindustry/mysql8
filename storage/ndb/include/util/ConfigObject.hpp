@@ -26,8 +26,6 @@
 #define ConfigObject_H
 
 #include <vector>
-#include "ConfigSection.hpp" // ConfigSection::Entry, SectionType, ValueType
-#include "ndb_types.h"
 
 #define OUR_V2_VERSION true
 

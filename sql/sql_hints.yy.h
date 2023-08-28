@@ -30,28 +30,20 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-#ifndef YY_MY_HINT_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED
-# define YY_MY_HINT_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED
+#ifndef YY_HINT_PARSER_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED
+# define YY_HINT_PARSER_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED
 /* Debug traces.  */
-#ifndef MY_HINT_PARSER_DEBUG
-# if defined YYDEBUG
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
 #if YYDEBUG
-#   define MY_HINT_PARSER_DEBUG 1
-#  else
-#   define MY_HINT_PARSER_DEBUG 0
-#  endif
-# else /* ! defined YYDEBUG */
-#  define MY_HINT_PARSER_DEBUG 0
-# endif /* ! defined YYDEBUG */
-#endif  /* ! defined MY_HINT_PARSER_DEBUG */
-#if MY_HINT_PARSER_DEBUG
-extern int my_hint_parser_debug;
+extern int HINT_PARSER_debug;
 #endif
 
 /* Token type.  */
-#ifndef MY_HINT_PARSER_TOKENTYPE
-# define MY_HINT_PARSER_TOKENTYPE
-  enum my_hint_parser_tokentype
+#ifndef YYTOKENTYPE
+# define YYTOKENTYPE
+  enum yytokentype
   {
     MAX_EXECUTION_TIME_HINT = 1000,
     RESOURCE_GROUP_HINT = 1001,
@@ -102,7 +94,8 @@ extern int my_hint_parser_debug;
     NO_ORDER_INDEX_HINT = 1046,
     DERIVED_CONDITION_PUSHDOWN_HINT = 1047,
     NO_DERIVED_CONDITION_PUSHDOWN_HINT = 1048,
-    HINT_ARG_FLOATING_POINT_NUMBER = 1049
+    HINT_ARG_FLOATING_POINT_NUMBER = 1049,
+    YYUNDEF = 1150
   };
 #endif
 /* Tokens.  */
@@ -156,11 +149,12 @@ extern int my_hint_parser_debug;
 #define DERIVED_CONDITION_PUSHDOWN_HINT 1047
 #define NO_DERIVED_CONDITION_PUSHDOWN_HINT 1048
 #define HINT_ARG_FLOATING_POINT_NUMBER 1049
+#define YYUNDEF 1150
 
 /* Value type.  */
 
 
 
-int my_hint_parser_parse (class THD *thd, class Hint_scanner *scanner, class PT_hint_list **ret);
+int HINT_PARSER_parse (class THD *thd, class Hint_scanner *scanner, class PT_hint_list **ret);
 
-#endif /* !YY_MY_HINT_PARSER_VAR_LIB_PB2_SB_1_11858416_1687334106_05_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED  */
+#endif /* !YY_HINT_PARSER_VAR_LIB_PB2_SB_1_10803651_1678987576_92_DIST_GPL_SQL_SQL_HINTS_YY_H_INCLUDED  */

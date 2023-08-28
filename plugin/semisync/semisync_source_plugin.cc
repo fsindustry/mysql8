@@ -29,7 +29,6 @@
 #include "my_psi_config.h"
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_stage.h"
-#include "nulls.h"
 #include "plugin/semisync/semisync_source.h"
 #include "plugin/semisync/semisync_source_ack_receiver.h"
 #include "sql/current_thd.h"

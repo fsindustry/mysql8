@@ -49,19 +49,18 @@
 #include "my_dir.h"
 #include "my_inttypes.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
 #include "my_time.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_my_plugin_log.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysql/service_mysql_password_policy.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"
@@ -97,8 +96,6 @@
 #include "sql/tztime.h"  // Time_zone
 #include "sql_common.h"  // mpvio_info
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strmake.h"
 #include "template_utils.h"
 #include "violite.h"
 
@@ -1253,7 +1250,7 @@ bool Rsa_authentication_keys::read_key_file(RSA **key_ptr, bool is_priv_key,
       filesize = ftell(key_file);
       fseek(key_file, 0, SEEK_SET);
       *key_text_buffer = new char[filesize + 1];
-      const int items_read = fread(*key_text_buffer, filesize, 1, key_file);
+      int items_read = fread(*key_text_buffer, filesize, 1, key_file);
       read_error = items_read != 1;
       if (read_error) {
         char errbuf[MYSQL_ERRMSG_SIZE];
@@ -1353,7 +1350,7 @@ bool Rsa_authentication_keys::read_rsa_keys() {
      Else clean up.
    */
   if (rsa_private_key_ptr && rsa_public_key_ptr) {
-    const size_t buff_len = strlen(pub_key_buff);
+    size_t buff_len = strlen(pub_key_buff);
     char *pem_file_buffer = (char *)allocate_pem_buffer(buff_len + 1);
     strncpy(pem_file_buffer, pub_key_buff, buff_len);
     pem_file_buffer[buff_len] = '\0';
@@ -1728,8 +1725,8 @@ static bool send_server_handshake_packet(MPVIO_EXT *mpvio, const char *data,
   end = strmake(end, client_plugin_name(mpvio->plugin),
                 strlen(client_plugin_name(mpvio->plugin)));
 
-  const int res = protocol->write((uchar *)buff, (size_t)(end - buff + 1)) ||
-                  protocol->flush();
+  int res = protocol->write((uchar *)buff, (size_t)(end - buff + 1)) ||
+            protocol->flush();
   return res;
 }
 
@@ -2180,11 +2177,10 @@ static bool find_mpvio_user(THD *thd, MPVIO_EXT *mpvio) {
       Pretend the user exists; let the plugin decide how to handle
       bad credentials.
     */
-    const LEX_CSTRING usr = {mpvio->auth_info.user_name,
-                             mpvio->auth_info.user_name_length};
-    const LEX_CSTRING hst = {
-        mpvio->host ? mpvio->host : mpvio->ip,
-        mpvio->host ? strlen(mpvio->host) : strlen(mpvio->ip)};
+    LEX_CSTRING usr = {mpvio->auth_info.user_name,
+                       mpvio->auth_info.user_name_length};
+    LEX_CSTRING hst = {mpvio->host ? mpvio->host : mpvio->ip,
+                       mpvio->host ? strlen(mpvio->host) : strlen(mpvio->ip)};
     mpvio->acl_user =
         decoy_user(usr, hst, mpvio->mem_root, mpvio->rand, initialized);
     mpvio->acl_user_plugin = mpvio->acl_user->plugin;
@@ -2510,7 +2506,7 @@ static bool parse_com_change_user_packet(THD *thd, MPVIO_EXT *mpvio,
     Cast *passwd to an unsigned char, so that it doesn't extend the sign for
     *passwd > 127 and become 2**32-127+ after casting to uint.
   */
-  const size_t passwd_len = (uchar)(*passwd++);
+  size_t passwd_len = (uchar)(*passwd++);
 
   db += passwd_len + 1;
   /*
@@ -2734,7 +2730,7 @@ static char *get_56_lenc_string(char **buffer, size_t *max_bytes_available,
   DBUG_EXECUTE_IF("buffer_too_short_4", *pos = 253; *max_bytes_available = 3;);
   DBUG_EXECUTE_IF("buffer_too_short_9", *pos = 254; *max_bytes_available = 8;);
 
-  const size_t required_length = (size_t)net_field_length_size(pos);
+  size_t required_length = (size_t)net_field_length_size(pos);
 
   if (*max_bytes_available < required_length) return nullptr;
 
@@ -2743,7 +2739,7 @@ static char *get_56_lenc_string(char **buffer, size_t *max_bytes_available,
   DBUG_EXECUTE_IF("sha256_password_scramble_too_long",
                   *string_length = SIZE_T_MAX;);
 
-  const size_t len_len = (size_t)(*buffer - begin);
+  size_t len_len = (size_t)(*buffer - begin);
 
   assert((*max_bytes_available >= len_len) && (len_len == required_length));
 
@@ -2776,7 +2772,7 @@ static char *get_41_lenc_string(char **buffer, size_t *max_bytes_available,
   if (*max_bytes_available == 0) return nullptr;
 
   /* Do double cast to prevent overflow from signed / unsigned conversion */
-  const size_t str_len = (size_t)(unsigned char)**buffer;
+  size_t str_len = (size_t)(unsigned char)**buffer;
 
   /*
     If the length encoded string has the length 0
@@ -2808,9 +2804,9 @@ static size_t parse_client_handshake_packet(THD *thd, MPVIO_EXT *mpvio,
   char *end;
   bool packet_has_required_size = false;
   /* save server capabilities before setting client capabilities */
-  const bool is_server_supports_zlib =
+  bool is_server_supports_zlib =
       protocol->has_client_capability(CLIENT_COMPRESS);
-  const bool is_server_supports_zstd =
+  bool is_server_supports_zstd =
       protocol->has_client_capability(CLIENT_ZSTD_COMPRESSION_ALGORITHM);
   assert(mpvio->status == MPVIO_EXT::FAILURE);
 
@@ -2907,7 +2903,7 @@ skip_to_ssl:
     }
 
     DBUG_PRINT("info", ("Reading user information over SSL layer"));
-    const int rc = protocol->read_packet();
+    int rc = protocol->read_packet();
     pkt_len = protocol->get_packet_length();
     if (rc) {
       DBUG_PRINT("error", ("Failed to read user information (pkt_len= %lu)",
@@ -3079,9 +3075,9 @@ skip_to_ssl:
 
   NET_SERVER *ext = static_cast<NET_SERVER *>(protocol->get_net()->extension);
   struct compression_attributes *compression = &(ext->compression);
-  const bool is_client_supports_zlib =
+  bool is_client_supports_zlib =
       protocol->has_client_capability(CLIENT_COMPRESS);
-  const bool is_client_supports_zstd =
+  bool is_client_supports_zstd =
       protocol->has_client_capability(CLIENT_ZSTD_COMPRESSION_ALGORITHM);
 
   if (is_client_supports_zlib && is_server_supports_zlib) {
@@ -3571,7 +3567,7 @@ static int do_multi_factor_auth(THD *thd, MPVIO_EXT *mpvio) {
 
 static void server_mpvio_initialize(THD *thd, MPVIO_EXT *mpvio,
                                     Thd_charset_adapter *charset_adapter) {
-  const LEX_CSTRING sctx_host_or_ip = thd->security_context()->host_or_ip();
+  LEX_CSTRING sctx_host_or_ip = thd->security_context()->host_or_ip();
 
   memset(mpvio, 0, sizeof(MPVIO_EXT));
   mpvio->read_packet = server_mpvio_read_packet;
@@ -3617,7 +3613,7 @@ static void server_mpvio_update_thd(THD *thd, MPVIO_EXT *mpvio) {
     thd->security_context()->lock_account(mpvio->acl_user->account_locked);
   }
   if (mpvio->auth_info.user_name) my_free(mpvio->auth_info.user_name);
-  const LEX_CSTRING sctx_user = thd->security_context()->user();
+  LEX_CSTRING sctx_user = thd->security_context()->user();
   mpvio->auth_info.user_name = const_cast<char *>(sctx_user.str);
   mpvio->auth_info.user_name_length = sctx_user.length;
   if (thd->get_protocol()->has_client_capability(CLIENT_IGNORE_SPACE))
@@ -3782,9 +3778,9 @@ static void check_and_update_password_lock_state(MPVIO_EXT &mpvio, THD *thd,
     assert(acl_user_ptr != nullptr);
     if (acl_user_ptr && acl_user_ptr->password_locked_state.update(
                             thd, res == CR_OK, &days_remaining)) {
-      const uint failed_logins =
+      uint failed_logins =
           acl_user_ptr->password_locked_state.get_failed_login_attempts();
-      const int blocked_for_days =
+      int blocked_for_days =
           acl_user_ptr->password_locked_state.get_password_lock_time_days();
       acl_cache_lock.unlock();
       char str_blocked_for_days[30], str_days_remaining[30];
@@ -3915,8 +3911,7 @@ int acl_authenticate(THD *thd, enum_server_command command) {
   {
     Security_context *sctx = thd->security_context();
     const ACL_USER *acl_user = mpvio.acl_user;
-    const bool proxy_check =
-        check_proxy_users && !*mpvio.auth_info.authenticated_as;
+    bool proxy_check = check_proxy_users && !*mpvio.auth_info.authenticated_as;
 
     DBUG_PRINT("info", ("proxy_check=%s", proxy_check ? "true" : "false"));
 
@@ -4273,23 +4268,9 @@ bool is_secure_transport(int vio_type) {
   return false;
 }
 
-static void native_password_authentication_deprecation_warning() {
-  /*
-    Deprecate message for mysql_native_password plugin.
-  */
-  LogPluginErr(WARNING_LEVEL, ER_SERVER_WARN_DEPRECATED,
-               Cached_authentication_plugins::get_plugin_name(
-                   PLUGIN_MYSQL_NATIVE_PASSWORD),
-               Cached_authentication_plugins::get_plugin_name(
-                   PLUGIN_CACHING_SHA2_PASSWORD));
-}
-
 static int generate_native_password(char *outbuf, unsigned int *buflen,
                                     const char *inbuf, unsigned int inbuflen) {
   THD *thd = current_thd;
-
-  native_password_authentication_deprecation_warning();
-
   if (!thd->m_disable_password_validation) {
     if (my_validate_password_policy(inbuf, inbuflen)) return 1;
   }
@@ -4429,7 +4410,7 @@ static int compare_native_password_with_hash(const char *hash,
   my_make_scrambled_password_sha1(buffer, cleartext, cleartext_length);
 
   *is_error = 0;
-  const int result = memcmp(hash, buffer, SCRAMBLED_PASSWORD_CHAR_LENGTH);
+  int result = memcmp(hash, buffer, SCRAMBLED_PASSWORD_CHAR_LENGTH);
 
   return result;
 }
@@ -4501,8 +4482,6 @@ static int native_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   MPVIO_EXT *mpvio = (MPVIO_EXT *)vio;
 
   DBUG_TRACE;
-
-  native_password_authentication_deprecation_warning();
 
   /* generate the scramble, or reuse the old one */
   if (mpvio->scramble[SCRAMBLE_LENGTH])
@@ -4771,7 +4750,7 @@ static int compare_sha256_password_with_hash(const char *hash,
                    user_salt_begin, (const char **)nullptr);
 
   /* Compare the newly created hash digest with the password record */
-  const int result = memcmp(hash, stage2, hash_length);
+  int result = memcmp(hash, stage2, hash_length);
 
   return result;
 }
@@ -4800,6 +4779,7 @@ static int sha256_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   char scramble[SCRAMBLE_LENGTH + 1];
   uchar *pkt;
   int pkt_len;
+  String scramble_response_packet;
   int cipher_length = 0;
   unsigned char plain_text[MAX_CIPHER_LENGTH + 1];
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -4899,7 +4879,7 @@ http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Proto
       before encrypting the password.
     */
     if (pkt_len == 1 && *pkt == 1) {
-      const uint pem_length =
+      uint pem_length =
           static_cast<uint>(strlen(g_sha256_rsa_keys->get_public_key_as_pem()));
       if (vio->write_packet(vio,
                             pointer_cast<const uchar *>(
@@ -5139,7 +5119,7 @@ class File_IO {
 File_IO &File_IO::operator>>(Sql_string_t &s) {
   assert(read_mode() && file_is_open());
 
-  const my_off_t off = my_seek(m_file, 0, SEEK_END, MYF(MY_WME));
+  my_off_t off = my_seek(m_file, 0, SEEK_END, MYF(MY_WME));
   if (off == MY_FILEPOS_ERROR || resize_no_exception(s, off) == false)
     set_error();
   else {

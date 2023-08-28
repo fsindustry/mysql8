@@ -22,15 +22,11 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include <sys/types.h>
-
-#include <cstddef>
-#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <utility>
 
+#include <m_ctype.h>                  /* Character set */
 #include <my_alloc.h>                 /* MEM_ROOT */
 #include <my_default.h>               /* print_defaults */
 #include <my_getopt.h>                /* Options handling */
@@ -42,10 +38,6 @@
 #include <print_version.h>            /* print_version */
 #include <typelib.h>                  /* find_type_or_exit */
 #include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
-#include "m_string.h"
-#include "mysql/strings/m_ctype.h" /* Character set */
-#include "nulls.h"
-#include "template_utils.h"
 
 #include "options.h"
 #include "utilities.h"
@@ -79,7 +71,6 @@ enum migration_options {
   OPT_SERVER_PUBLIC_KEY,
   OPT_SSL_SESSION_DATA,
   OPT_SSL_SESSION_DATA_CONTINUE_ON_FAILED_REUSE,
-  OPT_TLS_SNI_SERVERNAME,
   /* Add new value above this */
   OPT_LAST
 };
@@ -275,9 +266,9 @@ bool process_options(int *argc, char ***argv, int &exit_code) {
   }
   my_getopt_use_args_separator = false;
 
-  const bool save_skip_unknown = my_getopt_skip_unknown;
+  bool save_skip_unknown = my_getopt_skip_unknown;
   my_getopt_skip_unknown = true;
-  const bool ret = get_options(*argc, *argv, exit_code);
+  bool ret = get_options(*argc, *argv, exit_code);
   my_getopt_skip_unknown = save_skip_unknown;
   return ret;
 }

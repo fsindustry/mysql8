@@ -32,8 +32,6 @@
 #include "ndb_socket.h"
 #include "NdbTCP.h"
 
-class ndb_sockaddr;
-
 /* Utility Functions */
 
 static inline bool isValidUriSchemeChar(char c) {
@@ -186,10 +184,10 @@ void ProcessInfo::setHostAddress(Uint32 * signal_data) {
   setHostAddress((const char *) signal_data);
 }
 
-void ProcessInfo::setHostAddress(const ndb_sockaddr * addr) {
+void ProcessInfo::setHostAddress(const struct in6_addr * addr) {
   /* If address passed in is a wildcard address, do not use it. */
-  if (!addr->is_unspecified())
-    Ndb_inet_ntop(addr, host_address, AddressStringLength);
+  if (!IN6_IS_ADDR_UNSPECIFIED(addr))
+    Ndb_inet_ntop(AF_INET6, addr, host_address, AddressStringLength);
 }
 
 void ProcessInfo::setAngelPid(Uint32 pid) {

@@ -98,9 +98,6 @@
 #include "DblqhCommon.hpp"
 #include "portlib/mt-asm.h"
 
-#include "../backup/Backup.hpp"
-#include "../dbtux/Dbtux.hpp"
-
 /**
  * overload handling...
  * TODO: cleanup...from all sorts of perspective
@@ -2424,7 +2421,6 @@ void Dblqh::execREAD_CONFIG_REQ(Signal* signal)
     
     ndbrequire(c_lcpFragWatchdog.MaxElapsedWithNoProgressMillis >= 
                c_lcpFragWatchdog.WarnElapsedWithNoProgressMillis);
-    c_lcpFragWatchdog.MaxGcpWaitLimitMillis = 0; // Will be set by DIH
 
     if (!m_is_query_block)
     {
@@ -9590,7 +9586,54 @@ Dblqh::handle_nr_copy(Signal* signal, Ptr<TcConnectionrec> regTcPtr)
      * This is a normal operation in a starting node which is currently being
      * synchronised with the live node.
      */
-    if (!match && op != ZINSERT)
+
+    /**
+     * match used for NrCopy operations above is based on a binary
+     * comparison, but char keys with certain collations can be
+     * equivalent but not binary equal.
+     * We check for this case now if no match found so far
+     * This assumes that there is no case where
+     * binary equality does not imply collation equality.
+     */
+    bool xfrmMatch = match;
+    const Uint32 tableId = regTcPtr.p->tableref;
+    if (!match &&
+        g_key_descriptor_pool.getPtr(tableId)->hasCharAttr)
+    {
+      Uint64 reqKey[ MAX_KEY_SIZE_IN_WORDS >> 1 ];
+      Uint64 dbXfrmKey[ (MAX_KEY_SIZE_IN_WORDS*MAX_XFRM_MULTIPLY) >> 1 ];
+      Uint64 reqXfrmKey[ (MAX_KEY_SIZE_IN_WORDS*MAX_XFRM_MULTIPLY) >> 1 ];
+      Uint32 keyPartLen[MAX_ATTRIBUTES_IN_INDEX];
+
+      jam();
+
+      /* Transform db table key read from DB above into dbXfrmKey */
+      const int dbXfrmKeyLen = xfrm_key_hash(tableId,
+                                             &signal->theData[24],
+                                             (Uint32*)dbXfrmKey,
+                                             sizeof(dbXfrmKey) >> 2,
+                                             keyPartLen);
+
+      /* Copy request key into linear space */
+      copy((Uint32*) reqKey, regTcPtr.p->keyInfoIVal);
+
+      /* Transform request key */
+      const int reqXfrmKeyLen = xfrm_key_hash(tableId,
+                                              (Uint32*)reqKey,
+                                              (Uint32*)reqXfrmKey,
+                                              sizeof(reqXfrmKey) >> 2,
+                                              keyPartLen);
+      /* Check for a match between the xfrmd keys */
+      if (dbXfrmKeyLen > 0 &&
+          dbXfrmKeyLen == reqXfrmKeyLen)
+      {
+        jam();
+        /* Binary compare xfrm'd representations */
+        xfrmMatch = (memcmp(dbXfrmKey, reqXfrmKey, dbXfrmKeyLen << 2) == 0);
+      }
+    }
+
+    if (!xfrmMatch && op != ZINSERT)
     {
       /**
        * We are performing an UPDATE or a DELETE and the row id position
@@ -9605,7 +9648,7 @@ Dblqh::handle_nr_copy(Signal* signal, Ptr<TcConnectionrec> regTcPtr)
 	TRACENR(" IGNORE " << endl); 
       goto ignore;
     }
-    if (match)
+    if (xfrmMatch)
     {
       /**
        * An INSERT/UPDATE/DELETE/REFRESH on a record where we have the correct
@@ -9635,7 +9678,7 @@ Dblqh::handle_nr_copy(Signal* signal, Ptr<TcConnectionrec> regTcPtr)
      * same manner as if it was a copy row coming. It might be redone later
      * but this is not a problem with consistency.
      */
-    ndbassert(!match && op == ZINSERT);
+    ndbassert(!xfrmMatch && op == ZINSERT);
 
     /**
      * Perform the following action (same as above for copy row case)
@@ -9685,55 +9728,36 @@ update_gci_ignore:
  */
 int
 Dblqh::compare_key(const TcConnectionrec* regTcPtr, 
-		   const Uint32 *ptr, Uint32 len)
+		   const Uint32 * ptr, Uint32 len)
 {
-  ndbassert(len > 0);
-  if (regTcPtr->keyInfoIVal == RNIL)
+  if (regTcPtr->primKeyLen != len)
     return 1;
+  
+  ndbassert( regTcPtr->keyInfoIVal != RNIL );
 
-  const Uint32 tableId = regTcPtr->tableref;
-  if (g_key_descriptor_pool.getPtr(tableId)->hasCharAttr)
+  SectionReader keyInfoReader(regTcPtr->keyInfoIVal,
+                              getSectionSegmentPool());
+  
+  ndbassert(regTcPtr->primKeyLen == keyInfoReader.getSize());
+
+  while (len != 0)
   {
-    /**
-     * Need to do a collation aware compare.
-     * Note that we could always have taken this code path.
-     * However, doing a binary compare when possible, is likely more efficient.
-     */
-    jam();
+    const Uint32* keyChunk= NULL;
+    Uint32 chunkSize= 0;
 
-    // Copy key into linear space.
-    Uint64 reqKey[(MAX_KEY_SIZE_IN_WORDS+1) >> 1];
-    copy((Uint32*)reqKey, regTcPtr->keyInfoIVal);
+    /* Get a ptr to a chunk of contiguous words to compare */
+    bool ok= keyInfoReader.getWordsPtr(len, keyChunk, chunkSize);
 
-    return cmp_key(tableId, ptr, (Uint32*)reqKey);
-  }
-  else
-  {
-    // A binary compare is sufficient.
-    if (regTcPtr->primKeyLen != len)
+    ndbrequire(ok);
+
+    if ( memcmp(ptr, keyChunk, chunkSize << 2))
       return 1;
-
-    SectionReader keyInfoReader(regTcPtr->keyInfoIVal,
-                                getSectionSegmentPool());
-    ndbassert(regTcPtr->primKeyLen == keyInfoReader.getSize());
-
-    while (len != 0)
-    {
-      const Uint32* keyChunk= nullptr;
-      Uint32 chunkSize= 0;
-
-      /* Get a ptr to a chunk of contiguous words to compare */
-      bool ok= keyInfoReader.getWordsPtr(len, keyChunk, chunkSize);
-      ndbrequire(ok);
-
-      if (memcmp(ptr, keyChunk, chunkSize << 2))
-        return 1;
-
-      ptr+= chunkSize;
-      len-= chunkSize;
-    }
-    return 0;
+    
+    ptr+= chunkSize;
+    len-= chunkSize;
   }
+
+  return 0;
 }
 
 void
@@ -9772,7 +9796,7 @@ Dblqh::nr_copy_delete_row(Signal* signal,
     }
     else
     {
-      req->hashValue = md5_hash(signal->theData+24, len);
+      req->hashValue = md5_hash((Uint64*)(signal->theData+24), len);
     }
     req->keyLen = 0; // search by local key
     req->localKey[0] = rowid->m_page_no;
@@ -9962,6 +9986,32 @@ Dblqh::nr_delete_complete(Signal* signal, Nr_op_info* op)
     tcPtr.p->m_nr_delete.m_page_id[0] = tcPtr.p->m_nr_delete.m_page_id[1];
     tcPtr.p->m_nr_delete.m_disk_ref[0] = tcPtr.p->m_nr_delete.m_disk_ref[1];
   }
+}
+
+Uint32
+Dblqh::readPrimaryKeys(Uint32 opPtrI, Uint32 * dst, bool xfrm)
+{
+  TcConnectionrecPtr regTcPtr;  
+  Uint64 Tmp[MAX_KEY_SIZE_IN_WORDS >> 1];
+
+  jamEntry();
+  regTcPtr.i = opPtrI;
+  ndbrequire(tcConnect_pool.getValidPtr(regTcPtr));
+
+  Uint32 tableId = regTcPtr.p->tableref;
+  Uint32 keyLen = regTcPtr.p->primKeyLen;
+  Uint32 * tmp = xfrm ? (Uint32*)Tmp : dst;
+
+  copy(tmp, regTcPtr.p->keyInfoIVal);
+  
+  if (xfrm)
+  {
+    jam();
+    Uint32 keyPartLen[MAX_ATTRIBUTES_IN_INDEX];
+    return xfrm_key_hash(tableId, (Uint32*)Tmp, dst, ~0, keyPartLen);
+  }
+  
+  return keyLen;
 }
 
 /**
@@ -17639,31 +17689,6 @@ Dblqh::keyinfoLab(const Uint32 * src,
 }//Dblqh::keyinfoLab()
 
 Uint32
-Dblqh::readPrimaryKeys(Uint32 opPtrI, Uint32 *dst, bool xfrm_hash)
-{
-  TcConnectionrecPtr regTcPtr;
-  Uint32 Tmp[MAX_KEY_SIZE_IN_WORDS];
-
-  jamEntry();
-  regTcPtr.i = opPtrI;
-  ndbrequire(tcConnect_pool.getValidPtr(regTcPtr));
-
-  const Uint32 tableId = regTcPtr.p->tableref;
-  const Uint32 keyLen = regTcPtr.p->primKeyLen;
-  Uint32 *buf = xfrm_hash ? Tmp : dst;
-
-  copy(buf, regTcPtr.p->keyInfoIVal);
-
-  if (xfrm_hash)
-  {
-    jam();
-    Uint32 keyPartLen[MAX_ATTRIBUTES_IN_INDEX];
-    return xfrm_key_hash(tableId, Tmp, dst, ~0, keyPartLen);
-  }
-  return keyLen;
-}
-
-Uint32
 Dblqh::readPrimaryKeys(ScanRecord *scanP, TcConnectionrec *tcConP, Uint32 *dst)
 {
   Uint32 tableId = prim_tab_fragptr.p->tabRef;
@@ -17676,7 +17701,7 @@ Dblqh::readPrimaryKeys(ScanRecord *scanP, TcConnectionrec *tcConP, Uint32 *dst)
     jamDebug();
     fragPageId = c_tup->get_current_frag_page_id();
   }
-  int ret = c_tup->accReadPk(fragPageId, pageIndex, dst, /*xfrm=*/false);
+  int ret = c_tup->accReadPk(fragPageId, pageIndex, dst, false);
   jamEntry();
   if(0)
     g_eventLogger->info(
@@ -19119,14 +19144,14 @@ Uint32
 Dblqh::calculateHash(Uint32 tableId, const Uint32* src) 
 {
   jam();
-  Uint32 tmp[MAX_KEY_SIZE_IN_WORDS*MAX_XFRM_MULTIPLY];
+  Uint64 Tmp[(MAX_KEY_SIZE_IN_WORDS*MAX_XFRM_MULTIPLY) >> 1];
   Uint32 keyPartLen[MAX_ATTRIBUTES_IN_INDEX];
   Uint32 keyLen = xfrm_key_hash(tableId, src,
-                                tmp, sizeof(tmp) >> 2,
+                                (Uint32*)Tmp, sizeof(Tmp) >> 2,
                                 keyPartLen);
   ndbrequire(keyLen);
-
-  return md5_hash(tmp, keyLen);
+  
+  return md5_hash(Tmp, keyLen);
 }//Dblqh::calculateHash()
 
 /**
@@ -19966,7 +19991,7 @@ void Dblqh::copyTupkeyConfLab(Signal* signal,
   }
   else
   {
-    tcConnectptr.p->hashValue = md5_hash(tmp, len);
+    tcConnectptr.p->hashValue = md5_hash((Uint64*)tmp, len);
   }
 
   // Copy keyinfo into long section for LQHKEYREQ below
@@ -22928,19 +22953,11 @@ void Dblqh::execBACKUP_FRAGMENT_CONF(Signal* signal)
 {
   jamEntry();
 
-  if (ERROR_INSERTED(5073) || ERROR_INSERTED(5109))
+  if (ERROR_INSERTED(5073))
   {
     g_eventLogger->info("Delaying BACKUP_FRAGMENT_CONF");
     sendSignalWithDelay(reference(), GSN_BACKUP_FRAGMENT_CONF, signal, 500,
                         signal->getLength());
-    /**
-     * If an ALTER table is ongoing the error 5109 is removed to makes tup to
-     * commit the alter table
-     */
-    if(ERROR_INSERTED(5109) && handleLCPSurfacing(signal))
-    {
-      CLEAR_ERROR_INSERT_VALUE;
-    }
     return;
   }
 
@@ -35891,10 +35908,9 @@ Dblqh::execDUMP_STATE_ORD(Signal* signal)
   {
     g_eventLogger->info(
         "LCPFragWatchdog : WarnElapsed : %u(ms) MaxElapsed %u(ms) "
-	": MaxGcpWaitLimit %u(ms) period millis : %u",
+        ": period millis : %u",
         c_lcpFragWatchdog.WarnElapsedWithNoProgressMillis,
         c_lcpFragWatchdog.MaxElapsedWithNoProgressMillis,
-	c_lcpFragWatchdog.MaxGcpWaitLimitMillis,
         LCPFragWatchdog::PollingPeriodMillis);
     return;
   }
@@ -36669,14 +36685,6 @@ Dblqh::startLcpFragWatchdog(Signal* signal)
   c_lcpFragWatchdog.elapsedNoProgressMillis = 0;
   c_lcpFragWatchdog.lastChecked = NdbTick_getCurrentTicks();
   
-  // Use latest gcp timeout value to set 'extra time'
-  // available in LCP_WAIT_END_LCP state where we
-  // depend on GCP completion.
-  // This is set to twice GCP stop timer, to give plenty
-  // time for GCP problems to be resolved before LCP
-  // Watchdog attempts to escalate.
-  c_lcpFragWatchdog.MaxGcpWaitLimitMillis = 2 * c_gcp_stop_timer;
-
   /* If thread is not already active, start it */
   if (! c_lcpFragWatchdog.thread_active)
   {
@@ -36844,7 +36852,6 @@ Dblqh::lcpStateString(LcpStatusConf::LcpState lcpState)
 void
 Dblqh::execINFO_GCP_STOP_TIMER(Signal *signal)
 {
-  /* DIH informs us of current GCP stop timer value */
   c_gcp_stop_timer = signal->theData[0];
 }
 
@@ -36906,50 +36913,52 @@ Dblqh::checkLcpFragWatchdog(Signal* signal)
        "rows completed":
        "bytes remaining.");
     
-    char buf[512];
-    BaseString::snprintf(buf, sizeof(buf), " Completion Status %llu %s, table %u, frag %u",
-			 c_lcpFragWatchdog.completionStatus,
-			 completionStatusString,
-			 c_lcpFragWatchdog.tableId,
-			 c_lcpFragWatchdog.fragId);
+    warningEvent("LCP Frag watchdog : No progress on table %u, frag %u for %u s."
+                 "  %llu %s, state: %s",
+                 c_lcpFragWatchdog.tableId,
+                 c_lcpFragWatchdog.fragId,
+                 c_lcpFragWatchdog.elapsedNoProgressMillis / 1000,
+                 c_lcpFragWatchdog.completionStatus,
+                 completionStatusString,
+                 lcpStateString(c_lcpFragWatchdog.lcpState));
+    c_tup->lcp_frag_watchdog_print(c_lcpFragWatchdog.tableId,
+                                   c_lcpFragWatchdog.fragId);
+    g_eventLogger->info("LCP Frag watchdog : No progress on table %u,"
+                        " frag %u for %u s."
+                        "  %llu %s, state: %s",
+             c_lcpFragWatchdog.tableId,
+             c_lcpFragWatchdog.fragId,
+             c_lcpFragWatchdog.elapsedNoProgressMillis / 1000,
+             c_lcpFragWatchdog.completionStatus,
+             completionStatusString,
+             lcpStateString(c_lcpFragWatchdog.lcpState));
 
     Uint32 max_no_progress_time =
       c_lcpFragWatchdog.MaxElapsedWithNoProgressMillis;
 
     if ((c_lcpFragWatchdog.lcpState == LcpStatusConf::LCP_WAIT_END_LCP) &&
-        (max_no_progress_time < c_lcpFragWatchdog.MaxGcpWaitLimitMillis))
+        (max_no_progress_time < (2 * c_gcp_stop_timer)))
     {
       jam();
-      max_no_progress_time = c_lcpFragWatchdog.MaxGcpWaitLimitMillis;
+      max_no_progress_time = 2 * c_gcp_stop_timer;
     }
-
-    char buf2[512];
-    BaseString::snprintf(buf2, sizeof(buf2), "LCP Frag watchdog : No progress for %u s, MaxWaitTime %u s, lcp state %s",
-                        c_lcpFragWatchdog.elapsedNoProgressMillis / 1000,
-                        max_no_progress_time / 1000,
-                        lcpStateString(c_lcpFragWatchdog.lcpState));
-
-    if (c_lcpFragWatchdog.lcpState != LcpStatusConf::LCP_WAIT_END_LCP) {
-      // LCP is checkpointing the tables, thus add completion status
-      // and table/fragment info.
-      warningEvent("%s %s", buf2, buf);
-      c_tup->lcp_frag_watchdog_print(c_lcpFragWatchdog.tableId,
-                                    c_lcpFragWatchdog.fragId);
-      g_eventLogger->info("%s %s", buf2, buf);
-    }
-    else {
-      // LCP has finished checkpointing the tables, thus no need to
-      // add completion status and table/frag info.
-      warningEvent("%s", buf2);
-      g_eventLogger->info("%s", buf2);
-    }
-
     if (c_lcpFragWatchdog.elapsedNoProgressMillis >= max_no_progress_time)
     {
       jam();
       /* Too long with no progress... */
-      warningEvent("Waited too long with  LCP not progressing.");
-      g_eventLogger->info("Waited too long with LCP not progressing.");
+      
+      warningEvent("LCP Frag watchdog : Checkpoint of table %u fragment %u "
+                   "too slow (no progress for > %u s, state: %s).",
+                   c_lcpFragWatchdog.tableId,
+                   c_lcpFragWatchdog.fragId,
+                   c_lcpFragWatchdog.elapsedNoProgressMillis / 1000,
+                   lcpStateString(c_lcpFragWatchdog.lcpState));
+      g_eventLogger->info(
+          "LCP Frag watchdog : Checkpoint of table %u fragment %u "
+          "too slow (no progress for > %u s, state: %s).",
+          c_lcpFragWatchdog.tableId, c_lcpFragWatchdog.fragId,
+          c_lcpFragWatchdog.elapsedNoProgressMillis / 1000,
+          lcpStateString(c_lcpFragWatchdog.lcpState));
 
       /**
        * Dump some LCP and GCP state for debugging...

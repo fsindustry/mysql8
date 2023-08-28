@@ -1636,7 +1636,7 @@ private:
   void lookup_cleanup(Ptr<Request>, Ptr<TreeNode>);
 
   Uint32 handle_special_hash(Uint32 tableId, Uint32 dstHash[4],
-                             const Uint32* src,
+                             const Uint64* src,
                              Uint32 srcLen,       // Len in #32bit words
                              const struct KeyDescriptor* desc);
 

@@ -26,7 +26,7 @@
 #define PLUGIN_X_SRC_HELPER_TO_STRING_H_
 
 #include <string>
-#include "mysql/strings/dtoa.h"
+#include "m_string.h"
 
 namespace xpl {
 namespace detail {

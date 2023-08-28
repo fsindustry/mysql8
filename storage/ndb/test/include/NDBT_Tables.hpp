@@ -27,6 +27,7 @@
 #define NDBT_TABLES_HPP
 
 
+#include <NDBT.hpp>
 #include <Ndb.hpp>
 #include <NdbDictionary.hpp>
 #include <NDBT_Table.hpp>

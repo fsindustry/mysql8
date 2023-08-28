@@ -34,6 +34,7 @@
 #include "field_types.h"
 #include "ft_global.h"
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_compiler.h"
@@ -44,7 +45,6 @@
 #include "my_thread_local.h"
 #include "my_time.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
@@ -88,15 +88,7 @@ void report_conversion_error(const CHARSET_INFO *to_cs, const char *from,
 bool simplify_string_args(THD *thd, const DTCollation &c, Item **items,
                           uint nitems);
 
-String *eval_string_arg_noinline(const CHARSET_INFO *to_cs, Item *arg,
-                                 String *buffer);
-
-inline String *eval_string_arg(const CHARSET_INFO *to_cs, Item *arg,
-                               String *buffer) {
-  if (my_charset_same(to_cs, arg->collation.collation))
-    return arg->val_str(buffer);
-  return eval_string_arg_noinline(to_cs, arg, buffer);
-}
+String *eval_string_arg(const CHARSET_INFO *to_cs, Item *arg, String *buffer);
 
 class Item_func : public Item_result_field {
  protected:
@@ -270,7 +262,6 @@ class Item_func : public Item_result_field {
     YEAR_FUNC,
     YEARWEEK_FUNC,
     MAKEDATE_FUNC,
-    MAKETIME_FUNC,
     MONTH_FUNC,
     MONTHNAME_FUNC,
     DAY_FUNC,
@@ -304,13 +295,7 @@ class Item_func : public Item_result_field {
     MEMBER_OF_FUNC,
     STRCMP_FUNC,
     TRUE_FUNC,
-    FALSE_FUNC,
-    SYSDATE_FUNC,
-    TIMEDIFF_FUNC,
-    PERIODADD_FUNC,
-    PERIODDIFF_FUNC,
-    SEC_TO_TIME_FUNC,
-    GET_FORMAT_FUNC
+    FALSE_FUNC
   };
   enum optimize_type {
     OPTIMIZE_NONE,
@@ -457,7 +442,7 @@ class Item_func : public Item_result_field {
     return nullptr;
   }
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   bool fix_fields(THD *, Item **ref) override;
   bool fix_func_arg(THD *, Item **arg);
@@ -1007,7 +992,7 @@ class Item_func_connection_id final : public Item_int_func {
   table_map get_initial_pseudo_tables() const override {
     return INNER_TABLE_BIT;
   }
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "connection_id"; }
   bool resolve_type(THD *thd) override;
   bool fix_fields(THD *thd, Item **ref) override;
@@ -1049,9 +1034,6 @@ class Item_typecast_unsigned final : public Item_int_func {
 };
 
 class Item_typecast_decimal final : public Item_func {
- protected:
-  void add_json_info(Json_object *obj) override;
-
  public:
   Item_typecast_decimal(const POS &pos, Item *a, int len, int dec)
       : Item_func(pos, a) {
@@ -1083,12 +1065,6 @@ class Item_typecast_decimal final : public Item_func {
   Class used to implement CAST to floating-point data types.
 */
 class Item_typecast_real final : public Item_func {
- protected:
-  void add_json_info(Json_object *obj) override {
-    obj->add_alias("is_double", create_dom_ptr<Json_boolean>(
-                                    data_type() == MYSQL_TYPE_DOUBLE));
-  }
-
  public:
   Item_typecast_real(const POS &pos, Item *a, bool as_double)
       : Item_func(pos, a) {
@@ -1446,7 +1422,7 @@ class Item_func_rand final : public Item_real_func {
   Item_func_rand(const POS &pos, Item *a) : Item_real_func(pos, a) {}
   explicit Item_func_rand(const POS &pos) : Item_real_func(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   double val_real() override;
   const char *func_name() const override { return "rand"; }
   /**
@@ -1564,12 +1540,6 @@ class Item_func_min_max : public Item_func_numhybrid {
     '95-05-05'.
   */
   Item *temporal_item;
-
-  /**
-    Fractional seconds precision to use when converting a time or timestamp
-    expression into a string.
-  */
-  uint8 fsp_for_string;
   /**
     Compare arguments as datetime values.
 
@@ -2041,7 +2011,7 @@ class Item_func_last_insert_id final : public Item_int_func {
   explicit Item_func_last_insert_id(const POS &pos) : Item_int_func(pos) {}
   Item_func_last_insert_id(const POS &pos, Item *a) : Item_int_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "last_insert_id"; }
 
@@ -2075,7 +2045,7 @@ class Item_func_benchmark final : public Item_int_func {
     return RAND_TABLE_BIT;
   }
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "benchmark"; }
   bool resolve_type(THD *thd) override {
@@ -2105,7 +2075,7 @@ class Item_func_sleep final : public Item_int_func {
  public:
   Item_func_sleep(const POS &pos, Item *a) : Item_int_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "sleep"; }
   /**
     This function is non-deterministic and hence depends on the
@@ -2144,7 +2114,7 @@ class Item_udf_func : public Item_func {
   }
   ~Item_udf_func() override = default;
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return udf.name(); }
   enum Functype functype() const override { return UDF_FUNC; }
   table_map get_initial_pseudo_tables() const override {
@@ -2185,7 +2155,7 @@ class Item_func_udf_float final : public Item_udf_func {
     return (longlong)rint(Item_func_udf_float::val_real());
   }
   my_decimal *val_decimal(my_decimal *dec_buf) override {
-    const double res = val_real();
+    double res = val_real();
     if (null_value) return nullptr;
     double2my_decimal(E_DEC_FATAL_ERROR, res, dec_buf);
     return dec_buf;
@@ -2296,7 +2266,7 @@ class Item_func_get_lock final : public Item_int_func {
   Item_func_get_lock(const POS &pos, Item *a, Item *b)
       : Item_int_func(pos, a, b) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "get_lock"; }
   bool resolve_type(THD *thd) override {
@@ -2323,7 +2293,7 @@ class Item_func_release_lock final : public Item_int_func {
 
  public:
   Item_func_release_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   longlong val_int() override;
   const char *func_name() const override { return "release_lock"; }
@@ -2348,7 +2318,7 @@ class Item_func_release_all_locks final : public Item_int_func {
 
  public:
   explicit Item_func_release_all_locks(const POS &pos) : Item_int_func(pos) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   longlong val_int() override;
   const char *func_name() const override { return "release_all_locks"; }
@@ -2380,7 +2350,7 @@ class Item_source_pos_wait : public Item_int_func {
   Item_source_pos_wait(const POS &pos, Item *a, Item *b, Item *c, Item *d)
       : Item_int_func(pos, a, b, c, d) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "source_pos_wait"; }
   bool resolve_type(THD *thd) override {
@@ -3332,7 +3302,7 @@ class Item_user_var_as_out_param : public Item {
 
 class Item_func_get_system_var;
 
-/** Class to log audit event EVENT_TRACKING_GLOBAL_VARIABLE_GET. */
+/** Class to log audit event MYSQL_AUDIT_GLOBAL_VARIABLE_GET. */
 class Audit_global_variable_get_event {
  public:
   Audit_global_variable_get_event(THD *thd, Item_func_get_system_var *item,
@@ -3417,9 +3387,6 @@ class JOIN;
 class Item_func_match final : public Item_real_func {
   typedef Item_real_func super;
 
- protected:
-  void add_json_info(Json_object *obj) override;
-
  public:
   Item *against;
   uint key, flags;
@@ -3464,7 +3431,7 @@ class Item_func_match final : public Item_real_func {
     null_on_null = false;
   }
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   void cleanup() override {
     DBUG_TRACE;
@@ -3712,7 +3679,7 @@ class Item_func_is_free_lock final : public Item_int_func {
  public:
   Item_func_is_free_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "is_free_lock"; }
   bool resolve_type(THD *thd) override {
@@ -3739,7 +3706,7 @@ class Item_func_is_used_lock final : public Item_int_func {
  public:
   Item_func_is_used_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "is_used_lock"; }
   bool resolve_type(THD *thd) override {
@@ -3764,7 +3731,7 @@ class Item_func_row_count final : public Item_int_func {
  public:
   explicit Item_func_row_count(const POS &pos) : Item_int_func(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   longlong val_int() override;
   const char *func_name() const override { return "row_count"; }
@@ -3816,7 +3783,7 @@ class Item_func_sp final : public Item_func {
                const LEX_STRING &fn_name, bool use_explicit_name,
                PT_item_list *opt_list);
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   /**
     Must not be called before the procedure is resolved,
     i.e. @c init_result_field().
@@ -3872,7 +3839,7 @@ class Item_func_found_rows final : public Item_int_func {
  public:
   explicit Item_func_found_rows(const POS &pos) : Item_int_func(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   const char *func_name() const override { return "found_rows"; }
   bool resolve_type(THD *) override {
@@ -3896,7 +3863,7 @@ class Item_func_uuid_short final : public Item_int_func {
  public:
   Item_func_uuid_short(const POS &pos) : Item_int_func(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "uuid_short"; }
   longlong val_int() override;
   bool resolve_type(THD *) override {
@@ -3924,7 +3891,7 @@ class Item_func_version final : public Item_static_string_func {
  public:
   explicit Item_func_version(const POS &pos);
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 };
 
 /**

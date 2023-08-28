@@ -24,9 +24,9 @@
 #define NdbDir_HPP
 
 #ifdef _WIN32
-typedef int mode_t; // Only dummy usage on Windows
-#else
-#include <sys/types.h>  // mode_t
+#ifndef mode_t /* MySQL 5.5+ defines mode_t */
+typedef int mode_t;
+#endif
 #endif
 
 class NdbDir {

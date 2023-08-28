@@ -456,10 +456,7 @@ inline void operator delete[](void *, MEM_ROOT *,
 
 template <class T>
 inline void destroy(T *ptr) {
-  if (ptr != nullptr) {
-    ptr->~T();
-    TRASH(const_cast<std::remove_const_t<T> *>(ptr), sizeof(T));
-  }
+  if (ptr != nullptr) ptr->~T();
 }
 
 template <class T>
@@ -480,7 +477,10 @@ inline void destroy_array(T *ptr, size_t count) {
 template <class T>
 class Destroy_only {
  public:
-  void operator()(T *ptr) const { destroy(ptr); }
+  void operator()(T *ptr) const {
+    destroy(ptr);
+    TRASH(const_cast<std::remove_const_t<T> *>(ptr), sizeof(T));
+  }
 };
 
 /** std::unique_ptr, but only destroying. */

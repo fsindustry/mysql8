@@ -33,8 +33,6 @@
 #include "sql/mysqld.h"
 #include "sql/stateless_allocator.h"
 
-struct CHARSET_INFO;
-
 namespace dd {
 namespace tables {
 

@@ -60,13 +60,9 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   return error != 0 || end != from + from_length;
 }
 
-// ODR violation here as well, so rename yysymbol_kind_t
-#define yysymbol_kind_t my_hint_parser_symbol_kind_t
-
 %}
 
-%define api.pure
-%define api.prefix {my_hint_parser_}
+%pure-parser
 
 %parse-param { class THD *thd }
 %parse-param { class Hint_scanner *scanner }
@@ -137,12 +133,10 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token HINT_ARG_FLOATING_POINT_NUMBER 1049
 
 /*
-  YYUNDEF is internal to Bison. Please don't change its number, or change
+  YYUNDEF in internal to Bison. Please don't change its number, or change
   it in sync with YYUNDEF in sql_yacc.yy.
-  We would like to have this:
-    %token YYUNDEF 1150
-  here, but that creates conflicts in gen_lex_token.cc. See comments there.
 */
+%token YYUNDEF 1150
 
 /*
   Please add new tokens right above this line.
@@ -263,7 +257,7 @@ max_execution_time_hint:
 
 
 opt_hint_param_table_list:
-          %empty { $$.init(thd->mem_root); }
+          /* empty */ { $$.init(thd->mem_root); }
         | hint_param_table_list
         ;
 
@@ -283,7 +277,7 @@ hint_param_table_list:
         ;
 
 opt_hint_param_table_list_empty_qb:
-          %empty { $$.init(thd->mem_root); }
+          /* empty */ { $$.init(thd->mem_root); }
         | hint_param_table_list_empty_qb
         ;
 
@@ -303,7 +297,7 @@ hint_param_table_list_empty_qb:
         ;
 
 opt_hint_param_index_list:
-          %empty { $$.init(thd->mem_root); }
+          /* empty */ { $$.init(thd->mem_root); }
         | hint_param_index_list
         ;
 
@@ -352,7 +346,7 @@ hint_param_table_ext:
         ;
 
 opt_qb_name:
-          %empty { $$= NULL_CSTR; }
+          /* empty */ { $$= NULL_CSTR; }
         | HINT_ARG_QB_NAME
         ;
 
@@ -429,7 +423,7 @@ qb_level_hint:
           ;
 
 semijoin_strategies:
-          %empty { $$= 0; }
+          /* empty */ { $$= 0; }
 	| semijoin_strategy
           {
             $$= $1;

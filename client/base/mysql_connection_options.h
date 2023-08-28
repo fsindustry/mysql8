@@ -35,8 +35,6 @@
 #include "my_compiler.h"
 #include "my_inttypes.h"
 
-struct CHARSET_INFO;
-
 namespace Mysql {
 namespace Tools {
 namespace Base {

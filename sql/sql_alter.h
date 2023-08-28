@@ -53,7 +53,6 @@ class Item;
 class Key_spec;
 class String;
 class THD;
-struct CHARSET_INFO;
 class Table_ref;
 
 /**

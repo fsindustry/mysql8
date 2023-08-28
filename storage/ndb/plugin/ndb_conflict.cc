@@ -27,10 +27,7 @@
 #include <inttypes.h>
 
 #include "my_dbug.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "sql/mysqld.h"  // lower_case_table_names
-#include "sql/mysqld_cs.h"
 #include "storage/ndb/include/ndbapi/Ndb.hpp"
 #include "storage/ndb/include/ndbapi/NdbDictionary.hpp"
 #include "storage/ndb/include/ndbapi/NdbError.hpp"
@@ -41,7 +38,6 @@
 #include "storage/ndb/plugin/ndb_log.h"
 #include "storage/ndb/plugin/ndb_ndbapi_util.h"
 #include "storage/ndb/plugin/ndb_table_guard.h"
-#include "strxnmov.h"
 
 extern ulong opt_ndb_slave_conflict_role;
 
@@ -776,7 +772,7 @@ static int row_conflict_fn_old(NDB_CONFLICT_FN_SHARE *cfn_share,
   assert((resolve_size == 4) || (resolve_size == 8));
 
   if (unlikely(!bitmap_is_set(bi_cols, resolve_column))) {
-    ndb_log_info("Replica: missing data for %s timestamp column %u.",
+    ndb_log_info("NDB Replica: missing data for %s timestamp column %u.",
                  cfn_share->m_conflict_fn->name, resolve_column);
     return 1;
   }
@@ -846,7 +842,7 @@ static int row_conflict_fn_max_interpreted_program(
   assert((resolve_size == 4) || (resolve_size == 8));
 
   if (unlikely(!bitmap_is_set(ai_cols, resolve_column))) {
-    ndb_log_info("Replica: missing data for %s timestamp column %u.",
+    ndb_log_info("NDB Replica: missing data for %s timestamp column %u.",
                  cfn_share->m_conflict_fn->name, resolve_column);
     return 1;
   }
@@ -1448,12 +1444,13 @@ static int slave_set_resolve_fn(Ndb *ndb, NDB_CONFLICT_FN_SHARE **ppcfn_share,
         ndbtab_g.release();
 
         /* Table looked suspicious, warn user */
-        if (msg) ndb_log_warning("Replica: %s", msg);
+        if (msg) ndb_log_warning("NDB Replica: %s", msg);
 
-        ndb_log_verbose(1, "Replica: Table %s.%s logging exceptions to %s.%s",
+        ndb_log_verbose(1,
+                        "NDB Replica: Table %s.%s logging exceptions to %s.%s",
                         dbName, tabName, dbName, ex_tab_name);
       } else {
-        ndb_log_warning("Replica: %s", msg);
+        ndb_log_warning("NDB Replica: %s", msg);
       }
       break;
     } /* if (ex_tab) */
@@ -1584,8 +1581,8 @@ int setup_conflict_fn(Ndb *ndb, NDB_CONFLICT_FN_SHARE **ppcfn_share,
        * represent SavePeriod/EpochPeriod
        */
       if (ndbtab->getExtraRowGciBits() == 0)
-        ndb_log_info("Replica: Table %s.%s : %s, low epoch resolution", dbName,
-                     tabName, conflict_fn->name);
+        ndb_log_info("NDB Replica: Table %s.%s : %s, low epoch resolution",
+                     dbName, tabName, conflict_fn->name);
 
       if (ndbtab->getExtraRowAuthorBits() == 0) {
         snprintf(msg, msg_len, "No extra row author bits in table.");

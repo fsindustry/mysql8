@@ -64,9 +64,13 @@ bool printAPI_VERSION_CONF(FILE *output,
   }
   else
   {
-    ndb_sockaddr in((const in6_addr*)sig->m_inet6_addr, 0);
+    struct in6_addr in;
     char addr_buf[INET6_ADDRSTRLEN];
-    char* address= Ndb_inet_ntop(&in, addr_buf, INET6_ADDRSTRLEN);
+    memcpy(in.s6_addr, sig->m_inet6_addr, sizeof(in.s6_addr));
+    char* address= Ndb_inet_ntop(AF_INET6,
+                            static_cast<void*>(&in),
+                            addr_buf,
+                            INET6_ADDRSTRLEN);
     fprintf(output,
             " senderRef: (node: %d, block: %d), nodeId: %d\n" \
             " version: %d, mysql_version: %d, inet6_addr: %s\n" \

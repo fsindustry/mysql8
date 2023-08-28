@@ -28,12 +28,10 @@
 /* In OpenSSL before 1.1.0, we need this first. */
 #include <winsock2.h>
 #endif
-#include <openssl/err.h>
 #include <openssl/ssl.h>
 #endif
 
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -339,17 +337,7 @@ class Network_provider {
   virtual bool configure_secure_connections(
       const Network_configuration_parameters &params) = 0;
 
-  virtual void cleanup_secure_connections_context() = 0;
-
-  virtual std::function<void()> get_secure_connections_context_cleaner() {
-    std::function<void()> retval = []() {
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-      ERR_remove_thread_state(0);
-#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
-    };
-
-    return retval;
-  }
+  virtual bool cleanup_secure_connections_context() = 0;
 
   virtual bool finalize_secure_connections_context() = 0;
 

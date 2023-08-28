@@ -34,8 +34,8 @@
 #include "sql/rpl_group_replication.h"
 
 // Forward declaration of Group Replication callback...
-int handle_group_replication_incoming_connection(THD *thd, int fd,
-                                                 SSL *ssl_ctx);
+void handle_group_replication_incoming_connection(THD *thd, int fd,
+                                                  SSL *ssl_ctx);
 
 bool Gcs_mysql_network_provider_auth_interface_impl::get_credentials(
     std::string &username, std::string &password) {
@@ -179,10 +179,12 @@ bool Gcs_mysql_network_provider::configure_secure_connections(
   return false;
 }
 
-void Gcs_mysql_network_provider::cleanup_secure_connections_context() {
-  auto secure_connections_context_cleaner =
-      this->get_secure_connections_context_cleaner();
-  std::invoke(secure_connections_context_cleaner);
+bool Gcs_mysql_network_provider::cleanup_secure_connections_context() {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  ERR_remove_thread_state(0);
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+  return false;
 }
 
 bool Gcs_mysql_network_provider::finalize_secure_connections_context() {

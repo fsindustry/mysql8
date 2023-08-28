@@ -386,7 +386,6 @@ SET(SQL_SHARED_SOURCES
   histograms/equi_height_bucket.cc
   histograms/histogram.cc
   histograms/singleton.cc
-  histograms/table_histograms.cc
   histograms/value_map.cc
   hostname_cache.cc
   init.cc
@@ -432,7 +431,6 @@ SET(SQL_SHARED_SOURCES
   join_optimizer/online_cycle_finder.cc
   join_optimizer/overflow_bitset.cc
   join_optimizer/print_utils.cc
-  join_optimizer/relational_expression.cc
   join_optimizer/replace_item.cc
   json_diff.cc
   json_schema.cc
@@ -480,9 +478,7 @@ SET(SQL_SHARED_SOURCES
   persisted_variable.cc
   protocol_classic.cc
   psi_memory_key.cc
-  psi_memory_resource.cc
   query_result.cc
-  raii/targeted_stringstream.cc
   range_optimizer/geometry_index_range_scan.cc
   range_optimizer/group_index_skip_scan.cc
   range_optimizer/group_index_skip_scan_plan.cc
@@ -557,6 +553,7 @@ SET(SQL_SHARED_SOURCES
   sql_help.cc
   sql_import.cc
   sql_insert.cc
+  sql_join_buffer.cc
   sql_lex.cc
   sql_lex_hash.cc
   sql_lex_hints.cc
@@ -635,9 +632,6 @@ SET(SQL_SHARED_SOURCES
   xa/transaction_cache.cc
   xa/xid_extract.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
-  reference_caching_setup.cc
-  sql_event_tracking_to_audit_event_mapping.cc
-  command_mapping.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -698,7 +692,7 @@ IF(WITH_LOCK_ORDER)
     )
 
   # Bison output uses undefined symbols for clang >= v15
-  IF(MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
+  IF(MY_COMPILER_IS_CLANG AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15)
     ADD_COMPILE_FLAGS(${CMAKE_BINARY_DIR}/sql/debug_lo_parser.cc
                       COMPILE_FLAGS "-Wno-unused-but-set-variable")
   ENDIF()
@@ -899,7 +893,7 @@ IF(MY_COMPILER_IS_GNU_OR_CLANG)
   ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
                     ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
                     COMPILE_FLAGS "-Wno-undef -Wno-unused-label")
-  IF(MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
+  IF(MY_COMPILER_IS_CLANG AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15)
     ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
                       ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
                       COMPILE_FLAGS "-Wno-unused-but-set-variable")
@@ -999,8 +993,7 @@ SET(BINLOG_SOURCE
   binlog/group_commit/atomic_bgc_ticket.cc
   binlog/group_commit/atomic_bgc_ticket_guard.cc
   binlog/monitoring/context.cc
-  binlog/decompressing_event_object_istream.cc
-  binlog/services/iterator/file_storage.cc
+  binlog/tools/iterators.cc
   binlog.cc
   binlog_istream.cc
   binlog_ostream.cc
@@ -1157,6 +1150,11 @@ IF(APPLE)
 ENDIF()
 
 IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
+  # We get ODR violations because of multiple bison parsers.
+  MY_CHECK_CXX_COMPILER_WARNING("error=odr" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    MY_TARGET_LINK_OPTIONS(mysqld "${HAS_WARN_FLAG}")
+  ENDIF()
   # We may get errors in boost/geometry/srs/projections/proj/ob_tran.hpp
   # and several other boost files.
   MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
@@ -1309,7 +1307,7 @@ ELSE()
     ${CMAKE_CURRENT_SOURCE_DIR}/sql_yacc.yy
     ${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
     COMPILE_FLAGS
-    "--yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
+    "--name-prefix=MYSQL --yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
     DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.h
     )
 
@@ -1317,7 +1315,7 @@ ELSE()
     ${CMAKE_CURRENT_SOURCE_DIR}/sql_hints.yy
     ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
     COMPILE_FLAGS
-    "--yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
+    "--name-prefix=HINT_PARSER_ --yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
     DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.h
     )
 

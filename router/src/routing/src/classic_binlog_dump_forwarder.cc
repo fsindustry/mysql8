@@ -81,7 +81,7 @@ BinlogDumpForwarder::connect() {
   }
 
   stage(Stage::Connected);
-  return mysql_reconnect_start(nullptr);
+  return mysql_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code>

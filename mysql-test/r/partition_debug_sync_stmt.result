@@ -1,9 +1,3 @@
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 #
 # Test Auto increment generation and release of overbooked values.
 #
@@ -108,5 +102,3 @@ AUTO_INCREMENT
 13
 DROP TABLE t1, t2;
 SET DEBUG_SYNC='RESET';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.

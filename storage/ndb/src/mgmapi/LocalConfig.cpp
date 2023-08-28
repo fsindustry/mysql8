@@ -23,7 +23,6 @@
 */
 
 #include "LocalConfig.hpp"
-#include "ndb_config.h"
 #include <NdbEnv.h>
 #include <NdbConfig.h>
 #include <NdbAutoPtr.hpp>

@@ -62,8 +62,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0start.h"
 #include "trx0roll.h"
 
-struct CHARSET_INFO;
-
 /** configure variable for binlog option with InnoDB APIs */
 bool ib_binlog_enabled = false;
 
@@ -1918,13 +1916,14 @@ ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ib_ulint_t col_no, const void *src,
     case DATA_MYSQL:
     case DATA_VARMYSQL: {
       ulint cset;
+      CHARSET_INFO *cs;
       int error = 0;
       ulint true_len = len;
 
       /* For multi byte character sets we need to
       calculate the true length of the data. */
       cset = dtype_get_charset_coll(dtype_get_prtype(dtype));
-      const CHARSET_INFO *cs = all_charsets[cset];
+      cs = all_charsets[cset];
       if (cs) {
         uint pos = (uint)(col_len / cs->mbmaxlen);
 

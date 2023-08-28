@@ -1,5 +1,4 @@
-call mtr.add_suppression("Failed to validate certificate .*");
-call mtr.add_suppression("Server certificate .* verification has failed. Check logs for more details");
+call mtr.add_suppression("Server SSL certificate doesn't verify");
 CREATE USER 'user1'@'%' REQUIRE SSL;
 Variable_name	Value
 Ssl_cipher	SSL_CIPHER

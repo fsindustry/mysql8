@@ -29,11 +29,9 @@
 
 #include "mysql/mysql_lex_string.h"
 #include "plugin.h"
-
 #ifndef MYSQL_ABI_CHECK
 #include "m_string.h"
 #endif
-
 #include <mysql/components/services/bits/plugin_audit_connection_types.h>
 #include "my_command.h"
 #include "my_sqlcommand.h"

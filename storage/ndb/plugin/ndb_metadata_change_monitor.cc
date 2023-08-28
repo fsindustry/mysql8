@@ -34,7 +34,6 @@
 #include "my_dbug.h"
 #include "mysql/psi/mysql_cond.h"   // mysql_cond_t
 #include "mysql/psi/mysql_mutex.h"  // mysql_mutex_t
-#include "nulls.h"                  // NullS
 #include "sql/sql_class.h"          // THD
 #include "sql/table.h"              // is_infoschema_db() / is_perfschema_db()
 #include "storage/ndb/include/ndbapi/NdbError.hpp"    // NdbError
@@ -511,8 +510,6 @@ void Ndb_metadata_change_monitor::do_run() {
     }
 
     for (;;) {
-      Ndb_thd_memory_guard metadata_change_loop_guard(thd);
-
       // Inner loop where each iteration represents one "lap" of the thread
       Run_controller controller(g_metadata_detected_count);
       while (!controller.check_enabled() && !controller.sync_enabled()) {

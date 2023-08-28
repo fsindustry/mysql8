@@ -36,8 +36,6 @@
 #include "sql/dd/types/table.h"
 #include "sql/handler.h"
 
-struct CHARSET_INFO;
-
 namespace dd {
 namespace tables {
 

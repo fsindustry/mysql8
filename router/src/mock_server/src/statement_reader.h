@@ -347,15 +347,13 @@ class ProtocolBase {
 class StatementReaderBase {
  public:
   struct handshake_data {
-    classic_protocol::message::server::Greeting greeting;
+    std::optional<ErrorResponse> error;
 
     std::optional<std::string> username;
     std::optional<std::string> password;
     bool cert_required{false};
     std::optional<std::string> cert_subject;
     std::optional<std::string> cert_issuer;
-
-    std::chrono::microseconds exec_time;
   };
 
   StatementReaderBase() = default;
@@ -383,8 +381,13 @@ class StatementReaderBase {
 
   virtual std::vector<AsyncNotice> get_async_notices() = 0;
 
-  virtual stdx::expected<handshake_data, ErrorResponse> handshake(
-      bool is_greeting) = 0;
+  virtual stdx::expected<classic_protocol::message::server::Greeting,
+                         std::error_code>
+  server_greeting(bool with_tls) = 0;
+
+  virtual stdx::expected<handshake_data, ErrorResponse> handshake() = 0;
+
+  virtual std::chrono::microseconds server_greeting_exec_time() = 0;
 
   virtual void set_session_ssl_info(const SSL *ssl) = 0;
 };

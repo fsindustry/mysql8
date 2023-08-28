@@ -187,9 +187,8 @@ IF(CMAKE_GENERATOR MATCHES "Visual Studio [1-9][0-9].*" AND
   SET(CMAKE_GENERATOR_TOOLSET "host=x64")
 ENDIF()
 
-# On Linux el6/el7/el8/el9 the default gcc is too old,
-# see if devtoolset/gcc-toolset is installed.
-# Same with SUSE linux, look for gcc 10/12 there.
+# On Linux el6/el7 the default gcc is too old, see if devtoolset is installed.
+# Same with SLES 12, look for gcc 7 there.
 # We need to look for gcc before calling PROJECT below.
 OPTION(FORCE_UNSUPPORTED_COMPILER "Disable compiler version checks" OFF)
 MARK_AS_ADVANCED(WITHOUT_SERVER FORCE_UNSUPPORTED_COMPILER)
@@ -450,16 +449,16 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
           NO_DEFAULT_PATH
           PATHS "/usr/bin")
       ELSEIF(LINUX_SUSE_15)
-        FIND_PROGRAM(ALTERNATIVE_GCC gcc-12
+        FIND_PROGRAM(ALTERNATIVE_GCC gcc-9
           NO_DEFAULT_PATH
           PATHS "/usr/bin")
-        FIND_PROGRAM(ALTERNATIVE_GPP g++-12
+        FIND_PROGRAM(ALTERNATIVE_GPP g++-9
           NO_DEFAULT_PATH
           PATHS "/usr/bin")
-        FIND_PROGRAM(GCC_AR_EXECUTABLE gcc-ar-12
+        FIND_PROGRAM(GCC_AR_EXECUTABLE gcc-ar-9
           NO_DEFAULT_PATH
           PATHS "/usr/bin")
-        FIND_PROGRAM(GCC_RANLIB_EXECUTABLE gcc-ranlib-12
+        FIND_PROGRAM(GCC_RANLIB_EXECUTABLE gcc-ranlib-9
           NO_DEFAULT_PATH
           PATHS "/usr/bin")
       ENDIF()
@@ -487,7 +486,7 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
           MESSAGE(FATAL_ERROR "Please do zypper install gcc10 gcc10-c++\n"
             "or set CMAKE_C_COMPILER and CMAKE_CXX_COMPILER explicitly.")
         ELSE()
-          MESSAGE(FATAL_ERROR "Please do zypper install gcc12 gcc12-c++\n"
+          MESSAGE(FATAL_ERROR "Please do zypper install gcc9 gcc9-c++\n"
             "or set CMAKE_C_COMPILER and CMAKE_CXX_COMPILER explicitly.")
         ENDIF()
       ENDIF()
@@ -738,22 +737,11 @@ SET(CMAKE_SIZEOF_VOID_P ${SIZEOF_VOIDP})
 INCLUDE(compile_flags)
 INCLUDE(install_layout)
 
-IF(WITH_ASAN OR WITH_LSAN OR WITH_MSAN OR WITH_TSAN OR WITH_UBSAN)
-  SET(WITH_SOME_SANITIZER ON)
-ELSE()
-  SET(WITH_SOME_SANITIZER OFF)
-ENDIF()
-
-
 # Add RPM or DEB platform flags for STANDALONE build.
 # Not for DEBUG builds, since both platforms use -O2 and _FORTIFY_SOURCE.
 # Not for Release or MinSizeRel, it will inflate binary sizes.
 IF(LINUX_STANDALONE AND (LINUX_DEB_PLATFORM OR LINUX_RPM_PLATFORM))
-  # Do not add FORTIFY_SOURCE to any of the sanitizers
-  # https://github.com/google/sanitizers/issues/247
-  IF(WITH_SOME_SANITIZER)
-    SET(WITH_PACKAGE_FLAGS_DEFAULT OFF)
-  ELSEIF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
+  IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
     SET(WITH_PACKAGE_FLAGS_DEFAULT OFF)
   ELSEIF(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELWITHDEBINFO")
     SET(WITH_PACKAGE_FLAGS_DEFAULT ON)
@@ -840,6 +828,9 @@ INCLUDE(fprofile)
 INCLUDE(gloves)
 INCLUDE(fido2)
 INCLUDE(win_jemalloc)
+INCLUDE(msvc_cppcheck)
+
+MSVC_CPPCHECK()
 
 IF(UNIX)
   OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
@@ -919,10 +910,6 @@ IF(WITH_INTERNAL AND (NOT SOLARIS))
   SET(WITH_AUTHENTICATION_FIDO_DEFAULT ON)
 ELSE()
   SET(WITH_AUTHENTICATION_FIDO_DEFAULT OFF)
-ENDIF()
-
-IF(WITH_INTERNAL)
-  SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/internal/cmake)
 ENDIF()
 
 OPTION(WITH_AUTHENTICATION_FIDO
@@ -1082,9 +1069,6 @@ MACRO(DISABLE_MISSING_PROFILE_WARNING)
   ENDIF()
 ENDMACRO()
 
-OPTION(OPTIMIZE_SANITIZER_BUILDS
-  "Add -O1 -fno-inline to sanitizer builds" ON)
-
 MACRO(MY_SANITIZER_CHECK SAN_OPT ADD_OPTIMIZATION RESULT)
   MY_CHECK_C_COMPILER_FLAG("${SAN_OPT}" C_RESULT)
   MY_CHECK_CXX_COMPILER_FLAG("${SAN_OPT}" CXX_RESULT)
@@ -1094,7 +1078,7 @@ MACRO(MY_SANITIZER_CHECK SAN_OPT ADD_OPTIMIZATION RESULT)
     # We switch on basic optimization also for debug builds.
     # We disable inlining for stack trace readability.
     # With optimization we may get some warnings, so we switch off -Werror
-    IF(${ADD_OPTIMIZATION} AND OPTIMIZE_SANITIZER_BUILDS)
+    IF(${ADD_OPTIMIZATION})
       IF(MSVC)
         STRING_APPEND(CMAKE_C_FLAGS   " -O1 /Ob0")
         STRING_APPEND(CMAKE_CXX_FLAGS " -O1 /Ob0")
@@ -1581,17 +1565,6 @@ ADD_DEFINITIONS(-D__STDC_FORMAT_MACROS)    # Enable C99 printf format macros
 ADD_DEFINITIONS(-D_USE_MATH_DEFINES)       # Get access to M_PI, M_E, etc. in math.h
 ADD_DEFINITIONS(-DLZ4_DISABLE_DEPRECATE_WARNINGS) # C++14 deprecation warnings in LZ4.
 
-# Force the same macro definition MYSQL_PROJECT for all source files being
-# compiled as a part of the MySQL server, client tools, libraries etc.
-# The MYSQL_PROJECT macro helps to distinguish when e.g. some C++ header file
-# is included by the MySQL project source file or by the external project
-# source file.
-# For example, MYSQL_PROJECT helps to detect when include/mysql/strings/api.h
-# is used to a) build a static library, or b) build a Windows DLL, or
-# c) reference the server strings API from plugins (DLLs) loaded by the
-# MySQL server, or d) reference the libstrings DLL from external executables.
-ADD_DEFINITIONS(-DMYSQL_PROJECT)
-
 OPTION(ENABLE_EXPERIMENT_SYSVARS "Expose ussually hidden system variables to allow experiments" OFF)
 IF(ENABLE_EXPERIMENT_SYSVARS)
   ADD_DEFINITIONS(-DENABLE_EXPERIMENT_SYSVARS)
@@ -2025,15 +1998,6 @@ IF(LINUX)
   HAVE_PTHREAD_SETNAME_NP)
 ENDIF()
 
-# Cannot use system tirpc with custom OpenSSL
-IF(WITH_SSL_PATH AND (LINUX_RHEL8 OR LINUX_RHEL9))
-  SET(WITH_TIRPC "bundled")
-ENDIF()
-
-IF(WITH_TIRPC STREQUAL "bundled")
-  ADD_SUBDIRECTORY(extra/tirpc)
-ENDIF()
-
 IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   # Protobuf library is a target, installed to <root>/${INSTALL_PRIV_LIBDIR}
   # INSTALL_RPATH must be set for all binaries linking with libprotobuf.
@@ -2085,8 +2049,6 @@ OPTION(MYSQL_MAINTAINER_MODE
        "MySQL maintainer-specific development environment" OFF)
 
 INCLUDE(maintainer)
-INCLUDE(msvc_cppcheck)
-DO_MSVC_CPPCHECK()
 
 IF(WITH_UNIT_TESTS)
   ENABLE_TESTING()
@@ -2125,17 +2087,6 @@ ENDIF()
 OPTION(WITH_HYPERGRAPH_OPTIMIZER
   "Allow use of the hypergraph join optimizer"
   ${WITH_HYPERGRAPH_OPTIMIZER_DEFAULT}
-  )
-
-# Allow SHOW PARSE_TREE on debug build by default.
-IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
-  SET(WITH_SHOW_PARSE_TREE_DEFAULT ON)
-ELSE()
-  SET(WITH_SHOW_PARSE_TREE_DEFAULT OFF)
-ENDIF()
-OPTION(WITH_SHOW_PARSE_TREE
-  "Allow showing the parse tree"
-  ${WITH_SHOW_PARSE_TREE_DEFAULT}
   )
 
 # Utility target to build every executable tagged with ADD_TEST.
@@ -2260,13 +2211,6 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
       # If some symbols are still missing, they will be picked up from
       # dependent libraries, since we LINK_PUBLIC.
       # To see what symbols we need to import, remove LINK_PUBLIC above.
-      #
-      # The strings library uses visibility=hidden for all symbols,
-      # except those explicitly tagged with MYSQL_STRINGS_EXPORT.
-      # If we get ODR violations for executables using server_unittest_library,
-      # it means the symbol has been found in strings and
-      # server_unittest_library, which means the unit test is using
-      # some non-exported symbol from strings.
       EXPORTS
       builtin_perfschema_plugin            # Pulls in the whole server.
       mysql_service_mysql_rwlock_v1        # Pulls in minchassis
@@ -2275,6 +2219,11 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
       TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC numa)
     ENDIF()
     IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
+      # We get ODR violations because of multiple bison parsers.
+      MY_CHECK_CXX_COMPILER_WARNING("error=odr" HAS_WARN_FLAG)
+      IF(HAS_WARN_FLAG)
+        MY_TARGET_LINK_OPTIONS(server_unittest_library "${HAS_WARN_FLAG}")
+      ENDIF()
       # We may get errors in boost/geometry/srs/projections/proj/ob_tran.hpp
       # and several other boost files.
       MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
@@ -2468,22 +2417,6 @@ IF(WIN32)
   ENDIF()
 ENDIF()
 
-# Packaging
-IF(WIN32)
-  SET(BUNDLE_MYSQL_CONFIGURATOR "" CACHE PATH
-    "Path to MySQL Configurator executable to bundle in the MSI installer")
-  IF(BUNDLE_MYSQL_CONFIGURATOR)
-    FILE(TO_CMAKE_PATH "${BUNDLE_MYSQL_CONFIGURATOR}" BUNDLE_MYSQL_CONFIGURATOR)
-    IF(NOT EXISTS "${BUNDLE_MYSQL_CONFIGURATOR}")
-      MESSAGE(FATAL_ERROR "\"${BUNDLE_MYSQL_CONFIGURATOR}\" doesn't exist")
-    ENDIF()
-    MESSAGE(STATUS "INSTALL ${BUNDLE_MYSQL_CONFIGURATOR} to ${INSTALL_BINDIR}")
-    INSTALL(FILES
-      "${BUNDLE_MYSQL_CONFIGURATOR}" DESTINATION "${INSTALL_BINDIR}"
-      COMPONENT Server)
-  ENDIF()
-ENDIF()
-
 IF(WIN32)
   SET(CPACK_GENERATOR "ZIP")
 ELSE()
@@ -2651,11 +2584,6 @@ IF(DOXYGEN_FOUND)
     SET_PROPERTY(TARGET doxygen PROPERTY EXCLUDE_FROM_DEFAULT_BUILD TRUE)
   ENDIF()
 ENDIF(DOXYGEN_FOUND)
-
-MYSQL_ADD_EXECUTABLE(stack_direction
-  ${CMAKE_SOURCE_DIR}/cmake/stack_direction.c
-  SKIP_INSTALL
-  )
 
 INCLUDE(CPack)
 

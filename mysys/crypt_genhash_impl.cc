@@ -47,7 +47,6 @@
 
 #include "crypt_genhash_impl.h"
 #include "m_string.h"
-#include "my_inttypes.h"
 
 #include <errno.h>
 

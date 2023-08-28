@@ -25,7 +25,6 @@
 #include "DnsCache.hpp"
 
 #include "NdbTCP.h"
-#include "portlib/ndb_sockaddr.h"
 
 LocalDnsCache::~LocalDnsCache() {
   for (const auto& pair : m_resolver_cache) {
@@ -33,25 +32,26 @@ LocalDnsCache::~LocalDnsCache() {
   }
 }
 
-bool LocalDnsCache::getCachedOrResolveAddress(ndb_sockaddr *result,
+bool LocalDnsCache::getCachedOrResolveAddress(in6_addr *result,
                                               const char *hostname) {
   const auto pair = m_resolver_cache.find(hostname);
 
   if (pair != m_resolver_cache.end()) {
-    *result = *pair->second;
+    const in6_addr *address = pair->second;
+    *result = *address;  // Copy
     return true; /* Usable cache hit */
   }
 
-  if (Ndb_getAddr(result, hostname) != 0) {
+  if (Ndb_getInAddr6(result, hostname) != 0) {
     return false;  // hostname not found in DNS
   }
 
   // Hostname found, create a cache entry
-  m_resolver_cache[hostname] = new ndb_sockaddr(*result);
+  m_resolver_cache[hostname] = new in6_addr(*result);
   return true;
 }
 
-int LocalDnsCache::getAddress(ndb_sockaddr *result_address, const char *hostname) {
+int LocalDnsCache::getAddress(in6_addr *result_address, const char *hostname) {
   if (m_failed_lookups.count(hostname) != 0) {
     // Lookup failed earlier, same result now
     return -1;

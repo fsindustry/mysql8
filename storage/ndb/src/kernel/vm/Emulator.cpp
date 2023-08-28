@@ -410,7 +410,7 @@ static const char* const jamFileNames[] =
    "mt.hpp",                             // 275
    "Configuration.hpp",                  // 276
    "GlobalData.hpp",                     // 277
-   "RWPool.cpp",                         // 278 DELETED FILE
+   "RWPool.cpp",                         // 278
    "GlobalData.cpp",                     // 279
    "Prio.hpp",                           // 280
    "SuperPool.hpp",                      // 281 DELETED FILE
@@ -426,7 +426,7 @@ static const char* const jamFileNames[] =
    "ndbd_malloc_impl.hpp",               // 291
    "ArrayPool.hpp",                      // 292
    "Mutex.cpp",                          // 293
-   "WOPool.cpp",                         // 294 DELETED FILE
+   "WOPool.cpp",                         // 294
    "test_context.hpp",                   // 295
    "ndbd_malloc_impl.cpp",               // 296
    "mt_thr_config.cpp",                  // 297

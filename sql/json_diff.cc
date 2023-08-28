@@ -44,7 +44,6 @@
 #include "sql/sql_const.h"
 #include "sql/table.h"
 #include "sql_string.h"  // StringBuffer
-#include "string_with_len.h"
 #include "template_utils.h"
 
 class THD;
@@ -83,7 +82,7 @@ static bool write_length_and_string(String *to, const String &from) {
     length = 1 << 30;
   });
   char length_buf[9];
-  const size_t length_length =
+  size_t length_length =
       net_store_length((uchar *)length_buf, length) - (uchar *)length_buf;
   DBUG_PRINT("info", ("write_length_and_string: length=%lu length_length=%lu",
                       (unsigned long)length, (unsigned long)length_length));
@@ -269,7 +268,7 @@ bool Json_diff_vector::write_binary(String *to) const {
       return true; /* purecov: inspected */  // OOM, error is reported
 
   // Store the length.
-  const size_t length = to->length() - ENCODED_LENGTH_BYTES;
+  size_t length = to->length() - ENCODED_LENGTH_BYTES;
   int4store(to->ptr(), (uint32)length);
 
   DBUG_PRINT("info", ("Wrote JSON diff vector length %lu=%02x %02x %02x %02x",
@@ -297,10 +296,10 @@ bool Json_diff_vector::read_binary(const char **from, const TABLE *table,
                 (uint)length));
     // Read operation
     if (length < 1) goto corrupted;
-    const int operation_number = *p;
+    int operation_number = *p;
     DBUG_PRINT("info", ("operation_number=%d", operation_number));
     if (operation_number >= JSON_DIFF_OPERATION_COUNT) goto corrupted;
-    const enum_json_diff_operation operation =
+    enum_json_diff_operation operation =
         static_cast<enum_json_diff_operation>(operation_number);
     length--;
     p++;
@@ -333,7 +332,7 @@ bool Json_diff_vector::read_binary(const char **from, const TABLE *table,
       json_binary::Value value = json_binary::parse_binary(
           pointer_cast<const char *>(p), value_length);
       if (value.type() == json_binary::Value::ERROR) goto corrupted;
-      const Json_wrapper wrapper(value);
+      Json_wrapper wrapper(value);
       std::unique_ptr<Json_dom> dom = wrapper.clone_dom();
       if (dom == nullptr)
         return true; /* purecov: inspected */  // OOM, error is reported

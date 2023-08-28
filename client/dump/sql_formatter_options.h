@@ -29,7 +29,6 @@
 
 #include "client/base/abstract_options_provider.h"
 #include "client/dump/mysql_chain_element_options.h"
-#include "nulls.h"
 #include "template_utils.h"
 #include "typelib.h"
 

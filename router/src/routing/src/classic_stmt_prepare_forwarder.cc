@@ -39,10 +39,6 @@ StmtPrepareForwarder::process() {
       return connect();
     case Stage::Connected:
       return connected();
-    case Stage::Forward:
-      return forward();
-    case Stage::ForwardDone:
-      return forward_done();
     case Stage::Response:
       return response();
     case Stage::Column:
@@ -72,23 +68,14 @@ StmtPrepareForwarder::command() {
     tr.trace(Tracer::Event().stage("stmt_prepare::command"));
   }
 
-  connection()->execution_context().diagnostics_area().warnings().clear();
-  connection()->events().clear();
-
-  trace_event_command_ = trace_command(prefix());
-
-  trace_event_connect_and_forward_command_ =
-      trace_connect_and_forward_command(trace_event_command_);
-
   auto &server_conn = connection()->socket_splicer()->server_conn();
   if (!server_conn.is_open()) {
     stage(Stage::Connect);
+    return Result::Again;
   } else {
-    trace_event_forward_command_ =
-        trace_forward_command(trace_event_connect_and_forward_command_);
-    stage(Stage::Forward);
+    stage(Stage::Response);
+    return forward_client_to_server();
   }
-  return Result::Again;
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -98,7 +85,7 @@ StmtPrepareForwarder::connect() {
   }
 
   stage(Stage::Connected);
-  return mysql_reconnect_start(trace_event_connect_and_forward_command_);
+  return mysql_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -120,9 +107,6 @@ StmtPrepareForwarder::connected() {
       tr.trace(Tracer::Event().stage("stmt_prepare::connect::error"));
     }
 
-    trace_span_end(trace_event_connect_and_forward_command_);
-    trace_command_end(trace_event_command_);
-
     stage(Stage::Done);
     return reconnect_send_error_msg(src_channel, src_protocol);
   }
@@ -131,26 +115,8 @@ StmtPrepareForwarder::connected() {
     tr.trace(Tracer::Event().stage("stmt_prepare::connected"));
   }
 
-  trace_forward_command(trace_event_connect_and_forward_command_);
-
-  stage(Stage::Forward);
-  return Result::Again;
-}
-
-stdx::expected<Processor::Result, std::error_code>
-StmtPrepareForwarder::forward() {
-  stage(Stage::ForwardDone);
-  return forward_client_to_server();
-}
-
-stdx::expected<Processor::Result, std::error_code>
-StmtPrepareForwarder::forward_done() {
   stage(Stage::Response);
-
-  trace_span_end(trace_event_forward_command_);
-  trace_span_end(trace_event_connect_and_forward_command_);
-
-  return Result::Again;
+  return forward_client_to_server();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -190,21 +156,14 @@ stdx::expected<Processor::Result, std::error_code> StmtPrepareForwarder::ok() {
   auto *socket_splicer = connection()->socket_splicer();
   auto *src_channel = socket_splicer->server_channel();
   auto *src_protocol = connection()->server_protocol();
-  auto *dst_channel = socket_splicer->client_channel();
-  auto *dst_protocol = connection()->client_protocol();
 
   const auto msg_res = ClassicFrame::recv_msg<
       classic_protocol::borrowed::message::server::StmtPrepareOk>(src_channel,
                                                                   src_protocol);
   if (!msg_res) return recv_server_failed(msg_res.error());
 
-  auto msg = *msg_res;
-
   if (auto &tr = tracer()) {
-    tr.trace(Tracer::Event().stage(
-        "stmt_prepare::ok: stmt-id: " +
-        std::to_string(msg_res->statement_id()) +
-        ", param-count: " + std::to_string(msg_res->param_count())));
+    tr.trace(Tracer::Event().stage("stmt_prepare::ok"));
   }
 
   auto stmt_prep_ok = *msg_res;
@@ -214,27 +173,12 @@ stdx::expected<Processor::Result, std::error_code> StmtPrepareForwarder::ok() {
     params_left_ = stmt_prep_ok.param_count();
   }
 
-  prep_stmt_.parameters.reserve(stmt_prep_ok.param_count());
+  prep_stmt_.parameters.resize(stmt_prep_ok.param_count());
   stmt_id_ = stmt_prep_ok.statement_id();
 
   connection()->some_state_changed(true);
 
-  if (msg.warning_count() > 0) connection()->diagnostic_area_changed(true);
-
   stage(Stage::Param);
-
-  if (!connection()->events().empty()) {
-    discard_current_msg(src_channel, src_protocol);
-
-    auto msg = *msg_res;
-
-    msg.warning_count(msg.warning_count() + 1);
-
-    auto send_res = ClassicFrame::send_msg(dst_channel, dst_protocol, msg);
-    if (!send_res) return stdx::make_unexpected(send_res.error());
-
-    return Result::SendToClient;
-  }
 
   return forward_server_to_client(has_more_messages());
 }
@@ -337,8 +281,6 @@ StmtPrepareForwarder::ok_done() {
   // remember the stmt.
   dst_protocol->prepared_statements().emplace(stmt_id_, prep_stmt_);
 
-  trace_command_end(trace_event_command_);
-
   stage(Stage::Done);
 
   return Result::Again;
@@ -346,30 +288,9 @@ StmtPrepareForwarder::ok_done() {
 
 stdx::expected<Processor::Result, std::error_code>
 StmtPrepareForwarder::error() {
-  auto *socket_splicer = connection()->socket_splicer();
-  auto *src_channel = socket_splicer->server_channel();
-  auto *src_protocol = connection()->server_protocol();
-
-  auto msg_res = ClassicFrame::recv_msg<
-      classic_protocol::borrowed::message::server::Error>(src_channel,
-                                                          src_protocol);
-  if (!msg_res) return recv_server_failed(msg_res.error());
-
-  auto msg = *msg_res;
-
   if (auto &tr = tracer()) {
     tr.trace(Tracer::Event().stage("stmt_prepare::error"));
   }
-
-  if (auto *ev = trace_span(trace_event_command_, "mysql/response")) {
-    ClassicFrame::trace_set_attributes(ev, src_protocol, msg);
-
-    trace_span_end(ev);
-  }
-
-  trace_command_end(trace_event_command_, TraceEvent::StatusCode::kError);
-
-  connection()->diagnostic_area_changed(true);
 
   stage(Stage::Done);
 

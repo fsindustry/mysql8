@@ -25,10 +25,6 @@
 #ifndef NDB_INTERNAL_HPP
 #define NDB_INTERNAL_HPP
 
-#include "ndb_types.h"
-
-class Ndb;
-
 /**
  * This class exposes non-public funcionality to various test/utility programs
  */

@@ -26,8 +26,6 @@
 #define NDBSLEEP_H
 
 #include <ndb_global.h>
-#include "my_config.h"
-#include "ndb_config.h"
 
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>

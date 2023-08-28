@@ -145,8 +145,7 @@ The following options may be given as the first argument:
  replayed in a deterministic manner using SQL. If
  NDBCLUSTER is enabled and binlog-format is MIXED, the
  format switches to row-based and back implicitly for each
- query accessing an NDBCLUSTER table. This option is
- deprecated and will be removed in a future version.
+ query accessing an NDBCLUSTER table.
  --binlog-group-commit-sync-delay=# 
  The number of microseconds the server waits for the
  binary log group commit sync queue to fill before
@@ -560,8 +559,7 @@ The following options may be given as the first argument:
  logging. Note that if ALL connections to this server
  ALWAYS use row-based binary logging, the security issues
  do not exist and the binary logging cannot break, so you
- can safely set this to TRUE. This variable is deprecated
- and will be removed in a future version.
+ can safely set this to TRUE
  --log-bin-use-v1-row-events 
  If equal to 1 then version 1 row events are written to a
  row based binary log.  If equal to 0, then the latest
@@ -615,8 +613,7 @@ The following options may be given as the first argument:
  log_slow_replica_statements instead.
  --log-statements-unsafe-for-binlog 
  Log statements considered unsafe when using statement
- based binary logging. This variable is deprecated and
- will be removed in a future version.
+ based binary logging.
  (Defaults to on; use --skip-log-statements-unsafe-for-binlog to disable.)
  --log-tc=name       Path to transaction coordinator log (used for
  transactions that affect more than one storage engine,
@@ -1534,9 +1531,7 @@ The following options may be given as the first argument:
  event. Use 0 to disable synchronous flushing
  --sync-relay-log-info=# 
  Synchronously flush relay log info to disk after every
- #th transaction. Use 0 to disable synchronous flushing.
- This variable is deprecated and will be removed in a
- future version.
+ #th transaction. Use 0 to disable synchronous flushing
  --sync-source-info=# 
  Synchronize replication receiver positions to disk
  periodically, after the specified number of events. Use 0
@@ -1596,11 +1591,6 @@ The following options may be given as the first argument:
  Define threads usage for handling queries, one of
  one-thread-per-connection, no-threads, loaded-dynamically
  --thread-stack=#    The stack size for each thread
- --tls-certificates-enforced-validation 
- If set to TRUE, server stops execution at the start up in
- case of invalid certificates When ALTER INSTANCE RELOAD
- TLS executed, new certficates will not be used if
- validation fails. 
  --tls-ciphersuites=name 
  --tmp-table-size=#  If an internal in-memory temporary table in the MEMORY or
  TempTable storage engine exceeds this size, MySQL will
@@ -1726,7 +1716,7 @@ collation-server utf8mb4_0900_ai_ci
 completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10
-connection-memory-chunk-size 8192
+connection-memory-chunk-size 8912
 connection-memory-limit 18446744073709551615
 console FALSE
 create-admin-listener-thread FALSE
@@ -1828,7 +1818,7 @@ lower-case-table-names 1
 mandatory-roles 
 master-info-file master.info
 master-info-repository TABLE
-master-retry-count 10
+master-retry-count 86400
 master-verify-checksum FALSE
 max-allowed-packet 67108864
 max-binlog-cache-size 18446744073709547520
@@ -1940,7 +1930,7 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-performance-schema-max-statement-classes 220
+performance-schema-max-statement-classes 219
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -2076,7 +2066,6 @@ terminology-use-previous NONE
 thread-cache-size 9
 thread-handling one-thread-per-connection
 thread-stack 1048576
-tls-certificates-enforced-validation FALSE
 tls-ciphersuites (No default value)
 tmp-table-size 16777216
 transaction-alloc-block-size 8192

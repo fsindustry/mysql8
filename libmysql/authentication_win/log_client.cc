@@ -23,14 +23,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "common.h"
-#include "mysql/my_loglevel.h"
+#include "my_loglevel.h"
 
 // Client-side logging function
 
 void error_log_vprint(error_log_level::type level, const char *fmt,
                       va_list args) {
   const char *level_string = "";
-  const int log_level = get_log_level();
+  int log_level = get_log_level();
 
   switch (level) {
     case error_log_level::INFO:

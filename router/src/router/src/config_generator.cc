@@ -452,15 +452,6 @@ void ConfigGenerator::init(
                                            bootstrap_options);
 
   // at this point we know the cluster type so let's do additional verifications
-
-  // check the type of the instance used for bootstraping - we can't allow
-  // bootstrapping from ReadReplica
-  if (metadata_->fetch_current_instance_type() == InstanceType::ReadReplica) {
-    throw std::runtime_error(
-        "Bootstrapping using the Read Replica Instance address is not "
-        "supported");
-  }
-
   if (mysqlrouter::ClusterType::RS_V2 == metadata_->get_type()) {
     if (bootstrap_options.find("use-gr-notifications") !=
         bootstrap_options.end()) {
@@ -1697,9 +1688,13 @@ See https://dev.mysql.com/doc/mysql-router/8.0/en/ for more information.)";
   // the user when such condition exists.
   MySQLSession rtr_acct_sess;
   {
+    MySQLSession::ConnectionParameters p = mysql_->get_connection_parameters();
+    p.conn_opts.username = username;
+    p.conn_opts.password = password;
+
     try {
       // will throw if logging in using Router's credentials fails
-      rtr_acct_sess.connect(*mysql_.get(), username, password);
+      rtr_acct_sess.connect_and_set_opts(p);
     } catch (const MySQLSession::Error &e) {
       failed_verification_handler(e);
       return;
@@ -2867,8 +2862,9 @@ void ConfigGenerator::create_users(const std::string &username,
       throw plugin_not_loaded(err_msg);
     }
     if (e.code() == ER_CANNOT_USER) {  // user already exists
-      // this should only happen when running with --account-create always,
-      // which sets if_not_exists to false harness_assert(!if_not_exists);
+      // // this should only happen when running with --account-create always,
+      // // which sets if_not_exists to false
+      // harness_assert(!if_not_exists);
 
       throw_account_exists(e, username);
     }

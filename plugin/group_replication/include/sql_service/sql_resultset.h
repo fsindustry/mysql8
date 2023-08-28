@@ -30,8 +30,6 @@
 
 #include "my_inttypes.h"
 
-struct CHARSET_INFO;
-
 struct Field_type {
   std::string db_name;
   std::string table_name;

@@ -29,7 +29,6 @@
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"
 #include "sql/sql_class.h"
-#include "string_with_len.h"
 #include "unittest/gunit/test_utils.h"
 
 namespace item_like_unittest {

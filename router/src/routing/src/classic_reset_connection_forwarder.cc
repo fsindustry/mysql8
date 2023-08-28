@@ -72,10 +72,6 @@ ResetConnectionForwarder::command() {
     tr.trace(Tracer::Event().stage("reset_connection::command"));
   }
 
-  // disable the tracer, as it would leak the previous session's "SET ROUTER
-  // trace" to the new, reset session.
-  connection()->events().active(false);
-
   auto &server_conn = connection()->socket_splicer()->server_conn();
   if (!server_conn.is_open()) {
     stage(Stage::Connect);
@@ -93,7 +89,7 @@ ResetConnectionForwarder::connect() {
   }
 
   stage(Stage::Connected);
-  return mysql_reconnect_start(nullptr);
+  return mysql_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -160,8 +156,6 @@ ResetConnectionForwarder::ok() {
   auto *socket_splicer = connection()->socket_splicer();
   auto *src_channel = socket_splicer->server_channel();
   auto *src_protocol = connection()->server_protocol();
-  auto *dst_channel = socket_splicer->client_channel();
-  auto *dst_protocol = connection()->client_protocol();
 
   auto msg_res =
       ClassicFrame::recv_msg<classic_protocol::borrowed::message::server::Ok>(
@@ -180,8 +174,6 @@ ResetConnectionForwarder::ok() {
         src_protocol->shared_capabilities());
   }
 
-  dst_protocol->status_flags(msg.status_flags());
-
   // allow connection sharing again.
   connection()->connection_sharing_allowed_reset();
 
@@ -190,10 +182,6 @@ ResetConnectionForwarder::ok() {
 
   // clear the prepared statements.
   connection()->client_protocol()->prepared_statements().clear();
-
-  // disable the tracer.
-  connection()->client_protocol()->trace_commands(false);
-  connection()->events().active(false);
 
   if (connection()->context().connection_sharing() &&
       connection()->greeting_from_router()) {
@@ -209,17 +197,6 @@ SET @@SESSION.session_track_schema           = 'ON',
     stage(Stage::Done);
   } else {
     stage(Stage::Done);
-  }
-
-  if (!connection()->events().empty()) {
-    discard_current_msg(src_channel, src_protocol);
-
-    msg.warning_count(msg.warning_count() + 1);
-
-    auto send_res = ClassicFrame::send_msg(dst_channel, dst_protocol, msg);
-    if (!send_res) return stdx::make_unexpected(send_res.error());
-
-    return Result::SendToClient;
   }
 
   return forward_server_to_client();

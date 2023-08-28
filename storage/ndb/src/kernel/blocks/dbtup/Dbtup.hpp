@@ -45,7 +45,6 @@
 #include <AttributeDescriptor.hpp>
 #include "AttributeOffset.hpp"
 #include "Undo_buffer.hpp"
-#include "my_config.h"
 #include "tuppage.hpp"
 #include <DynArr256.hpp>
 #include "../dbacc/Dbacc.hpp"
@@ -1232,7 +1231,7 @@ TupTriggerData_pool c_triggerPool;
 
     ReadFunction* readFunctionArray;
     UpdateFunction* updateFunctionArray;
-    const CHARSET_INFO** charsetArray;
+    CHARSET_INFO** charsetArray;
     
     Uint32 readKeyArray;
     /*
@@ -1933,7 +1932,7 @@ struct KeyReqStruct {
     Uint32 m_lcp_varpart_len;
   };
   Uint32 errorCode; // Used in DbtupRoutines read/update functions
-  bool   xfrm_flag;
+  bool            xfrm_flag;
 
   /* Flag: is tuple in expanded or in shrunken/stored format? */
   bool is_expanded;
@@ -2108,7 +2107,8 @@ public:
                    Uint32 tupVersion,
                    const Uint32* attrIds,
                    Uint32 numAttrs,
-                   Uint32* dataOut);
+                   Uint32* dataOut,
+                   bool xfrmFlag);
   int tuxReadAttrsOpt(EmulatedJamBuffer*,
                       Uint32* fragPtrP,
                       Uint32* tablePtrP,
@@ -2117,21 +2117,24 @@ public:
                       Uint32 tupVersion,
                       const Uint32* attrIds,
                       Uint32 numAttrs,
-                      Uint32* dataOut);
+                      Uint32* dataOut,
+                      bool xfrmFlag);
   int tuxReadAttrsCurr(EmulatedJamBuffer*,
                        const Uint32* attrIds,
                        Uint32 numAttrs,
                        Uint32* dataOut,
+                       bool xfrmFlag,
                        Uint32 tupVersion);
   int tuxReadAttrsCommon(KeyReqStruct &req_struct,
                          const Uint32* attrIds,
                          Uint32 numAttrs,
                          Uint32* dataOut,
+                         bool xfrmFlag,
                          Uint32 tupVersion);
 
   /*
-   * TUX reads primary key without headers into an array of words. Used
-   * for md5 summing and when returning keyinfo. Returns number of
+   * TUX reads primary key without headers into an array of words.  Used
+   * for md5 summing and when returning keyinfo.  Returns number of
    * words or negative (-terrorCode) on error.
    */
   int tuxReadPk(Uint32* fragPtrP,
@@ -2710,14 +2713,6 @@ private:
                      const Uint32*  inBuffer,
                      Uint32   inBufLen,
                      Uint32*  outBuffer,
-                     Uint32   TmaxRead);
-
-  // Read only PK attributes, without AttributeHeader.
-  // Optinally xfrm'ing the key in preparation for hash
-  int readKeyAttributes(KeyReqStruct* req_struct,
-                     const Uint32*  inBuffer,
-                     Uint32   inBufLen,
-                     Uint32*  outBuffer,
                      Uint32   TmaxRead,
                      bool     xfrmFlag);
 
@@ -3127,7 +3122,7 @@ private:
   void sendAlterTabRef(Signal *signal, Uint32 errorCode);
   void sendAlterTabConf(Signal *, Uint32 clientData=RNIL);
 
-  void handleCharsetPos(Uint32 csNumber, const CHARSET_INFO ** charsetArray,
+  void handleCharsetPos(Uint32 csNumber, CHARSET_INFO** charsetArray,
                         Uint32 noOfCharsets,
                         Uint32 & charsetIndex, Uint32 & attrDes2);
   Uint32 computeTableMetaData(TablerecPtr regTabPtr, Uint32 line);

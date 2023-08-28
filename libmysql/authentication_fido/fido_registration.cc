@@ -148,7 +148,7 @@ bool fido_make_cred::generate_signature() {
     ret_code = true;
     goto end;
   } else {
-    const std::string s(
+    std::string s(
         "Please insert FIDO device and perform gesture action for"
         " registration to complete.");
     get_plugin_messages(s, message_type::INFO);
@@ -179,16 +179,15 @@ end:
 bool fido_make_cred::make_challenge_response(
     unsigned char *&challenge_response) {
   /* copy client response into buf */
-  const unsigned long authdata_len = get_authdata_len();
-  const unsigned long sig_len = get_sig_len();
-  const unsigned long cert_len = get_x5c_len();
-  const unsigned long rp_id_len = strlen(get_rp_id());
+  unsigned long authdata_len = get_authdata_len();
+  unsigned long sig_len = get_sig_len();
+  unsigned long cert_len = get_x5c_len();
+  unsigned long rp_id_len = strlen(get_rp_id());
 
   /* calculate total required buffer length */
-  const size_t len = net_length_size(authdata_len) + net_length_size(sig_len) +
-                     (cert_len ? net_length_size(cert_len) + cert_len : 0) +
-                     net_length_size(rp_id_len) + authdata_len + sig_len +
-                     rp_id_len;
+  size_t len = net_length_size(authdata_len) + net_length_size(sig_len) +
+               (cert_len ? net_length_size(cert_len) + cert_len : 0) +
+               net_length_size(rp_id_len) + authdata_len + sig_len + rp_id_len;
   unsigned char *str = new unsigned char[len];
   unsigned char *pos = str;
   pos = net_store_length(pos, authdata_len);
@@ -215,7 +214,7 @@ bool fido_make_cred::make_challenge_response(
   pos += rp_id_len;
   assert(len == (size_t)(pos - str));
 
-  const uint64 needed = base64_needed_encoded_length((uint64)len);
+  uint64 needed = base64_needed_encoded_length((uint64)len);
   unsigned char *tmp_value = new unsigned char[needed];
   base64_encode(str, len, reinterpret_cast<char *>(tmp_value));
   /* Ensure caller will release this memory. */

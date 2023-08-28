@@ -52,6 +52,8 @@ ADD_LIBRARY(ndbkernel STATIC
   ndbd_malloc.cpp
   ndbd_malloc_impl.cpp
 )
+#    WOPool.cpp
+#    RWPool.cpp
 
 # 'sbrk' is deprecated [-Wdeprecated-declarations]
 IF(APPLE)

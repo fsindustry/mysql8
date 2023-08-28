@@ -145,9 +145,6 @@ SET(CLIENT_API_FUNCTIONS
   mysql_get_ssl_session_reused
   mysql_get_ssl_session_data
   mysql_free_ssl_session_data
-  mysql_binlog_close
-  mysql_binlog_fetch
-  mysql_binlog_open
   CACHE INTERNAL "Functions exported by client API"
 )
 
@@ -178,8 +175,6 @@ SET(CLIENT_API_NONBLOCKING_FUNCTIONS
   mysql_real_query_nonblocking
   mysql_send_query_nonblocking
   mysql_store_result_nonblocking
-  mysql_get_connect_nonblocking_stage
-  mysql_reset_connection_nonblocking
 
   CACHE INTERNAL "Nonblocking functions exported by client API"
 )

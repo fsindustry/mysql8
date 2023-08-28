@@ -47,14 +47,13 @@
 #include <boost/iterator/iterator_facade.hpp>        // operator-
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_alloc.h"  // operator new
 #include "my_byteorder.h"
 #include "my_compiler.h"  // MY_ATTRIBUTE
 #include "my_config.h"
 #include "my_dbug.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql-common/json_dom.h"  // Json_wrapper
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"
@@ -92,7 +91,6 @@
 #include "sql/srs_fetcher.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
-#include "string_with_len.h"
 #include "template_utils.h"
 #include "unsafe_string_append.h"
 
@@ -129,7 +127,7 @@ static bool is_item_null(Item *item) {
     return true;
 
   // The following will detect the usage of SQL NULL in user-defined variables.
-  const bool is_binary_charset = (item->collation.collation == &my_charset_bin);
+  bool is_binary_charset = (item->collation.collation == &my_charset_bin);
   if (is_binary_charset && item->type() == Item::FUNC_ITEM &&
       item->data_type() == MYSQL_TYPE_MEDIUM_BLOB) {
     return true;
@@ -213,7 +211,7 @@ bool is_colinear(const Point_range &ls) {
 */
 static bool validate_srid_arg(Item *arg, gis::srid_t *srid, bool *null_value,
                               const char *func_name) {
-  const longlong arg_srid = arg->val_int();
+  longlong arg_srid = arg->val_int();
 
   if ((*null_value = arg->null_value)) {
     return false;
@@ -279,7 +277,7 @@ static bool verify_srid_is_defined(gis::srid_t srid) {
     THD *thd = current_thd;
     std::unique_ptr<dd::cache::Dictionary_client::Auto_releaser> releaser(
         new dd::cache::Dictionary_client::Auto_releaser(thd->dd_client()));
-    const Srs_fetcher fetcher(thd);
+    Srs_fetcher fetcher(thd);
     bool srs_exists = false;
     if (fetcher.srs_exists(thd, srid, &srs_exists))
       return true;  // Error has already been flagged.
@@ -312,9 +310,9 @@ bool Item_geometry_func::resolve_type(THD *) {
   return false;
 }
 
-bool Item_func_geometry_from_text::do_itemize(Parse_context *pc, Item **res) {
+bool Item_func_geometry_from_text::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::do_itemize(pc, res)) return true;
+  if (super::itemize(pc, res)) return true;
   assert(arg_count == 1 || arg_count == 2 || arg_count == 3);
   if (arg_count == 1)
     pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_RAND);
@@ -572,9 +570,9 @@ String *Item_func_geometry_from_text::val_str(String *str) {
   return str;
 }
 
-bool Item_func_geometry_from_wkb::do_itemize(Parse_context *pc, Item **res) {
+bool Item_func_geometry_from_wkb::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::do_itemize(pc, res)) return true;
+  if (super::itemize(pc, res)) return true;
   assert(arg_count == 1 || arg_count == 2 || arg_count == 3);
   if (arg_count == 1)
     pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_RAND);
@@ -864,7 +862,7 @@ const char *Item_func_geomfromgeojson::GEOMETRYCOLLECTION_TYPE =
 String *Item_func_geomfromgeojson::val_str(String *buf) {
   if (arg_count > 1) {
     // Check and parse the OPTIONS parameter.
-    const longlong dimension_argument = args[1]->val_int();
+    longlong dimension_argument = args[1]->val_int();
     if ((null_value = args[1]->null_value)) return nullptr;
 
     if (dimension_argument == 1) {
@@ -1010,7 +1008,7 @@ String *Item_func_geomfromgeojson::val_str(String *buf) {
     write_at_position(0, static_cast<uint32>(m_srid_found_in_document), buf);
   }
 
-  const bool return_result = result_geometry->as_wkb(buf, false);
+  bool return_result = result_geometry->as_wkb(buf, false);
 
   delete result_geometry;
   result_geometry = nullptr;
@@ -1108,7 +1106,7 @@ bool Item_func_geomfromgeojson::parse_object(const Json_object *object,
   // in degrees (other values for other units), while Cartesians coordinates are
   // unlimited.
   if (m_user_provided_srid || m_srid_found_in_document >= 0) {
-    const gis::srid_t srid =
+    gis::srid_t srid =
         m_user_provided_srid ? m_user_srid : m_srid_found_in_document;
 
     if (srid != 0) {
@@ -1197,8 +1195,7 @@ bool Item_func_geomfromgeojson::parse_object(const Json_object *object,
     return parse_object_array(features_array, Geometry::wkb_geometrycollection,
                               rollback, buffer, true, geometry);
   } else {
-    const Geometry::wkbType wkbtype =
-        get_wkbtype(type_member_str->value().c_str());
+    Geometry::wkbType wkbtype = get_wkbtype(type_member_str->value().c_str());
     if (wkbtype == Geometry::wkb_invalid_type) {
       // An invalid GeoJSON type was found.
       my_error(ER_INVALID_GEOJSON_UNSPECIFIED, MYF(0), func_name());
@@ -1308,7 +1305,7 @@ bool Item_func_geomfromgeojson::get_positions(const Json_array *coordinates,
     */
     Json_wrapper coord((*coordinates)[i]);
     coord.set_alias();
-    const double coordinate = coord.coerce_real("");
+    double coordinate = coord.coerce_real("");
     if (i == 0) {
       // Longitude.
       if (coordinate <= m_min_longitude || coordinate > m_max_longitude) {
@@ -1722,7 +1719,7 @@ bool Item_func_geomfromgeojson::parse_crs_object(
     parsed_srid = 4326;
   } else {
     size_t start_index;
-    const size_t name_length = crs_name_member_str->size();
+    size_t name_length = crs_name_member_str->size();
     const char *crs_name = crs_name_member_str->value().c_str();
     if (native_strncasecmp(crs_name, SHORT_EPSG_PREFIX, 5) == 0) {
       start_index = 5;
@@ -1734,8 +1731,7 @@ bool Item_func_geomfromgeojson::parse_crs_object(
     }
 
     char *end_of_parse;
-    const longlong parsed_value =
-        strtoll(crs_name + start_index, &end_of_parse, 10);
+    longlong parsed_value = strtoll(crs_name + start_index, &end_of_parse, 10);
 
     /*
       Check that the whole ending got parsed, and that the value is within
@@ -1834,8 +1830,7 @@ bool Item_func_geomfromgeojson::is_member_valid(const Json_dom *member,
   @return true if the argument is a valid integer type, false otherwise.
 */
 bool Item_func_geomfromgeojson::check_argument_valid_integer(Item *argument) {
-  const bool is_binary_charset =
-      (argument->collation.collation == &my_charset_bin);
+  bool is_binary_charset = (argument->collation.collation == &my_charset_bin);
 
   switch (argument->data_type()) {
     case MYSQL_TYPE_NULL:
@@ -1884,7 +1879,7 @@ bool Item_func_geomfromgeojson::fix_fields(THD *thd, Item **ref) {
         argument.
       */
       if (args[0]->propagate_type(thd, MYSQL_TYPE_JSON)) return true;
-      const bool is_binary_charset =
+      bool is_binary_charset =
           (args[0]->collation.collation == &my_charset_bin);
       switch (args[0]->data_type()) {
         case MYSQL_TYPE_NULL:
@@ -1984,9 +1979,9 @@ static bool append_coordinates(Geometry::wkb_parser *parser, Json_array *array,
     return true;
   }
 
-  const double x_value =
+  double x_value =
       my_double_round(coordinates.x, max_decimal_digits, true, false);
-  const double y_value =
+  double y_value =
       my_double_round(coordinates.y, max_decimal_digits, true, false);
 
   if (array->append_alias(new (std::nothrow) Json_double(x_value)) ||
@@ -2416,7 +2411,7 @@ bool Item_func_as_geojson::val_json(Json_wrapper *wr) {
 */
 bool Item_func_as_geojson::parse_options_argument() {
   assert(arg_count > 2);
-  const longlong options_argument = args[2]->val_int();
+  longlong options_argument = args[2]->val_int();
   if (current_thd->is_error()) return true;
   null_value = args[2]->null_value;
   if (null_value) return false;
@@ -2453,7 +2448,7 @@ bool Item_func_as_geojson::parse_options_argument() {
 */
 bool Item_func_as_geojson::parse_maxdecimaldigits_argument() {
   assert(arg_count > 1);
-  const longlong max_decimal_digits_argument = args[1]->val_int();
+  longlong max_decimal_digits_argument = args[1]->val_int();
   if (current_thd->is_error()) return true;
   null_value = args[1]->null_value;
   if (null_value) return false;
@@ -2534,7 +2529,7 @@ bool Item_func_geohash::check_valid_latlong_type(Item *arg) {
     is_field_type_valid will be true if the item is a constant or a field of
     valid type.
   */
-  const bool is_binary_charset = (arg->collation.collation == &my_charset_bin);
+  bool is_binary_charset = (arg->collation.collation == &my_charset_bin);
   bool is_field_type_valid = false;
   switch (arg->data_type()) {
     case MYSQL_TYPE_DECIMAL:
@@ -2789,11 +2784,10 @@ bool Item_func_geohash::fix_fields(THD *thd, Item **ref) {
   */
   if (is_item_null(args[geohash_length_arg_index])) return false;
 
-  const bool is_binary_charset =
+  bool is_binary_charset =
       (args[geohash_length_arg_index]->collation.collation == &my_charset_bin);
-  const bool is_parameter =
-      (args[geohash_length_arg_index]->type() == PARAM_ITEM ||
-       args[geohash_length_arg_index]->type() == INT_ITEM);
+  bool is_parameter = (args[geohash_length_arg_index]->type() == PARAM_ITEM ||
+                       args[geohash_length_arg_index]->type() == INT_ITEM);
 
   switch (args[geohash_length_arg_index]->data_type()) {
     case MYSQL_TYPE_TINY:
@@ -2843,7 +2837,7 @@ void Item_func_geohash::encode_bit(double *upper_value, double *lower_value,
                                    int bit_number) {
   assert(bit_number >= 0 && bit_number <= 4);
 
-  const double middle_value = (*upper_value + *lower_value) / 2.0;
+  double middle_value = (*upper_value + *lower_value) / 2.0;
   if (target_value < middle_value) {
     *upper_value = middle_value;
     *char_value |= 0 << (4 - bit_number);
@@ -2916,7 +2910,7 @@ bool Item_func_latlongfromgeohash::check_geohash_argument_valid_type(
     If charset is not binary and data_type() is BLOB,
     we have a TEXT column (which is allowed).
   */
-  const bool is_binary_charset = (item->collation.collation == &my_charset_bin);
+  bool is_binary_charset = (item->collation.collation == &my_charset_bin);
 
   switch (item->data_type()) {
     case MYSQL_TYPE_VARCHAR:
@@ -2960,12 +2954,12 @@ bool Item_func_latlongfromgeohash::decode_geohash(
   double longitude_value = (upper_longitude + lower_longitude) / 2.0;
 
   uint number_of_bits_used = 0;
-  const uint input_length = geohash->length();
+  uint input_length = geohash->length();
 
   for (uint i = 0;
        i < input_length && latitude_accuracy > 0.0 && longitude_accuracy > 0.0;
        i++) {
-    const char input_character = my_tolower(&my_charset_latin1, (*geohash)[i]);
+    char input_character = my_tolower(&my_charset_latin1, (*geohash)[i]);
 
     /*
      The following part will convert from character value to a
@@ -3516,7 +3510,7 @@ String *Item_func_make_envelope::val_str(String *str) {
     mbr.ymax = y1;
   }
 
-  const int dim = mbr.dimension();
+  int dim = mbr.dimension();
   assert(dim >= 0);
 
   /*
@@ -4162,7 +4156,7 @@ String *Item_func_spatial_decomp_n::val_str(String *str) {
   String arg_val;
   String *swkb = args[0]->val_str(&arg_val);
   if (current_thd->is_error()) return error_str();
-  const long n = (long)args[1]->val_int();
+  long n = (long)args[1]->val_int();
   if (current_thd->is_error()) return error_str();
 
   Geometry_buffer buffer;
@@ -4231,8 +4225,8 @@ String *Item_func_point::val_str(String *str) {
     return error_str();
   }
 
-  const double x = args[0]->val_real();
-  const double y = args[1]->val_real();
+  double x = args[0]->val_real();
+  double y = args[1]->val_real();
   gis::srid_t srid = 0;
 
   if ((null_value =
@@ -4470,15 +4464,15 @@ String *Item_func_spatial_collection::val_str(String *str) {
             return error_str();
           }
 
-          const double x1 = float8get(data);
+          double x1 = float8get(data);
           data += SIZEOF_STORED_DOUBLE;
-          const double y1 = float8get(data);
+          double y1 = float8get(data);
           data += SIZEOF_STORED_DOUBLE;
 
           data += (n_points - 2) * POINT_DATA_SIZE;
 
-          const double x2 = float8get(data);
-          const double y2 = float8get(data + SIZEOF_STORED_DOUBLE);
+          double x2 = float8get(data);
+          double y2 = float8get(data + SIZEOF_STORED_DOUBLE);
 
           // A ring must be closed.
           if ((x1 != x2) || (y1 != y2)) {
@@ -4551,7 +4545,7 @@ BG_geometry_collection::BG_geometry_collection()
  */
 bool BG_geometry_collection::store_geometry(const Geometry *geo,
                                             bool break_multi_geom) {
-  const Geometry::wkbType geo_type = geo->get_type();
+  Geometry::wkbType geo_type = geo->get_type();
 
   if ((geo_type == Geometry::wkb_geometrycollection) ||
       (break_multi_geom && (geo_type == Geometry::wkb_multipoint ||
@@ -4611,7 +4605,7 @@ Geometry *BG_geometry_collection::store(const Geometry *geo) {
   String *pres = nullptr;
   Geometry *geo2 = nullptr;
   Geometry_buffer *pgeobuf = nullptr;
-  const size_t geosize = geo->get_data_size();
+  size_t geosize = geo->get_data_size();
 
   assert(geo->get_type() != Geometry::wkb_geometrycollection);
   pres = m_geosdata.append_object();
@@ -4670,8 +4664,8 @@ String *Item_func_st_union::val_str(String *str) {
   assert(g2);
 
   // The two geometry operand must be in the same coordinate system.
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_str();
@@ -4903,7 +4897,7 @@ longlong Item_func_numpoints::val_int() {
 String *Item_func_coordinate_mutator::val_str(String *str) {
   assert(fixed);
   String *swkb = args[0]->val_str(str);
-  const double new_value = args[1]->val_real();
+  double new_value = args[1]->val_real();
 
   if ((null_value = (args[0]->null_value || args[1]->null_value)))
     return nullptr;
@@ -4941,7 +4935,7 @@ String *Item_func_coordinate_mutator::val_str(String *str) {
   gis::Point &pt = static_cast<gis::Point &>(*g);
   if (srs != nullptr && srs->is_geographic()) {
     if (coordinate_number(srs) == 0) {
-      const double radian_longitude = srs->to_radians(new_value);
+      double radian_longitude = srs->to_radians(new_value);
       if (radian_longitude <= -M_PI || radian_longitude > M_PI) {
         my_error(ER_LONGITUDE_OUT_OF_RANGE, MYF(0), new_value, func_name(),
                  srs->from_radians(-M_PI), srs->from_radians(M_PI));
@@ -4950,7 +4944,7 @@ String *Item_func_coordinate_mutator::val_str(String *str) {
       pt.x(srs->to_normalized_longitude(new_value));
     } else {
       assert(coordinate_number(srs) == 1);
-      const double radian_latitude = srs->to_radians(new_value);
+      double radian_latitude = srs->to_radians(new_value);
       if (radian_latitude < -M_PI_2 || radian_latitude > M_PI_2) {
         my_error(ER_LATITUDE_OUT_OF_RANGE, MYF(0), new_value, func_name(),
                  srs->from_radians(-M_PI_2), srs->from_radians(M_PI_2));
@@ -5202,8 +5196,8 @@ bool Item_func_st_buffer::parse_strategy(String *arg,
 
   // Extracting the strategy (type) and value from the String object.
   const uchar *p_arg = pointer_cast<const uchar *>(arg->ptr());
-  const uint strategy_number = uint4korr(p_arg);
-  const double value = float8get(p_arg + 4);
+  uint strategy_number = uint4korr(p_arg);
+  double value = float8get(p_arg + 4);
 
   // Numbers stem from old buffer implementation. Still using the old
   // Item_func_buffer_strategy, thus need to convert into variables for
@@ -5290,8 +5284,7 @@ static ConvertUnitResult ConvertUnit(Item *to_query_expression,
       return ConvertUnitResult::kError;
       /* purecov: end */
     }
-    const std::string unit_name(converted_string.ptr(),
-                                converted_string.length());
+    std::string unit_name(converted_string.ptr(), converted_string.length());
     if (srs == nullptr) {
       my_error(ER_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, MYF(0), function_name,
                unit_name.c_str());
@@ -5482,8 +5475,8 @@ double Item_func_st_frechet_distance::val_real() {
     return error_real();
   }
 
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_real();
@@ -5546,8 +5539,8 @@ double Item_func_st_hausdorff_distance::val_real() {
     return error_real();
   }
 
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_real();
@@ -5621,8 +5614,8 @@ String *Item_func_st_difference::val_str(String *str) {
   assert(g2);
 
   // The two geometry operand must be in the same coordinate system.
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_str();
@@ -5680,8 +5673,8 @@ double Item_func_distance::val_real() {
     return error_real();
   }
 
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_real();
@@ -5761,8 +5754,8 @@ double Item_func_st_distance_sphere::val_real() {
   }
   assert(g2);
 
-  const gis::srid_t srid1 = srs1 ? srs1->id() : 0;
-  const gis::srid_t srid2 = srs2 ? srs2->id() : 0;
+  gis::srid_t srid1 = srs1 ? srs1->id() : 0;
+  gis::srid_t srid2 = srs2 ? srs2->id() : 0;
 
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
@@ -5775,8 +5768,8 @@ double Item_func_st_distance_sphere::val_real() {
 
   // Non-zero SRS overrides default radius.
   if (srs1) {
-    const double a = srs1->semi_major_axis();
-    const double b = srs1->semi_minor_axis();
+    double a = srs1->semi_major_axis();
+    double b = srs1->semi_minor_axis();
     if (a == b)
       // Avoid possible loss of precision.
       sphere_radius = a;
@@ -5845,8 +5838,8 @@ String *Item_func_st_intersection::val_str(String *str) {
   assert(g1);
   assert(g2);
   // The two geometry operand must be in the same coordinate system.
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_str();
@@ -5977,8 +5970,8 @@ String *Item_func_st_symdifference::val_str(String *str) {
   assert(g2);
 
   // The two geometry operand must be in the same coordinate system.
-  const gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
-  const gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
+  gis::srid_t srid1 = srs1 == nullptr ? 0 : srs1->id();
+  gis::srid_t srid2 = srs2 == nullptr ? 0 : srs2->id();
   if (srid1 != srid2) {
     my_error(ER_GIS_DIFFERENT_SRIDS, MYF(0), func_name(), srid1, srid2);
     return error_str();
@@ -6007,7 +6000,7 @@ String *Item_func_st_symdifference::val_str(String *str) {
 String *Item_func_st_transform::val_str(String *str) {
   assert(fixed);
   String *source_swkb = args[0]->val_str(str);
-  const gis::srid_t target_srid = args[1]->val_int();
+  gis::srid_t target_srid = args[1]->val_int();
 
   if ((null_value = (args[0]->null_value || args[1]->null_value)))
     return nullptr;

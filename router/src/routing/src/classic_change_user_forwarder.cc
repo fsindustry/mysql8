@@ -130,10 +130,6 @@ ChangeUserForwarder::command() {
     return recv_client_failed(msg_res.error());
   }
 
-  if (auto &tr = tracer()) {
-    tr.trace(Tracer::Event().stage("change_user::command"));
-  }
-
   src_protocol->username(std::string(msg_res->username()));
   src_protocol->schema(std::string(msg_res->schema()));
   src_protocol->attributes(std::string(msg_res->attributes()));
@@ -142,9 +138,9 @@ ChangeUserForwarder::command() {
 
   discard_current_msg(src_channel, src_protocol);
 
-  // disable the tracer for change-user as the previous users
-  // 'ROUTER SET trace = 1' should influence _this_ users change-user
-  connection()->events().active(false);
+  if (auto &tr = tracer()) {
+    tr.trace(Tracer::Event().stage("change_user::command"));
+  }
 
   auto &server_conn = connection()->socket_splicer()->server_conn();
   if (!server_conn.is_open()) {
@@ -156,8 +152,7 @@ ChangeUserForwarder::command() {
         connection(), true /* in-handshake */,
         [this](const classic_protocol::message::server::Error &err) {
           reconnect_error(err);
-        },
-        nullptr));
+        }));
 
     stage(Stage::Response);
   }
@@ -177,7 +172,7 @@ ChangeUserForwarder::connect() {
   //
   // don't use LazyConnector here as it would call authenticate with the old
   // user and then switch to the new one in a 2nd ChangeUser.
-  return socket_reconnect_start(nullptr);
+  return socket_reconnect_start();
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -215,16 +210,14 @@ ChangeUserForwarder::connected() {
         connection(), true,
         [this](const classic_protocol::message::server::Error &err) {
           reconnect_error(err);
-        },
-        nullptr));
+        }));
   } else {
     // connector, but not greeted yet.
     connection()->push_processor(std::make_unique<ServerGreetor>(
         connection(), true,
         [this](const classic_protocol::message::server::Error &err) {
           reconnect_error(err);
-        },
-        nullptr));
+        }));
   }
 
   stage(Stage::Response);
@@ -260,10 +253,6 @@ stdx::expected<Processor::Result, std::error_code> ChangeUserForwarder::ok() {
 
   // clear the prepared statements.
   connection()->client_protocol()->prepared_statements().clear();
-
-  // disable tracer
-  connection()->client_protocol()->trace_commands(false);
-  connection()->events().active(false);
 
   if (connection()->context().connection_sharing() &&
       connection()->greeting_from_router()) {

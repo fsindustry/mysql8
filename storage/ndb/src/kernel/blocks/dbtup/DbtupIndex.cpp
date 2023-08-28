@@ -135,6 +135,7 @@ Dbtup::tuxReadAttrsCurr(EmulatedJamBuffer *jamBuf,
                         const Uint32* attrIds,
                         Uint32 numAttrs,
                         Uint32* dataOut,
+                        bool xfrmFlag,
                         Uint32 tupVersion)
 {
   thrjamEntryDebug(jamBuf);
@@ -156,6 +157,7 @@ Dbtup::tuxReadAttrsCurr(EmulatedJamBuffer *jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 
@@ -172,7 +174,8 @@ Dbtup::tuxReadAttrsOpt(EmulatedJamBuffer * jamBuf,
                        Uint32 tupVersion,
                        const Uint32* attrIds,
                        Uint32 numAttrs,
-                       Uint32* dataOut)
+                       Uint32* dataOut,
+                       bool xfrmFlag)
 {
   thrjamEntryDebug(jamBuf);
   // search for tuple version if not original
@@ -195,6 +198,7 @@ Dbtup::tuxReadAttrsOpt(EmulatedJamBuffer * jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 
@@ -203,6 +207,7 @@ Dbtup::tuxReadAttrsCommon(KeyReqStruct &req_struct,
                           const Uint32* attrIds,
                           Uint32 numAttrs,
                           Uint32* dataOut,
+                          bool xfrmFlag,
                           Uint32 tupVersion)
 {
   /**
@@ -247,7 +252,8 @@ Dbtup::tuxReadAttrsCommon(KeyReqStruct &req_struct,
                            attrIds,
                            numAttrs,
                            dataOut,
-                           ZNIL);
+                           ZNIL,
+                           xfrmFlag);
   // done
   return ret;
 }
@@ -364,14 +370,33 @@ Dbtup::tuxReadPk(Uint32* fragPtrP_input,
   // read pk attributes from original tuple
     
   // do it
-  ret = readKeyAttributes(&req_struct,
+  ret = readAttributes(&req_struct,
                        attrIds,
                        numAttrs,
                        dataOut,
                        ZNIL,
                        xfrmFlag);
   // done
-  if (unlikely(ret < 0))
+  if (ret >= 0) {
+    // remove headers
+    Uint32 n= 0;
+    Uint32 i= 0;
+    while (n < numAttrs)
+    {
+      const AttributeHeader ah(dataOut[i]);
+      Uint32 size= ah.getDataSize();
+      ndbrequire(size != 0);
+      for (Uint32 j= 0; j < size; j++)
+      {
+        dataOut[i + j - n]= dataOut[i + j + 1];
+      }
+      n+= 1;
+      i+= 1 + size;
+    }
+    ndbrequire((int)i == ret);
+    ret -= numAttrs;
+  }
+  else
   {
     jam();
     return ret;
@@ -519,7 +544,8 @@ Dbtup::tuxReadAttrs(EmulatedJamBuffer * jamBuf,
                     Uint32 tupVersion,
                     const Uint32* attrIds,
                     Uint32 numAttrs,
-                    Uint32* dataOut)
+                    Uint32* dataOut,
+                    bool xfrmFlag)
 {
   thrjamEntryDebug(jamBuf);
   // use own variables instead of globals
@@ -546,6 +572,7 @@ Dbtup::tuxReadAttrs(EmulatedJamBuffer * jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 

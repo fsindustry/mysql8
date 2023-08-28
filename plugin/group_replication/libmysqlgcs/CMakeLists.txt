@@ -140,9 +140,7 @@ SET(GCS_SOURCES
   ${BUNDLED_LZ4_PATH}/xxhash.c # required by gcs_message_stage_split
   src/bindings/xcom/gcs_message_stage_split.cc
   src/bindings/xcom/gcs_xcom_synode.cc
-  src/bindings/xcom/gcs_xcom_expels_in_progress.cc
-  src/bindings/xcom/gcs_xcom_statistics_manager.cc
-  src/bindings/xcom/gcs_xcom_statistics_storage_impl.cc)
+  src/bindings/xcom/gcs_xcom_expels_in_progress.cc)
 
 ### Configuration ###
 
@@ -232,10 +230,6 @@ ADD_LIBRARY(mysqlgcs STATIC ${XCOM_SOURCES} ${GCS_SOURCES})
 # Dependency on mysys from gcs_logging_system.cc
 # but pick up symbols from the server:
 # TARGET_LINK_LIBRARIES(mysqlgcs mysys)
-
-IF(LINUX AND WITH_TIRPC STREQUAL "bundled")
-  ADD_DEPENDENCIES(mysqlgcs tirpc_ext)
-ENDIF()
 
 IF(CMAKE_VERSION VERSION_GREATER "3.19" AND NOT APPLE_XCODE)
   # New in version 3.19:

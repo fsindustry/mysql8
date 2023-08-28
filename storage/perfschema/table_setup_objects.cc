@@ -42,8 +42,6 @@
 #include "storage/perfschema/pfs_setup_object.h"
 #include "storage/perfschema/table_helper.h"
 
-struct CHARSET_INFO;
-
 THR_LOCK table_setup_objects::m_table_lock;
 
 Plugin_table table_setup_objects::m_table_def(

@@ -188,10 +188,8 @@ IF(NOT WIN32)
     "${CMAKE_SHARED_LIBRARY_C_FLAGS} ${ndbclient_so_link_flags}")
   IF(LINK_FLAG_NO_UNDEFINED)
     STRING_APPEND(ndbclient_so_link_flags " ${LINK_FLAG_NO_UNDEFINED}")
-    IF(LINUX)
-      STRING_APPEND(ndbclient_so_link_flags
-        " -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libndbclient.ver")
-    ENDIF()
+    STRING_APPEND(ndbclient_so_link_flags
+      " -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libndbclient.ver")
   ENDIF()
   IF(SOLARIS)
     STRING_APPEND(ndbclient_so_link_flags " ${CMAKE_CXX_LINK_FLAGS}")

@@ -160,10 +160,7 @@ struct FTS::Parser {
     Key_sort_buffer m_key_buffer;
 
     /** Buffer to use for temporary file writes. */
-    ut::unique_ptr_aligned<byte[]> m_aligned_buffer;
-
-    /** Buffer for IO to use for temporary file writes. */
-    IO_buffer m_io_buffer;
+    Aligned_buffer m_aligned_buffer;
 
     /** Record list start offsets. */
     Merge_offsets m_offsets{};
@@ -263,8 +260,9 @@ struct FTS::Inserter {
     /** Destructor. */
     ~Handler() = default;
 
-    using Buffer = ut::unique_ptr_aligned<byte[]>;
+    using Buffer = Aligned_buffer;
     using Files = std::vector<file_t, ut::allocator<file_t>>;
+    using Buffers = std::vector<Buffer *, ut::allocator<Buffer *>>;
 
     /** Aux index id. */
     size_t m_id{};
@@ -373,15 +371,9 @@ dberr_t FTS::Parser::init(size_t n_threads) noexcept {
       return DB_OUT_OF_MEMORY;
     }
 
-    handler->m_aligned_buffer =
-        ut::make_unique_aligned<byte[]>(ut::make_psi_memory_key(mem_key_ddl),
-                                        UNIV_SECTOR_SIZE, buffer_size.first);
-
-    if (!handler->m_aligned_buffer) {
+    if (!handler->m_aligned_buffer.allocate(buffer_size.first)) {
       return DB_OUT_OF_MEMORY;
     }
-
-    handler->m_io_buffer = {handler->m_aligned_buffer.get(), buffer_size.first};
 
     if (!file_create(&handler->m_file, path)) {
       return DB_OUT_OF_MEMORY;
@@ -894,7 +886,7 @@ void FTS::Parser::parse(Builder *builder) noexcept {
 
       if (!handler->m_key_buffer.empty()) {
         auto key_buffer = &handler->m_key_buffer;
-        auto io_buffer = handler->m_io_buffer;
+        auto io_buffer = handler->m_aligned_buffer.io_buffer();
 
         const auto n_tuples = key_buffer->size();
 
@@ -1012,7 +1004,7 @@ void FTS::Parser::parse(Builder *builder) noexcept {
     if (handler->m_key_buffer.size() > 0 && !processed) {
       auto &file = handler->m_file;
       auto key_buffer = &handler->m_key_buffer;
-      auto io_buffer = handler->m_io_buffer;
+      auto io_buffer = handler->m_aligned_buffer.io_buffer();
       const auto n_tuples = key_buffer->size();
 
       key_buffer->sort(nullptr);

@@ -182,13 +182,7 @@ class NonzeroSubsetsOf {
 };
 
 // Returns a bitmap representing a single table.
-constexpr uint64_t TableBitmap(unsigned x) { return uint64_t{1} << x; }
-
-// Returns a bitmap representing multiple tables.
-template <typename... Args>
-constexpr uint64_t TableBitmap(unsigned first, Args... rest) {
-  return TableBitmap(first) | TableBitmap(rest...);
-}
+inline uint64_t TableBitmap(unsigned x) { return uint64_t{1} << x; }
 
 // Returns a bitmap representing the semi-open interval [start, end).
 MY_COMPILER_DIAGNOSTIC_PUSH()

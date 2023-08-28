@@ -24,14 +24,11 @@
 
 #include "test_utils.h"
 
-#include "my_inttypes.h"
 #include "my_io.h"
 #include "my_thread.h"
-#include "nulls.h"
 #include "sql/log.h"
 #include "sql/named_pipe.h"
 #include "sql/sql_class.h"
-#include "strxnmov.h"
 
 #include <sddl.h>
 
