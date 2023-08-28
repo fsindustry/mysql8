@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-#include "m_string.h"
 #include "my_config.h"  // NOLINT(build/include_subdir)
 #include "my_io.h"      // NOLINT(build/include_subdir)
 
@@ -179,7 +178,6 @@ class Unixsocket_creator {
     return false;
 #else
     char buffer[8];
-    char *pid_begin = buffer;
     const char x_prefix = 'X';
     const pid_t cur_pid = m_system_interface->get_pid();
     const std::string lock_filename =
@@ -244,12 +242,15 @@ class Unixsocket_creator {
       }
       buffer[len] = '\0';
 
-      if (x_prefix == pid_begin[0]) {
-        ++pid_begin;
+      if (x_prefix != buffer[0]) {
+        error_message = "lock file wasn't allocated by X Plugin ";
+        error_message += lock_filename;
+
+        return false;
       }
 
       pid_t parent_pid = m_system_interface->get_ppid();
-      pid_t read_pid = atoi(pid_begin);
+      pid_t read_pid = atoi(buffer + 1);
 
       if (read_pid <= 0) {
         error_message = "invalid PID in UNIX socket lock file ";
@@ -281,7 +282,9 @@ class Unixsocket_creator {
       }
     }
 
-    snprintf(buffer, sizeof(buffer), "%d\n", static_cast<int>(cur_pid));
+    // The "X" should fail legacy UNIX socket lock-file allocation
+    snprintf(buffer, sizeof(buffer), "%c%d\n", x_prefix,
+             static_cast<int>(cur_pid));
     if (lockfile_fd->write(buffer, strlen(buffer)) !=
         static_cast<signed>(strlen(buffer))) {
       error_message = String_formatter()

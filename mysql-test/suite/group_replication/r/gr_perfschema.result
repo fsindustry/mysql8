@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 
 ############################################################
@@ -52,7 +52,7 @@ SSL_CRL_PATH
 CONNECTION_RETRY_INTERVAL	60
 CONNECTION_RETRY_COUNT	1
 HEARTBEAT_INTERVAL	30.000
-TLS_VERSION	TLSv1.2,TLSv1.3
+TLS_VERSION	TLSv1,TLSv1.1,TLSv1.2,TLSv1.3
 PUBLIC_KEY_PATH	
 GET_PUBLIC_KEY	NO
 NETWORK_NAMESPACE	
@@ -211,7 +211,7 @@ SSL_CRL_PATH
 CONNECTION_RETRY_INTERVAL	60
 CONNECTION_RETRY_COUNT	1
 HEARTBEAT_INTERVAL	30.000
-TLS_VERSION	TLSv1.2,TLSv1.3
+TLS_VERSION	TLSv1,TLSv1.1,TLSv1.2,TLSv1.3
 PUBLIC_KEY_PATH	
 GET_PUBLIC_KEY	NO
 NETWORK_NAMESPACE	

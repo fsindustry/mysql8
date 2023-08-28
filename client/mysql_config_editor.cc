@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,7 +50,6 @@
 #include "my_rnd.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysys/my_default_priv.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "welcome_copyright_notice.h"
 
@@ -135,8 +134,8 @@ struct my_command_data {
 /* mysql_config_editor utility options. */
 static struct my_option my_program_long_options[] = {
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit.", nullptr,
-     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"debug", '#', "This is a non-debug version. Catch this and exit.", 0, 0, 0,
+     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
     {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.", nullptr,
      nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},

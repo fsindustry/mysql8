@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,7 +44,7 @@ class Item_func_pfs_current_thread_id final : public Item_int_func {
  public:
   Item_func_pfs_current_thread_id(const POS &pos)
       : Item_int_func(pos), m_thread_id(0) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "ps_current_thread_id"; }
   bool resolve_type(THD *) override;
   bool fix_fields(THD *thd, Item **ref) override;
@@ -60,7 +60,7 @@ class Item_func_pfs_thread_id final : public Item_int_func {
  public:
   Item_func_pfs_thread_id(const POS &pos, Item *a)
       : Item_int_func(pos, a), m_thread_id(0) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "ps_thread_id"; }
   bool resolve_type(THD *) override;
   longlong val_int() override;

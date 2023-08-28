@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +35,7 @@
 #include "caching_sha2_passwordopt-vars.h"
 #include "client/client_priv.h"
 #include "compression.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
@@ -43,11 +44,8 @@
 #include "my_macros.h"
 #include "my_sys.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "sslopt-vars.h"
-#include "strxnmov.h"
 #include "typelib.h"
 #include "welcome_copyright_notice.h" /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
@@ -183,14 +181,6 @@ int main(int argc, char **argv) {
                            (first_argument_uses_wildcards) ? "" : argv[0],
                            opt_mysql_port, opt_mysql_unix_port, 0))) {
     fprintf(stderr, "%s: %s\n", my_progname, mysql_error(&mysql));
-    exit(1);
-  }
-  if (ssl_client_check_post_connect_ssl_setup(
-          &mysql, [](const char *err) { fprintf(stderr, "%s\n", err); })) {
-    mysql_close(&mysql);
-    free_passwords();
-    mysql_server_end();
-    my_end(my_end_arg);
     exit(1);
   }
   mysql.reconnect = true;
@@ -375,9 +365,6 @@ static bool get_one_option(int optid, const struct my_option *opt,
     case 'I': /* Info */
       usage();
       exit(0);
-    case 'C':
-      CLIENT_WARN_DEPRECATED("--compress", "--compression-algorithms");
-      break;
   }
   return false;
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,11 @@ INCLUDE(ndb_downgrade_warnings)
 # Disable specific types of warnings for current directory
 # if the compiler supports the flag
 FOREACH(warning
-    "cast-qual"
-    "maybe-uninitialized"
-    "unused-but-set-variable"
-    "unused-parameter"
+    # Downgrade -Werror=stringop-truncation to warning for gcc 8/9
+    "error=stringop-truncation"
+    # Downgrade -Werror=implicit-fallthrough to warning for
+    # NdbImportCsvGram.cpp
+    "error=implicit-fallthrough"
     )
   MY_CHECK_CXX_COMPILER_WARNING("${warning}" HAS_WARN_FLAG)
   IF(HAS_WARN_FLAG)
@@ -37,15 +38,15 @@ FOREACH(warning
   ENDIF()
 ENDFOREACH()
 
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_ndbapitools.cmake)
 # Check BISON_VERSION and set BISON_FLAGS_WARNINGS
 FIND_PACKAGE(BISON REQUIRED)
+INCLUDE(${CMAKE_SOURCE_DIR}/cmake/bison.cmake)
 
 INCLUDE_DIRECTORIES(
-  ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/storage/ndb/src/ndbapi
   ${CMAKE_SOURCE_DIR}/storage/ndb/include/kernel/signaldata
   ${CMAKE_SOURCE_DIR}/storage/ndb/include/util
-  ${CMAKE_SOURCE_DIR}/storage/ndb/test/include
   ${CMAKE_BINARY_DIR}/storage/ndb/tools)
 
 ADD_LIBRARY(ndbtools STATIC
@@ -55,13 +56,10 @@ ADD_LIBRARY(ndbtools STATIC
   NdbImportCsvGram.cpp
   NdbImportUtil.cpp)
 
-ADD_DEPENDENCIES(clang_tidy_prerequisites ndbtools)
-
 IF(MY_COMPILER_IS_GNU_OR_CLANG)
   # Suppress warnings for undefined identifiers in bison output
-  # For implicit-fallthrough - see Bug#34098818
   ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/NdbImportCsvGram.cpp
-    COMPILE_FLAGS "-Wno-undef -Wno-implicit-fallthrough")
+    COMPILE_FLAGS "-Wno-undef")
 ENDIF()
 
 IF(MSVC)
@@ -71,10 +69,9 @@ IF(MSVC)
 ENDIF()
 
 BISON_TARGET(ndb_import
-  ${CMAKE_CURRENT_SOURCE_DIR}/NdbImportCsvGram.ypp
+  NdbImportCsvGram.ypp
   ${CMAKE_CURRENT_BINARY_DIR}/NdbImportCsvGram.cpp
-  COMPILE_FLAGS
-  "--name-prefix=NdbImportCsv_yy --yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
+  COMPILE_FLAGS "--name-prefix=NdbImportCsv_yy --yacc ${BISON_FLAGS_WARNINGS}"
   DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/NdbImportCsvGram.hpp
   )
 
@@ -82,7 +79,7 @@ BISON_TARGET(ndb_import
 # The new Xcode build system does not support multiple targets that
 # DEPEND on the same outputs.
 IF(NOT APPLE_XCODE)
-  MY_ADD_CUSTOM_TARGET(GenBison_ndb_import DEPENDS ${BISON_ndb_import_OUTPUTS})
+  ADD_CUSTOM_TARGET(GenBison_ndb_import DEPENDS ${BISON_ndb_import_OUTPUTS})
 ENDIF()
 
 OPTION(NDB_UTILS_LINK_DYNAMIC
@@ -145,7 +142,7 @@ NDB_ADD_EXECUTABLE(ndb_select_count
 NDB_ADD_EXECUTABLE(ndb_perror
   ndb_perror.cpp
   ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi/mgmapi_error.cpp
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi/ndbd_exit_codes.cpp
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/error/ndbd_exit_codes.cpp
   COMPONENT ClusterTools
   ${LINK_NDBCLIENT}
   ENABLE_EXPORTS
@@ -167,7 +164,7 @@ NDB_ADD_EXECUTABLE(ndb_import
   ${LINK_NDBCLIENT}
   COMPONENT ClusterTools
   ENABLE_EXPORTS
-  LINK_LIBRARIES ndbtools ndbgeneral
+  LINK_LIBRARIES ndbtools
   )
 
 NDB_ADD_TEST(NdbImportUtil-t NdbImportUtil.cpp
@@ -211,25 +208,18 @@ NDB_ADD_EXECUTABLE(ndb_move_data
   )
 
 NDB_ADD_EXECUTABLE(ndbxfrm
-        ndbxfrm.cpp
-        COMPONENT ClusterTools
-        ENABLE_EXPORTS
-        LINK_LIBRARIES ndbmgmapi ndbgeneral ndbportlib
-        )
+  ndbxfrm.cpp
+  COMPONENT ClusterTools
+  ENABLE_EXPORTS
+  LINK_LIBRARIES ndbgeneral ndbportlib
+  )
 
-NDB_ADD_EXECUTABLE(ndb_secretsfile_reader
-        ndb_secretsfile_reader.cpp
-        COMPONENT ClusterTools
-        ENABLE_EXPORTS
-        LINK_LIBRARIES ndbmgmapi ndbgeneral ndbportlib
-        )
-
-IF(NOT WIN32)
-  IF(HAVE_NCURSESW_CURSES_H OR
-     HAVE_NCURSESW_H OR
-     HAVE_NCURSES_H OR
-     HAVE_NCURSES_CURSES_H)
-
+IF(NOT WIN32 AND NOT SOLARIS)
+  IF (HAVE_NCURSESW_1 OR
+      HAVE_NCURSESW_2 OR
+      HAVE_NCURSESW_3 OR
+      HAVE_NCURSESW_4 OR
+      HAVE_NCURSESW_5)
     MESSAGE(STATUS "-- Adding ndb_top executable")
     FIND_LIBRARY(NCURSESW_LIB
       NAMES ncursesw)

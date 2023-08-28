@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -103,19 +103,6 @@ class my_service {
   bool is_valid() const {
     /* NULLed service handle means no valid service managed. */
     return static_cast<const my_h_service_imp *>(this->m_service) != nullptr;
-  }
-
-  /**
-    Unties and returns the underlying service handle.
-
-    It will not be released by the destructor.
-
-    @retval the handle
-  */
-  TService *untie() {
-    TService *save = reinterpret_cast<TService *>(m_service);
-    m_service = nullptr;
-    return save;
   }
 
  private:

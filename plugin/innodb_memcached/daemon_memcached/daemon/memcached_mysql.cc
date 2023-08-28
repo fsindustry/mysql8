@@ -1,6 +1,6 @@
 /***********************************************************************
 
-Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -32,14 +32,12 @@ Created 04/12/2011 Jimmy Yang
 *******************************************************/
 
 #include "memcached_mysql.h"
-#include "nulls.h"
 #include <ctype.h>
 #include <mysql_version.h>
 #include <stdlib.h>
 #include "plugin.h"
 #include "sql/sql_error.h"
 #include "sql/sql_plugin.h"
-#include "strxmov.h"
 
 /** Configuration info passed to memcached, including
 the name of our Memcached InnoDB engine and memcached configure

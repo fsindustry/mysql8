@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,7 @@
 
 /*
   This file defines THD-related API calls that are meant for internal
-  usage (e.g. InnoDB, Thread Pool) only. There are therefore no stability
+  usage (e.g. InnoDB, Thread Pool) only. There are therefore no stabilty
   guarantees.
 */
 
@@ -34,8 +34,8 @@
 
 #include "dur_prop.h"  // durability_properties
 #include "lex_string.h"
-#include "mysql/components/services/bits/psi_thread_bits.h"
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
+#include "mysql/components/services/psi_thread_bits.h"
 #include "sql/handler.h"  // enum_tx_isolation
 
 class THD;
@@ -43,15 +43,6 @@ class partition_info;
 
 THD *create_internal_thd();
 void destroy_internal_thd(THD *thd);
-
-/**
-  Set up various THD data for a new connection.
-  @note PFS instrumentation is not set by this function.
-
-  @param thd            THD object
-  @param stack_start    Start of stack for connection
-*/
-void thd_init(THD *thd, char *stack_start);
 
 /**
   Set up various THD data for a new connection
@@ -88,16 +79,7 @@ THD *create_thd(bool enable_plugins, bool background_thread, bool bound,
   Cleanup the THD object, remove it from the global list of THDs
   and delete it.
 
-  @param    thd               Pointer to THD object.
-  @param    clear_pfs_instr   If true, then clear thread PFS instrumentations.
-*/
-void destroy_thd(THD *thd, bool clear_pfs_instr);
-
-/**
-  Cleanup the THD object, remove it from the global list of THDs
-  and delete it.
-
-  @param    thd   Pointer to THD object.
+  @param    thd   pointer to THD object.
 */
 void destroy_thd(THD *thd);
 
@@ -201,13 +183,6 @@ durability_properties thd_get_durability_property(const THD *thd);
   @param inc auto_increment_increment
 */
 void thd_get_autoinc(const THD *thd, ulong *off, ulong *inc);
-
-/**
-  Get the tmp_table_size threshold.
-  @param thd Thread object
-  @return Value of currently set tmp_table_size threshold.
-*/
-size_t thd_get_tmp_table_size(const THD *thd);
 
 /**
   Is strict sql_mode set.

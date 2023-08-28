@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,8 +32,6 @@
 #include <sys/types.h>
 
 #include <cstring>
-#include <optional>
-#include <string_view>
 
 #include "my_alloc.h"  // MEM_ROOT
 #include "my_compiler.h"
@@ -48,7 +46,6 @@ class Opt_trace_object;
 class Query_result;
 class Query_expression;
 class Window;
-class Json_object;
 
 enum class enum_explain_type;
 
@@ -286,7 +283,8 @@ class qep_row {
     NOTE: NULL value or mem_root_str.is_empty()==true means that Item_null
     object will be pushed into "items" list instead.
   */
-  column<uint> col_id;  ///< "id" column: seq. number of SELECT within the query
+  column<uint>
+      col_id;  ///< "id" column: seq. number of SELECT withing the query
   column<enum_explain_type> col_select_type;  ///< "select_type" column
   mem_root_str col_table_name;  ///< "table" to which the row of output refers
   List<const char> col_partitions;  ///< "partitions" column
@@ -511,17 +509,8 @@ class Explain_format {
  protected:
   Query_result *output;  ///< output resulting data there
 
- private:
-  std::optional<std::string_view> m_explain_into_variable_name;
-
- protected:
-  Explain_format() : output(nullptr) {}
-  explicit Explain_format(
-      std::optional<std::string_view> explain_into_variable_name)
-      : output(nullptr),
-        m_explain_into_variable_name(explain_into_variable_name) {}
-
  public:
+  Explain_format() : output(nullptr) {}
   virtual ~Explain_format() = default;
 
   /**
@@ -532,44 +521,7 @@ class Explain_format {
   */
   virtual bool is_hierarchical() const = 0;
 
-  /**
-    Whether the format closely resembles the final plan to be executed by
-    execution iterators (See RowIterator). These formats share a common logic
-    that uses AccessPath structure to generate the information, so they all
-    display exactly the same information, even though the style of each format
-    might be different.
-
-    @note: The new json format for hypergraph and the tree format are examples
-    of iterator-based formats.
-
-    @retval true        Format is Iterator-based.
-    @retval false       Format is not Iterator-based.
-  */
-  virtual bool is_iterator_based() const { return false; }
-
-  /**
-   * Whether the output of an EXPLAIN statement should be stored in a user
-   * variable or sent to the client. If this function returns true,
-   * explain_into_variable_name() returns the name of the variable.
-   *
-   * @retval true       EXPLAIN output should be stored in a user variable.
-   * @retval false      EXPLAIN output should be sent to the client.
-   */
-  bool is_explain_into() const {
-    return m_explain_into_variable_name.has_value();
-  }
-
-  /**
-   * Returns the name of the user variable the output of this EXPLAIN
-   * statement is to be stored in. Should only be called if this is an
-   * EXPLAIN INTO statement.
-   *
-   * @return std::string_view The name of the variable to store the output in.
-   */
-  std::string_view explain_into_variable_name() const {
-    assert(is_explain_into());
-    return m_explain_into_variable_name.value();
-  }
+  virtual bool is_tree() const { return false; }
 
   /**
     Send EXPLAIN header item(s) to output stream
@@ -615,15 +567,6 @@ class Explain_format {
     Get a pointer to the current TABLE/JOIN_TAB property set
   */
   virtual qep_row *entry() = 0;
-
-  /**
-    Convert Json object to string. Should only be called for iterator-based
-    formats.
-  */
-  virtual std::string ExplainJsonToString(Json_object *json [[maybe_unused]]) {
-    assert(false);
-    return nullptr;
-  }
 };
 
 #endif  // OPT_EXPLAIN_FORMAT_INCLUDED

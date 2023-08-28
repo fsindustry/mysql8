@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,7 +70,7 @@ public:
    */
   class Context {
   public:
-    Context() { m_mutex= nullptr; }
+    Context() { m_mutex= NULL; }
     ParserStatus m_status;
     const ParserRow<T> * m_currentCmd;
     const ParserRow<T> * m_currentArg;
@@ -91,7 +91,7 @@ public:
   /**
    * Run parser
    */
-  bool run(Context &, T &, volatile bool * stop = nullptr) const;
+  bool run(Context &, T &, volatile bool * stop = 0) const;
 
   /**
    * Parse only one entry and return Properties object representing
@@ -213,7 +213,7 @@ Parser<T>::parse(Context &ctx, T &t) {
 
   if(impl->run((ParserImpl::Context*)&ctx, &p, &stop)){
     const ParserRow<T> * cmd = ctx.m_currentCmd; // Cast to correct type
-    if(cmd == nullptr){
+    if(cmd == 0){
       /**
        * Should happen if run returns true
        */
@@ -222,7 +222,7 @@ Parser<T>::parse(Context &ctx, T &t) {
 
     for(unsigned i = 0; i<ctx.m_aliasUsed.size(); i++){
       const ParserRow<T> * alias = ctx.m_aliasUsed[i];
-      if(alias->function != nullptr){
+      if(alias->function != 0){
 	/**
 	 * Report alias usage with callback (if specified by user)
 	 */
@@ -231,7 +231,7 @@ Parser<T>::parse(Context &ctx, T &t) {
       }
     }
 
-    if(cmd->function == nullptr){
+    if(cmd->function == 0){
       DEBUG("CommandWithoutFunction");
       ctx.m_status = CommandWithoutFunction;
       return p;
@@ -239,7 +239,7 @@ Parser<T>::parse(Context &ctx, T &t) {
     return p;
   }
   DEBUG("");
-  return nullptr;
+  return NULL;
 }
 
 #endif

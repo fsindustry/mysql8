@@ -2,12 +2,12 @@
 .\"     Title: mysql_ssl_rsa_setup
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/20/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "MYSQL_SSL_RSA_SETUP" "1" "06/20/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "MYSQL_SSL_RSA_SETUP" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -33,24 +33,6 @@ mysql_ssl_rsa_setup \- create SSL/RSA files
 .HP \w'\fBmysql_ssl_rsa_setup\ [\fR\fB\fIoptions\fR\fR\fB]\fR\ 'u
 \fBmysql_ssl_rsa_setup [\fR\fB\fIoptions\fR\fR\fB]\fR
 .SH "DESCRIPTION"
-.if n \{\
-.sp
-.\}
-.RS 4
-.it 1 an-trap
-.nr an-no-space-flag 1
-.nr an-break-flag 1
-.br
-.ps +1
-\fBNote\fR
-.ps -1
-.br
-.PP
-\fBmysql_ssl_rsa_setup\fR
-is deprecated\&. Instead, consider using MySQL server to generate missing SSL and RSA files automatically at startup (see
-the section called \(lqAutomatic SSL and RSA File Generation\(rq)\&.
-.sp .5v
-.RE
 .PP
 This program creates the SSL certificate and key files and RSA key\-pair files required to support secure connections using SSL and secure password exchange using RSA over unencrypted connections, if those files are missing\&.
 \fBmysql_ssl_rsa_setup\fR
@@ -473,7 +455,7 @@ Display version information and exit\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

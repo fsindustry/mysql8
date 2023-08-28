@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,9 +32,9 @@
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_version.h"  // MYSQL_VERSION_ID
 #include "mysqld_error.h"   // ER_*
 #include "sql/auth/sql_security_ctx.h"
@@ -52,7 +52,6 @@
 #include "sql/dd/types/table.h"
 #include "sql/dd/types/view.h"  // View
 #include "sql/dd/types/weak_object.h"
-#include "string_with_len.h"
 
 using dd::tables::Columns;
 using dd::tables::Tables;
@@ -79,7 +78,6 @@ static const std::set<String_type> default_valid_option_keys = {
     "plugin_version",
     "row_type",
     "secondary_engine",
-    "secondary_load",
     "server_i_s_table",
     "server_p_s_table",
     "stats_auto_recalc",
@@ -88,8 +86,7 @@ static const std::set<String_type> default_valid_option_keys = {
     "storage",
     "tablespace",
     "timestamp",
-    "view_valid",
-    "gipk"};
+    "view_valid"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Abstract_table_impl implementation.
@@ -270,18 +267,6 @@ Column *Abstract_table_impl::add_column() {
   Column_impl *c = new (std::nothrow) Column_impl(this);
   m_columns.push_back(c);
   return c;
-}
-
-bool Abstract_table_impl::drop_column(const String_type &name) {
-  for (Column *c : m_columns) {
-    if (my_strcasecmp(system_charset_info, name.c_str(), c->name().c_str()) ==
-        0) {
-      m_columns.remove(down_cast<Column_impl *>(c));
-      return true;
-    }
-  }
-
-  return false;
 }
 
 ///////////////////////////////////////////////////////////////////////////

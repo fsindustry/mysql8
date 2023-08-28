@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +39,6 @@
 #include "TimeModule.hpp"
 
 #include <NdbAutoPtr.hpp>
-#include <NdbSleep.h>
 
 #define JAM_FILE_ID 490
 
@@ -63,10 +62,6 @@ static void dumpJam(FILE* jamStream,
 		    const JamEvent thrdTheEmulatedJam[]);
 
 const char * ndb_basename(const char *path);
-
-#ifdef ERROR_INSERT
-int simulate_error_during_error_reporting = 0;
-#endif
 
 static
 const char*
@@ -158,15 +153,12 @@ ErrorReporter::formatMessage(int thr_no,
 
   /* Extract the name of the trace file to log explicitly as it is
    * often truncated due to long path names */
-  BaseString failingThdTraceFileName("");
-  if (theNameOfTheTraceFile) {
-    BaseString traceFileFullPath(theNameOfTheTraceFile);
-    Vector<BaseString> traceFileComponents;
-    int noOfComponents = traceFileFullPath.split(traceFileComponents,
-                                                 DIR_SEPARATOR);
-    assert(noOfComponents >= 1);
-    failingThdTraceFileName = traceFileComponents[noOfComponents-1];
-  }
+  BaseString traceFileFullPath(theNameOfTheTraceFile);
+  Vector<BaseString> traceFileComponents;
+  int noOfComponents = traceFileFullPath.split(traceFileComponents,
+                                               DIR_SEPARATOR);
+  assert(noOfComponents >= 1);
+  BaseString failingThdTraceFileName = traceFileComponents[noOfComponents-1];
 
   processId = NdbHost_GetProcessId();
   char thrbuf[100] = "";
@@ -271,27 +263,7 @@ ErrorReporter::handleError(int messageID,
 			   const char* objRef,
 			   NdbShutdownType nst)
 {
-
-  /**
-   * Print the stack trace on stdout only for software errors.
-   * When the shutdown is provoked in a controlled way rather than a
-   * software crash stack trace is not printed.
-   *
-   * For the NDBD_EXIT_OS_SIGNAL_RECEIVED error code, although it is a
-   * software error (ndbd_exit_classification XIE), stack trace is not
-   * printed because it is already done in the Unix signal handler case.
-   */
-  if(ndbd_is_software_error(messageID))
-  {
-    if (nst != NST_ErrorHandlerSignal)
-    {
-      /**
-       * Show stack trace of thread hitting problem - already done in
-       * Unix signal handler case
-       */
-      ndb_print_stacktrace();
-    }
-  }
+  ndb_print_stacktrace();
 
   if(messageID == NDBD_EXIT_ERROR_INSERT)
   {
@@ -461,14 +433,6 @@ WriteMessage(int thrdMessageID,
   fclose(stream);
 
   ErrorReporter::prepare_to_crash(false, (nst == NST_ErrorInsert));
-
-#ifdef ERROR_INSERT
-  if (simulate_error_during_error_reporting == 1)
-  {
-    fprintf(stderr, "Stall during error reporting after releasing lock\n");
-    NdbSleep_MilliSleep(30000);
-  }
-#endif
 
   if (theTraceFileName) {
     /* Attempt to stop all processing to be able to dump a consistent state. */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -27,7 +27,6 @@
 
 #include <cstdint>
 
-#include "m_string.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin.h"
@@ -38,8 +37,6 @@
 #include "my_dbug.h"       // NOLINT(build/include_subdir)
 #include "my_inttypes.h"   // NOLINT(build/include_subdir)
 #include "mysqld_error.h"  // NOLINT(build/include_subdir)
-
-struct CHARSET_INFO;
 
 static Test_context *test_context = nullptr;
 
@@ -55,7 +52,7 @@ static void ensure_api_ok(const char *function, int result) {
 }
 
 static void ensure_api_ok(const char *function, MYSQL_SESSION result) {
-  if (result == nullptr) {
+  if (result == 0) {
     test_context->log_test_line("ERROR calling ", function, ": returned ",
                                 reinterpret_cast<uintptr_t>(result), "\n");
   }
@@ -77,8 +74,9 @@ static int sql_start_result_metadata(void *, uint, uint,
 ) {
   DBUG_ENTER("sql_start_result_metadata");
   DBUG_PRINT("info", ("resultcs->number: %d", resultcs->number));
-  DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
-  DBUG_PRINT("info", ("resultcs->m_coll_name: %s", resultcs->m_coll_name));
+  DBUG_PRINT("info",
+             ("resultcs->csname: %s", replace_utf8_utf8mb3(resultcs->csname)));
+  DBUG_PRINT("info", ("resultcs->name: %s", resultcs->name));
   DBUG_RETURN(false);
 }
 
@@ -266,9 +264,9 @@ static void run_cmd(MYSQL_SESSION session, const std::string &query,
   com.com_query.query = query.c_str();
   com.com_query.length = query.length();
 
-  const int fail = command_service_run_command(
-      session, COM_QUERY, &com, &my_charset_utf8mb3_general_ci, &sql_cbs,
-      CS_TEXT_REPRESENTATION, ctxt);
+  int fail = command_service_run_command(session, COM_QUERY, &com,
+                                         &my_charset_utf8_general_ci, &sql_cbs,
+                                         CS_TEXT_REPRESENTATION, ctxt);
   if (fail) {
     test_context->log_error("run_statement code: ", fail);
 
@@ -407,11 +405,11 @@ mysql_declare_plugin(test_daemon){
     "Test sql service commands",
     PLUGIN_LICENSE_GPL,
     test_session_plugin_init,   /* Plugin Init */
-    nullptr,                    /* Plugin Check uninstall */
+    NULL,                       /* Plugin Check uninstall */
     test_session_plugin_deinit, /* Plugin Deinit */
     0x0100 /* 1.0 */,
-    nullptr, /* status variables                */
-    nullptr, /* system variables                */
-    nullptr, /* config options                  */
-    0,       /* flags                           */
+    NULL, /* status variables                */
+    NULL, /* system variables                */
+    NULL, /* config options                  */
+    0,    /* flags                           */
 } mysql_declare_plugin_end;

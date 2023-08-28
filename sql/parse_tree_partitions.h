@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -81,10 +81,7 @@ typedef Parse_tree_node_tmpl<Partition_parse_context> Parse_tree_part_node;
 
   @ingroup ptn_part_options
 */
-class PT_partition_option : public Parse_tree_part_node {
- protected:
-  explicit PT_partition_option(const POS &pos) : Parse_tree_part_node(pos) {}
-};
+class PT_partition_option : public Parse_tree_part_node {};
 
 /**
   Node for the @SQL{COMMENT [=] @<string@>} partition option
@@ -97,11 +94,10 @@ class PT_partition_comment : public PT_partition_option {
   char *comment;
 
  public:
-  explicit PT_partition_comment(const POS &pos, char *comment)
-      : super(pos), comment(comment) {}
+  explicit PT_partition_comment(char *comment) : comment(comment) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->part_comment = comment;
     return false;
@@ -119,12 +115,11 @@ class PT_partition_index_directory : public PT_partition_option {
   const char *index_directory;
 
  public:
-  explicit PT_partition_index_directory(const POS &pos,
-                                        const char *index_directory)
-      : super(pos), index_directory(index_directory) {}
+  explicit PT_partition_index_directory(const char *index_directory)
+      : index_directory(index_directory) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->index_file_name = index_directory;
     return false;
@@ -142,12 +137,11 @@ class PT_partition_data_directory : public PT_partition_option {
   const char *data_directory;
 
  public:
-  explicit PT_partition_data_directory(const POS &pos,
-                                       const char *data_directory)
-      : super(pos), data_directory(data_directory) {}
+  explicit PT_partition_data_directory(const char *data_directory)
+      : data_directory(data_directory) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->data_file_name = data_directory;
     return false;
@@ -165,11 +159,10 @@ class PT_partition_min_rows : public PT_partition_option {
   ha_rows min_rows;
 
  public:
-  explicit PT_partition_min_rows(const POS &pos, ha_rows min_rows)
-      : super(pos), min_rows(min_rows) {}
+  explicit PT_partition_min_rows(ha_rows min_rows) : min_rows(min_rows) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->part_min_rows = min_rows;
     return false;
@@ -187,11 +180,10 @@ class PT_partition_max_rows : public PT_partition_option {
   ha_rows max_rows;
 
  public:
-  explicit PT_partition_max_rows(const POS &pos, ha_rows max_rows)
-      : super(pos), max_rows(max_rows) {}
+  explicit PT_partition_max_rows(ha_rows max_rows) : max_rows(max_rows) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->part_max_rows = max_rows;
     return false;
@@ -209,11 +201,10 @@ class PT_partition_nodegroup : public PT_partition_option {
   uint16 nodegroup;
 
  public:
-  explicit PT_partition_nodegroup(const POS &pos, uint16 nodegroup)
-      : super(pos), nodegroup(nodegroup) {}
+  explicit PT_partition_nodegroup(uint16 nodegroup) : nodegroup(nodegroup) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->nodegroup_id = nodegroup;
     return false;
@@ -231,11 +222,10 @@ class PT_partition_engine : public PT_partition_option {
  public:
   const LEX_CSTRING name;
 
-  explicit PT_partition_engine(const POS &pos, const LEX_CSTRING &name)
-      : super(pos), name(name) {}
+  explicit PT_partition_engine(const LEX_CSTRING &name) : name(name) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     return resolve_engine(pc->thd, name, false,  // partition can't be temporary
                           false, &pc->curr_part_elem->engine_type);
@@ -253,11 +243,11 @@ class PT_partition_tablespace : public PT_partition_option {
   const char *tablespace;
 
  public:
-  explicit PT_partition_tablespace(const POS &pos, const char *tablespace)
-      : super(pos), tablespace(tablespace) {}
+  explicit PT_partition_tablespace(const char *tablespace)
+      : tablespace(tablespace) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override {
-    if (super::do_contextualize(pc)) return true;
+  bool contextualize(Partition_parse_context *pc) override {
+    if (super::contextualize(pc)) return true;
 
     pc->curr_part_elem->tablespace_name = tablespace;
     return false;
@@ -270,19 +260,16 @@ class PT_partition_tablespace : public PT_partition_option {
   @ingroup ptn_partitioning
 */
 class PT_subpartition : public Parse_tree_part_node {
-  const POS m_errpos;
+  const POS pos;
   const char *name;
   const Mem_root_array<PT_partition_option *> *options;
 
  public:
-  PT_subpartition(const POS &pos, const POS &errpos, const char *name,
+  PT_subpartition(const POS &pos, const char *name,
                   Mem_root_array<PT_partition_option *> *options)
-      : Parse_tree_part_node(pos),
-        m_errpos(errpos),
-        name(name),
-        options(options) {}
+      : pos(pos), name(name), options(options) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -290,10 +277,7 @@ class PT_subpartition : public Parse_tree_part_node {
 
   @ingroup ptn_partitioning
 */
-class PT_part_value_item : public Parse_tree_part_node {
- protected:
-  explicit PT_part_value_item(const POS &pos) : Parse_tree_part_node(pos) {}
-};
+class PT_part_value_item : public Parse_tree_part_node {};
 
 /**
   Node for the @SQL{MAX_VALUE} partition value in @SQL{CREATE/ALTER TABLE}
@@ -303,10 +287,12 @@ class PT_part_value_item : public Parse_tree_part_node {
 class PT_part_value_item_max : public PT_part_value_item {
   typedef PT_part_value_item super;
 
- public:
-  explicit PT_part_value_item_max(const POS &pos) : super(pos) {}
+  const POS pos;
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+ public:
+  explicit PT_part_value_item_max(const POS &pos) : pos(pos) {}
+
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -317,13 +303,14 @@ class PT_part_value_item_max : public PT_part_value_item {
 class PT_part_value_item_expr : public PT_part_value_item {
   typedef PT_part_value_item super;
 
+  const POS pos;
   Item *expr;
 
  public:
   explicit PT_part_value_item_expr(const POS &pos, Item *expr)
-      : super(pos), expr(expr) {}
+      : pos(pos), expr(expr) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -331,10 +318,7 @@ class PT_part_value_item_expr : public PT_part_value_item {
 
   @ingroup ptn_partitioning
 */
-class PT_part_values : public Parse_tree_part_node {
- protected:
-  explicit PT_part_values(const POS &pos) : Parse_tree_part_node(pos) {}
-};
+class PT_part_values : public Parse_tree_part_node {};
 
 /**
   Node for a list of partitioning values in @SQL{VALUES} clauses
@@ -349,11 +333,10 @@ class PT_part_value_item_list_paren : public PT_part_values {
 
  public:
   explicit PT_part_value_item_list_paren(
-      const POS &pos, Mem_root_array<PT_part_value_item *> *values,
-      const POS &paren_pos)
-      : super(pos), values(values), paren_pos(paren_pos) {}
+      Mem_root_array<PT_part_value_item *> *values, const POS &paren_pos)
+      : values(values), paren_pos(paren_pos) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -364,15 +347,15 @@ class PT_part_value_item_list_paren : public PT_part_values {
 class PT_part_values_in_item : public PT_part_values {
   typedef PT_part_values super;
 
-  const POS m_errpos;
+  const POS pos;
   PT_part_value_item_list_paren *item;
 
  public:
-  explicit PT_part_values_in_item(const POS &pos, const POS &errpos,
+  explicit PT_part_values_in_item(const POS &pos,
                                   PT_part_value_item_list_paren *item)
-      : super(pos), m_errpos(errpos), item(item) {}
+      : pos(pos), item(item) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -383,16 +366,15 @@ class PT_part_values_in_item : public PT_part_values {
 class PT_part_values_in_list : public PT_part_values {
   typedef PT_part_values super;
 
-  const POS m_errpos;
+  const POS pos;
   Mem_root_array<PT_part_value_item_list_paren *> *list;
 
  public:
   explicit PT_part_values_in_list(
-      const POS &pos, const POS &errpos,
-      Mem_root_array<PT_part_value_item_list_paren *> *list)
-      : super(pos), m_errpos(errpos), list(list) {}
+      const POS &pos, Mem_root_array<PT_part_value_item_list_paren *> *list)
+      : pos(pos), list(list) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -403,7 +385,7 @@ class PT_part_values_in_list : public PT_part_values {
 class PT_part_definition : public Parse_tree_part_node {
   typedef Parse_tree_part_node super;
 
-  const POS m_errpos;
+  const POS pos;
   const LEX_STRING name;
   partition_type type;
   PT_part_values *const opt_part_values;
@@ -413,14 +395,13 @@ class PT_part_definition : public Parse_tree_part_node {
   const POS sub_partitions_pos;
 
  public:
-  PT_part_definition(const POS &pos, const POS &errpos, const LEX_STRING &name,
+  PT_part_definition(const POS &pos, const LEX_STRING &name,
                      partition_type type, PT_part_values *const opt_part_values,
                      const POS &values_pos,
                      Mem_root_array<PT_partition_option *> *opt_part_options,
                      Mem_root_array<PT_subpartition *> *opt_sub_partitions,
                      const POS &sub_partitions_pos)
-      : super(pos),
-        m_errpos(errpos),
+      : pos(pos),
         name(name),
         type(type),
         opt_part_values(opt_part_values),
@@ -429,7 +410,7 @@ class PT_part_definition : public Parse_tree_part_node {
         opt_sub_partitions(opt_sub_partitions),
         sub_partitions_pos(sub_partitions_pos) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -437,10 +418,7 @@ class PT_part_definition : public Parse_tree_part_node {
 
   @ingroup ptn_partitioning
 */
-class PT_sub_partition : public Parse_tree_part_node {
- protected:
-  explicit PT_sub_partition(const POS &pos) : Parse_tree_part_node(pos) {}
-};
+class PT_sub_partition : public Parse_tree_part_node {};
 
 /**
   Node for the @SQL{SUBRAPTITION BY HASH} definition clause
@@ -456,15 +434,14 @@ class PT_sub_partition_by_hash : public PT_sub_partition {
   const uint opt_num_subparts;
 
  public:
-  PT_sub_partition_by_hash(const POS &pos, bool is_linear, const POS &hash_pos,
-                           Item *hash, uint opt_num_subparts)
-      : super(pos),
-        is_linear(is_linear),
+  PT_sub_partition_by_hash(bool is_linear, const POS &hash_pos, Item *hash,
+                           uint opt_num_subparts)
+      : is_linear(is_linear),
         hash_pos(hash_pos),
         hash(hash),
         opt_num_subparts(opt_num_subparts) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -481,22 +458,18 @@ class PT_sub_partition_by_key : public PT_sub_partition {
   const uint opt_num_subparts;
 
  public:
-  PT_sub_partition_by_key(const POS &pos, bool is_linear,
-                          enum_key_algorithm key_algo, List<char> *field_names,
-                          const uint opt_num_subparts)
-      : super(pos),
-        is_linear(is_linear),
+  PT_sub_partition_by_key(bool is_linear, enum_key_algorithm key_algo,
+                          List<char> *field_names, const uint opt_num_subparts)
+      : is_linear(is_linear),
         key_algo(key_algo),
         field_names(field_names),
         opt_num_subparts(opt_num_subparts) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 class PT_part_type_def : public Parse_tree_part_node {
  protected:
-  explicit PT_part_type_def(const POS &pos) : Parse_tree_part_node(pos) {}
-
   bool set_part_field_list(Partition_parse_context *pc, List<char> *list);
 
   bool itemize_part_expr(Partition_parse_context *pc, const POS &pos,
@@ -516,14 +489,11 @@ class PT_part_type_def_key : public PT_part_type_def {
   List<char> *const opt_columns;
 
  public:
-  PT_part_type_def_key(const POS &pos, bool is_linear,
-                       enum_key_algorithm key_algo, List<char> *opt_columns)
-      : super(pos),
-        is_linear(is_linear),
-        key_algo(key_algo),
-        opt_columns(opt_columns) {}
+  PT_part_type_def_key(bool is_linear, enum_key_algorithm key_algo,
+                       List<char> *opt_columns)
+      : is_linear(is_linear), key_algo(key_algo), opt_columns(opt_columns) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -539,11 +509,10 @@ class PT_part_type_def_hash : public PT_part_type_def {
   Item *expr;
 
  public:
-  PT_part_type_def_hash(const POS &pos, bool is_linear, const POS &expr_pos,
-                        Item *expr)
-      : super(pos), is_linear(is_linear), expr_pos(expr_pos), expr(expr) {}
+  PT_part_type_def_hash(bool is_linear, const POS &expr_pos, Item *expr)
+      : is_linear(is_linear), expr_pos(expr_pos), expr(expr) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -558,10 +527,10 @@ class PT_part_type_def_range_expr : public PT_part_type_def {
   Item *expr;
 
  public:
-  PT_part_type_def_range_expr(const POS &pos, const POS &expr_pos, Item *expr)
-      : super(pos), expr_pos(expr_pos), expr(expr) {}
+  PT_part_type_def_range_expr(const POS &expr_pos, Item *expr)
+      : expr_pos(expr_pos), expr(expr) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -575,10 +544,10 @@ class PT_part_type_def_range_columns : public PT_part_type_def {
   List<char> *const columns;
 
  public:
-  explicit PT_part_type_def_range_columns(const POS &pos, List<char> *columns)
-      : super(pos), columns(columns) {}
+  explicit PT_part_type_def_range_columns(List<char> *columns)
+      : columns(columns) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -593,10 +562,10 @@ class PT_part_type_def_list_expr : public PT_part_type_def {
   Item *expr;
 
  public:
-  PT_part_type_def_list_expr(const POS &pos, const POS &expr_pos, Item *expr)
-      : super(pos), expr_pos(expr_pos), expr(expr) {}
+  PT_part_type_def_list_expr(const POS &expr_pos, Item *expr)
+      : expr_pos(expr_pos), expr(expr) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -610,10 +579,10 @@ class PT_part_type_def_list_columns : public PT_part_type_def {
   List<char> *const columns;
 
  public:
-  explicit PT_part_type_def_list_columns(const POS &pos, List<char> *columns)
-      : super(pos), columns(columns) {}
+  explicit PT_part_type_def_list_columns(List<char> *columns)
+      : columns(columns) {}
 
-  bool do_contextualize(Partition_parse_context *pc) override;
+  bool contextualize(Partition_parse_context *pc) override;
 };
 
 /**
@@ -634,18 +603,16 @@ class PT_partition : public Parse_tree_node {
   partition_info part_info;
 
  public:
-  PT_partition(const POS &pos, PT_part_type_def *part_type_def,
-               uint opt_num_parts, PT_sub_partition *opt_sub_part,
-               const POS &part_defs_pos,
+  PT_partition(PT_part_type_def *part_type_def, uint opt_num_parts,
+               PT_sub_partition *opt_sub_part, const POS &part_defs_pos,
                Mem_root_array<PT_part_definition *> *part_defs)
-      : super(pos),
-        part_type_def(part_type_def),
+      : part_type_def(part_type_def),
         opt_num_parts(opt_num_parts),
         opt_sub_part(opt_sub_part),
         part_defs_pos(part_defs_pos),
         part_defs(part_defs) {}
 
-  bool do_contextualize(Parse_context *pc) override;
+  bool contextualize(Parse_context *pc) override;
 };
 
 #endif /* PARSE_TREE_PARTITIONS_INCLUDED */

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,7 +24,6 @@
 
 #include <NdbNuma.h>
 #include <ndb_global.h>
-#include "my_config.h"
 
 #ifdef TEST_NDBNUMA
 static int NDB_TRACE_NUMA = 0;
@@ -38,7 +37,7 @@ static int NDB_TRACE_NUMA = 0;
 /**
  * Load libnuma using dlopen, not have to put link dependency on it...
  * - handle fact that there are 2 versions of libnuma...
- *   use existence of symbol "numa_all_nodes_ptr" to use v2 abi
+ *   use existance of symbol "numa_all_nodes_ptr" to use v2 abi
  */
 struct bitmask;
 extern "C"

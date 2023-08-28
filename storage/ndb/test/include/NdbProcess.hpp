@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
 
    This program is free software; you can redistribute it and/or modify
@@ -27,7 +27,6 @@
 #ifndef NDB_PROCESS_HPP
 #define NDB_PROCESS_HPP
 
-#include "util/require.h"
 #include <portlib/NdbSleep.h>
 
 class NdbProcess
@@ -137,15 +136,9 @@ public:
   {
 #ifdef _WIN32
     HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_pid);
-    if (!processHandle)
+    if(!TerminateProcess(processHandle,9999))
     {
       printerror();
-      return false;
-    }
-    if (!TerminateProcess(processHandle,9999))
-    {
-      printerror();
-      CloseHandle(processHandle);
       return false;
     }
     CloseHandle(processHandle);
@@ -168,11 +161,6 @@ public:
   {
 #ifdef _WIN32
     HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_pid);
-    if (!processHandle)
-    {
-      printerror();
-      return false;
-    }
     const DWORD result = WaitForSingleObject(processHandle, timeout*100);
     bool fun_ret = true;
     if (result == WAIT_TIMEOUT) {
@@ -189,10 +177,8 @@ public:
     {
       fprintf(stderr,
         "Error occurred when getting exit code of process %d\n", m_pid);
-      CloseHandle(processHandle);
       return false;
     }
-    CloseHandle(processHandle);
     if (exitCode != 9999)
     {
       ret = static_cast<int>(exitCode);

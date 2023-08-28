@@ -1,7 +1,7 @@
 #ifndef SQL_TRUNCATE_INCLUDED
 #define SQL_TRUNCATE_INCLUDED
 
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,11 +28,11 @@
 
 #include "my_sqlcommand.h"
 #include "sql/dd/types/table.h"
-#include "sql/sql_cmd_ddl.h"
+#include "sql/sql_cmd.h"
 
 class MDL_ticket;
 class THD;
-class Table_ref;
+struct TABLE_LIST;
 struct handlerton;
 
 using Up_table = std::unique_ptr<dd::Table>;
@@ -40,7 +40,7 @@ using Up_table = std::unique_ptr<dd::Table>;
 /**
   Sql_cmd_truncate_table represents the TRUNCATE statement.
 */
-class Sql_cmd_truncate_table : public Sql_cmd_ddl {
+class Sql_cmd_truncate_table : public Sql_cmd {
   /** Set if a lock must be downgraded after truncate is done. */
   MDL_ticket *m_ticket_downgrade = nullptr;
 
@@ -61,19 +61,19 @@ class Sql_cmd_truncate_table : public Sql_cmd_ddl {
 
  private:
   /* Handle locking a base table for truncate. */
-  bool lock_table(THD *, Table_ref *);
+  bool lock_table(THD *, TABLE_LIST *);
 
   /*
     Optimized delete of all rows by doing a full regenerate of the table.
     Depending on the storage engine, it can be accomplished through a
     drop and recreate or via the handler truncate method.
   */
-  void truncate_base(THD *, Table_ref *);
-  void truncate_temporary(THD *, Table_ref *);
+  void truncate_base(THD *, TABLE_LIST *);
+  void truncate_temporary(THD *, TABLE_LIST *);
 
   void end_transaction(THD *, bool, bool);
   void cleanup_base(THD *, const handlerton *);
-  void cleanup_temporary(THD *, handlerton *, const Table_ref &, Up_table *,
+  void cleanup_temporary(THD *, handlerton *, const TABLE_LIST &, Up_table *,
                          const std::string &);
 };
 

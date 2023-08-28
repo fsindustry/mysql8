@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,8 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/impl/object_key.h"  // dd::Object_key
 #include "sql/dd/object_id.h"        // dd::Object_id
 #include "sql/dd/string_type.h"

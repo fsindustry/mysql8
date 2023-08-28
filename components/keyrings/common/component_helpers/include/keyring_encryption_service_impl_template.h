@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -74,8 +74,8 @@ bool aes_get_encrypted_size_template(size_t input_length, const char *mode,
       return true;
     }
 
-    const Aes_operation_context context(std::string{}, std::string{}, mode,
-                                        block_size);
+    Aes_operation_context context(std::string{}, std::string{}, mode,
+                                  block_size);
     if (context.valid() == false) return true;
     *out_size = get_ciphertext_size(input_length, context.opmode());
     return false;
@@ -96,7 +96,7 @@ bool aes_get_encrypted_size_template(size_t input_length, const char *mode,
   @param [in]  iv                 Initialization vector
   @param [in]  padding            padding preference
   @param [in]  data_buffer        Input buffer
-  @param [in]  data_buffer_length Input buffer length
+  @param [in]  data_buffer_length Input buffer lenth
   @param [out] out_buffer         Output buffer
   @param [in]  out_buffer_length  Output buffer length
   @param [out] out_length         Length of encrypted data
@@ -249,7 +249,7 @@ bool aes_encrypt_template(
   @param [in]  iv                 Initialization vector
   @param [in]  padding            padding preference
   @param [in]  data_buffer        Input buffer
-  @param [in]  data_buffer_length Input buffer length
+  @param [in]  data_buffer_length Input buffer lenth
   @param [out] out_buffer         Output buffer
   @param [in]  out_buffer_length  Output buffer length
   @param [out] out_length         Length of decrypted data

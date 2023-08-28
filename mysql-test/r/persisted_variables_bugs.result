@@ -68,14 +68,10 @@ SELECT @@global.optimizer_trace_offset, @@global.activate_all_roles_on_login,
 @@global.max_join_size;
 @@global.optimizer_trace_offset	@@global.activate_all_roles_on_login	@@global.auto_increment_increment	@@global.auto_increment_offset	@@global.binlog_error_action	@@global.binlog_format	@@global.cte_max_recursion_depth	@@global.eq_range_index_dive_limit	@@global.innodb_monitor_disable	@@global.histogram_generation_max_mem_size	@@global.innodb_max_dirty_pages_pct	@@global.init_connect	@@global.max_join_size
 -1	0	1	1	ABORT_SERVER	###	1000	200	NULL	20000000	90.000000		18446744073709551615
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET PERSIST optimizer_trace_offset = default;
 SET PERSIST activate_all_roles_on_login= ON;
 SET PERSIST auto_increment_increment= 4, auto_increment_offset= 2;
 SET PERSIST binlog_error_action= IGNORE_ERROR, binlog_format= ROW;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET PERSIST cte_max_recursion_depth= 4294967295, eq_range_index_dive_limit= 4294967295;
 SET PERSIST innodb_monitor_disable='latch';
 SET PERSIST innodb_max_dirty_pages_pct= 97.3;
@@ -90,8 +86,6 @@ SELECT @@global.optimizer_trace_offset, @@global.activate_all_roles_on_login,
 @@global.max_join_size;
 @@global.optimizer_trace_offset	@@global.activate_all_roles_on_login	@@global.auto_increment_increment	@@global.auto_increment_offset	@@global.binlog_error_action	@@global.binlog_format	@@global.cte_max_recursion_depth	@@global.eq_range_index_dive_limit	@@global.innodb_monitor_disable	@@global.innodb_max_dirty_pages_pct	@@global.init_connect	@@global.max_join_size
 -1	1	4	2	IGNORE_ERROR	###	4294967295	4294967295	latch	97.300000	SET autocommit=0	18446744073709551615
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 VARIABLE_NAME	VARIABLE_VALUE
 activate_all_roles_on_login	ON
@@ -117,8 +111,6 @@ SELECT @@global.optimizer_trace_offset, @@global.activate_all_roles_on_login,
 @@global.max_join_size;
 @@global.optimizer_trace_offset	@@global.activate_all_roles_on_login	@@global.auto_increment_increment	@@global.auto_increment_offset	@@global.binlog_error_action	@@global.binlog_format	@@global.cte_max_recursion_depth	@@global.eq_range_index_dive_limit	@@global.innodb_monitor_disable	@@global.innodb_max_dirty_pages_pct	@@global.init_connect	@@global.max_join_size
 -1	1	4	2	IGNORE_ERROR	###	4294967295	4294967295	latch	97.300000	SET autocommit=0	18446744073709551615
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 VARIABLE_NAME	VARIABLE_VALUE
 activate_all_roles_on_login	ON
@@ -143,7 +135,6 @@ innodb_monitor_disable = default,
 innodb_max_dirty_pages_pct = default, init_connect = default,
 max_join_size = default;
 Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 Warning	1230	Default value is not defined for this set option. Please specify correct counter or module name.
 #
 # Bug #27629719: SET PERSIST STORES TRUNCATED TIMESTAMPS
@@ -348,9 +339,9 @@ DROP USER u1;
 SELECT @@global.innodb_strict_mode, @@global.innodb_lock_wait_timeout;
 @@global.innodb_strict_mode	@@global.innodb_lock_wait_timeout
 1	50
-SELECT @@global.myisam_sort_buffer_size;
-@@global.myisam_sort_buffer_size
-8388608
+SELECT @@global.myisam_repair_threads, @@global.myisam_sort_buffer_size;
+@@global.myisam_repair_threads	@@global.myisam_sort_buffer_size
+1	8388608
 SELECT @@global.myisam_stats_method;
 @@global.myisam_stats_method
 nulls_unequal
@@ -363,6 +354,8 @@ SET PERSIST innodb_lock_wait_timeout = 110;
 SELECT @@global.innodb_lock_wait_timeout;
 @@global.innodb_lock_wait_timeout
 110
+SET GLOBAL myisam_repair_threads=27;
+SET PERSIST myisam_repair_threads=12;
 SET GLOBAL myisam_sort_buffer_size=16777216;
 SET PERSIST myisam_sort_buffer_size=default;
 SELECT @@global.innodb_lock_wait_timeout;
@@ -377,6 +370,9 @@ SELECT @@global.innodb_strict_mode;
 SELECT @@global.innodb_lock_wait_timeout;
 @@global.innodb_lock_wait_timeout
 110
+SELECT @@global.myisam_repair_threads;
+@@global.myisam_repair_threads
+12
 SELECT @@global.myisam_sort_buffer_size;
 @@global.myisam_sort_buffer_size
 8388608
@@ -387,10 +383,11 @@ SELECT variable_name FROM performance_schema.variables_info WHERE variable_sourc
 variable_name
 innodb_lock_wait_timeout
 innodb_strict_mode
+myisam_repair_threads
 myisam_sort_buffer_size
 myisam_stats_method
 SET GLOBAL innodb_strict_mode=default, innodb_lock_wait_timeout=default,
-myisam_stats_method=default;
+myisam_repair_threads=default, myisam_stats_method=default;
 RESET PERSIST;
 #
 # Bug #30030648: NO DEPRECATION WARNING ON SERVER RESTART FOR SET PERSISTED OPTIONS
@@ -472,63 +469,4 @@ skip_replica_start	PERSISTED
 skip_slave_start	PERSISTED
 RESET PERSIST;
 # restart:
-#
-# Bug #33388488: NO DEPRECATION WARNING ON SERVER RESTART IF TWO OR MORE
-# PERSISTED OPTIONS
-#
-SET PERSIST transaction_write_set_extraction='XXHASH64';
-Warnings:
-Warning	1287	'@@transaction_write_set_extraction' is deprecated and will be removed in a future release.
-SET PERSIST avoid_temporal_upgrade=TRUE;
-Warnings:
-Warning	1287	'@@avoid_temporal_upgrade' is deprecated and will be removed in a future release.
-# restart:--log_error=LOG_ERR --no-console
-include/assert_grep.inc [Assert that there is a warning at bootstrap when setting transaction_write_set_extraction]
-include/assert_grep.inc [Assert that there is a warning at bootstrap when setting avoid_temporal_upgrade]
-RESET PERSIST;
-SET PERSIST_ONLY transaction_write_set_extraction='XXHASH64';
-Warnings:
-Warning	1287	'@@transaction_write_set_extraction' is deprecated and will be removed in a future release.
-SET PERSIST_ONLY avoid_temporal_upgrade=TRUE;
-Warnings:
-Warning	1287	'@@avoid_temporal_upgrade' is deprecated and will be removed in a future release.
-# restart:--log_error=LOG_ERR --no-console
-include/assert_grep.inc [Assert that there is a warning at bootstrap when setting transaction_write_set_extraction]
-include/assert_grep.inc [Assert that there is a warning at bootstrap when setting avoid_temporal_upgrade]
-RESET PERSIST;
-# restart:
-#
-# Bug #34751419: component system variable behaves differently from command-line and set persist
-#
-call mtr.add_suppression("Duplicate variable name 'test_component.int_sys_var'");
-INSTALL COMPONENT "file://component_test_sys_var_service";
-SET PERSIST test_component.bool_sys_var = OFF;
-SET PERSIST test_component.bool_ro_sys_var = OFF;
-SET PERSIST replica_preserve_commit_order = OFF;
-# restart:
-UNINSTALL COMPONENT "file://component_test_sys_var_service";
-INSTALL COMPONENT "file://component_test_sys_var_service";
-# Test: Should be set to OFF
-SHOW VARIABLES LIKE 'test_component.bool_sys_var';
-Variable_name	Value
-test_component.bool_sys_var	OFF
-# Test read only: Should be set to OFF
-SHOW VARIABLES LIKE 'test_component.bool_ro_sys_var';
-Variable_name	Value
-test_component.bool_ro_sys_var	OFF
-RESET PERSIST test_component.bool_sys_var;
-RESET PERSIST test_component.bool_ro_sys_var;
-RESET PERSIST replica_preserve_commit_order;
-SET GLOBAL replica_preserve_commit_order = DEFAULT;
-UNINSTALL COMPONENT "file://component_test_sys_var_service";
-#
-# Bug #34897517: Can't set report_host to NULL
-#
-SET PERSIST_ONLY report_host = NULL;
-ERROR HY000: Trying to persist a NULL into a variable 'report_host' that's settable only on command line is not supported
-SET PERSIST_ONLY report_host = DEFAULT;
-ERROR HY000: Trying to persist a NULL into a variable 'report_host' that's settable only on command line is not supported
-SET PERSIST ssl_crl = NULL;
-RESET PERSIST ssl_crl;
-SET GLOBAL ssl_crl = DEFAULT;
 # End of the 8.0 tests

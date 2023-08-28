@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -162,6 +162,7 @@
 /* Code tests*/
 #cmakedefine HAVE_CLOCK_GETTIME 1
 #cmakedefine HAVE_CLOCK_REALTIME 1
+#cmakedefine STACK_DIRECTION @STACK_DIRECTION@
 #cmakedefine TIME_WITH_SYS_TIME 1
 #cmakedefine NO_FCNTL_NONBLOCK 1
 #cmakedefine HAVE_PAUSE_INSTRUCTION 1
@@ -189,9 +190,6 @@
 #define MACHINE_TYPE "@MYSQL_MACHINE_TYPE@"
 #cmakedefine LINUX_ALPINE 1
 #cmakedefine LINUX_SUSE
-#cmakedefine LINUX_RHEL6
-#cmakedefine LINUX_RHEL7
-#cmakedefine LINUX_RHEL8
 #cmakedefine HAVE_LINUX_LARGE_PAGES 1
 #cmakedefine HAVE_SOLARIS_LARGE_PAGES 1
 #cmakedefine HAVE_SOLARIS_ATOMIC 1
@@ -200,7 +198,6 @@
 /* This should mean case insensitive file system */
 #cmakedefine FN_NO_CASE_SENSE 1
 #cmakedefine APPLE_ARM 1
-#cmakedefine HAVE_BUILD_ID_SUPPORT
 
 /*
  * From main CMakeLists.txt
@@ -220,7 +217,6 @@
 #cmakedefine SCRAM_LIB_CONFIGURED
 #cmakedefine WITH_HYPERGRAPH_OPTIMIZER
 #cmakedefine KERBEROS_LIB_SSPI
-#cmakedefine WITH_SHOW_PARSE_TREE
 
 /* Lock Order */
 #cmakedefine WITH_LOCK_ORDER 1
@@ -235,8 +231,6 @@
 #cmakedefine PLUGINDIR "@PLUGINDIR@"
 #cmakedefine DEFAULT_SYSCONFDIR "@DEFAULT_SYSCONFDIR@"
 #cmakedefine DEFAULT_TMPDIR @DEFAULT_TMPDIR@
-#cmakedefine MYSQL_ICU_DATADIR "@MYSQL_ICU_DATADIR@"
-#cmakedefine ICUDT_DIR "@ICUDT_DIR@"
 /*
  * Readline
  */
@@ -292,7 +286,6 @@
 #cmakedefine DISABLE_PSI_METADATA 1
 #cmakedefine DISABLE_PSI_MEMORY 1
 #cmakedefine DISABLE_PSI_TRANSACTION 1
-#cmakedefine DISABLE_PSI_SERVER_TELEMETRY_TRACES 1
 
 /*
  * MySQL version
@@ -331,6 +324,10 @@
 #define HAVE_FCNTL_H 1
 #define HAVE_GETADDRINFO 1
 #define HAVE_INTTYPES_H 1
+/* libevent's select.c is not Windows compatible */
+#ifndef _WIN32
+#define HAVE_SELECT 1
+#endif
 #define HAVE_SIGNAL_H 1
 #define HAVE_STDARG_H 1
 #define HAVE_STDINT_H 1
@@ -360,8 +357,5 @@
 
 /* ARM crc32 support */
 #cmakedefine HAVE_ARMV8_CRC32_INTRINSIC @HAVE_ARMV8_CRC32_INTRINSIC@
-
-/* sasl_client_done support */
-#cmakedefine SASL_CLIENT_DONE_SUPPORTED @SASL_CLIENT_DONE_SUPPORTED@
 
 #endif

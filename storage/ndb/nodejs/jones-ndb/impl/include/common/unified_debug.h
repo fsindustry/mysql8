@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+ Copyright (c) 2012, 2021, Oracle and/or its affiliates.
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,6 @@
 #define NODEJS_ADAPTER_INCLUDE_UNIFIED_DEBUG_H
 
 #include <assert.h>
-#include "adapter_global.h"
 
 /* Unified debugging library for C++ and JavaScript. 
    JavaScript code can control debugging output. 

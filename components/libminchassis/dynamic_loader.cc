@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/dynamic_loader.h>
 #include <mysql/components/services/dynamic_loader_scheme_file.h>
-#include <mysql/components/services/dynamic_loader_service_notification.h>
 #include <mysql/components/services/mysql_runtime_error_service.h>
 #include <mysql/components/services/registry.h>
 #include <mysqld_error.h>
@@ -58,7 +57,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
     i.e. no encapsulation
   3. There's no explicit set of dependencies of a plugin, thus it's
     hard to initialize them properly
-  4. Plugins require a running server to operate.
+  4. Plusing require a running server to operate.
 
   The component infrastructure aims at allowing the MySQL server subsystems
   to be encapsulated into a set of logical components. Additional components
@@ -165,7 +164,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
   which accepts a path to a dynamic library to load components
   from using the OS dynamic library APIs. This dynamic loader scheme
   implementation does not rely on any server functionality and hence can
-  be placed into the component infrastructure core (a.k.a. the minimal
+  be placed into the component infrastructure core (a.k.a. the mimimal
   chassis).
 
   An additional service implementation, the path filter dynamic Loader
@@ -233,7 +232,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
   Note: minimal chassis support the native implementation of rwlocks and
   trylocks and it doesn't support the prlock because the prlock native
-  implementation depends on mysql server code.
+  implementaion depends on mysql server code.
 
   @section sect_components_layering_server_component The Server Component
 
@@ -277,7 +276,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
   Plugins do implement plugin APIs and may choose to call plugin service
   APIs exposed by the server. But in reality they have access to all of
   the server binary global symbols. So most if not all plugins choose to
-  use these instead of confining themselves into the (admittedly limited
+  use these instead of confining themselves into the (admitedly limited
   set of) plugin APIs available.
 
   The above makes plugins an integral part of the server codebase, more
@@ -337,7 +336,7 @@ void mysql_dynamic_loader_imp::init() {
 void mysql_dynamic_loader_imp::deinit() {
   /* Leave scope and lock before destroying it. */
   {
-    const minimal_chassis::rwlock_scoped_lock lock(
+    minimal_chassis::rwlock_scoped_lock lock(
         &mysql_dynamic_loader_imp::LOCK_dynamic_loader, true, __FILE__,
         __LINE__);
 
@@ -402,7 +401,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::load,
   try {
     /* Acquire write lock for entire process, possibly this could be
       optimized, but must be done with care. */
-    const minimal_chassis::rwlock_scoped_lock lock(
+    minimal_chassis::rwlock_scoped_lock lock(
         &mysql_dynamic_loader_imp::LOCK_dynamic_loader, true, __FILE__,
         __LINE__);
 
@@ -448,7 +447,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::load,
 DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::unload,
                    (const char *urns[], int component_count)) {
   try {
-    const minimal_chassis::rwlock_scoped_lock lock(
+    minimal_chassis::rwlock_scoped_lock lock(
         &mysql_dynamic_loader_imp::LOCK_dynamic_loader, true, __FILE__,
         __LINE__);
 
@@ -512,6 +511,14 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::iterator_create,
   return true;
 }
 
+/**
+  Releases Component iterator. Releases read lock on dynamic loader.
+
+  @param iterator Component iterator handle.
+  @return Status of performed operation
+  @retval false success
+  @retval true failure
+*/
 DEFINE_METHOD(void, mysql_dynamic_loader_imp::iterator_release,
               (my_h_component_iterator iterator)) {
   try {
@@ -673,7 +680,7 @@ bool mysql_dynamic_loader_imp::load_do_load_component_by_scheme(
 
   /* First load all components. */
   for (int it = 0; it < component_count; ++it) {
-    const my_string urn(urns[it]);
+    my_string urn(urns[it]);
 
     SERVICE_TYPE(dynamic_loader_scheme) * scheme_service;
 
@@ -695,42 +702,8 @@ bool mysql_dynamic_loader_imp::load_do_load_component_by_scheme(
         new mysql_component(loaded_component_raw, urn)));
   }
 
-  /*
-    Collect service names before actually loading components.
-
-    This is required because as a part of load_do_commit(),
-    mysql_component objects will be moved from loaded_component
-    to mysql_dynamic_loader_imp::components_list.
-
-    Thus, if load_do_collect_services_provided() returns success,
-    information about components would no longer be available in
-    loaded_components.
-
-    Note that it is safe access services vector *after*
-    load_do_collect_services_provided() because we use std::move
-    to move already created mysql_component object from
-    loaded_components to mysql_dynamic_loader_imp::components_list.
-    Thus, pointers stored in services vector will still be valid
-    after returning from load_do_collect_services_provided.
-  */
-  std::vector<const char *> services;
-
   bool res = mysql_dynamic_loader_imp::load_do_collect_services_provided(
-      loaded_components, services);
-
-  if (!res) {
-    /* Notify implementer of post_service_load_notification if any */
-    my_service<SERVICE_TYPE(dynamic_loader_services_loaded_notification)>
-        post_load_notification("dynamic_loader_services_loaded_notification",
-                               &imp_mysql_minimal_chassis_registry);
-    if (post_load_notification.is_valid()) {
-      /*
-        At this point we cannot abort the operation
-      */
-      (void)post_load_notification->notify(services.data(), services.size());
-    }
-  }
-
+      loaded_components);
   if (!res) {
     guard.commit();
   }
@@ -743,15 +716,12 @@ bool mysql_dynamic_loader_imp::load_do_load_component_by_scheme(
   other Components dependencies.
 
   @param loaded_components List of Components to continue load of.
-  @param services_loaded   List of services loaded
-
   @return Status of performed operation
   @retval false success
   @retval true failure
 */
 bool mysql_dynamic_loader_imp::load_do_collect_services_provided(
-    std::vector<std::unique_ptr<mysql_component>> &loaded_components,
-    std::vector<const char *> &services_loaded) {
+    std::vector<std::unique_ptr<mysql_component>> &loaded_components) {
   /* Set of names of services without implementation names that
     specified components provide. */
   std::set<my_string> services_provided;
@@ -761,7 +731,6 @@ bool mysql_dynamic_loader_imp::load_do_collect_services_provided(
        loaded_components) {
     for (const mysql_service_ref_t *service_provided :
          loaded_component->get_provided_services()) {
-      services_loaded.push_back(service_provided->name);
       const char *dot_position = strchr(service_provided->name, '.');
       if (dot_position == nullptr) {
         services_provided.insert(my_string(service_provided->name));
@@ -885,8 +854,10 @@ bool mysql_dynamic_loader_imp::load_do_resolve_dependencies(
   /* List of services acquired for component dependencies. */
   std::vector<my_h_service *> acquired_services;
   auto guard = create_scope_guard([&acquired_services]() {
-    for (my_h_service *service_storage : acquired_services)
+    for (my_h_service *service_storage : acquired_services) {
       mysql_registry_imp::release(*service_storage);
+      *service_storage = nullptr;
+    }
   });
 
   /* Acquire services to meet component dependencies. */
@@ -1004,7 +975,7 @@ bool mysql_dynamic_loader_imp::unload_do_list_components(const char *urns[],
 
   /* Lookup for components by URNs specified. */
   for (int it = 0; it < component_count; ++it) {
-    const my_string urn = my_string(urns[it]);
+    my_string urn = my_string(urns[it]);
     my_component_registry::iterator component_it =
         mysql_dynamic_loader_imp::components_list.find(urn.c_str());
     /* Return error if any component is not loaded. */
@@ -1161,33 +1132,8 @@ bool mysql_dynamic_loader_imp::unload_do_lock_provided_services(
     const std::map<const void *, std::vector<mysql_component *>>
         &dependency_graph,
     scheme_service_map &scheme_services) {
-  {
-    /*
-      We do this within a scope to make sure that service is released
-      before unload continues. Otherwise, a component that provides
-      dynamic_loader_services_unload_notification can never be unloaded.
-    */
-    my_service<SERVICE_TYPE(dynamic_loader_services_unload_notification)>
-        pre_unload_notification("dynamic_loader_services_unload_notification",
-                                &imp_mysql_minimal_chassis_registry);
-
-    if (pre_unload_notification.is_valid()) {
-      std::vector<const char *> services;
-      for (auto &one : components_to_unload) {
-        for (const mysql_service_ref_t *service :
-             one->get_provided_services()) {
-          services.push_back(service->name);
-        }
-      }
-
-      if (pre_unload_notification->notify(services.data(), services.size()))
-        return true;
-    }
-  }
-
-  /*
-    We do lock the whole registry, as we don't have yet any better granulation.
-  */
+  /* We do lock the whole registry, as we don't have yet any better granulation.
+   */
   minimal_chassis::rwlock_scoped_lock lock =
       mysql_registry_imp::lock_registry_for_write();
   return mysql_dynamic_loader_imp::

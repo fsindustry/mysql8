@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -35,12 +35,9 @@
 #include <stdexcept>  // logic_error
 #include <thread>
 #include <type_traits>  // decay_t, enable_if
-#include <typeindex>
 #include <unordered_map>
-#include <utility>
 
 #include "my_compiler.h"
-#include "mysql/harness/net_ts/impl/callstack.h"
 #include "mysql/harness/net_ts/netfwd.h"
 
 namespace net {
@@ -213,14 +210,16 @@ class execution_context {
     std::unique_ptr<service, void (*)(service *)> ptr_;
   };
 
-  using service_key_type = std::type_index;
+  using service_key_type = void (*)();
 
   /**
-   * maps selected type to unique identifier.
+   * create one function per Key and return its address.
+   *
+   * As it is static, the address is constant and can be used as key.
    */
   template <class Key>
   static service_key_type service_key() {
-    return std::type_index(typeid(Key));
+    return reinterpret_cast<service_key_type>(&service_key<Key>);
   }
 
   // mutex for services_, keys_
@@ -895,9 +894,7 @@ class strand {
 
   inner_executor_type get_inner_executor() const noexcept { return inner_ex_; }
 
-  bool running_in_this_thread() const noexcept {
-    return impl::Callstack<strand>::contains(this) != nullptr;
-  }
+  bool running_in_this_thread() const noexcept;
 
   execution_context &context() const noexcept { return inner_ex_.context(); }
 
@@ -905,11 +902,7 @@ class strand {
   void on_work_finished() const noexcept { inner_ex_.on_work_finished(); }
 
   template <class Func, class ProtoAllocator>
-  void dispatch(Func &&f, const ProtoAllocator & /* a */) const {
-    if (running_in_this_thread()) {
-      std::forward<Func>(f)();
-    }
-  }
+  void dispatch(Func &&f, const ProtoAllocator &a) const;
   template <class Func, class ProtoAllocator>
   void post(Func &&f, const ProtoAllocator &a) const;
   template <class Func, class ProtoAllocator>
@@ -917,9 +910,6 @@ class strand {
 
  private:
   Executor inner_ex_;
-
-  bool running_{false};
-  std::queue<std::function<void()>> jobs_;
 };
 
 template <class Executor>

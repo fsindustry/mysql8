@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,9 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mysqlrouter/routing_plugin_export.h"
-
 #include <atomic>
+#include <iostream>
 #include <mutex>
 #include <stdexcept>
 #include <vector>
@@ -37,28 +36,25 @@
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "mysql/harness/tls_server_context.h"
-#include "mysql/harness/utility/string.h"  // join, string_format
+#include "mysql/harness/utility/string.h"  // join
 #include "mysql_routing.h"
-#include "mysqlrouter/connection_pool.h"
-#include "mysqlrouter/connection_pool_component.h"
 #include "mysqlrouter/destination.h"
 #include "mysqlrouter/io_component.h"
 #include "mysqlrouter/routing_component.h"
-#include "mysqlrouter/supported_routing_options.h"
+#include "mysqlrouter/routing_export.h"  // ROUTING_EXPORT
+#include "mysqlrouter/utils.h"           // string_format
 #include "plugin_config.h"
-#include "scope_guard.h"
 #include "ssl_mode.h"
 
 using mysql_harness::AppInfo;
 using mysql_harness::ConfigSection;
 using mysqlrouter::URI;
 using mysqlrouter::URIError;
+using std::string;
 IMPORT_LOG_FUNCTIONS()
 
 const mysql_harness::AppInfo *g_app_info;
-static const std::string kSectionName = "routing";
-std::mutex g_dest_tls_contexts_mtx;
-std::vector<std::unique_ptr<DestinationTlsContext>> g_dest_tls_contexts;
+static const string kSectionName = "routing";
 
 static void validate_socket_info(const std::string &err_prefix,
                                  const mysql_harness::ConfigSection *section,
@@ -152,7 +148,7 @@ static void init(mysql_harness::PluginFuncEnv *env) {
         if (section->name == kSectionName) {
           io_context_work_guards.emplace_back(IoComponent::get_instance());
 
-          const auto err_prefix = mysql_harness::utility::string_format(
+          const auto err_prefix = mysqlrouter::string_format(
               "in [%s%s%s]: ", section->name.c_str(),
               section->key.empty() ? "" : ":", section->key.c_str());
           // Check the configuration
@@ -251,7 +247,7 @@ static std::string get_default_ciphers() {
 static void start(mysql_harness::PluginFuncEnv *env) {
   const mysql_harness::ConfigSection *section = get_config_section(env);
 
-  std::string name;
+  string name;
   if (!section->key.empty()) {
     name = section->name + ":" + section->key;
   } else {
@@ -261,11 +257,15 @@ static void start(mysql_harness::PluginFuncEnv *env) {
   try {
     RoutingPluginConfig config(section);
 
+    // connect_timeout is in seconds, we want milli's
+    //
+    std::chrono::milliseconds destination_connect_timeout(
+        config.connect_timeout * 1000);
+    std::chrono::milliseconds client_connect_timeout(
+        config.client_connect_timeout * 1000);
+
     // client side TlsContext.
-    TlsServerContext source_tls_ctx{TlsVersion::TLS_1_2, TlsVersion::AUTO,
-                                    config.client_ssl_session_cache_mode,
-                                    config.client_ssl_session_cache_size,
-                                    config.client_ssl_session_cache_timeout};
+    TlsServerContext source_tls_ctx;
 
     if (config.source_ssl_mode != SslMode::kDisabled &&
         config.source_ssl_mode != SslMode::kPassthrough) {
@@ -282,8 +282,8 @@ static void start(mysql_harness::PluginFuncEnv *env) {
                                                         config.source_ssl_cert);
       if (!res) {
         throw std::system_error(
-            res.error(), "loading client_ssl_cert '" + config.source_ssl_cert +
-                             "' and client_ssl_key '" + config.source_ssl_key +
+            res.error(), "loading client_ssl_cert '" + config.source_ssl_key +
+                             "' and client_ssl_key '" + config.source_ssl_cert +
                              "' failed");
       }
 
@@ -325,10 +325,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
       }
     }
 
-    auto dest_tls_context = std::make_unique<DestinationTlsContext>(
-        config.server_ssl_session_cache_mode,
-        config.server_ssl_session_cache_size,
-        config.server_ssl_session_cache_timeout);
+    DestinationTlsContext dest_tls_ctx;
     if (config.dest_ssl_mode != SslMode::kDisabled) {
       // validate the config-values one time
       TlsServerContext tls_server_ctx;
@@ -342,7 +339,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
           throw std::system_error(res.error(), "setting server_ssl_cipher=" +
                                                    dest_ssl_cipher + " failed");
         }
-        dest_tls_context->ciphers(dest_ssl_cipher);
+        dest_tls_ctx.ciphers(dest_ssl_cipher);
       }
       if (!config.dest_ssl_curves.empty()) {
         const auto res = tls_server_ctx.curves_list(config.dest_ssl_curves);
@@ -357,7 +354,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
                                                      " failed");
           }
         }
-        dest_tls_context->curves(config.dest_ssl_curves);
+        dest_tls_ctx.curves(config.dest_ssl_curves);
       }
       if (!config.dest_ssl_ca_file.empty() || !config.dest_ssl_ca_dir.empty()) {
         if (!config.dest_ssl_ca_dir.empty()) {
@@ -373,8 +370,8 @@ static void start(mysql_harness::PluginFuncEnv *env) {
                                " and server_ssl_capath=" +
                                config.dest_ssl_ca_dir + " failed");
         }
-        dest_tls_context->ca_file(config.dest_ssl_ca_file);
-        dest_tls_context->ca_path(config.dest_ssl_ca_dir);
+        dest_tls_ctx.ca_file(config.dest_ssl_ca_file);
+        dest_tls_ctx.ca_path(config.dest_ssl_ca_dir);
       }
 
       if (!config.dest_ssl_crl_file.empty() ||
@@ -394,55 +391,25 @@ static void start(mysql_harness::PluginFuncEnv *env) {
                   " failed");
         }
 
-        dest_tls_context->crl_file(config.dest_ssl_crl_file);
-        dest_tls_context->crl_path(config.dest_ssl_crl_dir);
+        dest_tls_ctx.crl_file(config.dest_ssl_crl_file);
+        dest_tls_ctx.crl_path(config.dest_ssl_crl_dir);
       }
 
-      dest_tls_context->verify(config.dest_ssl_verify);
-    }
-
-    if (config.connection_sharing == 1) {
-      if (config.source_ssl_mode == SslMode::kPassthrough) {
-        log_warning(
-            "[%s].connection_sharing=1 has been ignored, as "
-            "client_ssl_mode=PASSTHROUGH.",
-            name.c_str());
-      } else if (config.source_ssl_mode == SslMode::kPreferred &&
-                 config.dest_ssl_mode == SslMode::kAsClient) {
-        log_warning(
-            "[%s].connection_sharing=1 has been ignored, as "
-            "client_ssl_mode=PREFERRED and server_ssl_mode=AS_CLIENT.",
-            name.c_str());
-      }
-
-      auto &pool_component = ConnectionPoolComponent::get_instance();
-      auto default_pool_name = pool_component.default_pool_name();
-      auto default_pool = pool_component.get(default_pool_name);
-      if (!default_pool) {
-        log_warning(
-            "[%s].connection_sharing=1 has been ignored, as "
-            "there is no [connection_pool]",
-            name.c_str());
-      } else if (default_pool->max_pooled_connections() == 0) {
-        log_warning(
-            "[%s].connection_sharing=1 has been ignored, as "
-            "[connection_pool].max_idle_server_connections=0",
-            name.c_str());
-      }
-
-      if (config.protocol == Protocol::Type::kXProtocol) {
-        log_warning("[%s].connection_sharing=1 has been ignored, as protocol=x",
-                    name.c_str());
-      }
+      dest_tls_ctx.verify(config.dest_ssl_verify);
     }
 
     net::io_context &io_ctx = IoComponent::get_instance().io_context();
     auto r = std::make_shared<MySQLRouting>(
-        config, io_ctx, name,
+        io_ctx, config.routing_strategy, config.bind_address.port(),
+        config.protocol, config.mode, config.bind_address.address(),
+        config.named_socket, name, config.max_connections,
+        destination_connect_timeout, config.max_connect_errors,
+        client_connect_timeout, config.net_buffer_length,
+        config.thread_stack_size, config.source_ssl_mode,
         config.source_ssl_mode != SslMode::kDisabled ? &source_tls_ctx
                                                      : nullptr,
-        config.dest_ssl_mode != SslMode::kDisabled ? dest_tls_context.get()
-                                                   : nullptr);
+        config.dest_ssl_mode,
+        config.dest_ssl_mode != SslMode::kDisabled ? &dest_tls_ctx : nullptr);
 
     try {
       // don't allow rootless URIs as we did already in the
@@ -451,18 +418,8 @@ static void start(mysql_harness::PluginFuncEnv *env) {
     } catch (const URIError &) {
       r->set_destinations_from_csv(config.destinations);
     }
-    MySQLRoutingComponent::get_instance().register_route(section->key, r);
-
-    Scope_guard guard{[section_key = section->key]() {
-      MySQLRoutingComponent::get_instance().erase(section_key);
-    }};
-
-    {
-      std::lock_guard<std::mutex> lock{g_dest_tls_contexts_mtx};
-      g_dest_tls_contexts.emplace_back(std::move(dest_tls_context));
-    }
-
-    r->run(env);
+    MySQLRoutingComponent::get_instance().init(section->key, r);
+    r->start(env);
   } catch (const std::invalid_argument &exc) {
     set_error(env, mysql_harness::kConfigInvalidArgument, "%s", exc.what());
   } catch (const std::runtime_error &exc) {
@@ -473,7 +430,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
   }
 
   {
-    // as the r->run() shuts down all in parallel, synchronize the access to
+    // as the r->start() shuts down all in parallel, synchronize the access to
     std::lock_guard<std::mutex> lk(io_context_work_guard_mtx);
 
     io_context_work_guards.erase(io_context_work_guards.begin());
@@ -481,40 +438,30 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 }
 
 static void deinit(mysql_harness::PluginFuncEnv * /* env */) {
-  MySQLRoutingComponent::get_instance().deinit();
   // release all that may still be taken
   io_context_work_guards.clear();
-
-  std::lock_guard<std::mutex> lock{g_dest_tls_contexts_mtx};
-  g_dest_tls_contexts.clear();
 }
 
-static const std::array<const char *, 6> required = {{
+static const std::array<const char *, 4> required = {{
     "logger",
     "router_protobuf",
     "router_openssl",
     "io",
-    "connection_pool",
-    "destination_status",
 }};
 
-mysql_harness::Plugin ROUTING_PLUGIN_EXPORT harness_plugin_routing = {
+mysql_harness::Plugin ROUTING_EXPORT harness_plugin_routing = {
     mysql_harness::PLUGIN_ABI_VERSION,       // abi-version
     mysql_harness::ARCHITECTURE_DESCRIPTOR,  // arch
     "Routing MySQL connections between MySQL clients/connectors and "
     "servers",  // name
     VERSION_NUMBER(0, 0, 1),
     // requires
-    required.size(),
-    required.data(),
+    required.size(), required.data(),
     // conflicts
-    0,
-    nullptr,
+    0, nullptr,
     init,     // init
     deinit,   // deinit
     start,    // start
     nullptr,  // stop
     true,     // declares_readiness
-    routing_supported_options.size(),
-    routing_supported_options.data(),
 };

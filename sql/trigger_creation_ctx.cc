@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,10 +29,10 @@
 #include <atomic>
 
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysqld_error.h"
 #include "sql/derror.h"
 #include "sql/log.h"
@@ -40,8 +40,6 @@
 #include "sql/sql_db.h"  // get_default_db_collation()
 #include "sql/sql_error.h"
 #include "sql/system_variables.h"
-
-struct CHARSET_INFO;
 
 Trigger_creation_ctx *Trigger_creation_ctx::create(
     THD *thd, const LEX_CSTRING &db_name, const LEX_CSTRING &table_name,

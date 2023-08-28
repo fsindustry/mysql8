@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -114,7 +114,7 @@ vector<my_option> Abstract_options_provider::generate_options() {
 
   vector<my_option> res;
   for (vector<I_option *>::iterator it = this->m_options_created.begin();
-       it != this->m_options_created.end(); ++it) {
+       it != this->m_options_created.end(); it++) {
     res.push_back((*it)->get_my_option());
   }
 
@@ -128,7 +128,7 @@ Abstract_options_provider::Abstract_options_provider()
 
 Abstract_options_provider::~Abstract_options_provider() {
   for (vector<I_option *>::iterator it = this->m_options_created.begin();
-       it != this->m_options_created.end(); ++it) {
+       it != this->m_options_created.end(); it++) {
     delete *it;
   }
 }
@@ -146,7 +146,7 @@ void Abstract_options_provider::notify_option_name_changed(I_option *source,
     this->m_name_usage.erase(this->m_name_usage.find(old_name));
   }
 
-  const string new_name = source->get_my_option().name;
+  string new_name = source->get_my_option().name;
 
   // Try to find existing option with that name.
   map<string, I_option *>::iterator name_item =
@@ -178,7 +178,7 @@ void Abstract_options_provider::notify_option_optid_changed(I_option *source,
     this->m_optid_usage.erase(this->m_optid_usage.find(old_optid));
   }
 
-  const uint32 new_optid = source->get_my_option().id;
+  uint32 new_optid = source->get_my_option().id;
 
   // Try to find existing option with that optid.
   map<uint32, I_option *>::iterator optid_item =
@@ -186,7 +186,7 @@ void Abstract_options_provider::notify_option_optid_changed(I_option *source,
 
   // Report error if already used.
   if (optid_item != this->m_optid_usage.end()) {
-    const string name = source->get_my_option().name;
+    string name = source->get_my_option().name;
 
     std::cerr << "Cannot register new option \"" << name
               << "\" as it collides with existing one with following name \""

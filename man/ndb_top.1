@@ -2,12 +2,12 @@
 .\"     Title: ndb_top
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/21/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "NDB_TOP" "1" "06/21/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "NDB_TOP" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -176,7 +176,7 @@ T}:T{
 Show ASCII graphs in color; use --skip-colors to disable
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -185,7 +185,7 @@ T}:T{
 Read given file after global files are read
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -194,7 +194,7 @@ T}:T{
 Read default options from given file only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -203,7 +203,7 @@ T}:T{
 Also read groups with concat(group, suffix)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -214,7 +214,7 @@ T}:T{
 Display data using graphs; use --skip-graphs to disable
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -223,18 +223,18 @@ T}:T{
 Show program usage information
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--host=string\fR,
+\fB--host[=name]\fR,
 .PP
-\fB \fR\fB-h string\fR\fB \fR
+\fB \fR\fB-h\fR\fB \fR
 T}:T{
 Host name or IP address of MySQL Server to connect to
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -243,7 +243,7 @@ T}:T{
 Read given path from login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -254,7 +254,7 @@ T}:T{
 Show measured load by thread
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -263,18 +263,18 @@ T}:T{
 Do not read default options from any option file other than login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--node-id=#\fR,
+\fB--node-id[=#]\fR,
 .PP
-\fB \fR\fB-n #\fR\fB \fR
+\fB \fR\fB-n\fR\fB \fR
 T}:T{
 Watch node having this node ID
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -285,30 +285,30 @@ T}:T{
 Show load measured by operating system
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--password=password\fR,
+\fB--password[=password]\fR,
 .PP
-\fB \fR\fB-p password\fR\fB \fR
+\fB \fR\fB-p\fR\fB \fR
 T}:T{
 Connect using this password
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--port=#\fR,
+\fB--port[=#]\fR,
 .PP
-\fB-P #\fR
+\fB-P\fR
 (>=7.6.6)
 T}:T{
 Port number to use when connecting to MySQL Server
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -317,29 +317,29 @@ T}:T{
 Print program argument list and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--sleep-time=#\fR,
+\fB--sleep-time[=seconds]\fR,
 .PP
-\fB \fR\fB-s #\fR\fB \fR
+\fB \fR\fB-s\fR\fB \fR
 T}:T{
 Time to wait between display refreshes, in seconds
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--socket=path\fR,
+\fB--socket\fR,
 .PP
-\fB \fR\fB-S path\fR\fB \fR
+\fB \fR\fB-S\fR\fB \fR
 T}:T{
 Socket file to use for connection
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -350,7 +350,7 @@ T}:T{
 Sort threads by usage; use --skip-sort to disable
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -362,7 +362,7 @@ T}:T{
 Display data using text
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -371,18 +371,18 @@ T}:T{
 Show program usage information; same as --help
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--user=name\fR,
+\fB--user[=name]\fR,
 .PP
-\fB \fR\fB-u name\fR\fB \fR
+\fB \fR\fB-u\fR\fB \fR
 T}:T{
 Connect as this MySQL user
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 .TE
 .sp 1
@@ -400,11 +400,23 @@ Additional Options
 \fB\-c\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --color
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -527,11 +539,23 @@ Also read groups with concat(group, suffix)\&.
 \fB\-g\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --graph
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -554,11 +578,23 @@ must be true; both options may be true\&.
 \fB\-?\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --help
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -583,7 +619,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---host=string
+--host[=name]
 T}
 T{
 Type
@@ -646,11 +682,23 @@ Read given path from login file\&.
 \fB\-m\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --measured-load
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -699,7 +747,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---node-id=#
+--node-id[=#]
 T}
 T{
 Type
@@ -728,11 +776,23 @@ Watch the data node having this node ID\&.
 \fB\-o\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --os-load
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -759,12 +819,12 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---password=password
+--password[=password]
 T}
 T{
 Type
 T}:T{
-String
+Boolean
 T}
 T{
 Default Value
@@ -799,7 +859,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---port=#
+--port[=#]
 T}
 T{
 Type
@@ -860,7 +920,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---sleep-time=#
+--sleep-time[=seconds]
 T}
 T{
 Type
@@ -886,7 +946,7 @@ Time to wait between display refreshes, in seconds\&.
 .IP \(bu 2.3
 .\}
 \fB\-\-socket=\fR\fB\fIpath/to/file\fR\fR,
-\fB\-S\fR
+\fI\-S\fR
 .TS
 allbox tab(:);
 lB l
@@ -895,7 +955,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---socket=path
+--socket
 T}
 T{
 Type
@@ -924,11 +984,23 @@ Use the specified socket file for the connection\&.
 \fB\-r\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --sort
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -949,11 +1021,23 @@ to disable\&.
 \fB\-t\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --text
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -977,11 +1061,23 @@ in previous versions of NDB Cluster, but this is no longer supported\&.)
 \fB\-\-usage\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --usage
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -1007,7 +1103,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---user=name
+--user[=name]
 T}
 T{
 Type
@@ -1036,7 +1132,7 @@ data node under a moderate load\&. Here, the program has been invoked using
 \fB\-x\fR
 to provide both text and graph output:
 .PP
-\fBFigure\ \&23.5.\ \&ndb_top Running in Terminal\fR
+\fBFigure\ \&23.26.\ \&ndb_top Running in Terminal\fR
 .sp
 .RS 4
 [IMAGE]\&\s-2\u[1]\d\s+2
@@ -1046,12 +1142,13 @@ Display from ndb_top, running in a
             the utilized resources\&.
 .RE
 .PP
+Beginning with NDB 8\&.0\&.20,
 \fBndb_top\fR
 also shows spin times for threads, displayed in green\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

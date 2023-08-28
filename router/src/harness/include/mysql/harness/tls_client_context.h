@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,11 +27,7 @@
 
 #include "mysql/harness/tls_context.h"
 
-#include <chrono>
-#include <list>
-#include <mutex>
 #include <system_error>
-#include <vector>
 
 #include "mysql/harness/stdx/expected.h"
 #include "mysql/harness/tls_export.h"
@@ -41,21 +37,7 @@
  */
 class HARNESS_TLS_EXPORT TlsClientContext : public TlsContext {
  public:
-  struct SslSessionDeleter {
-    void operator()(SSL_SESSION *sess) { SSL_SESSION_free(sess); }
-  };
-  using SslSession = std::unique_ptr<SSL_SESSION, SslSessionDeleter>;
-
-  TlsClientContext(
-      TlsVerify mode = TlsVerify::PEER, bool session_cache_mode = false,
-      size_t session_cache_size = 0,
-      std::chrono::seconds session_cache_timeout = std::chrono::seconds(0));
-
-  TlsClientContext(const TlsClientContext &) = delete;
-  TlsClientContext(TlsClientContext &&) = default;
-  TlsClientContext &operator=(const TlsClientContext &) = delete;
-  TlsClientContext &operator=(TlsClientContext &&) = default;
-  ~TlsClientContext();
+  TlsClientContext(TlsVerify mode = TlsVerify::PEER);
 
   /**
    * set cipher-list.
@@ -99,33 +81,6 @@ class HARNESS_TLS_EXPORT TlsClientContext : public TlsContext {
    */
   stdx::expected<void, std::error_code> verify_hostname(
       const std::string &server_host);
-
-  /**
-   * add session.
-   */
-  stdx::expected<void, std::error_code> add_session(SSL_SESSION *sess);
-  /**
-   * remove session.
-   */
-  stdx::expected<void, std::error_code> remove_session(SSL_SESSION *sess);
-  /**
-   * get session.
-   */
-  stdx::expected<SSL_SESSION *, std::error_code> get_session();
-
- private:
-  struct Sessions {
-    using SessionId = std::vector<uint8_t>;
-    using SessionData = std::pair<SessionId, SslSession>;
-
-    std::list<SessionData> sessions_;
-    std::mutex mtx_;
-  };
-  std::unique_ptr<Sessions> sessions_;
-
-  bool session_cache_mode_;
-  size_t session_cache_size_;
-  std::chrono::seconds session_cache_timeout_;
 };
 
 #endif

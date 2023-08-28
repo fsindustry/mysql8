@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,6 @@
 #include <algorithm>  // std::find
 #include "binlog.h"   // mysql_bin_log
 #include "mysqld.h"   // key_rwlock_gtid_mode_lock
-#include "nulls.h"
 #include "sql/rpl_gtid.h"
 #include "sql/rpl_msr.h"  // channel_map
 

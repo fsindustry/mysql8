@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,8 +42,6 @@
 #include "sql/dd/string_type.h"                // dd::String_type
 #include "sql/dd/types/parameter.h"
 #include "sql/dd/types/weak_object.h"
-
-struct CHARSET_INFO;
 
 using dd::tables::Parameters;
 using dd::tables::Routines;
@@ -140,7 +138,6 @@ bool Routine_impl::restore_attributes(const Raw_record &r) {
   m_definition_utf8 = r.read_str(Routines::FIELD_DEFINITION_UTF8);
   m_parameter_str = r.read_str(Routines::FIELD_PARAMETER_STR);
   m_comment = r.read_str(Routines::FIELD_COMMENT);
-  m_external_language = r.read_str(Routines::FIELD_EXTERNAL_LANGUAGE);
 
   // Read definer user/host
   {
@@ -178,7 +175,6 @@ bool Routine_impl::store_attributes(Raw_record *r) {
          r->store(Routines::FIELD_PARAMETER_STR, m_parameter_str) ||
          r->store(Routines::FIELD_IS_DETERMINISTIC, m_is_deterministic) ||
          r->store(Routines::FIELD_SQL_DATA_ACCESS, m_sql_data_access) ||
-         r->store(Routines::FIELD_EXTERNAL_LANGUAGE, m_external_language) ||
          r->store(Routines::FIELD_SECURITY_TYPE, m_security_type) ||
          r->store(Routines::FIELD_DEFINER, definer.str()) ||
          r->store(Routines::FIELD_SQL_MODE, m_sql_mode) ||
@@ -206,7 +202,6 @@ void Routine_impl::debug_print(String_type &outb) const {
      << "m_name: " << name() << "; "
      << "m_routine_type: " << m_routine_type << "; "
      << "m_sql_data_access: " << m_sql_data_access << "; "
-     << "m_external_language: " << m_external_language << "; "
      << "m_security_type: " << m_security_type << "; "
      << "m_is_deterministic: " << m_is_deterministic << "; "
      << "m_sql_mode: " << m_sql_mode << "; "
@@ -275,7 +270,6 @@ Routine_impl::Routine_impl(const Routine_impl &src)
       m_definer_user(src.m_definer_user),
       m_definer_host(src.m_definer_host),
       m_comment(src.m_comment),
-      m_external_language(src.m_external_language),
       m_parameters(),
       m_schema_id(src.m_schema_id),
       m_client_collation_id(src.m_client_collation_id),
@@ -296,7 +290,7 @@ void Routine::create_mdl_key(enum_routine_type type,
                                   tables::Schemata::name_collation()));
   DBUG_EXECUTE_IF("simulate_lctn_two_case_for_schema_case_compare", {
     assert((lower_case_table_names == 2) ||
-           is_string_in_lowercase(schema_name, &my_charset_utf8mb3_tolower_ci));
+           is_string_in_lowercase(schema_name, &my_charset_utf8_tolower_ci));
   });
 #endif
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -75,7 +75,7 @@ class NDB_SCHEMA_OBJECT {
   mutable struct State {
     // Mutex protecting state
     std::mutex m_lock;
-    // Condition for communication between client and coordinator
+    // Condition for communication betwen client and coordinator
     std::condition_variable m_cond;
 
     // Use counter controlling lifecycle of the NDB_SCHEMA_OBJECT
@@ -86,9 +86,9 @@ class NDB_SCHEMA_OBJECT {
 
     // List of participant nodes in schema operation.
     // Used like this:
-    // 1) When coordinator receives the schema op event it adds all the
+    // 1) When coordinator recieves the schema op event it adds all the
     //    nodes currently subscribed as participants
-    // 2) When coordinator receives reply or failure from a participant it will
+    // 2) When coordinator recieves reply or failure from a participant it will
     //    be removed from the list
     // 3) When list of participants is empty the coordinator will
     //    send the final ack, clearing all slock bits(thus releasing also any
@@ -105,9 +105,9 @@ class NDB_SCHEMA_OBJECT {
     std::unordered_map<uint32, Participant> m_participants;
 
     // Set after coordinator has received replies from all participants and
-    // received the final ack which cleared all the slock bits
+    // recieved the final ack which cleared all the slock bits
     bool m_coordinator_completed{false};
-
+    bool m_coordinator_received_schema_op{false};
   } state;
 
   uint increment_use_count() const;
@@ -206,15 +206,10 @@ class NDB_SCHEMA_OBJECT {
   static size_t count_active_schema_ops();
 
   /**
-     @brief Register participants taking part in schema operation.
-     The function will check the schema operation doesn't already contain
-     participants, in such case the participants can't be registered.
-
+     @brief Add list of nodes to participants
      @param nodes List of nodes to add
-
-     @return true Could not register participants
    */
-  bool register_participants(const std::unordered_set<uint32> &nodes);
+  void register_participants(const std::unordered_set<uint32> &nodes) const;
 
   /**
      @brief Save the result received from a node
@@ -251,6 +246,19 @@ class NDB_SCHEMA_OBJECT {
   bool check_coordinator_completed() const;
 
   /**
+     @brief This function is used by Co-ordinator to acknowledge that it
+     received the schema operation sent by the schema distribution client
+  */
+  void coordinator_received_schema_op();
+
+  /**
+     @brief Check if the schema operation has been received by the Co-ordinator
+
+     @return true if Co-ordinator received the schema operation.
+  */
+  bool has_coordinator_received_schema_op() const;
+
+  /**
      @brief Check if any client should wakeup after subscribers have changed.
      This happens when node unsubscribes(one subscriber shutdown or fail) or
      when cluster connection is lost(all subscribers are removed)
@@ -266,12 +274,11 @@ class NDB_SCHEMA_OBJECT {
   /**
      @brief Check if schema operation has timed out and in such case mark all
      participants which haven't already completed as timedout.
-     @param is_client Indicates if it is the client checking timeout
      @param result The result to set on the participant
      @param message The message to set on the participant
-     @return true if timeout occurred (and all participants have completed)
+     @return true if timeout occured (and all participants have completed)
    */
-  bool check_timeout(bool is_client, int timeout_seconds, uint32 result,
+  bool check_timeout(int timeout_seconds, uint32 result,
                      const char *message) const;
 
   /**

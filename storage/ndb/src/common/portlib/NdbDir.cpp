@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,7 +57,7 @@ class DirIteratorImpl {
 
 public:
   DirIteratorImpl():
-    m_dirp(nullptr) {
+    m_dirp(NULL) {
      m_buf = new char[PATH_MAX];
   }
 
@@ -67,7 +67,7 @@ public:
   }
 
   int open(const char* path){
-    if ((m_dirp = opendir(path)) == nullptr){
+    if ((m_dirp = opendir(path)) == NULL){
       return -1;
     }
     m_path= path;
@@ -78,15 +78,15 @@ public:
   {
     if (m_dirp)
       closedir(m_dirp);
-    m_dirp = nullptr;
+    m_dirp = NULL;
   }
 
   const char* next_entry(bool& is_reg)
   {
     struct dirent* dp = readdir(m_dirp);
 
-    if (dp == nullptr)
-      return nullptr;
+    if (dp == NULL)
+      return NULL;
 
     is_reg = is_regular_file(dp);
     return dp->d_name;
@@ -110,7 +110,7 @@ class DirIteratorImpl {
 public:
   DirIteratorImpl():
     m_first(true),
-    m_find_handle(INVALID_HANDLE_VALUE) {}
+    m_find_handle(INVALID_HANDLE_VALUE) {};
 
   ~DirIteratorImpl() {
     close();
@@ -178,11 +178,11 @@ const char* NdbDir::Iterator::next_file(void)
 {
   bool is_reg;
   const char* name;
-  while((name = m_impl.next_entry(is_reg)) != nullptr){
+  while((name = m_impl.next_entry(is_reg)) != NULL){
     if (is_reg == true)
       return name; // Found regular file
   }
-  return nullptr;
+  return NULL;
 }
 
 const char* NdbDir::Iterator::next_entry(void)
@@ -205,8 +205,7 @@ mode_t NdbDir::o_x(void) { return IF_WIN(0, S_IXOTH); }
 
 
 bool
-NdbDir::create(const char *dir, mode_t mode [[maybe_unused]],
-               bool ignore_existing)
+NdbDir::create(const char *dir, mode_t mode, bool ignore_existing)
 {
 #ifdef _WIN32
   if (CreateDirectory(dir, NULL) == 0)
@@ -241,10 +240,9 @@ NdbDir::Temp::Temp()
 {
 #ifdef _WIN32
   DWORD len = GetTempPath(0, NULL);
-  char *tmp = new char[len];
-  if (GetTempPath(len, tmp) == 0)
+  m_path = new char[len];
+  if (GetTempPath(len, (char*)m_path) == 0)
     abort();
-  m_path = tmp;
 #else
   char* tmp = getenv("TMPDIR");
   if (tmp)
@@ -302,7 +300,7 @@ loop:
       return false;
     }
 
-    while ((name = iter.next_entry()) != nullptr)
+    while ((name = iter.next_entry()) != NULL)
     {
       if ((strcmp(".", name) == 0) || (strcmp("..", name) == 0))
         continue;
@@ -439,7 +437,7 @@ TAPTEST(DirIterator)
     CHECK(iter.open(path) == 0);
     const char* name;
     int num_files = 0;  
-    while((name = iter.next_file()) != nullptr)
+    while((name = iter.next_file()) != NULL)
     {
       //printf("%s\n", name);
       num_files++;
@@ -467,7 +465,7 @@ TAPTEST(DirIterator)
   CHECK(NdbDir::remove_recursive(path));
   CHECK(gone(path));
 
-  // Remove non existing directory(again)
+  // Remove non exisiting directory(again)
   CHECK(!NdbDir::remove_recursive(path));
   CHECK(gone(path));
 

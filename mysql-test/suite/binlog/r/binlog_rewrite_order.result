@@ -6,16 +6,10 @@ FLUSH LOGS;
 CREATE TABLE test (id int);
 CREATE TABLE tload (c1 TEXT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (2);
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 LOAD DATA INFILE '../../std_data/words.dat' INTO TABLE tload;
 SET SESSION SQL_LOG_BIN=0;
 CREATE DATABASE _other_;
@@ -23,12 +17,8 @@ USE _other_;
 SET SESSION SQL_LOG_BIN=1;
 CREATE TABLE t1 (a INT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (2);
 SET SQL_LOG_BIN=0;
 FLUSH LOGS;
@@ -54,8 +44,6 @@ DROP TABLE _other_.t1;
 include/assert.inc [Verify that other database was not rewritten]
 SET SQL_LOG_BIN=1;
 SET BINLOG_FORMAT=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 DROP SCHEMA db1;
 DROP SCHEMA schemaa;
 DROP SCHEMA _other_;
@@ -67,16 +55,10 @@ FLUSH LOGS;
 CREATE TABLE test (id int);
 CREATE TABLE tload (c1 TEXT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (2);
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 LOAD DATA INFILE '../../std_data/words.dat' INTO TABLE tload;
 SET SESSION SQL_LOG_BIN=0;
 CREATE DATABASE _other_;
@@ -84,12 +66,8 @@ USE _other_;
 SET SESSION SQL_LOG_BIN=1;
 CREATE TABLE t1 (a INT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (2);
 SET SQL_LOG_BIN=0;
 FLUSH LOGS;
@@ -115,8 +93,6 @@ DROP TABLE _other_.t1;
 include/assert.inc [Verify that other database was not rewritten]
 SET SQL_LOG_BIN=1;
 SET BINLOG_FORMAT=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 DROP SCHEMA schemab;
 DROP SCHEMA schemaa;
 DROP SCHEMA _other_;
@@ -128,16 +104,10 @@ FLUSH LOGS;
 CREATE TABLE test (id int);
 CREATE TABLE tload (c1 TEXT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO test (id) VALUES (2);
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 LOAD DATA INFILE '../../std_data/words.dat' INTO TABLE tload;
 SET SESSION SQL_LOG_BIN=0;
 CREATE DATABASE _other_;
@@ -145,12 +115,8 @@ USE _other_;
 SET SESSION SQL_LOG_BIN=1;
 CREATE TABLE t1 (a INT);
 SET SESSION BINLOG_FORMAT='STATEMENT';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (1);
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t1 VALUES (2);
 SET SQL_LOG_BIN=0;
 FLUSH LOGS;
@@ -176,12 +142,8 @@ DROP TABLE _other_.t1;
 include/assert.inc [Verify that other database was not rewritten]
 SET SQL_LOG_BIN=1;
 SET BINLOG_FORMAT=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 DROP SCHEMA my_new_fancy_and_very_long_schema_name;
 DROP SCHEMA schemaa;
 DROP SCHEMA _other_;
 RESET MASTER;
 SET BINLOG_FORMAT=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.

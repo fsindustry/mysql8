@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +35,8 @@
 #include <time.h>
 
 #include "keycache.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_base.h"
 #include "my_check_opt.h"
 #include "my_checksum.h"  // ha_checksum
@@ -42,7 +44,6 @@
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_macros.h"
-#include "mysql/strings/m_ctype.h"
 
 /*
   Limit max keys according to HA_MAX_POSSIBLE_KEY
@@ -140,7 +141,7 @@ struct MI_ISAMINFO /* Struct from h_info */
   char *data_file_name{nullptr}, *index_file_name{nullptr};
   uint keys{0};          /* Number of keys in use */
   uint options{};        /* HA_OPTION_... used */
-  int errkey{0},         /* With key was duplicated on err */
+  int errkey{0},         /* With key was dupplicated on err */
       sortkey{0};        /* clustered by this key */
   File filenr{0};        /* (uniq) filenr for datafile */
   time_t create_time{0}; /* When table was created */
@@ -163,7 +164,7 @@ struct MI_CREATE_INFO {
   bool with_auto_increment;
 };
 
-struct MI_INFO; /* For reference */
+struct MI_INFO; /* For referense */
 struct MYISAM_SHARE;
 struct MI_INFO;
 struct MI_KEY_PARAM;
@@ -377,6 +378,8 @@ struct MI_CHECK {
   const char *db_name{nullptr}, *table_name{nullptr};
   const char *op_name{nullptr};
   enum_mi_stats_method stats_method{MI_STATS_METHOD_NULLS_NOT_EQUAL};
+  mysql_mutex_t print_msg_mutex;
+  bool need_print_msg_lock{false};
 };
 
 struct SORT_FT_BUF {
@@ -396,6 +399,10 @@ struct SORT_INFO {
   uchar *buff{nullptr};
   SORT_KEY_BLOCKS *key_block{nullptr}, *key_block_end{nullptr};
   SORT_FT_BUF *ft_buf{nullptr};
+  /* sync things */
+  uint got_error{0}, threads_running{0};
+  mysql_mutex_t mutex;
+  mysql_cond_t cond;
 };
 
 /* functions in mi_check */
@@ -411,6 +418,8 @@ int mi_sort_index(MI_CHECK *param, MI_INFO *info, char *name,
                   bool no_copy_stat);
 int mi_repair_by_sort(MI_CHECK *param, MI_INFO *info, const char *name,
                       int rep_quick, bool no_copy_stat);
+int mi_repair_parallel(MI_CHECK *param, MI_INFO *info, const char *name,
+                       int rep_quick, bool no_copy_stat);
 int change_to_newfile(const char *filename, const char *old_ext,
                       const char *new_ext, myf myflags);
 int lock_file(MI_CHECK *param, File file, int lock_type, const char *filetype,

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +30,7 @@
 #include <string>
 #include <utility>
 
+#include "m_ctype.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
 #include "my_base.h"
@@ -37,18 +38,16 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
+#include "sql/basic_row_iterators.h"
+#include "sql/composite_iterators.h"
 #include "sql/debug_sync.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"  // Item_func_like
-#include "sql/iterators/basic_row_iterators.h"
-#include "sql/iterators/composite_iterators.h"
-#include "sql/iterators/row_iterator.h"
-#include "sql/iterators/timing_iterator.h"
 #include "sql/protocol.h"
+#include "sql/row_iterator.h"
 #include "sql/sql_base.h"  // REPORT_ALL_ERRORS
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"
@@ -56,6 +55,7 @@
 #include "sql/sql_list.h"
 #include "sql/sql_table.h"  // primary_key_name
 #include "sql/table.h"
+#include "sql/timing_iterator.h"
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
@@ -115,10 +115,10 @@ enum enum_used_fields {
 
   RETURN VALUES
     0           all ok
-    1           one of the fields was not found
+    1           one of the fileds was not found
 */
 
-static bool init_fields(THD *thd, Table_ref *tables,
+static bool init_fields(THD *thd, TABLE_LIST *tables,
                         struct st_find_field *find_fields, uint count) {
   Name_resolution_context *context = &thd->lex->query_block->context;
   DBUG_TRACE;
@@ -151,7 +151,7 @@ static bool init_fields(THD *thd, Table_ref *tables,
     memorize_variant_topic()
 
     thd           Thread handler
-    count         number of already found topics
+    count         number of alredy found topics
     find_fields   Filled array of information for work with fields
 
   RETURN VALUES
@@ -320,7 +320,7 @@ static int get_topics_for_keyword(THD *thd, TABLE *topics, TABLE *relations,
   for (; !key_res && key_id == (int16)rkey_id->val_int();
        key_res = relations->file->ha_index_next(relations->record[0])) {
     uchar topic_id_buff[8];
-    const longlong topic_id = rtopic_id->val_int();
+    longlong topic_id = rtopic_id->val_int();
     Field *field = find_fields[help_topic_help_topic_id].field;
     field->store(topic_id, true);
     field->get_key_image(topic_id_buff, field->pack_length(), Field::itRAW);
@@ -539,15 +539,13 @@ static unique_ptr_destroy_only<RowIterator> prepare_simple_query_block(
   if (!cond->fixed) cond->fix_fields(thd, &cond);  // can never fail
 
   unique_ptr_destroy_only<RowIterator> table_scan_iterator =
-      NewIterator<TableScanIterator>(thd, thd->mem_root, table,
-                                     /*expected_rows=*/100.0,
+      NewIterator<TableScanIterator>(thd, table, /*expected_rows=*/100.0,
                                      /*examined_rows=*/nullptr);
   if (table_scan_iterator == nullptr) {
     return nullptr;
   }
   unique_ptr_destroy_only<RowIterator> filter_iterator =
-      NewIterator<FilterIterator>(thd, thd->mem_root,
-                                  std::move(table_scan_iterator), cond);
+      NewIterator<FilterIterator>(thd, std::move(table_scan_iterator), cond);
   if (filter_iterator == nullptr || filter_iterator->Init()) {
     return nullptr;
   }
@@ -585,7 +583,7 @@ static unique_ptr_destroy_only<RowIterator> prepare_select_for_name(
 
   RETURN VALUES
     false Success
-    true  Error and send_error already committed
+    true  Error and send_error already commited
 */
 
 bool mysqld_help(THD *thd, const char *mask) {
@@ -594,20 +592,20 @@ bool mysqld_help(THD *thd, const char *mask) {
   List<String> topics_list, categories_list, subcategories_list;
   String name, description, example;
   int count_topics, count_categories;
-  const size_t mlen = strlen(mask);
+  size_t mlen = strlen(mask);
   size_t i;
   MEM_ROOT *mem_root = thd->mem_root;
   Query_block *const query_block = thd->lex->query_block;
   DBUG_TRACE;
 
-  Table_ref *tables[4];
-  tables[0] = new (thd->mem_root) Table_ref("mysql", "help_topic", TL_READ);
+  TABLE_LIST *tables[4];
+  tables[0] = new (thd->mem_root) TABLE_LIST("mysql", "help_topic", TL_READ);
   if (tables[0] == nullptr) return true;
-  tables[1] = new (thd->mem_root) Table_ref("mysql", "help_category", TL_READ);
+  tables[1] = new (thd->mem_root) TABLE_LIST("mysql", "help_category", TL_READ);
   if (tables[1] == nullptr) return true;
-  tables[2] = new (thd->mem_root) Table_ref("mysql", "help_relation", TL_READ);
+  tables[2] = new (thd->mem_root) TABLE_LIST("mysql", "help_relation", TL_READ);
   if (tables[2] == nullptr) return true;
-  tables[3] = new (thd->mem_root) Table_ref("mysql", "help_keyword", TL_READ);
+  tables[3] = new (thd->mem_root) TABLE_LIST("mysql", "help_keyword", TL_READ);
   if (tables[3] == nullptr) return true;
 
   tables[0]->next_global = tables[0]->next_local =

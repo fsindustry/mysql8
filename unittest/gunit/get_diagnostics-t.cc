@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,6 @@
 #include "sql/item_func.h"
 #include "sql/sql_class.h"
 #include "sql/sql_get_diagnostics.h"
-#include "string_with_len.h"
 #include "unittest/gunit/test_utils.h"
 
 namespace get_diagnostics_unittest {

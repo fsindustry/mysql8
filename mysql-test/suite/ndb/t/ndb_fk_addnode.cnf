@@ -10,7 +10,7 @@
 # the create / alter table stmt.
 #
 PartitionsPerNode=1
-ThreadConfig=main,rep,recv,ldm={count=1}
+ThreadConfig=ldm={count=1}
 
 [cluster_config.1]
 NoOfReplicas=                  2
@@ -26,6 +26,9 @@ ndb-wait-connected=20
 ndb-wait-setup=60
 ndb-cluster-connection-pool=3
 ndb-extra-logging=99
+# Set error log verbosity to max, otherwise info messages
+# are filtered away
+log-error-verbosity=3
 # Enable load data local functionality
 local-infile=true
 

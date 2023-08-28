@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,11 +33,11 @@
 
 #include <stddef.h>
 
+#include "m_ctype.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
-#include "mysql/my_loglevel.h"
-#include "mysql/strings/m_ctype.h"
 #if defined(_WIN32)
 #include <stdio.h>
 
@@ -137,14 +137,14 @@ int my_syslog(const CHARSET_INFO *cs [[maybe_unused]], enum loglevel level,
 
     // Fetch mysqld's Windows default message, insert u16buf, log the result.
     if (!ReportEventW(hEventLog,
-                      _level,       // severity
-                      0,            // app-defined event category
-                      MSG_DEFAULT,  // event ID / message ID (see above)
-                      NULL,         // security identifier
-                      1,            // number of strings in u16buf
-                      0,            // number of bytes in raw data
-                      const_cast<LPCWSTR *>(&u16buf),  // 0-terminated strings
-                      NULL))                           // raw (binary data)
+                      _level,              // severity
+                      0,                   // app-defined event category
+                      MSG_DEFAULT,         // event ID / message ID (see above)
+                      NULL,                // security identifier
+                      1,                   // number of strings in u16buf
+                      0,                   // number of bytes in raw data
+                      (LPCWSTR *)&u16buf,  // 0-terminated strings
+                      NULL))               // raw (binary data)
       goto err;
   }
 
@@ -214,7 +214,7 @@ static int windows_eventlog_create_registry_entry(const char *key) {
   TCHAR szPath[MAX_PATH];
   DWORD dwTypes;
 
-  const size_t l = sizeof(registry_prefix) + strlen(key) + 1;
+  size_t l = sizeof(registry_prefix) + strlen(key) + 1;
   char *buff;
 
   int ret = 0;
@@ -290,8 +290,6 @@ int my_openlog(const char *name, int option, int facility) {
   openlog(name, opts | LOG_NDELAY, facility);
 
 #else
-  (void)option;    // maybe unused
-  (void)facility;  // maybe unused
 
   HANDLE hEL_new;
 

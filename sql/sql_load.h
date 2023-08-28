@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,9 +27,9 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 
 #include "my_sqlcommand.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/current_thd.h"
 #include "sql/sql_cmd.h"         /* Sql_cmd */
 #include "sql/sql_data_change.h" /* enum_duplicates */
@@ -41,7 +41,7 @@
 class Item;
 class READ_INFO;
 class THD;
-class Table_ref;
+struct TABLE_LIST;
 
 class Sql_cmd_load_table final : public Sql_cmd {
  public:
@@ -109,14 +109,14 @@ class Sql_cmd_load_table final : public Sql_cmd {
  private:
   bool execute_inner(THD *thd, enum enum_duplicates handle_duplicates);
 
-  bool read_fixed_length(THD *thd, COPY_INFO &info, Table_ref *table_list,
+  bool read_fixed_length(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
                          READ_INFO &read_info, ulong skip_lines);
 
-  bool read_sep_field(THD *thd, COPY_INFO &info, Table_ref *table_list,
+  bool read_sep_field(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
                       READ_INFO &read_info, const String &enclosed,
                       ulong skip_lines);
 
-  bool read_xml_field(THD *thd, COPY_INFO &info, Table_ref *table_list,
+  bool read_xml_field(THD *thd, COPY_INFO &info, TABLE_LIST *table_list,
                       READ_INFO &read_info, ulong skip_lines);
 
   bool write_execute_load_query_log_event(

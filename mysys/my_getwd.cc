@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,13 +49,11 @@
 #include "my_thread_local.h"
 #include "mysys/my_static.h"
 #include "mysys_err.h"
-#include "nulls.h"
-#include "strmake.h"
 #if defined(_WIN32)
 #include <direct.h>
 #include <dos.h>
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #endif
 
 /* Gets current working directory in buff.
@@ -67,7 +65,7 @@
     MyFlags	Flags
 
   NOTES
-    Directory is always ended with FN_LIBCHAR
+    Directory is allways ended with FN_LIBCHAR
 
   RESULT
     0  ok

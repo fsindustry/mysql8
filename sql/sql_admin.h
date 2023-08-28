@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@ class Clone_handler;
 class String;
 class THD;
 
-class Table_ref;
+struct TABLE_LIST;
 template <class T>
 class List;
 
@@ -78,7 +78,7 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
   */
   Sql_cmd_analyze_table(THD *thd, Alter_info *alter_info,
                         Histogram_command histogram_command,
-                        int histogram_buckets, LEX_STRING data);
+                        int histogram_buckets);
 
   bool execute(THD *thd) override;
 
@@ -103,9 +103,6 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
   /// The number of buckets specified by the user in UPDATE HISTOGRAM
   int m_histogram_buckets;
 
-  /// The histogram json literal for update
-  const LEX_STRING m_data;
-
   /// @return The histogram command specified, if any.
   Histogram_command get_histogram_command() const {
     return m_histogram_command;
@@ -113,9 +110,6 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
 
   /// @return The number of buckets specified in UPDATE HISTOGRAM.
   int get_histogram_buckets() const { return m_histogram_buckets; }
-
-  /// @return The histogram json literal specified in UPDATE HISTOGRAM.
-  LEX_STRING get_histogram_data_string() const { return m_data; }
 
   /// @return The fields specified in UPDATE/DROP HISTOGRAM
   const columns_set &get_histogram_fields() const { return m_histogram_fields; }
@@ -130,7 +124,7 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
     @return false on success, true otherwise.
   */
   bool send_histogram_results(THD *thd, const histograms::results_map &results,
-                              const Table_ref *table);
+                              const TABLE_LIST *table);
 
   /**
     Update one or more histograms
@@ -145,7 +139,7 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
 
     @return false on success, true on error.
   */
-  bool update_histogram(THD *thd, Table_ref *table,
+  bool update_histogram(THD *thd, TABLE_LIST *table,
                         histograms::results_map &results);
 
   /**
@@ -161,25 +155,10 @@ class Sql_cmd_analyze_table : public Sql_cmd_ddl_table {
 
     @return false on success, true on error.
   */
-  bool drop_histogram(THD *thd, Table_ref *table,
+  bool drop_histogram(THD *thd, TABLE_LIST *table,
                       histograms::results_map &results);
 
-  /**
-    Dispatches the histogram command (DROP or UPDATE) and commits or rollbacks
-    the changes depending on success or failure. If histograms were modified we
-    update the current snapshot of the table's histograms on the TABLE_SHARE.
-
-    @param thd Thread handler.
-    @param table The table specified in ANALYZE TABLE
-
-    @return True if sending the results of the histogram operations fails. False
-    otherwise (even if the histogram operations themselves fail).
-  */
-  bool handle_histogram_command(THD *thd, Table_ref *table);
-
-  // Carries out the main portion of the work of handle_histogram_command().
-  bool handle_histogram_command_inner(THD *thd, Table_ref *table,
-                                      histograms::results_map &results);
+  bool handle_histogram_command(THD *thd, TABLE_LIST *table);
 };
 
 /**

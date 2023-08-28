@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,6 +21,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_util.cmake)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/storage/ndb/include/ndbapi)
 
 IF(WIN32)
@@ -43,13 +44,10 @@ ELSE()
   SET(EXTRA_SRC ${EXTRA_SRC} ndb_file_posix.cpp)
 ENDIF()
 
-IF(CMAKE_CXX_FLAGS MATCHES " -DNDB_MUTEX_DEADLOCK_DETECTOR")
-  SET(EXTRA_SRC ${EXTRA_SRC} NdbMutex_DeadlockDetector.cpp)
-ENDIF()
-
 ADD_CONVENIENCE_LIBRARY(ndbportlib
   NdbCondition.cpp
   NdbMutex.cpp
+  ndb_socket.cpp
   NdbEnv.cpp
   NdbThread.cpp
   NdbHost.cpp
@@ -62,24 +60,18 @@ ADD_CONVENIENCE_LIBRARY(ndbportlib
   ndb_daemon.cpp
   ndb_file_common.cpp
   ndb_password.cpp
-  ndb_sockaddr.cpp
-  ndb_socket_poller.cpp
-  ndb_socketpair.cpp
   ndb_stacktrace.cpp
   ${EXTRA_SRC}
   NdbNuma.cpp
+  NdbMutex_DeadlockDetector.cpp
   NdbGetRUsage.cpp
   NdbLockCpuUtil.cpp
   NdbSpin.cpp
   LINK_LIBRARIES mysys ${LIBSOCKET}
   )
 
-IF(WIN32_CLANG)
-  ADD_COMPILE_FLAGS(ndb_daemon.cpp COMPILE_FLAGS " -Wno-microsoft-cast")
-ENDIF()
+NDB_ADD_TEST(NdbHW-t NdbHW.cpp LIBS ndbgeneral ndbportlib)
 
-NDB_ADD_TEST(NdbHW-t NdbHW.cpp LIBS ndbmgmapi ndbgeneral ndbportlib)
+NDB_ADD_TEST(NdbDir-t NdbDir.cpp LIBS ndbgeneral ndbportlib)
 
-NDB_ADD_TEST(NdbDir-t NdbDir.cpp LIBS ndbmgmapi ndbgeneral ndbportlib)
-
-NDB_ADD_TEST(NdbGetInAddr-t NdbTCP.cpp LIBS ndbgeneral ${LIBSOCKET} ${LIBNSL})
+NDB_ADD_TEST(NdbGetInAddr-t NdbTCP.cpp LIBS ${LIBSOCKET} ${LIBNSL})

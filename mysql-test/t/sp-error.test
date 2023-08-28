@@ -869,7 +869,7 @@ create procedure bug17015_012345678901234567890123456789012345678901234567890123
 begin
 end|
 
---replace_column 6 '0000-00-00 00:00:00' 7 '0000-00-00 00:00:00'
+--replace_column 5 '0000-00-00 00:00:00' 6 '0000-00-00 00:00:00'
 show procedure status like 'bug17015%'|
 drop procedure bug17015_0123456789012345678901234567890123456789012345678901234|
 
@@ -1447,7 +1447,7 @@ create procedure mysqltest2.p1() select version();
 --error ER_NO_DB_ERROR 
 create procedure p2() select version();
 use mysqltest2;
---replace_column 6 '0000-00-00 00:00:00' 7 '0000-00-00 00:00:00'
+--replace_column 5 '0000-00-00 00:00:00' 6 '0000-00-00 00:00:00'
 show procedure status like 'p1';
 drop database mysqltest2;
 use test;
@@ -1558,7 +1558,7 @@ create procedure `x `.bug15658() select 1;
 # This should work
 create procedure ` bug15658`() select 1;
 call ` bug15658`();
---replace_column 6 '0000-00-00 00:00:00' 7 '0000-00-00 00:00:00'
+--replace_column 5 '0000-00-00 00:00:00' 6 '0000-00-00 00:00:00'
 show procedure status like '%bug15658';
 drop procedure ` bug15658`;
 
@@ -1640,6 +1640,12 @@ create aggregate function bug16896() returns int return 1;
 CREATE IF NOT EXISTS PROCEDURE bug14702()
 BEGIN
 END;
+
+--error ER_PARSE_ERROR
+CREATE PROCEDURE IF NOT EXISTS bug14702()
+BEGIN
+END;
+
 
 #
 # BUG#20953: create proc with a create view that uses local
@@ -3771,20 +3777,20 @@ eval ALTER FUNCTION f1 COMMENT '$string_65536';
 DROP FUNCTION f1;
 
 --echo # Case 6: Test case to validate comment string.
---error ER_COMMENT_CONTAINS_INVALID_STRING
+--error ER_INVALID_CHARACTER_STRING
 CREATE PROCEDURE p2() COMMENT 'test𝌆' SELECT 1;
 #
---error ER_COMMENT_CONTAINS_INVALID_STRING
+--error ER_INVALID_CHARACTER_STRING
 CREATE FUNCTION f2() RETURNS INT COMMENT 'test𝌆' RETURN 1;
 
 
 CREATE PROCEDURE p2() SELECT 1;
---error ER_COMMENT_CONTAINS_INVALID_STRING
+--error ER_INVALID_CHARACTER_STRING
 ALTER PROCEDURE p2 COMMENT 'test𝌆';
 DROP PROCEDURE p2;
 #
 CREATE FUNCTION f2() RETURNS INT RETURN 1;
---error ER_COMMENT_CONTAINS_INVALID_STRING
+--error ER_INVALID_CHARACTER_STRING
 ALTER FUNCTION f2 COMMENT 'test𝌆';
 DROP FUNCTION f2;
 

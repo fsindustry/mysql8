@@ -1,5 +1,5 @@
 /* 
-   Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,12 +31,9 @@
  * Also does direct IO, preallocation.
  */
 
-#include "AsyncFile.hpp"
+#include "portlib/ndb_file.h"
 
 #define JAM_FILE_ID 397
-
-class Ndbfs;
-class Request;
 
 class PosixAsyncFile : public AsyncFile
 {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
    Use is subject to license terms
 
    This program is free software; you can redistribute it and/or modify
@@ -23,17 +23,9 @@
 
 #include <signaldata/BuildIndx.hpp>
 
-bool printBUILD_INDX_REQ(FILE* output,
-                         const Uint32* theData,
-                         Uint32 len,
-                         Uint16 /*rbn*/)
+bool
+printBUILD_INDX_REQ(FILE* output, const Uint32* theData, Uint32 len, Uint16 rbn)
 {
-  if (len < BuildIndxReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
   const BuildIndxReq* sig = (const BuildIndxReq*)theData;
   fprintf(output, " clientRef: 0x%x", sig->clientRef);
   fprintf(output, " clientData: %u", sig->clientData);
@@ -53,17 +45,9 @@ bool printBUILD_INDX_REQ(FILE* output,
   return true;
 }
 
-bool printBUILD_INDX_CONF(FILE* output,
-                          const Uint32* theData,
-                          Uint32 len,
-                          Uint16 /*rbn*/)
+bool
+printBUILD_INDX_CONF(FILE* output, const Uint32* theData, Uint32 len, Uint16 rbn)
 {
-  if (len < BuildIndxConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
   const BuildIndxConf* sig = (const BuildIndxConf*)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
@@ -77,17 +61,8 @@ bool printBUILD_INDX_CONF(FILE* output,
   return true;
 }
 
-bool printBUILD_INDX_REF(FILE* output,
-                         const Uint32* theData,
-                         Uint32 len,
-                         Uint16 /*rbn*/)
+bool printBUILD_INDX_REF(FILE* output, const Uint32* theData, Uint32 len, Uint16 rbn)
 {
-  if (len < BuildIndxRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
   const BuildIndxRef* sig = (const BuildIndxRef*)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);

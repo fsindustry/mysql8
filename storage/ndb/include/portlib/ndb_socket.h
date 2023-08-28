@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,202 +25,73 @@
 #ifndef NDB_SOCKET_H
 #define NDB_SOCKET_H
 
-#include "portlib/ndb_sockaddr.h"
-
-/* Include platform-specific inline functions */
 #ifdef _WIN32
 #include "ndb_socket_win32.h"
 #else
 #include "ndb_socket_posix.h"
+#include <cstring>
 #endif
+#include <string>
 
-// Default constructed ndb_socket_t is always invalid
-static_assert(ndb_socket_t{}.s == INVALID_SOCKET);
-
-/* Functions for creating and initializing ndb_socket_t */
 
 static inline
-void ndb_socket_init_from_native(ndb_socket_t & ndb_sock, socket_t s)
-{
-  ndb_sock.s = s;
-}
-
-static inline
-ndb_socket_t ndb_socket_create_from_native(socket_t native_socket)
-{
-  ndb_socket_t s;
-  ndb_socket_init_from_native(s, native_socket);
-  return s;
-}
-
-static inline
-ndb_socket_t ndb_socket_create(int af)
-{
-  return ndb_socket_t{socket(af, SOCK_STREAM, IPPROTO_TCP)};
-}
-
-static inline socket_t
-ndb_socket_get_native(ndb_socket_t s)
-{
-  return s.s;
-}
-
-static inline
-void ndb_socket_initialize(ndb_socket_t *s)
-{
-  s->s= INVALID_SOCKET;
-}
-
-static inline
-void ndb_socket_invalidate(ndb_socket_t *s)
-{
-  s->s= INVALID_SOCKET;
-}
-
-static inline
-int ndb_socket_valid(ndb_socket_t s)
-{
-  return (s.s != INVALID_SOCKET);
-}
-
-// Returns 0 on success, -1 on error
-static inline
-int ndb_getsockopt(ndb_socket_t s, int level, int optname, int *optval)
-{
-  socklen_t optlen = sizeof(int);
-  int r = getsockopt(s.s, level, optname, (char*)optval, &optlen);
-  return r ? -1 : 0;
-}
-
-// Returns 0 on success, -1 on error
-static inline
-int ndb_setsockopt(ndb_socket_t s, int level, int optname, const int *optval)
-{
-  int r = setsockopt(s.s, level, optname, (const char*)optval, sizeof(int));
-  return r ? -1 : 0;
-}
-
-// Returns 0 on success, -1 on error
-static inline
-int ndb_socket_reuseaddr(ndb_socket_t s, int enable)
-{
-  const int on = enable;
-  return ndb_setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on);
-}
-
-// Returns 0 on success, -1 on error
-static inline
-int ndb_socket_dual_stack(ndb_socket_t s, int enable)
-{
-  int on = !enable;
-  return ndb_setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &on);
-}
-
-/* Returns 0 on success, -1 on error
-   Use ndb_socket_errno() to retrieve error
-*/
-static inline
-int ndb_bind(ndb_socket_t s, const ndb_sockaddr *addr)
-{
-  int r = bind(s.s, addr->get_sockaddr(), addr->get_sockaddr_len());
-  return r ? -1 : 0;
-}
-
-/* Returns 0 on success, -1 on error
-   Use ndb_socket_errno() to retrieve error
-*/
-static inline
-int ndb_listen(ndb_socket_t s, int backlog)
-{
-  int r = listen(s.s, backlog);
-  return r ? -1 : 0;
-}
-
-/* Returns 0 on success.
-   Use ndb_socket_errno() to retrieve error
-*/
-static inline
-ndb_socket_t ndb_accept(ndb_socket_t s, ndb_sockaddr *addr)
-{
-  ndb_sockaddr::storage_type sa;
-  socklen_t salen = sizeof(sa);
-  socket_t sock = accept(s.s, &sa.common, &salen);
-  if (sock != INVALID_SOCKET && addr != nullptr)
-  {
-    *addr = ndb_sockaddr(&sa.common, salen);
-  }
-  return ndb_socket_create_from_native(sock);
-}
-
-/* Returns 0 on success.
-   Use ndb_socket_errno() to retrieve error
-*/
-static inline
-int ndb_connect(ndb_socket_t s, const ndb_sockaddr *addr)
-{
-  return connect(s.s, addr->get_sockaddr(), addr->get_sockaddr_len());
-}
-
-// Returns 0 on success, 1 on error
-static inline
-int ndb_getpeername(ndb_socket_t s, ndb_sockaddr *addr)
-{
-  ndb_sockaddr::storage_type sa;
-  socklen_t salen = sizeof(sa);
-  if (getpeername(s.s, &sa.common, &salen) == -1)
-    return 1;
-  *addr = ndb_sockaddr(&sa.common, salen);
-  return 0;
-}
-
-// Returns 0 on success, 1 on error
-static inline
-int ndb_getsockname(ndb_socket_t s, ndb_sockaddr *addr)
-{
-  ndb_sockaddr::storage_type sa;
-  socklen_t salen = sizeof(sa);
-  if (getsockname(s.s, &sa.common, &salen) == -1)
-    return 1;
-  *addr = ndb_sockaddr(&sa.common, salen);
-  return 0;
-}
-
-// Returns 0 on success or ndb_socket_errno() on failure
-static inline
-int ndb_socket_connect_address(ndb_socket_t s, ndb_sockaddr *a)
-{
-  if(ndb_getpeername(s, a) == -1) return ndb_socket_errno();
-
-  return 0;
-}
-
-// Returns 0 on success, 1 on error
-static inline
-int ndb_socket_get_port(ndb_socket_t s, unsigned short *port)
-{
-  ndb_sockaddr servaddr;
-  if(ndb_getsockname(s, &servaddr) < 0) return 1;
-
-  *port= servaddr.get_port();
-  return 0;
-}
-
-static inline
-void ndb_socket_close_with_reset(ndb_socket_t & sock, bool with_reset = false)
+void ndb_socket_close_with_reset(ndb_socket_t sock, bool with_reset = false)
 {
   if (with_reset)
   {
-    // Force hard reset of the socket by turning on linger with timeout 0
+    // Force hard reset of the socket by turning on linger
+    // with timeout 0
     struct linger hard_reset = {1, 0};
-    setsockopt(sock.s, SOL_SOCKET, SO_LINGER,
-               (char*)&hard_reset, sizeof(hard_reset));
+    ndb_setsockopt(sock, SOL_SOCKET, SO_LINGER,
+                  (void*)&hard_reset, sizeof(hard_reset));
   }
 
   ndb_socket_close(sock);
 }
 
-/* Create a pair of connected sockets.
-   Returns 0 on success.
+// Create ndb_socket_t given ndb_native_socket_t
+static inline
+ndb_socket_t ndb_socket_create_from_native(ndb_native_socket_t native_socket)
+{
+  ndb_socket_t s;
+#ifdef _WIN32
+  s.s = native_socket;
+#else
+  s.fd = native_socket;
+#endif
+  return s;
+}
+
+static inline
+int ndb_socket_configure_reuseaddr(ndb_socket_t s, int enable)
+{
+#ifdef _WIN32
+  return ndb_socket_excladdruse(s, enable);
+#else
+  return ndb_socket_reuseaddr(s, enable);
+#endif
+}
+
+static inline
+std::string ndb_socket_err_message(int error_code)
+{
+#ifdef _WIN32
+  LPTSTR tmp_str = NULL;
+  FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                    FORMAT_MESSAGE_IGNORE_INSERTS |
+                    FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                (LPTSTR)&tmp_str, 0, NULL);
+  std::string err_str(tmp_str);
+  LocalFree(tmp_str);
+#else
+  std::string err_str(strerror(error_code));
+#endif
+  return err_str;
+}
+
+/*
+  create a pair of connected sockets
 */
 int ndb_socketpair(ndb_socket_t s[2]);
 

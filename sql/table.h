@@ -1,7 +1,7 @@
 #ifndef TABLE_INCLUDED
 #define TABLE_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 #include "field_types.h"
 #include "lex_string.h"
 #include "libbinlogevents/include/table_id.h"  // Table_id
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
@@ -41,16 +42,14 @@
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "my_table_map.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
-#include "mysql/components/services/bits/psi_table_bits.h"
-#include "mysql/strings/m_ctype.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/psi_table_bits.h"
 #include "sql/dd/types/foreign_key.h"  // dd::Foreign_key::enum_rule
 #include "sql/enum_query_type.h"       // enum_query_type
 #include "sql/key.h"
 #include "sql/key_spec.h"
 #include "sql/mdl.h"  // MDL_wait_for_subgraph
 #include "sql/mem_root_array.h"
-#include "sql/mysqld_cs.h"
 #include "sql/opt_costmodel.h"  // Cost_model_table
 #include "sql/partition_info.h"
 #include "sql/record_buffer.h"  // Record_buffer
@@ -64,11 +63,10 @@
 #include "typelib.h"
 
 class Field;
-class Field_longlong;
 
 namespace histograms {
 class Histogram;
-}  // namespace histograms
+}
 
 class ACL_internal_schema_access;
 class ACL_internal_table_access;
@@ -95,9 +93,6 @@ class SortingIterator;
 class String;
 class THD;
 class Table_cache_element;
-class Table_histograms;
-class Table_histograms_collection;
-class Table_ref;
 class Table_trigger_dispatcher;
 class Temp_table_param;
 class handler;
@@ -111,10 +106,11 @@ struct LEX;
 struct NESTED_JOIN;
 struct Partial_update_info;
 struct TABLE;
+struct TABLE_LIST;
 struct TABLE_SHARE;
 struct handlerton;
 struct Name_resolution_context;
-using plan_idx = int;
+typedef int8 plan_idx;
 
 namespace dd {
 class Table;
@@ -159,7 +155,7 @@ bool assert_invalid_stats_is_locked(const TABLE *);
 /**
   Enumerate possible types of a table from re-execution
   standpoint.
-  Table_ref class has a member of this type.
+  TABLE_LIST class has a member of this type.
   At prepared statement prepare, this member is assigned a value
   as of the current state of the database. Before (re-)execution
   of a prepared statement, we check that the value recorded at
@@ -253,7 +249,7 @@ class Default_object_creation_ctx : public Object_creation_ctx {
     connection_cl stores the value of collation_connection session
     variable. Both character set and collation attributes are used.
 
-    Connection collation is included into query context, because it defines
+    Connection collation is included into query context, becase it defines
     the character set and collation of text literals in internal
     representation of query (item-objects).
   */
@@ -268,7 +264,7 @@ class View_creation_ctx : public Default_object_creation_ctx {
  public:
   static View_creation_ctx *create(THD *thd);
 
-  static View_creation_ctx *create(THD *thd, Table_ref *view);
+  static View_creation_ctx *create(THD *thd, TABLE_LIST *view);
 
  private:
   View_creation_ctx(THD *thd) : Default_object_creation_ctx(thd) {}
@@ -307,11 +303,11 @@ struct ORDER {
   bool in_field_list{false}; /* true if in select field list */
   /**
      Tells whether this ORDER element was referenced with an alias or with an
-     expression in the query, and what the alias was:
-     SELECT a AS foo GROUP BY foo: "foo".
-     SELECT a AS foo GROUP BY a: nullptr.
+     expression, in the query:
+     SELECT a AS foo GROUP BY foo: true.
+     SELECT a AS foo GROUP BY a: false.
   */
-  const char *used_alias{nullptr};
+  bool used_alias{false};
   /**
     When GROUP BY is implemented with a temporary table (i.e. the table takes
     care to store only unique group rows, table->group != nullptr), each GROUP
@@ -324,12 +320,13 @@ struct ORDER {
   Field *field_in_tmp_table{nullptr};
   char *buff{nullptr}; /* If tmp-table group */
   table_map used{0}, depend_map{0};
+  bool is_position{false}; /* An item expresses a position in a ORDER clause */
   bool is_explicit{false}; /* Whether ASC/DESC is explicitly specified */
 };
 
 /**
   State information for internal tables grants.
-  This structure is part of the Table_ref, and is updated
+  This structure is part of the TABLE_LIST, and is updated
   during the ACL check process.
   @sa GRANT_INFO
 */
@@ -701,15 +698,21 @@ struct TABLE_SHARE {
       : m_version(version), m_secondary_engine(secondary) {}
 
   /*
-    Managed collection of refererence-counted snapshots of histograms statistics
-    for the table. TABLE objects acquire/release pointers to histogram
-    statistics from this collection. A new statistics snapshot is inserted when
-    the share is initialized and when histograms are updated/dropped.
-
-    For temporary tables m_histograms should be nullptr since we do not support
-    histograms on temporary tables.
+    A map of [uint, Histogram] values, where the key is the field index. The
+    map is populated with any histogram statistics when it is loaded/created.
   */
-  Table_histograms_collection *m_histograms{nullptr};
+  malloc_unordered_map<uint, const histograms::Histogram *> *m_histograms{
+      nullptr};
+
+  /**
+    Find the histogram for the given field index.
+
+    @param field_index the index of the field we want to find a histogram for
+
+    @retval nullptr if no histogram is found
+    @retval a pointer to a histogram if one is found
+  */
+  const histograms::Histogram *find_histogram(uint field_index) const;
 
   /** Category of this table. */
   TABLE_CATEGORY table_category{TABLE_UNKNOWN_CATEGORY};
@@ -739,7 +742,7 @@ struct TABLE_SHARE {
   Field **field{nullptr};
   Field **found_next_number_field{nullptr};
   KEY *key_info{nullptr};    /* data of keys defined for the table */
-  uint *blob_field{nullptr}; /* Index to blobs in Field array */
+  uint *blob_field{nullptr}; /* Index to blobs in Field arrray*/
 
   uchar *default_values{nullptr};      /* row with default values */
   LEX_STRING comment{nullptr, 0};      /* Comment about table */
@@ -748,8 +751,6 @@ struct TABLE_SHARE {
 
   /** Secondary storage engine. */
   LEX_CSTRING secondary_engine{nullptr, 0};
-  /** Secondary engine load status */
-  bool secondary_load{false};
 
   const CHARSET_INFO *table_charset{
       nullptr}; /* Default charset of string fields */
@@ -897,8 +898,8 @@ struct TABLE_SHARE {
     are in use by storage engine.
 
     @note db_options_in_use is normally copy of db_create_options but can
-          be overridden by SE. E.g. MyISAM does this at handler::open() and
-          handler::info() time.
+          be overriden by SE. E.g. MyISAM does this at handler::open() and
+          hander::info() time.
   */
   uint db_options_in_use{0};
   uint rowid_field_offset{0}; /* Field_nr +1 to rowid field */
@@ -1172,7 +1173,7 @@ struct TABLE_SHARE {
    @retval  0        For schema tables, DD tables and system views.
             non-0    For bases tables, views and temporary tables.
 
-   @sa Table_ref::is_table_ref_id_equal()
+   @sa TABLE_LIST::is_table_ref_id_equal()
   */
   ulonglong get_table_ref_version() const;
 
@@ -1257,7 +1258,6 @@ struct TABLE_SHARE {
   */
   unsigned long m_version{0};
 
- protected:  // To allow access from unit tests.
   /// Does this TABLE_SHARE represent a table in a secondary storage engine?
   bool m_secondary_engine{false};
 };
@@ -1286,7 +1286,7 @@ class Blob_mem_storage {
     truncated_value = false;
   }
   /**
-     Function creates duplicate of 'from'
+     Fuction creates duplicate of 'from'
      string in 'storage' MEM_ROOT.
 
      @param from           string to copy
@@ -1413,10 +1413,6 @@ struct TABLE {
   friend class Table_cache_element;
 
  public:
-  // Pointer to the histograms available on the table.
-  // Protected in the same way as the pointer to the share.
-  const Table_histograms *histograms{nullptr};
-
   /**
     A bitmap marking the hidden generated columns that exists for functional
     indexes.
@@ -1453,7 +1449,7 @@ struct TABLE {
   Key_map covering_keys;
   Key_map quick_keys;
 
-  /* Merge keys are all keys that had a column referred to in the query */
+  /* Merge keys are all keys that had a column reffered to in the query */
   Key_map merge_keys;
 
   /*
@@ -1499,84 +1495,13 @@ struct TABLE {
   Field **gen_def_fields_ptr{nullptr};
   /// Field used by unique constraint
   Field *hash_field{nullptr};
-  // ----------------------------------------------------------------------
-  // The next few members are used if this (temporary) file is used solely for
-  // the materialization/computation of an INTERSECT or EXCEPT set operation
-  // (in addition to hash_field above used to detect duplicate rows).  For
-  // INTERSECT and EXCEPT, we always use the hash field and compute the shape
-  // of the result set using m_set_counter. The latter is a hidden field
-  // located between the hash field and the row proper, only present for
-  // INTERSECT or EXCEPT materialized in a temporary result table.  The
-  // materialized table has no duplicate rows, relying instead of the embedded
-  // counter to produce the correct number of duplicates with ALL semantics. If
-  // we have distinct semantics, we squash duplicates. This all happens in the
-  // reading step of the tmp table (TableScanIterator::Read),
-  // cf. m_last_operation_is_distinct. For explanation if the logic of the set
-  // counter, see MaterializeIterator<Profiler>::MaterializeQueryBlock.
-  //
-
-  /// A priori unlimited. We pass this on to TableScanIterator at construction
-  /// time, q.v., to limit the number of rows out of an EXCEPT or INTERSECT.
-  /// For these set operations, we do not know enough to enforce the limit at
-  /// materialize time (as for UNION): only when reading the rows with
-  /// TableScanIterator do we check the counters.
-  /// @todo: Ideally, this limit should be communicated to TableScanIterator in
-  /// some other way.
-  ha_rows m_limit_rows{HA_POS_ERROR};
-
- private:
-  /// The set counter. It points to the field in the materialized table
-  /// holding the counter used to compute INTERSECT and EXCEPT, in record[0].
-  /// For EXCEPT [DISTINCT | ALL] and INTERSECT DISTINCT this is a simple 64
-  /// bits counter. For INTERSECT ALL, it is subdivided into two sub counters
-  /// cf. class HalfCounter, cf. MaterializeQueryBlock. See set_counter().
-  Field_longlong *m_set_counter{nullptr};
-
-  /// True if we have EXCEPT, else we have INTERSECT. See is_except() and
-  /// is_intersect().
-  bool m_except{false};
-
-  /// If m_set_counter is set: true if last block has DISTINCT semantics,
-  /// either because it is marked as such, or because we have computed this
-  /// to give an equivalent answer. If false, we have ALL semantics.
-  /// It will be true if any DISTINCT is given in the merged N-ary set
-  /// operation. See is_distinct().
-  bool m_last_operation_is_distinct{false};
-
- public:
-  /// Test if this tmp table stores the result of a UNION set operation or
-  /// a single table.
-  /// @return true if so, else false.
-  bool is_union_or_table() const { return m_set_counter == nullptr; }
-  bool is_intersect() const { return m_set_counter != nullptr && !m_except; }
-  bool is_except() const { return m_set_counter != nullptr && m_except; }
-  bool is_distinct() const { return m_last_operation_is_distinct; }
-  /**
-    Initialize the set counter field pointer and the type of set operation
-    other than UNION.
-    @param set_counter the field in the materialized table that holds the
-                       counter we use to compute intersect or except
-    @param is_except   if true, EXCEPT, else INTERSECT
-  */
-  void set_set_counter(Field_longlong *set_counter, bool is_except) {
-    m_set_counter = set_counter;
-    m_except = is_except;
-  }
-
-  void set_distinct(bool distinct) { m_last_operation_is_distinct = distinct; }
-
-  Field_longlong *set_counter() { return m_set_counter; }
-  //
-  // end of INTERSECT and EXCEPT specific members
-  // ----------------------------------------------------------------------
-
   Field *fts_doc_id_field{nullptr}; /* Set if FTS_DOC_ID field is present */
 
   /* Table's triggers, 0 if there are no of them */
   Table_trigger_dispatcher *triggers{nullptr};
-  Table_ref *pos_in_table_list{nullptr}; /* Element referring to this table */
+  TABLE_LIST *pos_in_table_list{nullptr}; /* Element referring to this table */
   /* Position in thd->locked_table_list under LOCK TABLES */
-  Table_ref *pos_in_locked_tables{nullptr};
+  TABLE_LIST *pos_in_locked_tables{nullptr};
   ORDER *group{nullptr};
   const char *alias{nullptr};  ///< alias or table name
   uchar *null_flags{nullptr};  ///< Pointer to the null flags of record[0]
@@ -1605,16 +1530,11 @@ struct TABLE {
   MY_BITMAP def_fields_set_during_insert;
 
   /**
-    The read set contains the set of columns that the execution engine needs to
-    process the query. In particular, it is used to tell the storage engine
-    which columns are needed. For virtual generated columns, the underlying base
-    columns are also added, since they are required in order to calculate the
-    virtual generated columns.
-
-    Internal operations in the execution engine that need to move rows between
-    buffers, such as aggregation, sorting, hash join and set operations, should
-    rather use read_set_internal, since the virtual generated columns have
-    already been calculated when the row was read from the storage engine.
+    Set over all columns that the optimizer intends to read. This is used
+    for two purposes: First, to tell the storage engine which ones it needs
+    to populate. (In particular, NDB can save a lot of bandwidth here.)
+    Second, functions that need to store and restore rows, such as hash join
+    or filesort, need to know which ones to keep.
 
     Set during resolving; every field that gets resolved, sets its own bit
     in the read set. In some cases, we switch the read set around during
@@ -1629,22 +1549,6 @@ struct TABLE {
   MY_BITMAP *read_set{nullptr};
 
   MY_BITMAP *write_set{nullptr};
-
-  /**
-    A bitmap of fields that are explicitly referenced by the query. This is
-    mostly the same as read_set, but it does not include base columns of
-    referenced virtual generated columns unless the base columns are referenced
-    explicitly in the query.
-
-    This is the read set that should be used for determining which columns to
-    store in join buffers, aggregation buffers, sort buffers, or similar
-    operations internal to the execution engine. Both because it is unnecessary
-    to store the implicitly read base columns in the buffer, since they won't
-    ever be read out of the buffer anyways, and because the base columns may not
-    even be possible to read, if a covering index scan is used and the index
-    only contains the virtual column and not all its base columns.
-  */
-  MY_BITMAP read_set_internal;
 
   /**
     A pointer to the bitmap of table fields (columns), which are explicitly set
@@ -1737,13 +1641,13 @@ struct TABLE {
 
   /**
     Flag set when the statement contains FORCE INDEX FOR ORDER BY
-    See Table_ref::process_index_hints().
+    See TABLE_LIST::process_index_hints().
   */
   bool force_index_order{false};
 
   /**
     Flag set when the statement contains FORCE INDEX FOR GROUP BY
-    See Table_ref::process_index_hints().
+    See TABLE_LIST::process_index_hints().
   */
   bool force_index_group{false};
   bool const_table{false};
@@ -1764,6 +1668,7 @@ struct TABLE {
     If set, indicate that the table is not replicated by the server.
   */
   bool no_replicate{false};
+  bool no_cache{false};
   /* To signal that the table is associated with a HANDLER statement */
   bool open_by_handler{false};
   /**
@@ -1800,7 +1705,7 @@ struct TABLE {
     @note This member can be set only by thread that owns/has opened the
           table and while holding its THD::LOCK_thd_data lock.
           It can be read without locking by this owner thread, or by some other
-          thread concurrently after acquiring owner's THD::LOCK_thd_data.
+          thread concurrently after acquring owner's THD::LOCK_thd_data.
 
     @note The TABLE will not be reopened under LOCK TABLES in
           close_thread_tables().
@@ -1831,6 +1736,7 @@ struct TABLE {
     class JOIN_TAB *join_tab{nullptr};
     class QEP_TAB *qep_tab{nullptr};
     thr_lock_type lock_type{TL_UNLOCK}; /* How table is used */
+    thr_locked_row_action locked_row_action{THR_DEFAULT};
     bool not_exists_optimize{false};
     /*
       true <=> range optimizer found that there is no rows satisfying
@@ -1860,7 +1766,7 @@ struct TABLE {
   SortingIterator *duplicate_removal_iterator{nullptr};
 
   /**
-    The result of applying a unique operation (by row ID) to the table, if done.
+    The result of applying a unique opertion (by row ID) to the table, if done.
     In particular, this is done in some forms of index merge.
   */
   Sort_result unique_result;
@@ -1882,11 +1788,12 @@ struct TABLE {
 #endif
  public:
   void reset();
-  void init(THD *thd, Table_ref *tl);
+  void init(THD *thd, TABLE_LIST *tl);
   bool init_tmp_table(THD *thd, TABLE_SHARE *share, MEM_ROOT *m_root,
                       CHARSET_INFO *charset, const char *alias, Field **fld,
                       uint *blob_fld, bool is_virtual);
   bool fill_item_list(mem_root_deque<Item *> *item_list) const;
+  void reset_item_list(const mem_root_deque<Item *> &item_list) const;
   void clear_column_bitmaps(void);
   void prepare_for_position(void);
 
@@ -1937,7 +1844,7 @@ struct TABLE {
   bool alloc_tmp_keys(uint new_key_count, uint new_key_part_count,
                       bool modify_share);
   bool add_tmp_key(Field_map *key_parts, bool invisible, bool modify_share);
-  void move_tmp_key(int old_idx, bool modify_share);
+  void copy_tmp_key(int old_idx, bool modify_share);
   void drop_unused_tmp_keys(bool modify_share);
 
   void set_keyread(bool flag);
@@ -2097,13 +2004,7 @@ struct TABLE {
   /// @return true if current row has been deleted (multi-table delete)
   bool has_deleted_row() const { return m_status & STATUS_DELETED; }
 
-  /// Save the NULL flags of the current row into the designated buffer.
-  /// This should be done before null-complementing a table accessed
-  /// with EQRefIterator or a const table, as they need to be able to
-  /// restore the original contents of the record buffer before
-  /// reading the next row. This is necessary because of their special
-  /// code for avoiding table access if the same row should be
-  /// accessed by the next read.
+  /// Save the NULL flags of the current row into the designated buffer
   void save_null_flags() {
     if (s->null_bytes > 0) memcpy(null_flags_saved, null_flags, s->null_bytes);
   }
@@ -2133,17 +2034,26 @@ struct TABLE {
   const Cost_model_table *cost_model() const { return &m_cost_model; }
 
   /**
-    Bind all the table's value generator columns in all the forms:
-    stored/virtual GC, default expressions and checked constraints.
+    Fix table's generated columns' (GC) and/or default expressions
 
     @details When a table is opened from the dictionary, the Value Generator
-    expressions are bound during opening (see fix_value_generator_fields()).
+    expressions are fixed during opening (see fix_value_generators_fields()).
     After query execution, Item::cleanup() is called on them
     (see cleanup_value_generator_items()). When the table is opened from the
-    table cache, the Value Generetor(s) need to be bound again and this
+    table cache, the Value Generetor(s) need to be fixed again and this
     function does that.
+
+    @param[in] thd     the current thread
   */
-  void bind_value_generators_to_fields();
+  void refix_value_generator_items(THD *thd);
+
+  /**
+    Helper function for refix_value_generator_items() that fixes one column's
+    expression (be it GC or default expression) and check constraint expression.
+
+    @param[in,out] g_expr       the expression who's items needs to be fixed
+  */
+  void refix_inner_value_generator_items(Value_generator *g_expr);
 
   /**
     Clean any state in items associated with generated columns to be ready for
@@ -2168,12 +2078,6 @@ struct TABLE {
   */
   void update_covering_prefix_keys(Field *field, uint16 key_read_length,
                                    Key_map *covering_prefix_keys);
-
-  /**
-    Returns the primary engine handler for the table.
-    If none exist, nullptr is returned.
-  */
-  handler *get_primary_handler() const;
 
  private:
   /**
@@ -2411,16 +2315,6 @@ struct TABLE {
             set or not
   */
   bool should_binlog_drop_if_temp(void) const;
-
-  /**
-    Find the histogram for the given field index.
-
-    @param field_index The index of the field we want to find a histogram for.
-
-    @retval nullptr if no histogram is found.
-    @retval Pointer to a histogram if one is found.
-  */
-  const histograms::Histogram *find_histogram(uint field_index) const;
 };
 
 static inline void empty_record(TABLE *table) {
@@ -2459,7 +2353,7 @@ struct ST_FIELD_INFO {
      combine them using the bitwise or operator @c |. Both flags are
      defined in table.h.
    */
-  uint field_flags;  // Field attributes (maybe_null, signed, unsigned etc.)
+  uint field_flags;  // Field atributes(maybe_null, signed, unsigned etc.)
   const char *old_name;
   uint open_method;  // Not used
 };
@@ -2468,10 +2362,10 @@ struct ST_SCHEMA_TABLE {
   const char *table_name;
   ST_FIELD_INFO *fields_info;
   /* Fill table with data */
-  int (*fill_table)(THD *thd, Table_ref *tables, Item *cond);
-  /* Handle fields for old SHOW */
+  int (*fill_table)(THD *thd, TABLE_LIST *tables, Item *cond);
+  /* Handle fileds for old SHOW */
   int (*old_format)(THD *thd, ST_SCHEMA_TABLE *schema_table);
-  int (*process_table)(THD *thd, Table_ref *tables, TABLE *table, bool res,
+  int (*process_table)(THD *thd, TABLE_LIST *tables, TABLE *table, bool res,
                        LEX_CSTRING db_name, LEX_CSTRING table_name);
   bool hidden;
 };
@@ -2525,7 +2419,7 @@ class Natural_join_column {
  public:
   Field_translator *view_field; /* Column reference of merge view. */
   Item_field *table_field;      /* Column reference of table or temp view. */
-  Table_ref *table_ref;         /* Original base table/view reference. */
+  TABLE_LIST *table_ref;        /* Original base table/view reference. */
   /*
     True if a common join column of two NATURAL/USING join operands. Notice
     that when we have a hierarchy of nested NATURAL/USING joins, a column can
@@ -2536,8 +2430,8 @@ class Natural_join_column {
   bool is_common;
 
  public:
-  Natural_join_column(Field_translator *field_param, Table_ref *tab);
-  Natural_join_column(Item_field *field_param, Table_ref *tab);
+  Natural_join_column(Field_translator *field_param, TABLE_LIST *tab);
+  Natural_join_column(Item_field *field_param, TABLE_LIST *tab);
   const char *name();
   Item *create_item(THD *thd);
   Field *field();
@@ -2752,7 +2646,7 @@ enum enum_open_type {
   The 'referenced_by' is the table map of tables to which this possible
     key corresponds.
   The 'used_field' is a map of fields of which this key consists of.
-  See also the comment for the Table_ref::update_derived_keys function.
+  See also the comment for the TABLE_LIST::update_derived_keys function.
 */
 
 class Derived_key {
@@ -2768,58 +2662,57 @@ class Table_function;
 
   These table references can be of several types that correspond to
   different SQL elements. Below we list all types of TABLE_LISTs with
-  the necessary conditions to determine when a Table_ref instance
+  the necessary conditions to determine when a TABLE_LIST instance
   belongs to a certain type.
 
-  1) table (Table_ref::view == NULL)
+  1) table (TABLE_LIST::view == NULL)
      - base table
-       (Table_ref::derived == NULL)
-     - subquery - Table_ref::table is a temp table
-       (Table_ref::derived != NULL)
+       (TABLE_LIST::derived == NULL)
+     - subquery - TABLE_LIST::table is a temp table
+       (TABLE_LIST::derived != NULL)
      - information schema table
-       (Table_ref::schema_table != NULL)
-       NOTICE: for schema tables Table_ref::field_translation may be != NULL
-  2) view (Table_ref::view != NULL)
-     - merge    (Table_ref::effective_algorithm == VIEW_ALGORITHM_MERGE)
-           also (Table_ref::field_translation != NULL)
-     - temptable(Table_ref::effective_algorithm == VIEW_ALGORITHM_TEMPTABLE)
-           also (Table_ref::field_translation == NULL)
-  3) nested table reference (Table_ref::nested_join != NULL)
+       (TABLE_LIST::schema_table != NULL)
+       NOTICE: for schema tables TABLE_LIST::field_translation may be != NULL
+  2) view (TABLE_LIST::view != NULL)
+     - merge    (TABLE_LIST::effective_algorithm == VIEW_ALGORITHM_MERGE)
+           also (TABLE_LIST::field_translation != NULL)
+     - temptable(TABLE_LIST::effective_algorithm == VIEW_ALGORITHM_TEMPTABLE)
+           also (TABLE_LIST::field_translation == NULL)
+  3) nested table reference (TABLE_LIST::nested_join != NULL)
      - table sequence - e.g. (t1, t2, t3)
        TODO: how to distinguish from a JOIN?
      - general JOIN
        TODO: how to distinguish from a table sequence?
      - NATURAL JOIN
-       (Table_ref::natural_join != NULL)
+       (TABLE_LIST::natural_join != NULL)
        - JOIN ... USING
-         (Table_ref::join_using_fields != NULL)
+         (TABLE_LIST::join_using_fields != NULL)
      - semi-join
        ;
 */
 
-class Table_ref {
- public:
-  Table_ref() = default;
+struct TABLE_LIST {
+  TABLE_LIST() = default;
 
   /**
-    Only to be used by legacy code that temporarily needs a Table_ref,
-    more specifically: Query_result_create::binlog_show_create_table().
+    Only to be used by legacy code that temporarily needs a TABLE_LIST, more
+    specifically: Query_result_create::binlog_show_create_table().
   */
-  explicit Table_ref(TABLE *table_arg) : table(table_arg) {}
+  explicit TABLE_LIST(TABLE *table_arg) : table(table_arg) {}
 
   /// Constructor that can be used when the strings are null terminated.
-  Table_ref(const char *db_name, const char *table_name,
-            enum thr_lock_type lock_type)
-      : Table_ref(db_name, strlen(db_name), table_name, strlen(table_name),
-                  table_name, lock_type) {}
+  TABLE_LIST(const char *db_name, const char *table_name,
+             enum thr_lock_type lock_type)
+      : TABLE_LIST(db_name, strlen(db_name), table_name, strlen(table_name),
+                   table_name, lock_type) {}
 
   /**
-    Creates a Table_ref object with pre-allocated strings for database,
-    table and alias.
+    Creates a TABLE_LIST object with pre-allocated strings for database, table
+    and alias.
   */
-  Table_ref(TABLE *table_arg, const char *db_name_arg, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            const char *alias_arg, enum thr_lock_type lock_type_arg)
+  TABLE_LIST(TABLE *table_arg, const char *db_name_arg, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             const char *alias_arg, enum thr_lock_type lock_type_arg)
       : db(db_name_arg),
         table_name(table_name_arg),
         alias(alias_arg),
@@ -2833,19 +2726,18 @@ class Table_ref {
   }
 
   /// Constructor that can be used when the strings are null terminated.
-  Table_ref(const char *db_name, const char *table_name, const char *alias,
-            enum thr_lock_type lock_type)
-      : Table_ref(db_name, strlen(db_name), table_name, strlen(table_name),
-                  alias, lock_type) {}
+  TABLE_LIST(const char *db_name, const char *table_name, const char *alias,
+             enum thr_lock_type lock_type)
+      : TABLE_LIST(db_name, strlen(db_name), table_name, strlen(table_name),
+                   alias, lock_type) {}
 
   /**
-    This constructor can be used when a Table_ref is needed for an
-    existing temporary table. These typically have very long table names, since
-    it is a fully qualified path. For this reason, the table is set to the
-    alias. The database name is left blank. The lock descriptor is set to
-    TL_READ.
+    This constructor can be used when a TABLE_LIST is needed for an existing
+    temporary table. These typically have very long table names, since it is
+    a fully qualified path. For this reason, the table is set to the alias.
+    The database name is left blank. The lock descriptor is set to TL_READ.
   */
-  Table_ref(TABLE *table_arg, const char *alias_arg)
+  TABLE_LIST(TABLE *table_arg, const char *alias_arg)
       : db(""),
         table_name(alias_arg),
         alias(alias_arg),
@@ -2862,7 +2754,7 @@ class Table_ref {
     Sets an explicit enum_mdl_type value, without initializing
     m_lock_descriptor.
   */
-  Table_ref(TABLE *table_arg, const char *alias_arg, enum_mdl_type mdl_type)
+  TABLE_LIST(TABLE *table_arg, const char *alias_arg, enum_mdl_type mdl_type)
       : db(table_arg->s->db.str),
         table_name(table_arg->s->table_name.str),
         alias(alias_arg),
@@ -2874,9 +2766,9 @@ class Table_ref {
                      MDL_TRANSACTION);
   }
 
-  Table_ref(const char *db_name, const char *table_name_arg,
-            enum thr_lock_type lock_type_arg,
-            enum enum_mdl_type mdl_request_type)
+  TABLE_LIST(const char *db_name, const char *table_name_arg,
+             enum thr_lock_type lock_type_arg,
+             enum enum_mdl_type mdl_request_type)
       : db(db_name),
         table_name(table_name_arg),
         alias(table_name_arg),
@@ -2889,10 +2781,10 @@ class Table_ref {
     mdl_request.set_type(mdl_request_type);
   }
 
-  Table_ref(const char *db_name, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            enum thr_lock_type lock_type_arg,
-            enum enum_mdl_type mdl_request_type)
+  TABLE_LIST(const char *db_name, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             enum thr_lock_type lock_type_arg,
+             enum enum_mdl_type mdl_request_type)
       : db(db_name),
         table_name(table_name_arg),
         alias(table_name_arg),
@@ -2905,9 +2797,9 @@ class Table_ref {
     mdl_request.set_type(mdl_request_type);
   }
 
-  Table_ref(const char *db_name, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            enum thr_lock_type lock_type_arg)
+  TABLE_LIST(const char *db_name, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             enum thr_lock_type lock_type_arg)
       : db(db_name),
         table_name(table_name_arg),
         alias(table_name_arg),
@@ -2920,9 +2812,9 @@ class Table_ref {
     Sets an explicit enum_mdl_type value, without initializing
     m_lock_descriptor.
   */
-  Table_ref(const char *db_name, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            const char *alias_arg, enum enum_mdl_type mdl_request_type)
+  TABLE_LIST(const char *db_name, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             const char *alias_arg, enum enum_mdl_type mdl_request_type)
       : db(db_name),
         table_name(table_name_arg),
         alias(alias_arg),
@@ -2934,10 +2826,10 @@ class Table_ref {
     mdl_request.set_type(mdl_request_type);
   }
 
-  Table_ref(const char *db_name, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            const char *alias_arg, enum thr_lock_type lock_type_arg,
-            enum enum_mdl_type mdl_request_type)
+  TABLE_LIST(const char *db_name, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             const char *alias_arg, enum thr_lock_type lock_type_arg,
+             enum enum_mdl_type mdl_request_type)
       : db(db_name),
         table_name(table_name_arg),
         alias(alias_arg),
@@ -2950,9 +2842,9 @@ class Table_ref {
     mdl_request.set_type(mdl_request_type);
   }
 
-  Table_ref(const char *db_name_arg, size_t db_length_arg,
-            const char *table_name_arg, size_t table_name_length_arg,
-            const char *alias_arg, enum thr_lock_type lock_type_arg)
+  TABLE_LIST(const char *db_name_arg, size_t db_length_arg,
+             const char *table_name_arg, size_t table_name_length_arg,
+             const char *alias_arg, enum thr_lock_type lock_type_arg)
       : db(db_name_arg),
         table_name(table_name_arg),
         alias(alias_arg),
@@ -2964,11 +2856,11 @@ class Table_ref {
                      mdl_type_for_dml(m_lock_descriptor.type), MDL_TRANSACTION);
   }
 
-  /// Create a Table_ref object representing a nested join
-  static Table_ref *new_nested_join(MEM_ROOT *allocator, const char *alias,
-                                    Table_ref *embedding,
-                                    mem_root_deque<Table_ref *> *belongs_to,
-                                    Query_block *select);
+  /// Create a TABLE_LIST object representing a nested join
+  static TABLE_LIST *new_nested_join(MEM_ROOT *allocator, const char *alias,
+                                     TABLE_LIST *embedding,
+                                     mem_root_deque<TABLE_LIST *> *belongs_to,
+                                     Query_block *select);
   Item **join_cond_ref() { return &m_join_cond; }
   Item *join_cond() const { return m_join_cond; }
   void set_join_cond(Item *val) {
@@ -3008,16 +2900,19 @@ class Table_ref {
   /// Evaluate the check option of a view
   int view_check_option(THD *thd) const;
 
+  /// Cleanup field translations for a view
+  void cleanup_items();
+
   /// Produce a textual identification of this object
   void print(const THD *thd, String *str, enum_query_type query_type) const;
 
   /// Check which single table inside a view that matches a table map
-  bool check_single_table(Table_ref **table_ref, table_map map);
+  bool check_single_table(TABLE_LIST **table_ref, table_map map);
 
   /// Allocate a buffer for inserted column values
   bool set_insert_values(MEM_ROOT *mem_root);
 
-  Table_ref *first_leaf_for_name_resolution();
+  TABLE_LIST *first_leaf_for_name_resolution();
   /**
     Retrieve the last (right-most) leaf in a nested join tree with
     respect to name resolution.
@@ -3036,17 +2931,17 @@ class Table_ref {
         of the tree rooted in 'this',
       - else - 'this'
    */
-  Table_ref *last_leaf_for_name_resolution();
+  TABLE_LIST *last_leaf_for_name_resolution();
   bool is_leaf_for_name_resolution() const;
 
   /// Return the outermost view this table belongs to, or itself
-  inline const Table_ref *top_table() const {
+  inline const TABLE_LIST *top_table() const {
     return belong_to_view ? belong_to_view : this;
   }
 
-  inline Table_ref *top_table() {
-    return const_cast<Table_ref *>(
-        const_cast<const Table_ref *>(this)->top_table());
+  inline TABLE_LIST *top_table() {
+    return const_cast<TABLE_LIST *>(
+        const_cast<const TABLE_LIST *>(this)->top_table());
   }
 
   /// Prepare check option for a view
@@ -3167,7 +3062,7 @@ class Table_ref {
 
   /// Set table and all referencing views as being updated
   void set_updated() {
-    for (Table_ref *tr = this; tr != nullptr; tr = tr->referencing_view)
+    for (TABLE_LIST *tr = this; tr != nullptr; tr = tr->referencing_view)
       tr->m_updated = true;
   }
 
@@ -3176,7 +3071,7 @@ class Table_ref {
 
   /// Set table and all referencing views as being inserted into
   void set_inserted() {
-    for (Table_ref *tr = this; tr != nullptr; tr = tr->referencing_view)
+    for (TABLE_LIST *tr = this; tr != nullptr; tr = tr->referencing_view)
       tr->m_inserted = true;
   }
 
@@ -3185,7 +3080,7 @@ class Table_ref {
 
   /// Set table and all referencing views as being deleted from
   void set_deleted() {
-    for (Table_ref *tr = this; tr != nullptr; tr = tr->referencing_view)
+    for (TABLE_LIST *tr = this; tr != nullptr; tr = tr->referencing_view)
       tr->m_deleted = true;
   }
 
@@ -3194,9 +3089,6 @@ class Table_ref {
 
   /// Returns true if a MATCH function references this table.
   bool is_fulltext_searched() const { return m_fulltext_searched; }
-
-  /// Is this table only available in an external storage engine?
-  bool is_external() const;
 
   /**
     Set table as readonly, ie it is neither updatable, insertable nor
@@ -3225,8 +3117,8 @@ class Table_ref {
   uint leaf_tables_count() const;
 
   /// Return first leaf table of a base table or a view/derived table
-  Table_ref *first_leaf_table() {
-    Table_ref *tr = this;
+  TABLE_LIST *first_leaf_table() {
+    TABLE_LIST *tr = this;
     while (tr->merge_underlying_list) tr = tr->merge_underlying_list;
     return tr;
   }
@@ -3236,8 +3128,8 @@ class Table_ref {
   /// when WL#6059 is merged in (it really converts RIGHT JOIN to
   /// LEFT JOIN so the first leaf is part of a LEFT JOIN,
   /// guaranteed).
-  Table_ref *any_outer_leaf_table() {
-    Table_ref *tr = this;
+  TABLE_LIST *any_outer_leaf_table() {
+    TABLE_LIST *tr = this;
     while (tr->merge_underlying_list) {
       tr = tr->merge_underlying_list;
       /*
@@ -3291,9 +3183,16 @@ class Table_ref {
   /// Check if we can push outer where condition to this derived table
   bool can_push_condition_to_derived(THD *thd);
 
-  /// Return the number of hidden fields added for the temporary table
-  /// created for this derived table.
-  uint get_hidden_field_count_for_derived() const;
+  /// Get derived table expression
+  Item *get_derived_expr(uint expr_index);
+
+  /// Get cloned item for a derived table column. This creates the clone
+  /// and resolves it in the context provided.
+  Item *get_clone_for_derived_expr(THD *thd, Item *item,
+                                   Name_resolution_context *context);
+
+  /// Clean up the query expression for a materialized derived table
+  void cleanup_derived(THD *thd);
 
   /// Prepare security context for a view
   bool prepare_security(THD *thd);
@@ -3345,7 +3244,7 @@ class Table_ref {
   /**
      This is for showing in EXPLAIN.
      If a derived table, returns query block id of first underlying query block
-     of first materialized Table_ref instance. Zero if not derived.
+     of first materialized TABLE_LIST instance. Zero if not derived.
   */
   uint query_block_id_for_explain() const;
 
@@ -3356,14 +3255,13 @@ class Table_ref {
   const char *get_db_name() const { return db; }
 
   /**
-     @brief Returns the name of the table that this Table_ref represents.
+     @brief Returns the name of the table that this TABLE_LIST represents.
 
      @details The unqualified table name or view name for a table or view,
      respectively.
    */
   const char *get_table_name() const { return table_name; }
-  int fetch_number_of_rows(
-      ha_rows fallback_estimate = PLACEHOLDER_TABLE_ROW_ESTIMATE);
+  int fetch_number_of_rows();
   bool update_derived_keys(THD *, Field *, Item **, uint, bool *);
   bool generate_keys();
 
@@ -3377,8 +3275,7 @@ class Table_ref {
   bool create_field_translation(THD *thd);
 
   /**
-    @brief Returns the outer join nest that this Table_ref belongs to, if
-    any.
+    @brief Returns the outer join nest that this TABLE_LIST belongs to, if any.
 
     @details There are two kinds of join nests, outer-join nests and semi-join
     nests.  This function returns non-NULL in the following cases:
@@ -3395,7 +3292,7 @@ class Table_ref {
     @return outer join nest, or NULL if none.
   */
 
-  Table_ref *outer_join_nest() const {
+  TABLE_LIST *outer_join_nest() const {
     if (!embedding) return nullptr;
     if (embedding->is_sj_nest()) return embedding->embedding;
     return embedding;
@@ -3412,7 +3309,7 @@ class Table_ref {
 
   bool is_inner_table_of_outer_join() const {
     if (outer_join) return true;
-    for (Table_ref *emb = embedding; emb; emb = emb->embedding) {
+    for (TABLE_LIST *emb = embedding; emb; emb = emb->embedding) {
       if (emb->outer_join) return true;
     }
     return false;
@@ -3423,8 +3320,8 @@ class Table_ref {
     In DELETE and UPDATE, a view used as a target table must be mergeable,
     updatable and defined over a single table.
   */
-  const Table_ref *updatable_base_table() const {
-    const Table_ref *tbl = this;
+  const TABLE_LIST *updatable_base_table() const {
+    const TABLE_LIST *tbl = this;
     assert(tbl->is_updatable() && !tbl->is_multiple_tables());
     while (tbl->is_view_or_derived()) {
       tbl = tbl->merge_underlying_list;
@@ -3433,9 +3330,9 @@ class Table_ref {
     return tbl;
   }
 
-  Table_ref *updatable_base_table() {
-    return const_cast<Table_ref *>(
-        static_cast<const Table_ref *>(this)->updatable_base_table());
+  TABLE_LIST *updatable_base_table() {
+    return const_cast<TABLE_LIST *>(
+        static_cast<const TABLE_LIST *>(this)->updatable_base_table());
   }
 
   /**
@@ -3446,7 +3343,7 @@ class Table_ref {
       cases of each other, so we treat them together. The function
       setup_conds() creates a list of equal condition between all fields
       of the same name for NATURAL JOIN or the fields in
-      Table_ref::join_using_fields for JOIN ... USING.
+      TABLE_LIST::join_using_fields for JOIN ... USING.
       The list of equality conditions is stored
       either in b->join_cond(), or in JOIN::conds, depending on whether there
       was an outer join.
@@ -3468,7 +3365,7 @@ class Table_ref {
 
     @param b            Right join argument.
   */
-  void add_join_natural(Table_ref *b) { b->natural_join = this; }
+  void add_join_natural(TABLE_LIST *b) { b->natural_join = this; }
 
   /**
     Set granted privileges for a table.
@@ -3489,9 +3386,9 @@ class Table_ref {
     Created at parse time in Query_block::add_table_to_list() ->
     table_list.link_in_list().
   */
-  Table_ref *next_local{nullptr};
+  TABLE_LIST *next_local{nullptr};
   /* link in a global list of all queries tables */
-  Table_ref *next_global{nullptr}, **prev_global{nullptr};
+  TABLE_LIST *next_global{nullptr}, **prev_global{nullptr};
   const char *db{nullptr}, *table_name{nullptr}, *alias{nullptr};
   /*
     Target tablespace name: When creating or altering tables, this
@@ -3510,8 +3407,6 @@ class Table_ref {
   }
 
   const Lock_descriptor &lock_descriptor() const { return m_lock_descriptor; }
-
-  bool is_derived_unfinished_materialization() const;
 
  private:
   /**
@@ -3545,7 +3440,7 @@ class Table_ref {
     'this' represents a NATURAL or USING join operation. Thus after
     parsing 'this' is a NATURAL/USING join iff (natural_join != NULL).
   */
-  Table_ref *natural_join{nullptr};
+  TABLE_LIST *natural_join{nullptr};
   /*
     True if 'this' represents a nested join that is a NATURAL JOIN.
     For one of the operands of 'this', the member 'natural_join' points
@@ -3566,10 +3461,10 @@ class Table_ref {
     List of nodes in a nested join tree, that should be considered as
     leaves with respect to name resolution. The leaves are: views,
     top-most nodes representing NATURAL/USING joins, subqueries, and
-    base tables. All of these Table_ref instances contain a
+    base tables. All of these TABLE_LIST instances contain a
     materialized list of columns. The list is local to a subquery.
   */
-  Table_ref *next_name_resolution_table{nullptr};
+  TABLE_LIST *next_name_resolution_table{nullptr};
   /* Index names in a "... JOIN ... USE/IGNORE INDEX ..." clause. */
   List<Index_hint> *index_hints{nullptr};
   TABLE *table{nullptr}; /* opened table */
@@ -3586,7 +3481,7 @@ class Table_ref {
     here it will be reference of first occurrence of t1 to second (as you
     can see this lists can't be merged)
   */
-  Table_ref *correspondent_table{nullptr};
+  TABLE_LIST *correspondent_table{nullptr};
 
   /*
     Holds the function used as the table function
@@ -3633,6 +3528,7 @@ class Table_ref {
     schema table fields for backwards compatibility with SHOW command.
   */
   bool schema_table_reformed{false};
+  Temp_table_param *schema_table_param{nullptr};
   /* link to query_block where this table was used */
   Query_block *query_block{nullptr};
 
@@ -3650,22 +3546,22 @@ class Table_ref {
     does not include the tables of subqueries used in the view. Is set only
     for merged views.
   */
-  Table_ref *merge_underlying_list{nullptr};
+  TABLE_LIST *merge_underlying_list{nullptr};
   /*
     - 0 for base tables
     - in case of the view it is the list of all (not only underlying
     tables but also used in subquery ones) tables of the view.
   */
-  mem_root_deque<Table_ref *> *view_tables{nullptr};
+  mem_root_deque<TABLE_LIST *> *view_tables{nullptr};
   /* most upper view this table belongs to */
-  Table_ref *belong_to_view{nullptr};
+  TABLE_LIST *belong_to_view{nullptr};
   /*
     The view directly referencing this table
     (non-zero only for merged underlying tables of a view).
   */
-  Table_ref *referencing_view{nullptr};
+  TABLE_LIST *referencing_view{nullptr};
   /* Ptr to parent MERGE table list item. See top comment in ha_myisammrg.cc */
-  Table_ref *parent_l{nullptr};
+  TABLE_LIST *parent_l{nullptr};
   /*
     Security  context (non-zero only for tables which belong
     to view with SQL SECURITY DEFINER)
@@ -3681,7 +3577,7 @@ class Table_ref {
     tables. Unlike 'next_local', this in this list views are *not*
     leaves. Created in setup_tables() -> make_leaf_tables().
   */
-  Table_ref *next_leaf{nullptr};
+  TABLE_LIST *next_leaf{nullptr};
   Item *derived_where_cond{nullptr};   ///< WHERE condition from derived table
   Item *check_option{nullptr};         ///< WITH CHECK OPTION condition
   Item *replace_filter{nullptr};       ///< Filter for REPLACE command
@@ -3707,6 +3603,12 @@ class Table_ref {
   ulonglong algorithm{0};
   ulonglong view_suid{0};   ///< view is suid (true by default)
   ulonglong with_check{0};  ///< WITH CHECK OPTION
+  /**
+    Context that is used to resolve a merged derived table's
+    fields. Needed when a field from a merged derived table
+    is cloned. Used during condition pushdown to derived tables.
+  */
+  Name_resolution_context *m_merged_derived_context{nullptr};
 
  private:
   /// The view algorithm that is actually used, if this is a view.
@@ -3767,9 +3669,9 @@ class Table_ref {
   */
   NESTED_JOIN *nested_join{nullptr};
   /// The nested join containing this table reference.
-  Table_ref *embedding{nullptr};
+  TABLE_LIST *embedding{nullptr};
   /// The join list immediately containing this table reference
-  mem_root_deque<Table_ref *> *join_list{nullptr};
+  mem_root_deque<TABLE_LIST *> *join_list{nullptr};
   /// stop PS caching
   bool cacheable_table{false};
   /**
@@ -3787,12 +3689,12 @@ class Table_ref {
   dd::enum_table_type required_type{};
   char timestamp_buffer[20]{0}; /* buffer for timestamp (19+1) */
   /*
-    This Table_ref object is just placeholder for prelocking, it will be
+    This TABLE_LIST object is just placeholder for prelocking, it will be
     used for implicit LOCK TABLES only and won't be used in real statement.
   */
   bool prelocking_placeholder{false};
   /**
-     Indicates that if Table_ref object corresponds to the table/view
+     Indicates that if TABLE_LIST object corresponds to the table/view
      which requires special handling.
   */
   enum {
@@ -3862,11 +3764,15 @@ class Table_ref {
   List<Derived_key> derived_key_list;
 
   /**
-    Indicates what triggers we need to pre-load for this Table_ref
+    Indicates what triggers we need to pre-load for this TABLE_LIST
     when opening an associated TABLE. This is filled after
     the parsed tree is created.
   */
   uint8 trg_event_map{0};
+  uint i_s_requested_object{0};
+  bool has_db_lookup_value{false};
+  bool has_table_lookup_value{false};
+  uint table_open_method{0};
   bool schema_table_filled{false};
 
   MDL_request mdl_request;
@@ -3953,7 +3859,8 @@ class Table_ref {
   MY_BITMAP lock_partitions_saved;
   MY_BITMAP read_set_saved;
   MY_BITMAP write_set_saved;
-  MY_BITMAP read_set_internal_saved;
+  my_bitmap_map read_set_small[bitmap_buffer_size(64) / sizeof(my_bitmap_map)];
+  my_bitmap_map write_set_small[bitmap_buffer_size(64) / sizeof(my_bitmap_map)];
 };
 
 /*
@@ -3963,7 +3870,7 @@ class Table_ref {
 class Field_iterator {
  public:
   virtual ~Field_iterator() = default;
-  virtual void set(Table_ref *) = 0;
+  virtual void set(TABLE_LIST *) = 0;
   virtual void next() = 0;
   virtual bool end_of_fields() = 0; /* Return 1 at end of list */
   virtual const char *name() = 0;
@@ -3981,7 +3888,7 @@ class Field_iterator_table : public Field_iterator {
 
  public:
   Field_iterator_table() : ptr(nullptr) {}
-  void set(Table_ref *table) override { ptr = table->table->field; }
+  void set(TABLE_LIST *table) override { ptr = table->table->field; }
   void set_table(TABLE *table) { ptr = table->field; }
   void next() override { ptr++; }
   bool end_of_fields() override { return *ptr == nullptr; }
@@ -3996,11 +3903,11 @@ class Field_iterator_table : public Field_iterator {
 
 class Field_iterator_view : public Field_iterator {
   Field_translator *ptr, *array_end;
-  Table_ref *view;
+  TABLE_LIST *view;
 
  public:
   Field_iterator_view() : ptr(nullptr), array_end(nullptr) {}
-  void set(Table_ref *table) override;
+  void set(TABLE_LIST *table) override;
   void next() override { ptr++; }
   bool end_of_fields() override { return ptr == array_end; }
   const char *name() override;
@@ -4023,7 +3930,7 @@ class Field_iterator_natural_join : public Field_iterator {
  public:
   Field_iterator_natural_join() : cur_column_ref(nullptr) {}
   ~Field_iterator_natural_join() override = default;
-  void set(Table_ref *table) override;
+  void set(TABLE_LIST *table) override;
   void next() override;
   bool end_of_fields() override { return !cur_column_ref; }
   const char *name() override { return cur_column_ref->name(); }
@@ -4045,11 +3952,11 @@ class Field_iterator_natural_join : public Field_iterator {
 
     The implementation assumes that all underlying NATURAL/USING table
     references already contain their result columns and are linked into
-    the list Table_ref::next_name_resolution_table.
+    the list TABLE_LIST::next_name_resolution_table.
 */
 
 class Field_iterator_table_ref : public Field_iterator {
-  Table_ref *table_ref, *first_leaf, *last_leaf;
+  TABLE_LIST *table_ref, *first_leaf, *last_leaf;
   Field_iterator_table table_field_it;
   Field_iterator_view view_field_it;
   Field_iterator_natural_join natural_join_it;
@@ -4058,7 +3965,7 @@ class Field_iterator_table_ref : public Field_iterator {
 
  public:
   Field_iterator_table_ref() : field_it(nullptr) {}
-  void set(Table_ref *table) override;
+  void set(TABLE_LIST *table) override;
   void next() override;
   bool end_of_fields() override {
     return (table_ref == last_leaf && field_it->end_of_fields());
@@ -4070,7 +3977,7 @@ class Field_iterator_table_ref : public Field_iterator {
   Item *create_item(THD *thd) override { return field_it->create_item(thd); }
   Field *field() override { return field_it->field(); }
   Natural_join_column *get_or_create_column_ref(THD *thd,
-                                                Table_ref *parent_table_ref);
+                                                TABLE_LIST *parent_table_ref);
   Natural_join_column *get_natural_column_ref();
 };
 
@@ -4116,7 +4023,7 @@ static inline void dbug_tmp_restore_column_map(MY_BITMAP *bitmap
 
 /*
   Variant of the above : handle both read and write sets.
-  Provide for the possibility of the read set being the same as the write set
+  Provide for the possiblity of the read set being the same as the write set
 */
 static inline void dbug_tmp_use_all_columns(
     TABLE *table [[maybe_unused]], my_bitmap_map **save [[maybe_unused]],
@@ -4139,33 +4046,27 @@ static inline void dbug_tmp_restore_column_maps(
 #endif
 }
 
-void init_mdl_requests(Table_ref *table_list);
+void init_mdl_requests(TABLE_LIST *table_list);
 
 /**
-   Unpacks the definition of a value generator in all its forms: generated
-   column, default expression or checked constraint.
-   The function parses the text definition of this expression, resolves its
-   items and runs validation and calculates the base_columns_map which is used
-   for tracking the columns the expression depends on.
+   Unpacks the definition of a generated column, default expression or check
+   constraint expression passed as argument. Parses the text obtained from
+   TABLE_SHARE and produces an Item.
 
-  @param[in] thd               Thread handler
-  @param[in] table             Table having the value generator to be unpacked
-  @param[in,out] val_generator Contains the expression in string format, and,
-                               if successful will be replaced by the parser
-                               with a new one having the unpacked expression.
-  @param[in] source            Source of value generator(a generated column,
-                               a regular column with generated default value or
-                               a check constraint).
-  @param[in] source_name       Name of the source (generated column, a regular
-                               column with generated default value or a check
-                               constraint).
-  @param[in] field             The column the value generator depends on. Can
-                               be null for checked constraints which do not
-                               depend on a single column.
-  @param[in] is_create_table   Indicates that table is opened as part
-                               of CREATE or ALTER and does not yet exist in SE
-  @param[out] error_reported   updated flag for the caller that no other error
-                               messages are to be generated.
+  @param thd                  Thread handler
+  @param table                Table with the checked field
+  @param val_generator        The expression to unpack.
+  @param source               Source of value generator(a generated column,
+                              a regular column with generated default value or
+                              a check constraint).
+  @param source_name          Name of the source (generated column, a reguler
+                              column with generated default value or a check
+                              constraint).
+  @param field                Pointer to Field object
+  @param is_create_table      Indicates that table is opened as part
+                              of CREATE or ALTER and does not yet exist in SE
+  @param error_reported       updated flag for the caller that no other error
+                              messages are to be generated.
 
   @retval true Failure.
   @retval false Success.
@@ -4275,7 +4176,7 @@ inline bool is_perfschema_db(const char *name) {
         LOCK TABLE mode. This function is needed to handle the special case
         of P_S tables being used under LOCK TABLE mode.
 */
-inline bool belongs_to_p_s(Table_ref *tl) {
+inline bool belongs_to_p_s(TABLE_LIST *tl) {
   return (!strcmp("performance_schema", tl->db) &&
           strcmp(tl->table_name, "threads") &&
           strstr(tl->table_name, "setup_") == nullptr);
@@ -4307,10 +4208,10 @@ bool update_generated_read_fields(uchar *buf, TABLE *table,
                                   uint active_index = MAX_KEY);
 
 /**
-  Check if a Table_ref instance represents a pre-opened temporary table.
+  Check if a TABLE_LIST instance represents a pre-opened temporary table.
 */
 
-inline bool is_temporary_table(const Table_ref *tl) {
+inline bool is_temporary_table(const TABLE_LIST *tl) {
   if (tl->is_view() || tl->schema_table) return false;
 
   if (!tl->table) return false;
@@ -4327,8 +4228,8 @@ inline bool is_temporary_table(const Table_ref *tl) {
 
 /**
   After parsing, a Common Table Expression is accessed through a
-  Table_ref. This class contains all information about the CTE which the
-  Table_ref needs.
+  TABLE_LIST. This class contains all information about the CTE which the
+  TABLE_LIST needs.
 
   @note that before and during parsing, the CTE is described by a
   PT_common_table_expr.
@@ -4337,10 +4238,10 @@ class Common_table_expr {
  public:
   Common_table_expr(MEM_ROOT *mem_root)
       : references(mem_root), recursive(false), tmp_tables(mem_root) {}
-  TABLE *clone_tmp_table(THD *thd, Table_ref *tl);
+  TABLE *clone_tmp_table(THD *thd, TABLE_LIST *tl);
   bool substitute_recursive_reference(THD *thd, Query_block *sl);
   /// Remove one table reference.
-  void remove_table(Table_ref *tr);
+  void remove_table(TABLE_LIST *tr);
   /// Empties the materialized CTE and informs all of its clones.
   bool clear_all_references();
   /**
@@ -4348,7 +4249,7 @@ class Common_table_expr {
      query expression defining this CTE.
      In other words, all non-recursive references.
   */
-  Mem_root_array<Table_ref *> references;
+  Mem_root_array<TABLE_LIST *> references;
   /// True if it's a recursive CTE
   bool recursive;
   /**
@@ -4357,7 +4258,7 @@ class Common_table_expr {
     has a TABLE generated by create_tmp_table(); other ones have a TABLE
     generated by open_table_from_share().
   */
-  Mem_root_array<Table_ref *> tmp_tables;
+  Mem_root_array<TABLE_LIST *> tmp_tables;
   /// Name of the WITH block. Used only for EXPLAIN FORMAT=tree.
   LEX_STRING name;
 };
@@ -4366,18 +4267,18 @@ class Common_table_expr {
    This iterates on those references to a derived table / view / CTE which are
    materialized. If a recursive CTE, this includes recursive references.
    Upon construction it is passed a non-recursive materialized reference
-   to the derived table (Table_ref*).
+   to the derived table (TABLE_LIST*).
    For a CTE it may return more than one reference; for a derived table or a
    view, there is only one (as references to a same view are treated as
    independent objects).
    References are returned as TABLE*.
 */
 class Derived_refs_iterator {
-  Table_ref *const start;  ///< The reference provided in construction.
-  size_t ref_idx{0};       ///< Current index in cte->tmp_tables
-  bool m_is_first{true};   ///< True when at first reference in list
+  TABLE_LIST *const start;  ///< The reference provided in construction.
+  size_t ref_idx{0};        ///< Current index in cte->tmp_tables
+  bool m_is_first{true};    ///< True when at first reference in list
  public:
-  explicit Derived_refs_iterator(Table_ref *start_arg) : start(start_arg) {}
+  explicit Derived_refs_iterator(TABLE_LIST *start_arg) : start(start_arg) {}
   TABLE *get_next() {
     const Common_table_expr *cte = start->common_table_expr();
     m_is_first = ref_idx == 0;
@@ -4525,14 +4426,14 @@ class FRM_context {
   @param[in]  is_fix_view_cols_and_deps Fix view column data, table
                                         and routine dependency.
 
-  @retval 0            ON SUCCESS
-  @retval -1           ON FAILURE
-  @retval -2           ON LESS SEVER FAILURE (see read_frm_file)
+  @retval TABLE_SHARE  ON SUCCESS
+  @retval NULL         ON FAILURE
 */
-int create_table_share_for_upgrade(THD *thd, const char *path,
-                                   TABLE_SHARE *share, FRM_context *frm_context,
-                                   const char *db, const char *table,
-                                   bool is_fix_view_cols_and_deps);
+bool create_table_share_for_upgrade(THD *thd, const char *path,
+                                    TABLE_SHARE *share,
+                                    FRM_context *frm_context, const char *db,
+                                    const char *table,
+                                    bool is_fix_view_cols_and_deps);
 //////////////////////////////////////////////////////////////////////////
 
 /**

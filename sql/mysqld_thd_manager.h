@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,8 +30,8 @@
 
 #include "my_inttypes.h"
 #include "my_thread_local.h"  // my_thread_id
-#include "mysql/components/services/bits/mysql_cond_bits.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
+#include "mysql/components/services/mysql_cond_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
 #include "prealloced_array.h"
 
 class THD;
@@ -81,12 +81,10 @@ class Find_THD_Impl {
 */
 class Find_thd_with_id : public Find_THD_Impl {
  public:
-  Find_thd_with_id(my_thread_id value, bool daemon_allowed = false)
-      : m_thread_id(value), m_daemon_allowed(daemon_allowed) {}
+  Find_thd_with_id(my_thread_id value) : m_thread_id(value) {}
   bool operator()(THD *thd) override;
 
   const my_thread_id m_thread_id;
-  const bool m_daemon_allowed;
 };
 
 /**
@@ -215,11 +213,6 @@ class Global_THD_manager {
   }
 
   /**
-    Checks if the singleton is not already deinitialized
-  */
-  static bool is_initialized() { return thd_manager != nullptr; }
-
-  /**
     Initializes the thd manager.
     Must be called before get_instance() can be used.
 
@@ -330,14 +323,6 @@ class Global_THD_manager {
     @note One list partition is unlocked before the next partition is locked.
   */
   void do_for_all_thd(Do_THD_Impl *func);
-
-  /**
-   * This function calls func() for all first "n" THDs across all THD list
-   * partitions.
-   * @param func Object of class which overrides operator()
-   * @param n number of elements we want to call func for
-   */
-  void do_for_first_n_thd(Do_THD_Impl *func, uint n);
 
   /**
     Returns a THD_ptr containing first THD for which operator() returns true.

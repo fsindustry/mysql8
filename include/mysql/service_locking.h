@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 */
 
 #ifndef MYSQL_ABI_CHECK
-#include <stddef.h>
 #include <stdint.h>
 #endif /* MYSQL_ABI_CHECK */
 

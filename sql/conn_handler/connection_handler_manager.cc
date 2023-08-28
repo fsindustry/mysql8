@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,17 +25,16 @@
 #include "sql/conn_handler/connection_handler_manager.h"
 
 #include <assert.h>
-#include <ctime>
 #include <new>
 
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
-#include "mysql/components/services/bits/mysql_cond_bits.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/bits/psi_cond_bits.h"
-#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/mysql_cond_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/psi_cond_bits.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/service_thd_wait.h"
 #include "mysqld_error.h"                              // ER_*
 #include "sql/conn_handler/channel_info.h"             // Channel_info
@@ -119,7 +118,7 @@ bool Connection_handler_manager::check_and_incr_conn_count(
 
     if (connection_count > max_used_connections) {
       max_used_connections = connection_count;
-      max_used_connections_time = time(nullptr);
+      max_used_connections_time = (ulong)my_time(0);
     }
   }
   mysql_mutex_unlock(&LOCK_connection_count);
@@ -221,7 +220,7 @@ void Connection_handler_manager::destroy_instance() {
 void Connection_handler_manager::reset_max_used_connections() {
   mysql_mutex_lock(&LOCK_connection_count);
   max_used_connections = connection_count;
-  max_used_connections_time = time(nullptr);
+  max_used_connections_time = (ulong)my_time(0);
   mysql_mutex_unlock(&LOCK_connection_count);
 }
 

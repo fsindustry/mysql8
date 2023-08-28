@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,11 +25,9 @@
 #include "storage/ndb/plugin/ndb_dd_client.h"
 
 #include <assert.h>
-
 #include <iostream>
 
 #include "my_dbug.h"
-#include "my_psi_config.h"         // HAVE_PSI_SP_INTERFACE
 #include "sql/auth/auth_common.h"  // check_readonly()
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/dd.h"
@@ -51,19 +49,13 @@
 #include "storage/ndb/plugin/ndb_dd_upgrade_table.h"
 #include "storage/ndb/plugin/ndb_fk_util.h"
 #include "storage/ndb/plugin/ndb_log.h"
-#include "storage/ndb/plugin/ndb_pfs_init.h"
 #include "storage/ndb/plugin/ndb_schema_dist_table.h"
 #include "storage/ndb/plugin/ndb_thd.h"
-
-constexpr size_t NDB_DD_CLIENT_MEMROOT_BLOCK_SIZE = 1024;
 
 Ndb_dd_client::Ndb_dd_client(THD *thd)
     : m_thd(thd),
       m_client(thd->dd_client()),
-      m_save_mdl_locks(thd->mdl_context.mdl_savepoint()),
-      m_dd_mem_root(key_memory_ndb_dd_client_mem_root,
-                    NDB_DD_CLIENT_MEMROOT_BLOCK_SIZE),
-      m_prev_mem_root(thd->mem_root) {
+      m_save_mdl_locks(thd->mdl_context.mdl_savepoint()) {
   DBUG_TRACE;
   disable_autocommit();
 
@@ -72,18 +64,13 @@ Ndb_dd_client::Ndb_dd_client(THD *thd)
   // Dictionary_client in the ndb_dd_client header file
   m_auto_releaser =
       (void *)new dd::cache::Dictionary_client::Auto_releaser(m_client);
-
-  // Use dedicated MEM_ROOT while acessing DD
-  thd->mem_root = &m_dd_mem_root;
 }
 
 Ndb_dd_client::~Ndb_dd_client() {
   DBUG_TRACE;
   // Automatically restore the option_bits in THD if they have
   // been modified
-  if (m_save_option_bits != 0) {
-    m_thd->variables.option_bits = m_save_option_bits;
-  }
+  if (m_save_option_bits) m_thd->variables.option_bits = m_save_option_bits;
 
   if (m_auto_rollback) {
     // Automatically rollback unless commit has been called
@@ -92,9 +79,6 @@ Ndb_dd_client::~Ndb_dd_client() {
 
   // Release MDL locks
   mdl_locks_release();
-
-  // Restore previous MEM_ROOT
-  m_thd->mem_root = m_prev_mem_root;
 
   // Free the dictionary client auto releaser
   dd::cache::Dictionary_client::Auto_releaser *ar =
@@ -479,8 +463,8 @@ bool Ndb_dd_client::rename_table(
   to_table_def->set_schema_id(new_schema->id());
   to_table_def->set_name(new_table_name);
 
-  const Ndb_dd_handle dd_handle{new_table_id, new_table_version};
-  ndb_dd_table_set_spi_and_version(to_table_def, dd_handle);
+  ndb_dd_table_set_object_id_and_version(to_table_def, new_table_id,
+                                         new_table_version);
 
   // Rename foreign keys
   if (dd::rename_foreign_keys(m_thd, old_schema_name, old_table_name,
@@ -519,39 +503,6 @@ bool Ndb_dd_client::rename_table(
   return true;
 }
 
-bool Ndb_dd_client::remove_table(
-    const dd::Table *table, const char *schema_name, const char *table_name,
-    Ndb_referenced_tables_invalidator *invalidator) {
-  DBUG_TRACE;
-  DBUG_PRINT("enter", ("table_name: '%s'", table->name().c_str()));
-
-  if (table == nullptr) {
-    // Table does not exist
-    return true;
-  }
-
-  if (invalidator != nullptr &&
-      !invalidator->fetch_referenced_tables_to_invalidate(
-          schema_name, table_name, table, true)) {
-    return false;
-  }
-
-#ifdef HAVE_PSI_SP_INTERFACE
-  // Remove statistics, table is not using trigger(s) anymore
-  remove_all_triggers_from_perfschema(schema_name, *table);
-#endif
-
-  DBUG_PRINT("info", ("removing existing table"));
-  if (m_client->drop(table)) {
-    // Failed to remove table
-    // Catch in debug, unexpected error
-    assert(false);
-    return false;
-  }
-
-  return true;
-}
-
 bool Ndb_dd_client::remove_table(const char *schema_name,
                                  const char *table_name,
                                  Ndb_referenced_tables_invalidator *invalidator)
@@ -566,54 +517,30 @@ bool Ndb_dd_client::remove_table(const char *schema_name,
     return false;
   }
 
-  return remove_table(existing, schema_name, table_name, invalidator);
-}
-
-bool Ndb_dd_client::remove_table(
-    dd::Object_id spi, Ndb_referenced_tables_invalidator *invalidator) {
-  DBUG_TRACE;
-  DBUG_PRINT("enter", ("se_private_id: '%lld'", spi));
-
-  dd::Table *table;
-  dd::Schema *schema;
-  const char *engine = "ndbcluster";
-
-  // Find old table using the NDB tables id, skip missing SPI cache
-  if (m_client->acquire_uncached_table_by_se_private_id(engine, spi, &table,
-                                                        true)) {
-    ndb_log_warning("Error retrieving table definition ndbcluster-%lld", spi);
-    return false;
-  }
-
-  if (table == nullptr) {
-    // Table does not exist or was inadvertently cached. Nothing to do.
-    ndb_log_verbose(50, "Table definition with %s-%llu does not exist", engine,
-                    spi);
+  if (existing == nullptr) {
+    // Table does not exist
     return true;
   }
 
-#ifndef NDEBUG
-  // Double check that old table is in NDB
-  if (table->engine() != engine) {
-    assert(false);
+  if (invalidator != nullptr &&
+      !invalidator->fetch_referenced_tables_to_invalidate(
+          schema_name, table_name, existing, true)) {
     return false;
   }
+
+#ifdef HAVE_PSI_SP_INTERFACE
+  // Remove statistics, table is not using trigger(s) anymore
+  remove_all_triggers_from_perfschema(schema_name, *existing);
 #endif
 
-  if (m_client->acquire_uncached(table->schema_id(), &schema)) {
+  DBUG_PRINT("info", ("removing existing table"));
+  if (m_client->drop(existing)) {
+    // Failed to remove existing
+    assert(false);  // Catch in debug, unexpected error
     return false;
   }
 
-  const char *schema_name = schema->name().c_str();
-  const char *table_name = table->name().c_str();
-
-  // Take exclusive locks on old table
-  if (!mdl_locks_acquire_exclusive(schema_name, table_name)) {
-    // Failed to MDL lock old table
-    return false;
-  }
-
-  return remove_table(table, schema_name, table_name, invalidator);
+  return true;
 }
 
 bool Ndb_dd_client::deserialize_table(const dd::sdi_t &sdi,
@@ -658,7 +585,43 @@ bool Ndb_dd_client::store_table(dd::Table *install_table, int ndb_table_id) {
     // will set a new error
     m_thd->clear_error();
 
-    if (!remove_table(ndb_table_id)) {
+    // Find old table using the NDB tables id
+    dd::Table *old_table_def;
+    if (m_client->acquire_uncached_table_by_se_private_id(
+            "ndbcluster", ndb_table_id, &old_table_def)) {
+      // There was no old table
+      return false;
+    }
+
+    // Double check that old table is in NDB
+    if (old_table_def->engine() != "ndbcluster") {
+      assert(false);
+      return false;
+    }
+
+    // Lookup schema name of old table
+    dd::Schema *old_schema;
+    if (m_client->acquire_uncached(old_table_def->schema_id(), &old_schema)) {
+      return false;
+    }
+
+    if (old_schema == nullptr) {
+      assert(false);  // Database does not exist
+      return false;
+    }
+
+    const char *old_schema_name = old_schema->name().c_str();
+    const char *old_table_name = old_table_def->name().c_str();
+    DBUG_PRINT("info", ("Found old table '%s.%s', will try to remove it",
+                        old_schema_name, old_table_name));
+
+    // Take exclusive locks on old table
+    if (!mdl_locks_acquire_exclusive(old_schema_name, old_table_name)) {
+      // Failed to MDL lock old table
+      return false;
+    }
+
+    if (!remove_table(old_schema_name, old_table_name)) {
       // Failed to remove old table from DD
       return false;
     }
@@ -703,7 +666,7 @@ bool Ndb_dd_client::install_table(
   // matches the table name to install
   assert(ndb_dd_fs_name_case(install_table->name()) == table_name);
 
-  // Verify that table definition unpacked from NDB
+  // Verify that table defintion unpacked from NDB
   // does not have any se_private fields set, those will be set
   // from the NDB table metadata
   assert(install_table->se_private_id() == dd::INVALID_OBJECT_ID);
@@ -713,8 +676,8 @@ bool Ndb_dd_client::install_table(
   install_table->set_schema_id(schema->id());
 
   // Assign NDB id and version of the table
-  const Ndb_dd_handle dd_handle{ndb_table_id, ndb_table_version};
-  ndb_dd_table_set_spi_and_version(install_table.get(), dd_handle);
+  ndb_dd_table_set_object_id_and_version(install_table.get(), ndb_table_id,
+                                         ndb_table_version);
 
   // Check if the DD table object has the correct number of partitions.
   // Correct the number of partitions in the DD table object in case of
@@ -734,92 +697,63 @@ bool Ndb_dd_client::install_table(
     ndb_dd_table_set_tablespace_id(install_table.get(), tablespace_id);
   }
 
-  // Get the old table definition and compare the ndb_table_id with the
-  // already installed id (on se_private_id). First, attempt to get the
-  // definition using the table's full name. If the ids are different,
-  // attempt to retrieve the previous definition using the to-be-installed
-  // ndb_table_id. Drop all required definitions to install the new
-
-  const dd::Table *old_table_def = nullptr;
-  if (m_client->acquire(schema_name, table_name, &old_table_def)) {
+  const dd::Table *existing = nullptr;
+  if (m_client->acquire(schema_name, table_name, &existing)) {
     return false;
   }
 
   if (invalidator != nullptr &&
       !invalidator->fetch_referenced_tables_to_invalidate(
-          schema_name, table_name, old_table_def)) {
+          schema_name, table_name, existing)) {
     return false;
   }
 
-  if (old_table_def != nullptr) {
-    Ndb_dd_handle old_handle = ndb_dd_table_get_spi_and_version(old_table_def);
-    if (!old_handle.valid()) {
+  if (existing != nullptr) {
+    // Get id and version of existing table
+    int object_id, object_version;
+    if (!ndb_dd_table_get_object_id_and_version(existing, object_id,
+                                                object_version)) {
       DBUG_PRINT("error", ("Could not extract object_id and object_version "
                            "from table definition"));
       assert(false);
       return false;
     }
 
-    // Table already exists so do force overwrite
+    // Check that id and version of the existing table in DD
+    // matches NDB, otherwise it's a programming error
+    // not to request "force_overwrite"
+    if (ndb_table_id == object_id && ndb_table_version == object_version) {
+      // Table is already installed, with same id and version
+      // return sucess
+      return true;
+    }
+
+    // Table already exists
     if (!force_overwrite) {
+      // Don't overwrite existing table
       assert(false);
       return false;
     }
 
-    // Check that se_private_id of the existing table in DD
-    // matches NDB, otherwise it's a programming error
-    // not to request "force_overwrite"
-    if (old_handle == dd_handle) {
-      // Table is already installed, with same id and version
-      // return success
-      return true;
-    }
-
-    // Drop the old table definition of schema_name.table_name
-    // It needs to be done to free up "schema-id"-"table_name" DD entries
+    // Continue and remove the old table before
+    // installing the new
     DBUG_PRINT("info", ("dropping existing table"));
-    if (m_client->drop(old_table_def)) {
+    if (m_client->drop(existing)) {
       // Failed to drop existing
       assert(false);  // Catch in debug, unexpected error
       return false;
     }
-
-    // If the table to be installed has a different se_private_id than
-    // the existing, then the currently installed se_private_id table must
-    // also be removed if exists.
-    if (dd_handle.spi != old_handle.spi) {
-      ndb_log_info(
-          "Cached se_private_id different than ndb_table_id. "
-          "Removing ndbcluster-%llu table definition if exists",
-          dd_handle.spi);
-
-      if (!remove_table(dd_handle.spi)) {
-        ndb_log_warning(
-            "Failed to remove table definition from DD for spi=%llu. ",
-            dd_handle.spi);
-      }
-    }
-  } else {
-    // Remove any stale DD table that may be occupying this
-    // ndbcluster-<id> place
-    if (!remove_table(dd_handle.spi)) {
-      ndb_log_info("Failed to remove ndbcluster-%llu from DD", dd_handle.spi);
-    }
   }
 
   if (!store_table(install_table.get(), ndb_table_id)) {
-    const dd::sdi_t new_table_sdi = ndb_dd_sdi_serialize(
-        m_thd, *install_table.get(), dd::String_type(schema_name));
-
     ndb_log_error("Failed to store table: '%s.%s'", schema_name, table_name);
-    ndb_log_error("sdi for new table: %s",
-                  ndb_dd_sdi_prettify(new_table_sdi).c_str());
-
-    if (old_table_def) {
-      const dd::sdi_t old_table_sdi = ndb_dd_sdi_serialize(
-          m_thd, *old_table_def, dd::String_type(schema_name));
-      ndb_log_error("sdi for existing table: %s",
-                    ndb_dd_sdi_prettify(old_table_sdi).c_str());
+    ndb_log_error_dump("sdi for new table: %s",
+                       ndb_dd_sdi_prettify(sdi).c_str());
+    if (existing) {
+      const dd::sdi_t existing_sdi =
+          ndb_dd_sdi_serialize(m_thd, *existing, dd::String_type(schema_name));
+      ndb_log_error_dump("sdi for existing table: %s",
+                         ndb_dd_sdi_prettify(existing_sdi).c_str());
     }
     DBUG_ABORT();
     return false;
@@ -911,8 +845,7 @@ bool Ndb_dd_client::set_object_id_and_version_in_table(const char *schema_name,
   }
 
   /* Update id and version */
-  Ndb_dd_handle dd_handle{object_id, object_version};
-  ndb_dd_table_set_spi_and_version(table_def, dd_handle);
+  ndb_dd_table_set_object_id_and_version(table_def, object_id, object_version);
 
   /* Update it to DD */
   if (m_client->update(table_def)) {
@@ -1181,7 +1114,7 @@ bool Ndb_dd_client::lookup_tablespace_id(const char *tablespace_name,
       MDL_key::TABLESPACE, "", tablespace_name, MDL_INTENTION_EXCLUSIVE));
 
   // Acquire tablespace.
-  const dd::Tablespace *ts_obj = nullptr;
+  const dd::Tablespace *ts_obj = NULL;
   if (m_client->acquire(tablespace_name, &ts_obj)) {
     // acquire() always fails with an error being reported.
     return false;
@@ -1680,7 +1613,7 @@ bool Ndb_referenced_tables_invalidator::fetch_referenced_tables_to_invalidate(
 */
 bool Ndb_referenced_tables_invalidator::invalidate() const {
   DBUG_TRACE;
-  for (auto const &parent_it : m_referenced_tables) {
+  for (auto parent_it : m_referenced_tables) {
     // Invalidate the table from DD
     const char *schema_name = parent_it.first.c_str();
     const char *table_name = parent_it.second.c_str();
@@ -1694,133 +1627,3 @@ bool Ndb_referenced_tables_invalidator::invalidate() const {
   }
   return true;
 }
-
-#ifndef NDEBUG
-/*
-   Tables in DD are stored in the mysql.tables which is defined like this:
-
-   CREATE TABLE mysql.tables (
-     object_id BIGINT PRIMARY KEY,  // DD object's id
-     schema_name VARCHAR(255),
-     table_name VARCHAR(255),
-     ..
-     engine VARCHAR(255),
-     se_private_id INT,
-     se_private_data JSON,
-     UNIQUE(engine, se_private_id), // Unique index preventing each SE to
-                                    // store more than one table with same
-                                    // se_private_id
-   )
-   For each table in NDB, the ndbcluster plugin stores
-   the NDB table's id and version in the DD using:
-     - se_private_id -> the NDB table id
-     - se_private_data["object_version"] -> the NDB table version
-   For example, the hypothetical NDB table 'db1.t1' with NDB table id 37 and
-   version 9 would be returned like this using SQL:
-    SELECT .. FROM mysql.tables WHERE
-      schema_name = db1 AND table_name = t1;
-        object_id: 479
-        schema_name: db1
-        table_name: t1
-        ...
-        engine = ndbcluster
-        se_private_id = 37
-        se_private_data = {
-           object_version: 9
-        }
-*/
-bool Ndb_dd_client::dump_NDB_tables() {
-  fprintf(stderr, "Ndb_dd_client::dump_NDB_tables\n");
-  fprintf(stderr,
-          "| object_id | db_name | table_name | ... | engine | se_private_id | "
-          "se_private_data |\n");
-  // Fetch list of schemas in DD
-  std::vector<std::string> schema_names;
-  if (!fetch_schema_names(&schema_names)) {
-    return true;
-  }
-  // Iterate over each schema in DD and show all NDB tables
-  for (const std::string &schema_name : schema_names) {
-    const dd::Schema *schema = nullptr;
-    if (!mdl_lock_schema(schema_name.c_str()) ||
-        m_client->acquire(schema_name.c_str(), &schema)) {
-      return true;
-    }
-    assert(schema);
-    std::vector<const dd::Table *> ndb_tables;
-    if (m_client->fetch_schema_components(schema, &ndb_tables)) {
-      return true;
-    }
-    for (const dd::Table *table_def : ndb_tables) {
-      if (table_def->engine() != "ndbcluster") continue;
-      const Ndb_dd_handle ndb_id = ndb_dd_table_get_spi_and_version(table_def);
-      assert(table_def->se_private_id() == ndb_id.spi);
-      fprintf(stderr,
-              "| %llu | %s | %s | ... | %s | %llu | { object_version: %d} |\n",
-              table_def->id(), schema_name.c_str(), table_def->name().c_str(),
-              "ndbcluster", ndb_id.spi, ndb_id.version);
-    }
-  }
-  return false;
-}
-
-bool Ndb_dd_client::dbug_shuffle_spi_for_NDB_tables() {
-  fprintf(stderr, "Ndb_dd_client::dbug_shuffle_spi_for_NDB_tables\n");
-  // Fetch list of schemas in DD
-  std::vector<std::string> schema_names;
-  if (!fetch_schema_names(&schema_names)) {
-    return true;
-  }
-
-  dd::Object_id old_id = 0;
-  // Iterate over each schema in DD
-  for (const std::string &schema_name : schema_names) {
-    const dd::Schema *schema = nullptr;
-    if (!mdl_lock_schema(schema_name.c_str()) ||
-        m_client->acquire(schema_name.c_str(), &schema)) {
-      return true;
-    }
-    assert(schema);
-    std::vector<const dd::Table *> ndb_tables;
-    if (m_client->fetch_schema_components(schema, &ndb_tables)) {
-      return true;
-    }
-    for (const dd::Table *table_def : ndb_tables) {
-      if (table_def->engine() != "ndbcluster") {
-        // Skip non NDB tables
-        continue;
-      }
-      if (!mdl_locks_acquire_exclusive(schema_name.c_str(),
-                                       table_def->name().c_str())) {
-        assert(false);
-        return true;
-      }
-      const Ndb_dd_handle ndb_id = ndb_dd_table_get_spi_and_version(table_def);
-      const dd::Object_id new_id = old_id;
-      old_id = ndb_id.spi;
-
-      fprintf(stderr, " %s: %llu -> %llu\n", table_def->name().c_str(), old_id,
-              new_id);
-
-      if (!set_object_id_and_version_in_table(schema_name.c_str(),
-                                              table_def->name().c_str(), new_id,
-                                              ndb_id.version)) {
-        // Failure to update can happen when there is already another table
-        // using the decreased se_private_id, skip these tables for now and
-        // thus cause only some tables to later need to be reinstalled from NDB
-        // NOTE! To update _all_ tables it would be necessary to update tables
-        // in sorted order, starting from table with lowest se_private_id
-        const int error = m_thd->get_stmt_da()->mysql_errno();
-        assert(error == 1062);
-        fprintf(stderr, "Failed to update %s, error: %u\n",
-                table_def->name().c_str(), error);
-        continue;
-      }
-    }
-  }
-  // Save updated table definitions to DD
-  commit();
-  return false;
-}
-
-#endif

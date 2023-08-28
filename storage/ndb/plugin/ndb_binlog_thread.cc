@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,9 +28,9 @@
 #include <cstdint>
 
 // Using
+#include "m_string.h"  // NullS
 #include "my_dbug.h"
 #include "mysql/status_var.h"  // enum_mysql_show_type
-#include "nulls.h"             // NullS
 #include "sql/current_thd.h"   // current_thd
 #include "storage/ndb/include/ndbapi/NdbError.hpp"
 #include "storage/ndb/plugin/ndb_apply_status_table.h"
@@ -38,7 +38,6 @@
 #include "storage/ndb/plugin/ndb_local_connection.h"
 #include "storage/ndb/plugin/ndb_log.h"
 #include "storage/ndb/plugin/ndb_metadata_change_monitor.h"
-#include "storage/ndb/plugin/ndb_ndbapi_util.h"
 #include "storage/ndb/plugin/ndb_share.h"
 
 int Ndb_binlog_thread::do_init() {
@@ -59,7 +58,7 @@ int Ndb_binlog_thread::do_deinit() {
   reset index. This means that ndbcluster also need to clear its own binlog
   index(which is stored in the mysql.ndb_binlog_index table).
 
-  @return 0 on success
+  @return 0 on sucess
 */
 int Ndb_binlog_thread::do_after_reset_master(void *) {
   DBUG_TRACE;
@@ -310,29 +309,4 @@ void Ndb_binlog_thread::release_apply_status_reference() {
     NDB_SHARE::release_reference(m_apply_status_share, "m_apply_status_share");
     m_apply_status_share = nullptr;
   }
-}
-
-unsigned Ndb_binlog_thread::Metadata_cache::is_fk_parent(
-    unsigned table_id) const {
-  DBUG_TRACE;
-  DBUG_PRINT("enter", ("parent_id: %u", table_id));
-
-  DBUG_EXECUTE("", {
-    for (auto id : m_fk_parent_tables) {
-      DBUG_PRINT("info", ("id: %u", id));
-    }
-  });
-
-  return m_fk_parent_tables.count(table_id);
-}
-
-bool Ndb_binlog_thread::Metadata_cache::load_fk_parents(
-    const NdbDictionary::Dictionary *dict) {
-  DBUG_TRACE;
-  std::unordered_set<unsigned> table_ids;
-  if (!ndb_get_parent_table_ids_in_dictionary(dict, table_ids)) {
-    return false;
-  }
-  m_fk_parent_tables = std::move(table_ids);
-  return true;
 }

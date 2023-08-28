@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,29 +27,26 @@
   So we put them in a separate compilation unit.
 */
 
+#include <stddef.h>
 #include <sys/types.h>
 
-#include <cstddef>
-#include <cstdint>
-
-#include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 
 namespace strnxfrm_unittest {
 
-extern "C" size_t strnxfrm_orig(const CHARSET_INFO *cs, uint8_t *dst,
-                                size_t dstlen, uint nweights,
-                                const uint8_t *src, size_t srclen, uint flags);
-extern "C" size_t strnxfrm_orig_unrolled(const CHARSET_INFO *cs, uint8_t *dst,
+extern "C" size_t strnxfrm_orig(const CHARSET_INFO *cs, uchar *dst,
+                                size_t dstlen, uint nweights, const uchar *src,
+                                size_t srclen, uint flags);
+extern "C" size_t strnxfrm_orig_unrolled(const CHARSET_INFO *cs, uchar *dst,
                                          size_t dstlen, uint nweights,
-                                         const uint8_t *src, size_t srclen,
+                                         const uchar *src, size_t srclen,
                                          uint flags);
-extern "C" size_t strnxfrm_new(const CHARSET_INFO *cs, uint8_t *dst,
-                               size_t dstlen, uint nweights, const uint8_t *src,
+extern "C" size_t strnxfrm_new(const CHARSET_INFO *cs, uchar *dst,
+                               size_t dstlen, uint nweights, const uchar *src,
                                size_t srclen, uint flags);
-extern "C" size_t strnxfrm_new_unrolled(const CHARSET_INFO *cs, uint8_t *dst,
+extern "C" size_t strnxfrm_new_unrolled(const CHARSET_INFO *cs, uchar *dst,
                                         size_t dstlen, uint nweights,
-                                        const uint8_t *src, size_t srclen,
+                                        const uchar *src, size_t srclen,
                                         uint flags);
 
 }  // namespace strnxfrm_unittest

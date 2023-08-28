@@ -1,7 +1,7 @@
 #ifndef PROTOCOL_INCLUDED
 #define PROTOCOL_INCLUDED
 
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,8 +38,6 @@ class Item_param;
 template <class T>
 class List;
 class Field;
-
-struct CHARSET_INFO;
 
 class Protocol {
  private:
@@ -88,7 +86,7 @@ class Protocol {
     @param cmd       out parameter
 
     @returns
-      -1  fatal protocol error
+      -1  fatal protcol error
       0   ok
       1   non-fatal protocol or parsing error
   */
@@ -168,7 +166,7 @@ class Protocol {
 
   /**
     Returns the client capabilities stored on the protocol.
-    The available capabilities are defined in mysql_com.h
+    The available capabilites are defined in mysql_com.h
   */
   virtual ulong get_client_capabilities() = 0;
   /**
@@ -362,7 +360,7 @@ class Protocol {
 
     @param parameters      List of PS/SP parameters (both input and output).
     @param is_sql_prepare  Used for the legacy protocol. If we're dealing with
-                           sql prepare then text protocol will be used.
+                           sql prepare then text protocol wil be used.
 
     @return Error status.
       @retval false Success.

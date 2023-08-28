@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,7 +21,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
-#include "util/require.h"
 #include <ndb_global.h>
 #include <stdlib.h>
 #include "NdbWaitGroup.hpp"
@@ -42,7 +41,7 @@ NdbWaitGroup::NdbWaitGroup(Ndb_cluster_connection *_conn, int ndbs) :
   m_pos_new(0),
   m_pos_wait(0),
   m_pos_ready(0),
-  m_multiWaitHandler(nullptr),
+  m_multiWaitHandler(0),
   m_pos_overflow(0),
   m_nodeId(0),
   m_conn(_conn)
@@ -208,7 +207,7 @@ int NdbWaitGroup::wait(Uint32 timeout_millis, int pct_ready)
 
 Ndb * NdbWaitGroup::pop()
 {
-  Ndb * r = nullptr;
+  Ndb * r = 0;
 
   lock();
   if(m_pos_ready < m_pos_wait) 

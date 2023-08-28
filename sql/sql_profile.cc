@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,6 +42,7 @@
 #include <algorithm>
 
 #include "decimal.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_base.h"
 #include "my_compiler.h"
@@ -49,8 +50,6 @@
 #include "my_sqlcommand.h"
 #include "my_sys.h"
 #include "my_systime.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/my_decimal.h"
@@ -80,7 +79,7 @@ static const size_t MAX_QUERY_LENGTH = 300;
   Connects Information_Schema and Profiling.
 */
 int fill_query_profile_statistics_info(THD *thd [[maybe_unused]],
-                                       Table_ref *tables [[maybe_unused]],
+                                       TABLE_LIST *tables [[maybe_unused]],
                                        Item *) {
 #if defined(ENABLED_PROFILING)
   const char *old = thd->lex->sql_command == SQLCOM_SHOW_PROFILE
@@ -498,7 +497,7 @@ void PROFILING::set_query_source(const char *query_source_arg,
   There are two ways to get to this function:  Selecting from the information
   schema, and a SHOW command.
 */
-int PROFILING::fill_statistics_info(THD *thd_arg, Table_ref *tables) {
+int PROFILING::fill_statistics_info(THD *thd_arg, TABLE_LIST *tables) {
   DBUG_TRACE;
   TABLE *table = tables->table;
   ulonglong row_number = 0;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@ extern std::atomic_bool g_admin_ssl_configured;
 
 extern std::string mysql_main_channel;
 extern std::string mysql_admin_channel;
-extern bool opt_tls_certificates_enforced_validation;
 
 /** helper class to deal with optionally empty strings */
 class OptionalString {
@@ -62,9 +61,7 @@ class Ssl_init_callback {
                                OptionalString *cipher,
                                OptionalString *ciphersuites,
                                OptionalString *key, OptionalString *crl,
-                               OptionalString *crl_path,
-                               bool *session_cache_mode,
-                               long *session_cache_timeout) = 0;
+                               OptionalString *crl_path) = 0;
 
   virtual bool provision_certs() = 0;
 
@@ -83,8 +80,7 @@ class Ssl_init_callback_server_main final : public Ssl_init_callback {
                        OptionalString *version, OptionalString *cert,
                        OptionalString *cipher, OptionalString *ciphersuites,
                        OptionalString *key, OptionalString *crl,
-                       OptionalString *crl_path, bool *session_cache_mode,
-                       long *session_cache_timeout) override;
+                       OptionalString *crl_path) override;
 
   bool provision_certs() override;
 
@@ -106,8 +102,7 @@ class Ssl_init_callback_server_admin final : public Ssl_init_callback {
                        OptionalString *version, OptionalString *cert,
                        OptionalString *cipher, OptionalString *ciphersuites,
                        OptionalString *key, OptionalString *crl,
-                       OptionalString *crl_path, bool *session_cache_mode,
-                       long *session_cache_timeout) override;
+                       OptionalString *crl_path) override;
 
   bool provision_certs() override {
     /*
@@ -125,8 +120,4 @@ class Ssl_init_callback_server_admin final : public Ssl_init_callback {
 extern Ssl_init_callback_server_main server_main_callback;
 extern Ssl_init_callback_server_admin server_admin_callback;
 
-/**
-  Helper method to validate values of --tls-version and --admin-tls-version
-*/
-bool validate_tls_version(const char *val);
 #endif  // !SSL_INIT_CALLBACK_INCLUDED

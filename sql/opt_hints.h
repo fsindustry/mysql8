@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,16 +32,16 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_compiler.h"
 
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/enum_query_type.h"
 #include "sql/mem_root_array.h"  // Mem_root_array
 #include "sql/sql_bitmap.h"      // Bitmap
 #include "sql/sql_show.h"        // append_identifier
 #include "sql_string.h"          // String
-#include "string_with_len.h"
 
 enum class Subquery_strategy : int;
 class Item;
@@ -53,7 +53,7 @@ class set_var;
 class sys_var;
 struct MEM_ROOT;
 struct TABLE;
-class Table_ref;
+struct TABLE_LIST;
 
 /**
   Hint types, MAX_HINT_ENUM should be always last.
@@ -151,7 +151,7 @@ class PT_hint_max_execution_time;
 
   Opt_hints_global class is hierarchical structure.
   It contains information about global hints and also
-  contains array of QUERY BLOCK level objects (Opt_hints_qb class).
+  conains array of QUERY BLOCK level objects (Opt_hints_qb class).
   Each QUERY BLOCK level object contains array of TABLE level hints
   (class Opt_hints_table). Each TABLE level hint contains array of
   KEY lelev hints (Opt_hints_key class).
@@ -381,8 +381,8 @@ class Opt_hints_qb : public Opt_hints {
   ulonglong join_order_hints_ignored;
 
   /*
-    PT_qb_level_hint::do_contextualize sets subquery/semijoin_hint during
-    parsing. it also registers join order hints during parsing.
+    PT_qb_level_hint::contextualize sets subquery/semijoin_hint during parsing.
+    it also registers join order hints during parsing.
   */
   friend class PT_qb_level_hint;
 
@@ -432,7 +432,7 @@ class Opt_hints_qb : public Opt_hints {
     @return  pointer Opt_hints_table object if this object is found,
              NULL otherwise.
   */
-  Opt_hints_table *adjust_table_hints(Table_ref *table);
+  Opt_hints_table *adjust_table_hints(TABLE_LIST *table);
 
   /**
     Returns whether semi-join is enabled for this query block
@@ -489,7 +489,7 @@ class Opt_hints_qb : public Opt_hints {
 class PT_key_level_hint;
 
 /**
-  Auxiliary class for compound key objects.
+  Auxiluary class for compound key objects.
 */
 class Compound_key_hint {
   PT_key_level_hint *pt_hint;  // Pointer to PT_key_level_hint object.
@@ -574,9 +574,9 @@ class Opt_hints_table : public Opt_hints {
     Function sets correlation between key hint objects and
     appropriate KEY structures.
 
-    @param table      Pointer to Table_ref object
+    @param table      Pointer to TABLE_LIST object
   */
-  void adjust_key_hints(Table_ref *table);
+  void adjust_key_hints(TABLE_LIST *table);
   PT_hint *get_complex_hints(opt_hints_enum type) override;
 
   void set_resolved() override {
@@ -688,14 +688,13 @@ class Sys_var_hint {
     Add variable to hint list.
 
     @param thd            pointer to THD object
-    @param var_tracker    pointer to System_variable_tracker object
+    @param sys_var        pointer to sys_var object
     @param sys_var_value  variable value
 
     @return true if variable is added,
             false otherwise
   */
-  bool add_var(THD *thd, const System_variable_tracker &var_tracker,
-               Item *sys_var_value);
+  bool add_var(THD *thd, sys_var *sys_var, Item *sys_var_value);
   /**
     Find variable in hint list.
 
@@ -722,7 +721,7 @@ class Sys_var_hint {
   optimizer switch value if hint is not specified.
 
   @param thd               Pointer to THD object
-  @param table             Pointer to Table_ref object
+  @param table             Pointer to TABLE_LIST object
   @param keyno             Key number
   @param type_arg          Hint type
   @param optimizer_switch  Optimizer switch flag
@@ -730,7 +729,7 @@ class Sys_var_hint {
   @return key hint value if hint is specified,
           otherwise optimizer switch value.
 */
-bool hint_key_state(const THD *thd, const Table_ref *table, uint keyno,
+bool hint_key_state(const THD *thd, const TABLE_LIST *table, uint keyno,
                     opt_hints_enum type_arg, uint optimizer_switch);
 
 /**
@@ -738,14 +737,14 @@ bool hint_key_state(const THD *thd, const Table_ref *table, uint keyno,
   optimizer switch value if hint is not specified.
 
   @param thd                Pointer to THD object
-  @param table              Pointer to Table_ref object
+  @param table              Pointer to TABLE_LIST object
   @param type_arg           Hint type
   @param optimizer_switch   Optimizer switch flag
 
   @return table hint value if hint is specified,
           otherwise optimizer switch value.
 */
-bool hint_table_state(const THD *thd, const Table_ref *table,
+bool hint_table_state(const THD *thd, const TABLE_LIST *table,
                       opt_hints_enum type_arg, uint optimizer_switch);
 /**
    Append table and query block name.
@@ -791,7 +790,7 @@ bool compound_hint_key_enabled(const TABLE *table, uint keyno,
 bool idx_merge_hint_state(THD *thd, const TABLE *table,
                           bool *use_cheapest_index_merge);
 
-int cmp_lex_string(const LEX_CSTRING &s, const LEX_CSTRING &t,
+int cmp_lex_string(const LEX_CSTRING *s, const LEX_CSTRING *t,
                    const CHARSET_INFO *cs);
 
 #endif /* OPT_HINTS_INCLUDED */

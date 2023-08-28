@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,8 @@
 #include <assert.h>
 #include <new>
 
-#include "my_dbug.h"
+#include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysqld_error.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/impl/cache/cache_element.h"
@@ -105,8 +104,7 @@ void Shared_multi_map<T>::remove(Cache_element<T> *element, Autolocker *lock) {
   lock->auto_delete(element->object());
 
   // Reuse the element if there is room for it.
-  if (DBUG_EVALUATE_IF("simulate_dd_elements_cache_full", false, true) &&
-      !pool_capacity_exceeded())
+  if (!pool_capacity_exceeded())
     m_element_pool.push_back(element);
   else
     lock->auto_delete(element);
@@ -116,9 +114,7 @@ void Shared_multi_map<T>::remove(Cache_element<T> *element, Autolocker *lock) {
 template <typename T>
 void Shared_multi_map<T>::rectify_free_list(Autolocker *lock) {
   mysql_mutex_assert_owner(&m_lock);
-  while ((DBUG_EVALUATE_IF("simulate_dd_elements_cache_full", true, false) ||
-          map_capacity_exceeded()) &&
-         m_free_list.length() > 0) {
+  while (map_capacity_exceeded() && m_free_list.length() > 0) {
     Cache_element<T> *e = m_free_list.get_lru();
     assert(e && e->object());
     m_free_list.remove(e);

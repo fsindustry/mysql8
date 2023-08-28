@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,15 +27,13 @@
 #include <unordered_map>
 #include <utility>
 
+#include "m_ctype.h"
+#include "m_string.h"
 #include "map_helpers.h"
 #include "my_dbug.h"
 #include "my_list.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/status_var.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "sql/current_thd.h"
 #include "sql/item.h"
 #include "sql/mysqld.h"
@@ -44,11 +42,10 @@
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_const.h"
 #include "sql/sql_plugin.h"
-#include "sql/strfunc.h"  // find_type
-#include "sql/sys_vars_shared.h"
+#include "sql/strfunc.h"          // find_type
+#include "sql/sys_vars_shared.h"  // intern_find_sys_var
 #include "sql/system_variables.h"
 #include "sql_string.h"
-#include "strxmov.h"
 #include "template_utils.h"
 #include "typelib.h"
 
@@ -128,7 +125,7 @@ bool plugin_var_memalloc_session_update(THD *thd, SYS_VAR *var, char **dest,
   DBUG_TRACE;
 
   if (value) {
-    const size_t length = strlen(value) + 1;
+    size_t length = strlen(value) + 1;
     LIST *element;
     if (!(element = (LIST *)my_malloc(key_memory_THD_variables,
                                       sizeof(LIST) + length, MYF(MY_WME))))
@@ -180,45 +177,6 @@ SHOW_TYPE pluginvar_show_type(SYS_VAR *plugin_var) {
     default:
       assert(0);
       return SHOW_UNDEF;
-  }
-}
-
-const void *pluginvar_default_value(SYS_VAR *plugin_var) {
-  switch (plugin_var->flags & (PLUGIN_VAR_TYPEMASK | PLUGIN_VAR_THDLOCAL)) {
-    case PLUGIN_VAR_INT:
-      return &((sysvar_uint_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_LONG:
-      return &((sysvar_ulong_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_LONGLONG:
-      return &((sysvar_ulonglong_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_ENUM:
-      return &((sysvar_enum_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_SET:
-      return &((sysvar_set_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_BOOL:
-      return &((sysvar_bool_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_STR:
-      return &((sysvar_str_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_DOUBLE:
-      return &((sysvar_double_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_INT | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_uint_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_LONG | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_ulong_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_LONGLONG | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_ulonglong_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_ENUM | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_enum_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_SET | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_set_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_BOOL | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_bool_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_STR | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_str_t *)plugin_var)->def_val;
-    case PLUGIN_VAR_DOUBLE | PLUGIN_VAR_THDLOCAL:
-      return &((thdvar_double_t *)plugin_var)->def_val;
-    default:
-      return nullptr;
   }
 }
 
@@ -346,7 +304,7 @@ TYPELIB *sys_var_pluginvar::plugin_var_typelib(void) {
 }
 
 uchar *sys_var_pluginvar::do_value_ptr(THD *running_thd, THD *target_thd,
-                                       enum_var_type type, std::string_view) {
+                                       enum_var_type type, LEX_STRING *) {
   uchar *result;
 
   result = real_value_ptr(target_thd, type);
@@ -405,17 +363,68 @@ bool sys_var_pluginvar::global_update(THD *thd, set_var *var) {
   void *tgt = real_value_ptr(thd, var->type);
   const void *src = &var->save_result;
 
-  if (!var->value) src = pluginvar_default_value(plugin_var);
+  if (!var->value) {
+    switch (plugin_var->flags & (PLUGIN_VAR_TYPEMASK | PLUGIN_VAR_THDLOCAL)) {
+      case PLUGIN_VAR_INT:
+        src = &((sysvar_uint_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_LONG:
+        src = &((sysvar_ulong_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_LONGLONG:
+        src = &((sysvar_ulonglong_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_ENUM:
+        src = &((sysvar_enum_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_SET:
+        src = &((sysvar_set_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_BOOL:
+        src = &((sysvar_bool_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_STR:
+        src = &((sysvar_str_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_DOUBLE:
+        src = &((sysvar_double_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_INT | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_uint_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_LONG | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_ulong_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_LONGLONG | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_ulonglong_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_ENUM | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_enum_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_SET | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_set_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_BOOL | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_bool_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_STR | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_str_t *)plugin_var)->def_val;
+        break;
+      case PLUGIN_VAR_DOUBLE | PLUGIN_VAR_THDLOCAL:
+        src = &((thdvar_double_t *)plugin_var)->def_val;
+        break;
+      default:
+        assert(0);
+    }
+  }
 
   if ((plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR &&
-      plugin_var->flags & PLUGIN_VAR_MEMALLOC) {
+      plugin_var->flags & PLUGIN_VAR_MEMALLOC)
     rc = plugin_var_memalloc_global_update(thd, plugin_var,
                                            static_cast<char **>(tgt),
                                            *static_cast<char *const *>(src));
-  } else {
+  else
     plugin_var->update(thd, plugin_var, tgt, src);
-    return (thd->is_error() ? 1 : 0);
-  }
 
   return rc;
 }
@@ -598,7 +607,7 @@ int check_func_bool(THD *, SYS_VAR *, void *save, st_mysql_value *value) {
     if (tmp > 1 || tmp < 0) goto err;
     result = (int)tmp;
   }
-  *(bool *)save = (result != 0);
+  *(bool *)save = result ? true : false;
   return 0;
 err:
   return 1;
@@ -805,8 +814,10 @@ st_bookmark *find_bookmark(const char *plugin, const char *name, int flags) {
   varname[0] = flags & PLUGIN_VAR_TYPEMASK;
 
   const auto it = get_bookmark_hash()->find(std::string(varname, length - 1));
-  if (it == get_bookmark_hash()->end()) return nullptr;
-  return it->second;
+  if (it == get_bookmark_hash()->end())
+    return nullptr;
+  else
+    return it->second;
 }
 
 void plugin_opt_set_limits(struct my_option *options, const SYS_VAR *opt) {

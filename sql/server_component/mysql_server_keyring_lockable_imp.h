@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -50,9 +50,6 @@ extern SERVICE_TYPE(keyring_reader_with_status) * srv_keyring_reader;
 extern SERVICE_TYPE(keyring_load) * srv_keyring_load;
 extern SERVICE_TYPE(keyring_writer) * srv_keyring_writer;
 
-void init_srv_event_tracking_handles();
-void deinit_srv_event_tracking_handles();
-
 namespace keyring_lockable {
 
 /* Keyring_encryption_service_impl */
@@ -76,6 +73,5 @@ void keyring_lockable_init();
 void keyring_lockable_deinit();
 void set_srv_keyring_implementation_as_default();
 void release_keyring_handles();
-bool keyring_status_no_error();
 
 #endif /* MYSQL_SERVER_KEYRING_LOCKABLE_IMP_INCLUDED */

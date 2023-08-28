@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,9 +32,9 @@
 
 LogHandlerList::LogHandlerList() :
   m_size(0),
-  m_pHeadNode(nullptr),
-  m_pTailNode(nullptr),
-  m_pCurrNode(nullptr)
+  m_pHeadNode(NULL),
+  m_pTailNode(NULL),
+  m_pCurrNode(NULL)
 {
 }
 
@@ -50,10 +50,10 @@ LogHandlerList::add(LogHandler* pNewHandler)
   if (!pNode)
     return false;
 
-  if (m_pHeadNode == nullptr) 
+  if (m_pHeadNode == NULL) 
   {
     m_pHeadNode = pNode;
-    pNode->pPrev = nullptr;
+    pNode->pPrev = NULL;
   }
   else 
   {
@@ -61,7 +61,7 @@ LogHandlerList::add(LogHandler* pNewHandler)
     pNode->pPrev = m_pTailNode;
   }
   m_pTailNode = pNode;
-  pNode->pNext = nullptr;  
+  pNode->pNext = NULL;  
   pNode->pHandler = pNewHandler;
 
   m_size++;
@@ -82,7 +82,7 @@ LogHandlerList::remove(LogHandler* pRemoveHandler)
       removed = true;
       break;
     }
-  } while ( (pNode = next(pNode)) != nullptr);
+  } while ( (pNode = next(pNode)) != NULL);
 
   return removed;
 }
@@ -90,7 +90,7 @@ LogHandlerList::remove(LogHandler* pRemoveHandler)
 void 
 LogHandlerList::removeAll()
 {
-  while (m_pHeadNode != nullptr)
+  while (m_pHeadNode != NULL)
   {
     removeNode(m_pHeadNode);
   }
@@ -99,11 +99,11 @@ LogHandlerList::removeAll()
 LogHandler* 
 LogHandlerList::next()
 {
-  LogHandler* pHandler = nullptr;
-  if (m_pCurrNode == nullptr)
+  LogHandler* pHandler = NULL;
+  if (m_pCurrNode == NULL)
   {
     m_pCurrNode = m_pHeadNode;
-    if (m_pCurrNode != nullptr)
+    if (m_pCurrNode != NULL)
     {
       pHandler = m_pCurrNode->pHandler;
     }
@@ -111,7 +111,7 @@ LogHandlerList::next()
   else
   {
     m_pCurrNode = next(m_pCurrNode); // Next node    
-    if (m_pCurrNode != nullptr)
+    if (m_pCurrNode != NULL)
     {
       pHandler = m_pCurrNode->pHandler;
     }
@@ -134,14 +134,14 @@ LogHandlerList::LogHandlerNode*
 LogHandlerList::next(LogHandlerNode* pNode)
 {
   LogHandlerNode* pCurr = pNode;
-  if (pNode->pNext != nullptr) 
+  if (pNode->pNext != NULL) 
   {
     pCurr = pNode->pNext;
   }
   else
   {
     // Tail
-    pCurr = nullptr;    
+    pCurr = NULL;    
   }
   return pCurr;
 }
@@ -150,14 +150,14 @@ LogHandlerList::LogHandlerNode*
 LogHandlerList::prev(LogHandlerNode* pNode)
 {
   LogHandlerNode* pCurr = pNode;
-  if (pNode->pPrev != nullptr) // head
+  if (pNode->pPrev != NULL) // head
   {
     pCurr = pNode->pPrev;
   }
   else
   {
     // Head
-    pCurr = nullptr;
+    pCurr = NULL;
   }
 
   return pCurr;
@@ -166,7 +166,7 @@ LogHandlerList::prev(LogHandlerNode* pNode)
 void
 LogHandlerList::removeNode(LogHandlerNode* pNode)
 {
-  if (pNode->pPrev == nullptr) // If head
+  if (pNode->pPrev == NULL) // If head
   {
     m_pHeadNode = pNode->pNext;
   }
@@ -175,7 +175,7 @@ LogHandlerList::removeNode(LogHandlerNode* pNode)
     pNode->pPrev->pNext = pNode->pNext;
   }
 
-  if (pNode->pNext == nullptr) // if tail
+  if (pNode->pNext == NULL) // if tail
   {
     m_pTailNode = pNode->pPrev;
   }
@@ -184,8 +184,8 @@ LogHandlerList::removeNode(LogHandlerNode* pNode)
     pNode->pNext->pPrev = pNode->pPrev;
   }
 
-  pNode->pNext = nullptr;
-  pNode->pPrev = nullptr;
+  pNode->pNext = NULL;
+  pNode->pPrev = NULL;
   delete pNode->pHandler; // Delete log handler
   delete pNode; 
 

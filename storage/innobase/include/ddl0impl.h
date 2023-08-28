@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+Copyright (c) 2005, 2021, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -64,8 +64,8 @@ using Merge_offsets = std::deque<os_offset_t, ut::allocator<os_offset_t>>;
 
 /** Information about temporary files used in merge sort */
 struct file_t {
-  /** File. */
-  Unique_os_file_descriptor m_file;
+  /** File descriptor */
+  os_fd_t m_fd{OS_FD_CLOSED};
 
   /** Size of the file in bytes. */
   os_offset_t m_size;
@@ -88,7 +88,10 @@ struct Fetch_sequence : public Context::FTS::Sequence {
 
   /** Not supported.
   @return the current document ID. */
-  [[nodiscard]] doc_id_t current() noexcept override { ut_error; }
+  [[nodiscard]] doc_id_t current() noexcept override {
+    ut_error;
+    return 0;
+  }
 
   /** Not supported. */
   void increment() noexcept override { ut_error; }
@@ -99,7 +102,10 @@ struct Fetch_sequence : public Context::FTS::Sequence {
   [[nodiscard]] doc_id_t fetch(const dtuple_t *dtuple) noexcept override;
 
   /** @return the number of document IDs generated. */
-  doc_id_t generated_count() const noexcept override { ut_error; }
+  doc_id_t generated_count() const noexcept override {
+    ut_error;
+    return 0;
+  }
 
   /** @return the maximum document ID seen so far. */
   [[nodiscard]] doc_id_t max_doc_id() const noexcept override {
@@ -125,8 +131,6 @@ struct Row {
 
   /** Destructor. */
   ~Row() = default;
-
-  Row &operator=(const Row &) = default;
 
   /** Build a row from a raw record.
   @param[in,out] ctx            DDL context.
@@ -156,8 +160,8 @@ struct Row {
 /** Create a merge file int the given location.
 @param[out] file                Temporary generated during DDL.
 @param[in] path                 Location for creating temporary file
-@return true if file is created successfully */
-[[nodiscard]] bool file_create(file_t *file, const char *path) noexcept;
+@return file descriptor, or OS_FD_CLOSED  on failure */
+[[nodiscard]] os_fd_t file_create(file_t *file, const char *path) noexcept;
 
 /** Write a merge block to the file system.
 @param[in] fd                   File descriptor
@@ -175,6 +179,10 @@ dberr_t pwrite(os_fd_t fd, void *ptr, size_t size, os_offset_t offset) noexcept;
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t pread(os_fd_t fd, void *ptr, size_t len,
                             os_offset_t offset) noexcept;
+
+/** Destroy a merge file.
+@param[out] file                Temporary generated during DDL. */
+void file_destroy(file_t *file) noexcept;
 
 }  // namespace ddl
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -238,8 +238,6 @@ void Dbtup::execTUP_ADD_ATTRREQ(Signal* signal)
   Uint32 attrDescriptor = signal->theData[3];
   // DICT sends charset number in upper half
   Uint32 csNumber = (signal->theData[4] >> 16);
-
-  ndbrequire(csNumber < NDB_ARRAY_SIZE(all_charsets));
 
   regTabPtr.i= fragOperPtr.p->tableidFrag;
   ptrCheckGuard(regTabPtr, cnoOfTablerec, tablerec);
@@ -563,7 +561,7 @@ bool Dbtup::receive_defvalue(Signal* signal, const TablerecPtr& regTabPtr)
   jam();
   SectionHandle handle(this, signal);
   SegmentedSectionPtr ptr;
-  ndbrequire(handle.getSection(ptr, TupAddAttrReq::DEFAULT_VALUE_SECTION_NUM));
+  handle.getSection(ptr, TupAddAttrReq::DEFAULT_VALUE_SECTION_NUM);
 
   SimplePropertiesSectionReader r(ptr, getSectionSegmentPool());
   r.reset();
@@ -631,7 +629,7 @@ bool Dbtup::receive_defvalue(Signal* signal, const TablerecPtr& regTabPtr)
     /*
      * The condition is for BIT type.
      * Even though it is fixed, the compare operator should be > rather than ==,
-     * for the 4-byte alignment, the space for BIT type occupied 4 bytes at least.
+     * for the 4-byte alignemnt, the space for BIT type occupied 4 bytes at least.
      * yet the bytes of default value can be 1, 2, 3, 4, 5, 6, 7, 8 bytes.
      */
     jam();
@@ -1234,8 +1232,8 @@ Dbtup::handleAlterTablePrepare(Signal *signal,
       ALTER_TAB_REQ[commit]).
     */
     Uint32* desc= &tableDescriptor[tableDescriptorRef].tabDescr;
-    const CHARSET_INFO** CharsetArray=
-      (const CHARSET_INFO**)(desc + regAlterTabOpPtr.p->tabDesOffset[2]);
+    CHARSET_INFO** CharsetArray=
+      (CHARSET_INFO**)(desc + regAlterTabOpPtr.p->tabDesOffset[2]);
     memcpy(CharsetArray, regTabPtr->charsetArray,
            sizeof(*CharsetArray)*regTabPtr->noOfCharsets);
     Uint32 * const attrDesPtrStart = desc + regAlterTabOpPtr.p->tabDesOffset[4];
@@ -1534,13 +1532,13 @@ Dbtup::handleAlterTableAbort(Signal *signal,
   charsetIndex will be updated to point to next free charsetPos slot.
 */
 void
-Dbtup::handleCharsetPos(Uint32 csNumber, const CHARSET_INFO** charsetArray,
+Dbtup::handleCharsetPos(Uint32 csNumber, CHARSET_INFO** charsetArray,
                         Uint32 noOfCharsets,
                         Uint32 & charsetIndex, Uint32 & attrDes2)
 {
   if (csNumber != 0)
   { 
-    const CHARSET_INFO* cs = all_charsets[csNumber];
+    CHARSET_INFO* cs = all_charsets[csNumber];
     ndbrequire(cs != NULL);
     Uint32 i= 0;
     while (i < charsetIndex)
@@ -1878,7 +1876,7 @@ void Dbtup::setUpDescriptorReferences(Uint32 descriptorReference,
   Uint32* desc= &tableDescriptor[descriptorReference].tabDescr;
   regTabPtr->readFunctionArray= (ReadFunction*)(desc + offset[0]);
   regTabPtr->updateFunctionArray= (UpdateFunction*)(desc + offset[1]);
-  regTabPtr->charsetArray= (const CHARSET_INFO**)(desc + offset[2]);
+  regTabPtr->charsetArray= (CHARSET_INFO**)(desc + offset[2]);
   regTabPtr->readKeyArray= descriptorReference + offset[3];
   regTabPtr->tabDescriptor= descriptorReference + offset[4];
   regTabPtr->m_real_order_descriptor = descriptorReference + offset[5];
@@ -2206,7 +2204,7 @@ Dbtup::drop_fragment_unmap_pages(Signal *signal,
 	Local_extent_info_list
 	  list(c_extent_pool, alloc_info.m_free_extents[0]);
 	Ptr<Extent_info> ext_ptr;
-        ndbrequire(c_extent_pool.getPtr(ext_ptr, alloc_info.m_curr_extent_info_ptr_i));
+	c_extent_pool.getPtr(ext_ptr, alloc_info.m_curr_extent_info_ptr_i);
         list.addFirst(ext_ptr);
 	alloc_info.m_curr_extent_info_ptr_i= RNIL;
       }
@@ -2262,7 +2260,7 @@ Dbtup::drop_fragment_unmap_page_callback(Signal* signal,
 {
   jam();
   Ptr<GlobalPage> page;
-  ndbrequire(m_global_page_pool.getPtr(page, page_id));
+  m_global_page_pool.getPtr(page, page_id);
   
   Local_key key;
   key.m_page_no = ((Page*)page.p)->m_page_no;
@@ -2677,11 +2675,8 @@ Dbtup::lcp_open_ctl_file(Signal *signal,
   FsOpenReq::v5_setLcpNo(req->fileNumber, ctl_file);
   FsOpenReq::v5_setTableId(req->fileNumber, tableId);
   FsOpenReq::v5_setFragmentId(req->fileNumber, fragmentId);
-  req->page_size = 0;
-  req->file_size_hi = UINT32_MAX;
-  req->file_size_lo = UINT32_MAX;
-  req->auto_sync_size = 0;
-  sendSignal(NDBFS_REF, GSN_FSOPENREQ, signal, FsOpenReq::SignalLength, JBA);
+  sendSignal(NDBFS_REF, GSN_FSOPENREQ, signal,
+             FsOpenReq::SignalLength, JBA);
 }
 
 void
@@ -3447,7 +3442,7 @@ Dbtup::get_lcp_frag_stats(Uint32 fragPtrI,
    *
    * During REDO log apply it is important to count the changes made
    * that wasn't part of the LCP. We know the Max Completed GCI of
-   * each LCP, so if the row that is to be committed has a GCI which
+   * each LCP, so if the row that is to be commited has a GCI which
    * is higher than this Max Completed GCI then we know that the
    * row have already been changed since we started the REDO log
    * execution and we can thus ignore the change when counting the

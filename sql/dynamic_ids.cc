@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,11 +27,11 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
 #include "m_string.h"  // my_strtok_r
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql_string.h"  // String
 
 Server_ids::Server_ids() : dynamic_ids(PSI_NOT_INSTRUMENTED) {}
@@ -52,7 +52,7 @@ bool Server_ids::unpack_dynamic_ids(char *param_dynamic_ids) {
     if (token == nullptr)
       return true;
     else {
-      const ulong val = atol(token);
+      ulong val = atol(token);
       dynamic_ids.insert_unique(val);
     }
   }

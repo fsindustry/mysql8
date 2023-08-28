@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,14 +31,13 @@
 #include "caching_sha2_passwordopt-vars.h"
 #include "client/client_priv.h"
 #include "compression.h"
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_default.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "sslopt-vars.h"
 #include "typelib.h"
@@ -127,14 +126,14 @@ static struct my_option my_long_options[] = {
      &opt_databases, &opt_databases, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit.", nullptr,
-     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"debug", '#', "This is a non-debug version. Catch this and exit.", 0, 0, 0,
+     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
     {"debug-check", OPT_DEBUG_CHECK,
-     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
-     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
+     NO_ARG, 0, 0, 0, 0, 0, 0},
     {"debug-info", OPT_DEBUG_INFO,
-     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
-     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
+     NO_ARG, 0, 0, 0, 0, 0, 0},
 #else
     {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.", nullptr,
      nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
@@ -179,8 +178,8 @@ static struct my_option my_long_options[] = {
      nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
     {"write-binlog", OPT_WRITE_BINLOG,
-     "Write ANALYZE, OPTIMIZE and REPAIR TABLE commands to the binary log. "
-     "Use --skip-write-binlog to omit this.",
+     "Log ANALYZE, OPTIMIZE and REPAIR TABLE commands. Use --skip-write-binlog "
+     "when commands should not be sent to replication slaves.",
      &opt_write_binlog, &opt_write_binlog, nullptr, GET_BOOL, NO_ARG, 1, 0, 0,
      nullptr, 0, nullptr},
     {"optimize", 'o', "Optimize table.", nullptr, nullptr, nullptr, GET_NO_ARG,
@@ -304,7 +303,7 @@ static void usage(void) {
 extern "C" {
 static bool get_one_option(int optid, const struct my_option *opt,
                            char *argument) {
-  const int orig_what_to_do = what_to_do;
+  int orig_what_to_do = what_to_do;
 
   switch (optid) {
     case 'a':
@@ -364,9 +363,6 @@ static bool get_one_option(int optid, const struct my_option *opt,
       opt_protocol =
           find_type_or_exit(argument, &sql_protocol_typelib, opt->name);
       break;
-    case OPT_COMPRESS:
-      CLIENT_WARN_DEPRECATED("--compress", "--compression-algorithms");
-      break;
   }
 
   if (orig_what_to_do && (what_to_do != orig_what_to_do)) {
@@ -395,7 +391,7 @@ static int get_options(int *argc, char ***argv, MEM_ROOT *alloc) {
   my_getopt_use_args_separator = false;
 
   if (!what_to_do) {
-    const size_t pnlen = strlen(my_progname);
+    size_t pnlen = strlen(my_progname);
 
     if (pnlen < 6) /* name too short */
       what_to_do = DO_CHECK;

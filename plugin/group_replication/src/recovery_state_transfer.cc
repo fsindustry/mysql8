@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +33,6 @@
 #include "plugin/group_replication/include/plugin_variables/recovery_endpoints.h"
 #include "plugin/group_replication/include/recovery_channel_state_observer.h"
 #include "plugin/group_replication/include/recovery_state_transfer.h"
-#include "string_with_len.h"
 
 using std::string;
 
@@ -42,8 +41,6 @@ Recovery_state_transfer::Recovery_state_transfer(
     Channel_observation_manager *channel_obsr_mngr)
     : selected_donor(nullptr),
       group_members(nullptr),
-      suitable_donors(
-          Malloc_allocator<Group_member_info *>(key_group_member_info)),
       donor_connection_retry_count(0),
       recovery_aborted(false),
       donor_transfer_finished(false),
@@ -82,7 +79,8 @@ Recovery_state_transfer::Recovery_state_transfer(
 
 Recovery_state_transfer::~Recovery_state_transfer() {
   if (group_members != nullptr) {
-    Group_member_info_list_iterator member_it = group_members->begin();
+    std::vector<Group_member_info *>::iterator member_it =
+        group_members->begin();
     while (member_it != group_members->end()) {
       delete (*member_it);
       ++member_it;
@@ -189,7 +187,8 @@ void Recovery_state_transfer::update_group_membership(bool update_donor) {
   }
 
   if (group_members != nullptr) {
-    Group_member_info_list_iterator member_it = group_members->begin();
+    std::vector<Group_member_info *>::iterator member_it =
+        group_members->begin();
     while (member_it != group_members->end()) {
       delete (*member_it);
       ++member_it;
@@ -328,7 +327,7 @@ void Recovery_state_transfer::build_donor_list(string *selected_donor_uuid) {
 
   suitable_donors.clear();
 
-  Group_member_info_list_iterator member_it = group_members->begin();
+  std::vector<Group_member_info *>::iterator member_it = group_members->begin();
 
   while (member_it != group_members->end()) {
     Group_member_info *member = *member_it;
@@ -365,7 +364,9 @@ void Recovery_state_transfer::build_donor_list(string *selected_donor_uuid) {
   }
 
   if (suitable_donors.size() > 1) {
-    vector_random_shuffle(&suitable_donors);
+    std::random_device rng;
+    std::mt19937 urng(rng());
+    std::shuffle(suitable_donors.begin(), suitable_donors.end(), urng);
   }
 
   // no need for errors if no donors exist, we thrown it in the connection

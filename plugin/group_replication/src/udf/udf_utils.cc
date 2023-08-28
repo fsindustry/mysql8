@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,10 +24,8 @@
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/dynamic_privilege.h>
 #include <mysql/components/services/mysql_runtime_error_service.h>
-#include "m_string.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "sql/auth/auth_acls.h"
-#include "string_with_len.h"
 
 std::atomic<int> UDF_counter::number_udfs_running(0);
 
@@ -108,7 +106,14 @@ void log_privilege_status_result(privilege_result const &privilege,
 
 std::pair<bool, std::string> check_super_read_only_is_disabled() {
   bool read_only_mode = false, super_read_only_mode = false;
-  bool error = get_read_mode_state(&read_only_mode, &super_read_only_mode);
+
+  Sql_service_command_interface *sql_command_interface =
+      new Sql_service_command_interface();
+  bool error = sql_command_interface->establish_session_connection(
+                   PSESSION_USE_THREAD, GROUPREPL_USER, get_plugin_pointer()) ||
+               get_read_mode_state(sql_command_interface, &read_only_mode,
+                                   &super_read_only_mode);
+  delete sql_command_interface;
 
   if (error) {
     /* purecov: begin inspected */
@@ -259,7 +264,8 @@ bool group_contains_member_older_than(
   bool constexpr ALL_MEMBERS_OK = false;
   bool result = OLDER_MEMBER_EXISTS;
 
-  Group_member_info_list *members = group_member_mgr->get_all_members();
+  std::vector<Group_member_info *> *members =
+      group_member_mgr->get_all_members();
   auto it =
       std::find_if(members->begin(), members->end(),
                    [&min_required_version](Group_member_info *member) {
@@ -313,8 +319,7 @@ bool Charset_service::set_args_charset(UDF_ARGS *args,
                                        const std::string &charset_name) {
   char *charset = const_cast<char *>(charset_name.c_str());
   for (uint index = 0; index < args->arg_count; ++index) {
-    if (args->arg_type[index] == STRING_RESULT &&
-        udf_metadata_service->argument_set(args, Charset_service::arg_type,
+    if (udf_metadata_service->argument_set(args, Charset_service::arg_type,
                                            index,
                                            static_cast<void *>(charset))) {
       return true;

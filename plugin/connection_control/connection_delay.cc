@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,10 @@
 #include <mysql/psi/mysql_thread.h>
 #include <time.h>
 
+#include "m_ctype.h" /* my_charset_bin */
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_systime.h"
-#include "mysql/strings/m_ctype.h" /* my_charset_bin */
 #include "mysqld_error.h"
 #include "plugin/connection_control/connection_control.h"
 #include "plugin/connection_control/security_context_wrapper.h"
@@ -94,7 +94,7 @@ Sql_string I_S_CONNECTION_CONTROL_FAILED_ATTEMPTS_USERHOST(
 
   @returns 1 to indicate that entry is a match
 */
-int match_all_entries(const uchar *, void *) { return 1; }
+int match_all_entries(const uchar *) { return 1; }
 
 /**
   Callback function for LF hash to get key information
@@ -211,7 +211,7 @@ bool Connection_delay_event::remove_entry(const Sql_string &s) {
   if (searched_entry && searched_entry != MY_LF_ERRPTR) {
     searched_entry_info = *searched_entry;
     assert(searched_entry_info != nullptr);
-    const int rc = lf_hash_delete(&m_entries, pins, s.c_str(), s.length());
+    int rc = lf_hash_delete(&m_entries, pins, s.c_str(), s.length());
     lf_hash_search_unpin(pins);
     lf_hash_put_pins(pins);
     if (rc == 0) {
@@ -275,7 +275,7 @@ void Connection_delay_event::reset_all() {
   do {
     /* match anything */
     searched_entry = reinterpret_cast<Connection_event_record **>(
-        lf_hash_random_match(&m_entries, pins, match_all_entries, 0, nullptr));
+        lf_hash_random_match(&m_entries, pins, match_all_entries, 0));
 
     if (searched_entry != nullptr && searched_entry != MY_LF_ERRPTR &&
         (*searched_entry) &&
@@ -306,8 +306,7 @@ void set_connection_delay_IS_table(TABLE *t) { connection_delay_IS_table = t; }
     @retval 1 Error
 */
 
-int connection_delay_IS_table_writer(const uchar *ptr,
-                                     void *arg [[maybe_unused]]) {
+int connection_delay_IS_table_writer(const uchar *ptr) {
   /* Always return "no match" so that we go through all entries */
   THD *thd = current_thd;
   const Connection_event_record *const *entry;
@@ -330,7 +329,7 @@ int connection_delay_IS_table_writer(const uchar *ptr,
                      information_schema.connection_control_failed_attempts
 */
 
-void Connection_delay_event::fill_IS_table(Table_ref *tables) {
+void Connection_delay_event::fill_IS_table(TABLE_LIST *tables) {
   DBUG_TRACE;
   TABLE *table = tables->table;
   set_connection_delay_IS_table(table);
@@ -341,7 +340,7 @@ void Connection_delay_event::fill_IS_table(Table_ref *tables) {
     key =
         lf_hash_random_match(&m_entries, pins,
                              /* Functor: match anything and store the fields */
-                             connection_delay_IS_table_writer, 0, nullptr);
+                             connection_delay_IS_table_writer, 0);
     /* Always unpin after lf_hash_random_match() */
     lf_hash_search_unpin(pins);
   } while (key != nullptr);
@@ -492,7 +491,7 @@ void Connection_delay_action::conditional_wait(MYSQL_THD thd,
 }
 
 /**
-  @brief  Handle a connection event and, if required,
+  @brief  Handle a connection event and if requried,
   wait for random amount of time before returning.
 
   We only care about CONNECT and CHANGE_USER sub events.
@@ -514,7 +513,7 @@ bool Connection_delay_action::notify_event(
     Error_handler *error_handler) {
   DBUG_TRACE;
   bool error = false;
-  const unsigned int subclass = connection_event->event_subclass;
+  unsigned int subclass = connection_event->event_subclass;
   Connection_event_observer *self = this;
 
   if (subclass != MYSQL_AUDIT_CONNECTION_CONNECT &&
@@ -523,7 +522,7 @@ bool Connection_delay_action::notify_event(
 
   RD_lock rd_lock(m_lock);
 
-  const int64 threshold = this->get_threshold();
+  int64 threshold = this->get_threshold();
 
   /* If feature was disabled, return */
   if (threshold <= DISABLE_THRESHOLD) return error;
@@ -550,7 +549,7 @@ bool Connection_delay_action::notify_event(
       have to consider current connection as well - Hence the usage
       of current_count + 1.
     */
-    const ulonglong wait_time = get_wait_time((current_count + 1) - threshold);
+    ulonglong wait_time = get_wait_time((current_count + 1) - threshold);
 
     if ((error = coordinator->notify_status_var(
              &self, STAT_CONNECTION_DELAY_TRIGGERED, ACTION_INC))) {
@@ -612,11 +611,11 @@ bool Connection_delay_action::notify_sys_var(
   bool error = true;
   Connection_event_observer *self = this;
 
-  const WR_lock wr_lock(m_lock);
+  WR_lock wr_lock(m_lock);
 
   switch (variable) {
     case OPT_FAILED_CONNECTIONS_THRESHOLD: {
-      const int64 new_threshold = *(static_cast<int64 *>(new_value));
+      int64 new_threshold = *(static_cast<int64 *>(new_value));
       assert(new_threshold >= DISABLE_THRESHOLD);
       set_threshold(new_threshold);
 
@@ -629,7 +628,7 @@ bool Connection_delay_action::notify_sys_var(
     }
     case OPT_MIN_CONNECTION_DELAY:
     case OPT_MAX_CONNECTION_DELAY: {
-      const int64 new_delay = *(static_cast<int64 *>(new_value));
+      int64 new_delay = *(static_cast<int64 *>(new_value));
       if ((error =
                set_delay(new_delay, (variable == OPT_MIN_CONNECTION_DELAY)))) {
         error_handler->handle_error(
@@ -658,7 +657,7 @@ void Connection_delay_action::init(
   assert(coordinator);
   bool retval;
   Connection_event_observer *subscriber = this;
-  const WR_lock wr_lock(m_lock);
+  WR_lock wr_lock(m_lock);
   retval = coordinator->register_event_subscriber(&subscriber, &m_sys_vars,
                                                   &m_stats_vars);
   assert(!retval);
@@ -729,13 +728,13 @@ static bool get_equal_condition_argument(Item *cond, Sql_string *eq_arg,
   @param [in] cond    Condition if any.
 */
 
-void Connection_delay_action::fill_IS_table(THD *thd, Table_ref *tables,
+void Connection_delay_action::fill_IS_table(THD *thd, TABLE_LIST *tables,
                                             Item *cond) {
   DBUG_TRACE;
   Security_context_wrapper sctx_wrapper(thd);
   if (!(sctx_wrapper.is_super_user() || sctx_wrapper.is_connection_admin()))
     return;
-  const WR_lock wr_lock(m_lock);
+  WR_lock wr_lock(m_lock);
   Sql_string eq_arg;
   if (cond != nullptr &&
       !get_equal_condition_argument(
@@ -807,7 +806,7 @@ void deinit_connection_delay_event() {
   @returns Always returns false.
 */
 
-int fill_failed_attempts_view(THD *thd, Table_ref *tables, Item *cond) {
+int fill_failed_attempts_view(THD *thd, TABLE_LIST *tables, Item *cond) {
   if (connection_control::g_max_failed_connection_handler)
     connection_control::g_max_failed_connection_handler->fill_IS_table(
         thd, tables, cond);

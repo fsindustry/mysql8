@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,11 +26,11 @@
 #include <cstdlib>  // size_t
 
 /**
-  Helper class for the MY_SQL_PARSER_LTYPE
+  Helper class for the YYLTYPE
 */
 struct Symbol_location {
-  const char *start = nullptr;  // token start
-  const char *end = nullptr;    // the 1st byte after the token
+  const char *start;  // token start
+  const char *end;    // the 1st byte after the token
 
   bool is_empty() const { return length() == 0; }
   size_t length() const { return static_cast<size_t>(end - start); }
@@ -39,7 +39,7 @@ struct Symbol_location {
 /**
   Bison "location" class
 */
-struct MY_SQL_PARSER_LTYPE {
+struct YYLTYPE {
   Symbol_location cpp;  // token location in the preprocessed buffer
   Symbol_location raw;  // token location in the raw buffer
 
@@ -47,16 +47,15 @@ struct MY_SQL_PARSER_LTYPE {
 };
 
 /*
-  Note: MY_SQL_PARSER_LTYPE doesn't overload a default constructor (as
-  well an underlying Symbol_location).  OTOH if we need a
-  zero-initialized POS, MY_SQL_PARSER_LTYPE or Symbol_location object,
-  we can simply call POS(), MY_SQL_PARSER_LTYPE() or
-  Symbol_location(): C++ does value-initialization in that case.
+  Note: YYLTYPE doesn't overload a default constructor (as well an underlying
+  Symbol_location).
+  OTOH if we need a zero-initialized POS, YYLTYPE or Symbol_location object,
+  we can simply call POS(), YYLTYPE() or Symbol_location(): C++ does
+  value-initialization in that case.
 */
-using POS = MY_SQL_PARSER_LTYPE;
+typedef YYLTYPE POS;
 
-// signal Bison that we have our own MY_SQL_PARSER_LTYPE
-#define MY_SQL_PARSER_LTYPE_IS_DECLARED 1
+#define YYLTYPE_IS_DECLARED 1  // signal Bison that we have our own YYLTYPE
 
 /**
   Bison calls this macro:

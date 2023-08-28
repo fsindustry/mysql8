@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -89,8 +89,7 @@ void scan_page_type(space_id_t space_id,
   for (page_no_t page_no = 0; page_no < space->size; ++page_no) {
     const page_id_t page_id(space_id, page_no);
     mtr_start(&mtr);
-    buf_block_t *block =
-        buf_page_get(page_id, page_size, RW_S_LATCH, UT_LOCATION_HERE, &mtr);
+    buf_block_t *block = buf_page_get(page_id, page_size, RW_S_LATCH, &mtr);
     page_type_t page_type = block->get_page_type();
     result_map[page_type]++;
     mtr_commit(&mtr);
@@ -263,8 +262,7 @@ Ret_t Tester::find_fil_page_lsn(std::vector<std::string> &tokens) noexcept {
 
   mtr_t mtr;
   mtr_start(&mtr);
-  buf_block_t *block =
-      buf_page_get(page_id, page_size, RW_X_LATCH, UT_LOCATION_HERE, &mtr);
+  buf_block_t *block = buf_page_get(page_id, page_size, RW_X_LATCH, &mtr);
   lsn_t newest_lsn = block->page.get_newest_lsn();
   mtr_commit(&mtr);
 
@@ -305,27 +303,27 @@ Ret_t Tester::find_ondisk_page_type(std::vector<std::string> &tokens) noexcept {
   const os_offset_t offset = page_no * page_size.physical();
 
   /* When the space file is currently open we are not able to write to it
-  directly on Windows. We must use the currently opened handle. Moreover,
-  on Windows a file opened for the asynchronous access must be accessed only in
-  a way that allows asynchronous completion of the request. This requires that
-  the i/o buffer be aligned to OS block size and also its size divisible by OS
-  block size. */
+   * directly on Windows. We must use the currently opened handle. Moreover,
+   * on Windows a file opened for the AIO access must be accessed only by AIO
+   * methods. The AIO requires that the i/o buffer be aligned to OS block size
+   * and also its size divisible by OS block size. */
 
   IORequest read_io_type(IORequest::READ);
-  const dberr_t err = os_file_read(read_io_type, node->name, node->handle,
-                                   buf.data(), offset, OS_FILE_LOG_BLOCK_SIZE);
+  const dberr_t err =
+      os_aio(read_io_type, AIO_mode::SYNC, node->name, node->handle, buf.data(),
+             offset, OS_FILE_LOG_BLOCK_SIZE, false, nullptr, nullptr);
   if (err != DB_SUCCESS) {
     page_type_t page_type = fil_page_get_type(buf.data());
     TLOG("Could not read page_id=" << page_id << ", page_type=" << page_type
                                    << ", err=" << err);
     /* Since we do not pass encryption information in IORequest, if page is
-    encrypted on disk, it cannot be decrypted by i/o layer. But the encrypted
-    data will be available in the provided buffer. */
+     * encrypted on disk, it cannot be decrypted by i/o layer. But the encrypted
+     * data will be available in the provided buffer. */
 
     if (err == DB_IO_DECRYPT_FAIL) {
       /* We expect this only for encrypted pages.  For this function, this error
-      is OK because we will only read one header field and the header is not
-      encrypted. */
+       * is OK because we will only read one header field and the header is not
+       * encrypted. */
       ut_ad(Encryption::is_encrypted_page(buf.data()));
     } else {
       return RET_FAIL;
@@ -444,7 +442,7 @@ Ret_t Tester::clear_page_prefix(const space_id_t space_id, page_no_t page_no,
   const auto buf_size =
       ut_uint64_align_up(prefix_length, OS_FILE_LOG_BLOCK_SIZE);
 
-  mem.alloc(ut::Count(buf_size));
+  mem.alloc(buf_size);
   const page_id_t page_id{space_id, page_no};
   fil_space_t *space = fil_space_get(space_id);
 
@@ -460,16 +458,16 @@ Ret_t Tester::clear_page_prefix(const space_id_t space_id, page_no_t page_no,
   const os_offset_t offset = page_no * page_size_bytes;
 
   /* When the space file is currently open we are not able to write to it
-  directly on Windows. We must use the currently opened handle. Moreover,
-  on Windows a file opened for the AIO access must be accessed only by AIO
-  methods. The AIO requires the operations to be aligned and with size
-  divisible by OS block size, so we first read block of the first page, to
-  corrupt it and write back. */
+   * directly on Windows. We must use the currently opened handle. Moreover,
+   * on Windows a file opened for the AIO access must be accessed only by AIO
+   * methods. The AIO requires the operations to be aligned and with size
+   * divisible by OS block size, so we first read block of the first page, to
+   * corrupt it and write back. */
 
   byte *buf = mem;
   IORequest read_io_type(IORequest::READ);
-  dberr_t err = os_file_read(read_io_type, node->name, node->handle, buf,
-                             offset, buf_size);
+  dberr_t err = os_aio(read_io_type, AIO_mode::SYNC, node->name, node->handle,
+                       buf, offset, buf_size, false, nullptr, nullptr);
   if (err != DB_SUCCESS) {
     page_type_t page_type = fil_page_get_type(buf);
     TLOG("Could not read page_id=" << page_id << ", page type=" << page_type
@@ -477,7 +475,7 @@ Ret_t Tester::clear_page_prefix(const space_id_t space_id, page_no_t page_no,
 
     if (err == DB_IO_DECRYPT_FAIL) {
       /* We expect this only for encrypted pages. Since this function doesn't
-      actually read (or use) the contents, this error is OK. */
+       * actually read (or use) the contents, this error is OK. */
       ut_ad(Encryption::is_encrypted_page(buf));
     } else {
       return RET_FAIL;
@@ -488,8 +486,8 @@ Ret_t Tester::clear_page_prefix(const space_id_t space_id, page_no_t page_no,
   memset(buf, 0x00, prefix_length);
 
   IORequest write_io_type(IORequest::WRITE);
-  err = os_file_write(write_io_type, node->name, node->handle, buf, offset,
-                      buf_size);
+  err = os_aio(write_io_type, AIO_mode::SYNC, node->name, node->handle, buf,
+               offset, buf_size, false, nullptr, nullptr);
   if (err == DB_SUCCESS) {
     TLOG("Successfully zeroed prefix of page_id=" << page_id << ", prefix="
                                                   << prefix_length);
@@ -553,8 +551,8 @@ DISPATCH_FUNCTION_DEF(Tester::make_page_dirty) {
 
   mtr.start();
 
-  buf_block_t *block = buf_page_get(page_id, page_size_t(space->flags),
-                                    RW_X_LATCH, UT_LOCATION_HERE, &mtr);
+  buf_block_t *block =
+      buf_page_get(page_id, page_size_t(space->flags), RW_X_LATCH, &mtr);
 
   if (block != nullptr) {
     byte *page = block->frame;
@@ -582,7 +580,7 @@ DISPATCH_FUNCTION_DEF(Tester::make_page_dirty) {
 }
 
 Ret_t Tester::print_dblwr_has_encrypted_pages(
-    std::vector<std::string> &) noexcept {
+    std::vector<std::string> &tokens) noexcept {
   std::ostringstream sout;
   if (dblwr::has_encrypted_pages()) {
     std::string m1("Double write file has encrypted pages.");
@@ -701,10 +699,8 @@ int interpreter_run(const char *command) noexcept {
 
 }  // namespace ib
 
-void ib_interpreter_update(MYSQL_THD thd [[maybe_unused]],
-                           SYS_VAR *var [[maybe_unused]],
-                           void *var_ptr [[maybe_unused]],
-                           const void *save [[maybe_unused]]) {
+void ib_interpreter_update(MYSQL_THD thd, SYS_VAR *var, void *var_ptr,
+                           const void *save) {
   TLOG("ib_interpreter_update");
 
   /* Point the THD variables - innodb_interpreter and innodb_interpreter_output
@@ -712,8 +708,7 @@ void ib_interpreter_update(MYSQL_THD thd [[maybe_unused]],
   ib::tl_interpreter.update_thd_variable();
 }
 
-int ib_interpreter_check(THD *thd [[maybe_unused]],
-                         SYS_VAR *var [[maybe_unused]], void *save,
+int ib_interpreter_check(THD *thd, SYS_VAR *var, void *save,
                          struct st_mysql_value *value) {
   TLOG("ib_interpreter_check");
   char buff[STRING_BUFFER_USUAL_SIZE];
@@ -724,7 +719,7 @@ int ib_interpreter_check(THD *thd [[maybe_unused]],
 
   const char *cmd = value->val_str(value, buff, &len);
 
-  int ret = ib::interpreter_run(cmd ? cmd : "");
+  int ret = ib::interpreter_run(cmd);
 
   TLOG("ib_interpreter_check() is returning: " << ret);
   *static_cast<const char **>(save) = cmd;

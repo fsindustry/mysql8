@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -51,7 +51,7 @@ class ISNativeFuncTest : public ::testing::Test {
 TEST_F(ISNativeFuncTest, AllNullArguments) {
   Item *item = nullptr;
   Item_null *null = new (thd()->mem_root) Item_null();
-  PT_item_list *null_list = new (thd()->mem_root) PT_item_list(POS());
+  PT_item_list *null_list = new (thd()->mem_root) PT_item_list;
   auto prepare_null_list = [null_list, null](int cnt) {
     for (int i = 0; i < cnt; i++) null_list->push_front(null);
     return null_list;

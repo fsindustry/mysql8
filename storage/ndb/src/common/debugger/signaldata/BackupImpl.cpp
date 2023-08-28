@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,18 +25,9 @@
 #include <trigger_definitions.h>
 #include <signaldata/BackupImpl.hpp>
 
-bool printDEFINE_BACKUP_REQ(FILE* out,
-                            const Uint32* data,
-                            Uint32 len,
-                            Uint16 /*bno*/)
-{
-  if (len < DefineBackupReq::SignalLength_v1)
-  {
-    assert(false);
-    return false;
-  }
-
-  const DefineBackupReq* sig = (const DefineBackupReq*)data;
+bool 
+printDEFINE_BACKUP_REQ(FILE * out, const Uint32 * data, Uint32 len, Uint16 bno){
+  DefineBackupReq* sig = (DefineBackupReq*)data;
   fprintf(out, " backupPtr: %d backupId: %d clientRef: %d clientData: %d\n",
 	  sig->backupPtr, sig->backupId, sig->clientRef, sig->clientData);
   fprintf(out, " backupKey: [ %08x%08x ] DataLength: %d\n",
@@ -44,101 +35,49 @@ bool printDEFINE_BACKUP_REQ(FILE* out,
   return true;
 }
 
-bool printDEFINE_BACKUP_REF(FILE* out,
-                            const Uint32* data,
-                            Uint32 len,
-                            Uint16 /*bno*/)
-{
-  if (len < DefineBackupRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const DefineBackupRef* sig = (const DefineBackupRef*)data;
+bool 
+printDEFINE_BACKUP_REF(FILE * out, const Uint32 * data, Uint32 len, Uint16 bno){
+  DefineBackupRef* sig = (DefineBackupRef*)data;
   fprintf(out, " backupPtr: %d backupId: %d errorCode: %d\n",
 	  sig->backupPtr, sig->backupId, sig->errorCode);
   return true;
 }
 
-bool printDEFINE_BACKUP_CONF(FILE* out,
-                             const Uint32* data,
-                             Uint32 l,
-                             Uint16 /*bno*/)
-{
-  if (l < DefineBackupConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-  const DefineBackupConf* sig = (const DefineBackupConf*)data;
+bool 
+printDEFINE_BACKUP_CONF(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  DefineBackupConf* sig = (DefineBackupConf*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   return true;
 }
 
-bool printSTART_BACKUP_REQ(FILE* out,
-                           const Uint32* data,
-                           Uint32 l,
-                           Uint16 /*bno*/)
-{
-  if (l < StartBackupReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-  const StartBackupReq* sig = (const StartBackupReq*)data;
+bool 
+printSTART_BACKUP_REQ(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  StartBackupReq* sig = (StartBackupReq*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   return true;
 }
 
-bool printSTART_BACKUP_REF(FILE* out,
-                           const Uint32* data,
-                           Uint32 len,
-                           Uint16 /*bno*/)
-{
-  if (len < StartBackupRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StartBackupRef* sig = (const StartBackupRef*)data;
+bool 
+printSTART_BACKUP_REF(FILE * out, const Uint32 * data, Uint32 len, Uint16 bno){
+  StartBackupRef* sig = (StartBackupRef*)data;
   fprintf(out, " backupPtr: %d backupId: %d errorCode: %d\n",
 	  sig->backupPtr, sig->backupId, sig->errorCode);
   return true;
 }
 
-bool printSTART_BACKUP_CONF(FILE* out,
-                            const Uint32* data,
-                            Uint32 l,
-                            Uint16 /*bno*/)
-{
-  if (l < StartBackupConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StartBackupConf* sig = (const StartBackupConf*)data;
+bool 
+printSTART_BACKUP_CONF(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  StartBackupConf* sig = (StartBackupConf*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   return true;
 }
 
-bool printBACKUP_FRAGMENT_REQ(FILE* out,
-                              const Uint32* data,
-                              Uint32 l,
-                              Uint16 /*bno*/)
-{
-  if (l < BackupFragmentReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const BackupFragmentReq* sig = (const BackupFragmentReq*)data;
+bool 
+printBACKUP_FRAGMENT_REQ(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  BackupFragmentReq* sig = (BackupFragmentReq*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   fprintf(out, " tableId: %d fragmentNo: %d (count = %d)\n",
@@ -146,35 +85,17 @@ bool printBACKUP_FRAGMENT_REQ(FILE* out,
   return true;
 }
 
-bool printBACKUP_FRAGMENT_REF(FILE* out,
-                              const Uint32* data,
-                              Uint32 l,
-                              Uint16 /*bno*/)
-{
-  if (l < BackupFragmentRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const BackupFragmentRef* sig = (const BackupFragmentRef*)data;
+bool 
+printBACKUP_FRAGMENT_REF(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  BackupFragmentRef* sig = (BackupFragmentRef*)data;
   fprintf(out, " backupPtr: %d backupId: %d nodeId: %d errorCode: %d\n",
 	  sig->backupPtr, sig->backupId, sig->nodeId, sig->errorCode);
   return true;
 }
 
-bool printBACKUP_FRAGMENT_CONF(FILE* out,
-                               const Uint32* data,
-                               Uint32 l,
-                               Uint16 /*b*/)
-{
-  if (l < BackupFragmentConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const BackupFragmentConf* sig = (const BackupFragmentConf*)data;
+bool 
+printBACKUP_FRAGMENT_CONF(FILE * out, const Uint32 * data, Uint32 l, Uint16 b){
+  BackupFragmentConf* sig = (BackupFragmentConf*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   fprintf(out, " tableId: %d fragmentNo: %d records: %llu bytes: %llu\n",
@@ -184,52 +105,25 @@ bool printBACKUP_FRAGMENT_CONF(FILE* out,
   return true;
 }
 
-bool printSTOP_BACKUP_REQ(FILE* out,
-                          const Uint32* data,
-                          Uint32 l,
-                          Uint16 /*bno*/)
-{
-  if (l < StopBackupReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StopBackupReq* sig = (const StopBackupReq*)data;
+bool 
+printSTOP_BACKUP_REQ(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  StopBackupReq* sig = (StopBackupReq*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   return true;
 }
 
-bool printSTOP_BACKUP_REF(FILE* out,
-                          const Uint32* data,
-                          Uint32 len,
-                          Uint16 /*bno*/)
-{
-  if (len < StopBackupRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StopBackupRef* sig = (const StopBackupRef*)data;
+bool 
+printSTOP_BACKUP_REF(FILE * out, const Uint32 * data, Uint32 len, Uint16 bno){
+  StopBackupRef* sig = (StopBackupRef*)data;
   fprintf(out, " backupPtr: %d backupId: %d errorCode: %d\n",
 	  sig->backupPtr, sig->backupId, sig->errorCode);
   return true;
 }
 
-bool printSTOP_BACKUP_CONF(FILE* out,
-                           const Uint32* data,
-                           Uint32 l,
-                           Uint16 /*bno*/)
-{
-  if (l < StopBackupConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StopBackupConf* sig = (const StopBackupConf*)data;
+bool 
+printSTOP_BACKUP_CONF(FILE * out, const Uint32 * data, Uint32 l, Uint16 bno){
+  StopBackupConf* sig = (StopBackupConf*)data;
   fprintf(out, " backupPtr: %d backupId: %d\n",
 	  sig->backupPtr, sig->backupId);
   return true;

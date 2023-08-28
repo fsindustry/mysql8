@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -89,7 +89,7 @@ static int test_log_plugin_error() {
   return 0;
 }
 
-/* This function is needed to be called in a thread. */
+/* This fucntion is needed to be called in a thread. */
 static void *test_services(void *p [[maybe_unused]]) {
   DBUG_TRACE;
 
@@ -122,7 +122,7 @@ static void *test_services(void *p [[maybe_unused]]) {
 static int test_services_plugin_init(void *p) {
   DBUG_TRACE;
 
-  const int ret = 0;
+  int ret = 0;
   if (init_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs)) return 1;
   struct test_services_context *con;
   my_thread_attr_t attr; /* Thread attributes */

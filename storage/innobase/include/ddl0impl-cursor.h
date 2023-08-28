@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -83,7 +83,7 @@ struct Cursor {
 
     m_prev_fields = static_cast<dfield_t *>(p);
 
-    m_tuple_heap.create(sizeof(mrec_buf_t), UT_LOCATION_HERE);
+    MEM_HEAP_CREATE(m_tuple_heap, sizeof(mrec_buf_t));
 
     return m_tuple_heap.get() == nullptr ? DB_OUT_OF_MEMORY : DB_SUCCESS;
   }

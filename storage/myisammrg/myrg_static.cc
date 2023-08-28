@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,7 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
-  Static variables for pisam library. All defined here for easy making of
+  Static variables for pisam library. All definied here for easy making of
   a shared library
 */
 
@@ -32,8 +32,6 @@
 #include "my_psi_config.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_memory.h"
-#include "nulls.h"
-#include "template_utils.h"
 #include "typelib.h"
 
 LIST *myrg_open_list = nullptr;

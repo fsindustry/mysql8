@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,7 +36,6 @@
 #include "my_getopt.h"
 #include "my_sys.h"
 #include "print_version.h"
-#include "str2int.h"
 #include "welcome_copyright_notice.h"
 
 static const char *INFILE = "errmsg.h";
@@ -50,7 +49,7 @@ static struct my_option my_long_options[] = {
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
 
-static void usage() {
+static void usage(void) {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2016"));
   printf(

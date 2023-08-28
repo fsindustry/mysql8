@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -66,7 +66,7 @@ std::tuple<const char *, size_t, bool> parse_length_encoded_string(
   // check if we're in the connection attributes string boundaries
   if (*str < connection_attributes || *str > connection_attributes +
                                                  connection_attributes_length -
-                                                 sizeof(char))
+                                                 sizeof(size_t))
     return std::make_tuple(nullptr, 0, false);
 
   // The first item of the string is the length of the attribute
@@ -116,7 +116,7 @@ DEFINE_BOOL_METHOD(mysql_connection_attributes_iterator_imp::get,
 
       if (!isParsingSuccessful) return true;
 
-      *client_charset = thd->variables.character_set_client->m_coll_name;
+      *client_charset = thd->variables.character_set_client->name;
 
       return false;  // Success
     } else

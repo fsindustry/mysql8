@@ -28,7 +28,6 @@ select f1("c")|
 --echo
 # we should not see the trace of "select TRACE+NULL..."
 # because tracing is disabled when OPTIMIZER_TRACE table is used.
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE|
 delimiter ;|
 set optimizer_trace_offset=default, optimizer_trace_limit=default;
@@ -51,7 +50,6 @@ begin
 end|
 select f1("c")|
 --echo
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE|
 delimiter ;|
 set optimizer_trace_offset=default, optimizer_trace_limit=default;
@@ -84,14 +82,10 @@ select * from t1 where a in (select f1("c") from t1)|
 delimiter ;|
 set optimizer_trace="enabled=off";
 --echo this should find unfinished traces
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select count(*) from optt where TRACE NOT LIKE "%] /* steps */\n}";
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select count(*)<>0 from optt;
 --echo this should not
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select count(*) from information_schema.OPTIMIZER_TRACE where TRACE NOT LIKE "%] /* steps */\n}";
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select count(*)<>0 from information_schema.OPTIMIZER_TRACE;
 
 set optimizer_trace_offset=default, optimizer_trace_limit=default;
@@ -117,7 +111,6 @@ create table t1 (a bit(5), key(a));
 insert into t1 values(b'00000'),(b'01101');
 select cast(a as unsigned) from t1 where a > b'01100';
 # Note that in the trace we get either 0x0c or 12
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select TRACE from information_schema.OPTIMIZER_TRACE;
 drop table t1;
 
@@ -141,7 +134,6 @@ select * from
  ON t2.i = t1.i
  WHERE t3.i IS NULL
  ;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select TRACE from information_schema.OPTIMIZER_TRACE;
 drop table t1,t2,t3;
 
@@ -171,7 +163,6 @@ STRAIGHT_JOIN (t2 JOIN t3 ON t3.f2  = t2.f2  ) ON t3 .f2  = t2 .f2
 HAVING ('v', 'i') NOT IN (SELECT f2, MIN(f2) FROM t1)
 ORDER BY f2;
 --replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/ /("key_size":) [0-9]+/\1 "XXX"/ /("row_size":) [0-9]+/\1 "XXX"/ /("max_rows_per_buffer":) [0-9]+/\1 "XXX"/
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select TRACE from information_schema.OPTIMIZER_TRACE;
 
 --source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
@@ -186,7 +177,6 @@ create table t1 (a int, b int);
 insert into t1 values (1,1), (2,null), (3, 4);
 select max(x) from (select sum(a) as x from t1 group by b) as teeone;
 --replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select TRACE from information_schema.OPTIMIZER_TRACE;
 drop table t1;
 
@@ -215,11 +205,9 @@ DROP TABLE t1;
 --echo
 set optimizer_trace_offset=0, optimizer_trace_limit=100;
 prepare stmt from "select 1";
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE;
 set optimizer_trace_offset=0, optimizer_trace_limit=100;
 execute stmt;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE;
 deallocate prepare stmt;
 set optimizer_trace_offset=default, optimizer_trace_limit=default;
@@ -254,7 +242,6 @@ set optimizer_trace_max_mem_size=40000;
 call p1();
 # SET @a=(SELECT) is not traced because part of SET
 # which is a real command and not traced.
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE;
 select * from t1;
 select @a,@b;
@@ -268,7 +255,6 @@ drop table t1;
 
 set optimizer_trace_offset=0, optimizer_trace_limit=100;
 do (select 42);
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE;
 
 --echo
@@ -285,7 +271,6 @@ end|
 delimiter ;|
 set optimizer_trace_offset=0, optimizer_trace_limit=100;
 call p1((select a from t1 limit 1));
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.OPTIMIZER_TRACE;
 drop procedure p1;
 drop table t1;
@@ -299,7 +284,6 @@ set optimizer_trace_offset=default, optimizer_trace_limit=default;
 create table t1 (f1 varchar(1) not null) default charset utf8mb4;
 insert into t1 values (''), ('');
 select concat(concat(_latin1'->',f1),_latin1'<-') from t1;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.optimizer_trace;
 drop table t1;
 
@@ -420,7 +404,6 @@ FROM t3 AS table1
 table3.col_varchar_10_utf8_key
 ;
 
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.optimizer_trace;
 
 DROP TABLE t1,t2,t3;
@@ -454,7 +437,6 @@ explain select *
 from t0 where a in
 (select t2.a+t3.a from t1 left join (t2 join t3) on t2.a=t1.a and t3.a=t1.a);
 
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.optimizer_trace;
 set optimizer_switch=@old_opt_switch;
 drop table t0,t1,t2,t3;
@@ -482,7 +464,6 @@ UNIQUE KEY t3_ID_IDX (ID)
 INSERT INTO t3 VALUES (1000,0.00),(1001,0.25),(1002,0.50),(1003,0.75),(1008,1.00),(1009,1.25),(1010,1.50),(1011,1.75);
 
 select 497, tmp.ID, NULL from (select 497 as ID, MAX(t3.DATA) as DATA      from t1 join t2 on (t1.ObjectID = t2.ID) join t3 on (t1.ObjectID = t3.ID) group by t2.ParID order by DATA DESC) as tmp;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.optimizer_trace;
 drop table t1,t2,t3;
 
@@ -588,8 +569,6 @@ INSERT INTO t7 VALUES (2,0,'Medium',2);
 INSERT INTO t7 VALUES (3,0,'Low',3);
 --source include/turn_off_only_full_group_by.inc
 
-# Hypergraph optimizer has different warnings.
---disable_warnings
 select
 replace(t3._field_140, "\r","^M"),
  t3_id,
@@ -621,8 +600,6 @@ order by
  _field_135,
   link_alias_148._field_156
 ;
---enable_warnings
---skip_if_hypergraph  # Does not support the same optimizer trace.
 select * from information_schema.optimizer_trace;
 
 --source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
@@ -677,12 +654,8 @@ let $query=
 SELECT SUM(alias2.col_varchar_nokey) , alias2.pk AS field2 FROM t1 AS alias1
 STRAIGHT_JOIN t2 AS alias2 ON alias2.pk = alias1.col_int_key WHERE alias1.pk
 GROUP BY field2 ORDER BY alias1.col_int_key,alias2.pk ;
-# Hypergraph optimizer has different warnings.
---disable_warnings
 eval $query;
---enable_warnings
 --replace_regex /("peak_memory_used":) [0-9]+/\1 "NNN"/ /("key_size":) [0-9]+/\1 "XXX"/ /("row_size":) [0-9]+/\1 "XXX"/ /("max_rows_per_buffer":) [0-9]+/\1 "XXX"/
---skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 DROP TABLE t1,t2;
@@ -695,7 +668,6 @@ insert into t1 values(26);
 create table t2(b int primary key, c int) engine=myisam;
 insert into t2 values(1,100),(2,200),(3,300);
 select * from t1,t2 where t1.a+t2.c=cos(10) and t2.b=2;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 drop table t1,t2;
 
@@ -710,7 +682,6 @@ insert into mysqltest2.t2 values(1),(2);
 analyze table t1, mysqltest2.t2;
 --sorted_result
 select * from t1,mysqltest2.t2;
---skip_if_hypergraph  # Does not support the same optimizer trace.
 SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 drop table t1;
 drop database mysqltest2;

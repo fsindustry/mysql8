@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -83,6 +83,7 @@
 #include <atomic>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_base.h"
 #include "my_dbug.h"
@@ -90,7 +91,6 @@
 #include "my_sqlcommand.h"
 #include "my_sys.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_common.h"  // SUPER_ACL
@@ -316,9 +316,9 @@ MYSQL_LOCK *mysql_lock_tables(THD *thd, TABLE **tables, size_t count,
                               uint flags) {
   int rc;
   MYSQL_LOCK *sql_lock;
-  const ulong timeout = (flags & MYSQL_LOCK_IGNORE_TIMEOUT)
-                            ? LONG_TIMEOUT
-                            : thd->variables.lock_wait_timeout;
+  ulong timeout = (flags & MYSQL_LOCK_IGNORE_TIMEOUT)
+                      ? LONG_TIMEOUT
+                      : thd->variables.lock_wait_timeout;
 
   DBUG_TRACE;
 
@@ -329,8 +329,6 @@ MYSQL_LOCK *mysql_lock_tables(THD *thd, TABLE **tables, size_t count,
 
   if (!(thd->state_flags & Open_tables_state::SYSTEM_TABLES))
     THD_STAGE_INFO(thd, stage_system_lock);
-
-  const ulonglong lock_start_usec = my_micro_time();
 
   DBUG_PRINT("info", ("thd->proc_info %s", thd->proc_info()));
   if (sql_lock->table_count &&
@@ -370,9 +368,7 @@ end:
   if (thd->variables.session_track_transaction_info > TX_TRACK_NONE)
     track_table_access(thd, tables, count);
 
-  const ulonglong lock_end_usec = my_micro_time();
-  thd->inc_lock_usec(lock_end_usec - lock_start_usec);
-
+  thd->set_time_after_lock();
   return sql_lock;
 }
 
@@ -1011,7 +1007,7 @@ std::atomic<int32> Global_read_lock::m_atomic_active_requests;
 
 bool acquire_shared_global_read_lock(THD *thd,
                                      unsigned long lock_wait_timeout) {
-  // If we cannot acquire protection against GRL, err out.
+  // If we cannot acuqire protection against GRL, err out.
   if (thd->global_read_lock.can_acquire_protection()) return true;
 
   MDL_request grl_request;
@@ -1121,7 +1117,7 @@ bool Global_read_lock::make_global_read_lock_block_commit(THD *thd) {
   MDL_request mdl_request;
   DBUG_TRACE;
   /*
-    If we didn't succeed lock_global_read_lock(), or if we already succeeded
+    If we didn't succeed lock_global_read_lock(), or if we already suceeded
     make_global_read_lock_block_commit(), do nothing.
   */
   if (m_state != GRL_ACQUIRED) return false;

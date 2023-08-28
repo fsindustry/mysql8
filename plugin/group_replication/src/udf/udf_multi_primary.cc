@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,7 +21,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/group_replication/include/udf/udf_multi_primary.h"
-#include "m_string.h"
 #include "plugin/group_replication/include/group_actions/multi_primary_migration_action.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "plugin/group_replication/include/udf/udf_utils.h"
@@ -49,8 +48,7 @@ static char *group_replication_switch_to_multi_primary_mode(
 
   Group_action_diagnostics execution_message_area;
   group_action_coordinator->coordinate_action_execution(
-      &group_action, &execution_message_area,
-      Group_action_message::ACTION_UDF_SWITCH_TO_MULTI_PRIMARY_MODE);
+      &group_action, &execution_message_area);
   if (log_group_action_result_message(
           &execution_message_area,
           "group_replication_switch_to_multi_primary_mode", result, length)) {

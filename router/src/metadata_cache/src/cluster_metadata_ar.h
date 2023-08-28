@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 #ifndef METADATA_CACHE_CLUSTER_METADATA_AR_INCLUDED
 #define METADATA_CACHE_CLUSTER_METADATA_AR_INCLUDED
 
-#include "mysqlrouter/metadata_cache_export.h"
-
 #include "cluster_metadata.h"
 #include "gr_notifications_listener.h"
 
@@ -36,7 +34,7 @@
  * Cluster metadata server.
  *
  */
-class METADATA_CACHE_EXPORT ARClusterMetadata : public ClusterMetadata {
+class METADATA_API ARClusterMetadata : public ClusterMetadata {
  public:
   /** @brief Constructor
    *
@@ -70,7 +68,9 @@ class METADATA_CACHE_EXPORT ARClusterMetadata : public ClusterMetadata {
    * metadata
    * @param needs_writable_node flag indicating if the caller needs us to query
    * for writable node
-   * @param [out] instance_id id of the server the metadata was fetched from
+   * @param cluster_type_specific_id  (GR ID for GR cluster, cluster_id for AR
+   * cluster)
+   * @param [out] instance_id of the server the metadata was fetched from
    * @return object containing cluster topology information in case of success,
    * or error code in case of failure
    * @throws metadata_cache::metadata_error
@@ -80,8 +80,8 @@ class METADATA_CACHE_EXPORT ARClusterMetadata : public ClusterMetadata {
       const std::atomic<bool> &terminated,
       mysqlrouter::TargetCluster &target_cluster, const unsigned router_id,
       const metadata_cache::metadata_servers_list_t &metadata_servers,
-      bool needs_writable_node, const std::string & /*clusterset_id*/,
-      bool /*whole_topology*/, std::size_t &instance_id) override;
+      bool needs_writable_node, const std::string &cluster_type_specific_id,
+      const std::string & /*clusterset_id*/, std::size_t &instance_id) override;
 
   /** @brief Returns cluster type this object is suppsed to handle
    */
@@ -90,7 +90,8 @@ class METADATA_CACHE_EXPORT ARClusterMetadata : public ClusterMetadata {
   }
 
   void setup_notifications_listener(
-      const metadata_cache::ClusterTopology & /*cluster_topology*/,
+      const std::vector<metadata_cache::ManagedInstance> & /*instances*/,
+      const mysqlrouter::TargetCluster & /*target_cluster*/,
       const GRNotificationListener::NotificationClb & /*callback*/) override {}
 
   /** @brief Deinitializes the notifications listener thread
@@ -98,27 +99,24 @@ class METADATA_CACHE_EXPORT ARClusterMetadata : public ClusterMetadata {
   void shutdown_notifications_listener() override {}
 
  private:
-  /** @brief Returns the current cluster topology according to the metadata of
+  /** @brief Returns vector of the cluster members according to the metadata of
    * the given metadata server.
    *
    * @param session active connection to the member that is checked for the
    * metadata
-   * @param view_id last known view_id of the cluster metadata
    * @param cluster_id ID of the cluster this operation refers to
    * @return vector of the cluster members
    */
-  metadata_cache::ClusterTopology fetch_topology_from_member(
-      mysqlrouter::MySQLSession &session, unsigned view_id,
-      const std::string &cluster_id = "");
+  std::vector<metadata_cache::ManagedInstance> fetch_instances_from_member(
+      mysqlrouter::MySQLSession &session, const std::string &cluster_id = "");
 
   /** @brief Returns metadata view id the given member holds
    *
    * @param session active connection to the member that is checked for the view
    * id
    * @param cluster_id ID of the cluster this operation refers to
-   * @param[out] result  member's metadata view_id
-   * @retval true on success
-   * @retval false otherwise.
+   * @param result [output parameter [out] member's metadata view_id
+   * @return True on success, false otherwise.
    */
   bool get_member_view_id(mysqlrouter::MySQLSession &session,
                           const std::string &cluster_id, uint64_t &result);

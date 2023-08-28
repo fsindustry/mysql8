@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -152,7 +152,7 @@ class Plugin_gcs_message {
     CT_GROUP_VALIDATION_MESSAGE = 9,
 
     // This cargo type is used for synchronization before executing a
-    // transaction.
+    // transation.
     CT_SYNC_BEFORE_EXECUTION_MESSAGE = 10,
 
     // This cargo type is used for transaction data with guarantee.
@@ -258,27 +258,6 @@ class Plugin_gcs_message {
     @param[in] cargo_type Message type to be sent
    */
   explicit Plugin_gcs_message(enum_cargo_type cargo_type);
-
-  /**
-    Return the time at which the message contained in the buffer was sent.
-    @see Metrics_handler::get_current_time()
-
-    @note The method
-      static uint64_t get_sent_timestamp(const unsigned char *buffer,
-                                         size_t length);
-    must be implemented on all children classes in order to allow read
-    the sent timestamp without requiring a object creation and complete
-    message deserialization.
-
-    @param[in] buffer                       the buffer to decode from.
-    @param[in] length                       the buffer length
-    @param[in] timestamp_payload_item_type  the payload item type of the
-                                            timestamp.
-
-    @return the time on which the message was sent.
-  */
-  static int64_t get_sent_timestamp(const unsigned char *buffer, size_t length,
-                                    const uint16 timestamp_payload_item_type);
 
   /**
     Encodes the header of this instance into the buffer.
@@ -420,8 +399,8 @@ class Plugin_gcs_message {
     @param[out] type   the type of the payload item
     @param[out] value  the value of the payload item
   */
-  static void decode_payload_item_int8(const unsigned char **buffer,
-                                       uint16 *type, uint64 *value);
+  void decode_payload_item_int8(const unsigned char **buffer, uint16 *type,
+                                uint64 *value);
 
   /**
     Encodes the given payload item (type, length and value) into the buffer as

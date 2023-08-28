@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -39,19 +39,3 @@ ENDFOREACH()
 #    where even unused symbols must be defined)
 MYSQL_ADD_EXECUTABLE(mytime_client-t mytime_client-t.cc SKIP_INSTALL)
 TARGET_LINK_LIBRARIES(mytime_client-t mytime ${LIBRT})
-
-MYSQL_ADD_EXECUTABLE(libstrings_static-t
-  libstrings-t.cc
-  LINK_LIBRARIES strings
-  ADD_TEST libstrings_static
-  SKIP_INSTALL
-  )
-
-# Undefine MYSQL_PROJECT, simulating building outside the MySQL project tree.
-MYSQL_ADD_EXECUTABLE(libstrings_shared-t
-  libstrings-t.cc
-  LINK_LIBRARIES strings_shared
-  ADD_TEST libstrings_shared
-  SKIP_INSTALL
-  )
-TARGET_COMPILE_OPTIONS(libstrings_shared-t PRIVATE -DUNDEFINE_MYSQL_PROJECT)

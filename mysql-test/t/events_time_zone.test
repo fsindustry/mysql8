@@ -37,7 +37,6 @@ let $N = 5;
 #
 
 --source include/big_test.inc
---source include/not_valgrind.inc
 
 --disable_warnings
 DROP DATABASE IF EXISTS mysqltest_db1;

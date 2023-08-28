@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,11 +30,11 @@
 
 client_query_attributes *global_attrs = nullptr;
 
-bool client_query_attributes::push_param(const char *name, const char *value) {
+bool client_query_attributes::push_param(char *name, char *value) {
   if (count >= max_count) return true;
   names[count] = my_strdup(PSI_NOT_INSTRUMENTED, name, MYF(0));
   memset(&values[count], 0, sizeof(MYSQL_BIND));
-  const unsigned val_len = strlen(value);
+  unsigned val_len = strlen(value);
   values[count].buffer = my_malloc(PSI_NOT_INSTRUMENTED, val_len + 1, MYF(0));
   if (val_len) memcpy(values[count].buffer, value, val_len);
   ((unsigned char *)values[count].buffer)[val_len] = 0;
@@ -47,12 +47,12 @@ bool client_query_attributes::push_param(const char *name, const char *value) {
 int client_query_attributes::set_params(MYSQL *mysql) {
   if (count == 0) return 0;
 
-  const int rc = mysql_bind_param(mysql, count, values, names);
+  int rc = mysql_bind_param(mysql, count, values, names);
   return rc;
 }
 
 void client_query_attributes::clear(MYSQL *mysql) {
-  if (mysql != nullptr) mysql_bind_param(mysql, 0, nullptr, nullptr);
+  if (mysql != nullptr) mysql_bind_param(mysql, 0, NULL, NULL);
   while (count) {
     count--;
     my_free(const_cast<char *>(names[count]));

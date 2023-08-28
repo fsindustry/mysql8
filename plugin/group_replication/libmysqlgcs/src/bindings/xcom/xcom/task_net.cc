@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -71,13 +71,13 @@ int checked_getaddrinfo(const char *nodename, const char *servname,
   memset(&_hints, 0, sizeof(_hints));
   _hints.ai_family = AF_UNSPEC;
   _hints.ai_socktype = SOCK_STREAM; /* TCP stream sockets */
-  if (hints == nullptr) hints = &_hints;
+  if (hints == NULL) hints = &_hints;
   for (attempt_nr = 0;
        errval == EAI_AGAIN && attempt_nr < NR_GETADDRINFO_ATTEMPTS;
        attempt_nr++) {
     if (*res) {
       freeaddrinfo(*res);
-      *res = nullptr;
+      *res = NULL;
     }
     errval = getaddrinfo(nodename, servname, hints, res);
   }
@@ -100,7 +100,7 @@ int checked_getaddrinfo(const char *nodename, const char *servname,
     IFDBG(D_NONE, NUMEXP(errval); STREXP(gai_strerror(errval)));
 #endif
   }
-  assert((errval == 0 && *res) || (errval != 0 && *res == nullptr));
+  assert((errval == 0 && *res) || (errval != 0 && *res == NULL));
   return errval;
 }
 

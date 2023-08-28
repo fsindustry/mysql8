@@ -1,4 +1,4 @@
-/*  Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/*  Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,6 @@
 
 #ifndef MYSQL_ABI_CHECK
 #include <stdarg.h>
-
-#include "mysql/plugin.h"
 #endif
 
 /* keep in sync with the loglevel enum in my_sys.h */

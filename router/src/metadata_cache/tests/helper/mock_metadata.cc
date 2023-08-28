@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -60,15 +60,12 @@ MockNG::MockNG(
   cluster_instances_vector.push_back(ms2);
   cluster_instances_vector.push_back(ms3);
 
-  metadata_cache::ManagedCluster cluster;
-  cluster.single_primary_mode = true;
-  cluster.members = cluster_instances_vector;
-  cluster_topology.clusters_data.push_back(cluster);
-  cluster_topology.target_cluster_pos = 0;
+  cluster_info.single_primary_mode = true;
+  cluster_info.members = cluster_instances_vector;
 
-  cluster_topology.metadata_servers.emplace_back(ms1.host, ms1.port);
-  cluster_topology.metadata_servers.emplace_back(ms2.host, ms2.port);
-  cluster_topology.metadata_servers.emplace_back(ms3.host, ms3.port);
+  metadata_servers.push_back({ms1.host, ms1.port});
+  metadata_servers.push_back({ms2.host, ms2.port});
+  metadata_servers.push_back({ms3.host, ms3.port});
 }
 
 /** @brief Destructor
@@ -88,9 +85,9 @@ MockNG::fetch_cluster_topology(
     mysqlrouter::TargetCluster & /*target_cluster*/,
     const unsigned /*router_id*/,
     const metadata_cache::metadata_servers_list_t & /*metadata_servers*/,
-    bool /* needs_writable_node */, const string & /*clusterset_id*/,
-    bool /*whole_topology*/, size_t & /*instance_id*/) {
-  return cluster_topology;
+    bool /* needs_writable_node */, const string & /*group_replication_id*/,
+    const string & /*clusterset_id*/, size_t & /*instance_id*/) {
+  return metadata_cache::ClusterTopology{cluster_info, metadata_servers};
 }
 
 /** @brief Mock connect method.

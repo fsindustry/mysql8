@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 
 #include "../sql_update.h"  // compare_records()
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_alloc.h"
 #include "my_base.h"
@@ -36,20 +37,19 @@
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/mysql_lex_string.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
 #include "sql/auth/sql_user_table.h"
 #include "sql/field.h"
 #include "sql/handler.h"
-#include "sql/iterators/row_iterator.h"
 #include "sql/key.h"
 #include "sql/mdl.h"
 #include "sql/mysqld.h"
+#include "sql/records.h"
+#include "sql/row_iterator.h"
 #include "sql/sql_base.h"
 #include "sql/sql_const.h"
-#include "sql/sql_executor.h"
 #include "sql/table.h"
 #include "sql_string.h"
 #include "thr_lock.h"
@@ -93,7 +93,7 @@ bool modify_role_edges_in_table(THD *thd, TABLE *table,
       to_user.second.str, to_user.second.length, system_charset_info);
   table->field[MYSQL_ROLE_EDGES_FIELD_TO_USER]->store(
       to_user.first.str, to_user.first.length, system_charset_info);
-  const char with_admin_option_char = with_admin_option ? 'Y' : 'N';
+  char with_admin_option_char = with_admin_option ? 'Y' : 'N';
   table->field[MYSQL_ROLE_EDGES_FIELD_TO_WITH_ADMIN_OPT]->store(
       &with_admin_option_char, 1, system_charset_info, CHECK_FIELD_IGNORE);
 
@@ -185,7 +185,7 @@ bool modify_default_roles_in_table(THD *thd, TABLE *table,
 
 /*
   Populates caches from roles tables.
-  Assumes that tables are opened and required locks are taken.
+  Assumes that tables are opened and requried locks are taken.
   Assumes that caller will close the tables.
 
   @param [in] thd      Handle to THD object
@@ -196,7 +196,7 @@ bool modify_default_roles_in_table(THD *thd, TABLE *table,
     @retval true failure
 */
 
-bool populate_roles_caches(THD *thd, Table_ref *tablelst) {
+bool populate_roles_caches(THD *thd, TABLE_LIST *tablelst) {
   DBUG_TRACE;
   assert(assert_acl_cache_write_lock(thd));
   unique_ptr_destroy_only<RowIterator> iterator;
@@ -239,8 +239,8 @@ bool populate_roles_caches(THD *thd, Table_ref *tablelst) {
           &tmp_mem,
           roles_edges_table->field[MYSQL_ROLE_EDGES_FIELD_TO_WITH_ADMIN_OPT]);
 
-      const int from_user_len = from_user ? strlen(from_user) : 0;
-      const int to_user_len = to_user ? strlen(to_user) : 0;
+      int from_user_len = from_user ? strlen(from_user) : 0;
+      int to_user_len = to_user ? strlen(to_user) : 0;
       if (from_user_len == 0 || to_user_len == 0) {
         LogErr(WARNING_LEVEL, ER_AUTHCACHE_ROLE_EDGES_IGNORED_EMPTY_NAME);
         continue;
@@ -293,10 +293,10 @@ bool populate_roles_caches(THD *thd, Table_ref *tablelst) {
       char *role_user = get_field(
           &tmp_mem,
           default_role_table->field[MYSQL_DEFAULT_ROLE_FIELD_ROLE_USER]);
-      const int user_len = (user ? strlen(user) : 0);
-      const int host_len = (host ? strlen(host) : 0);
-      const int role_user_len = (role_user ? strlen(role_user) : 0);
-      const int role_host_len = (role_host ? strlen(role_host) : 0);
+      int user_len = (user ? strlen(user) : 0);
+      int host_len = (host ? strlen(host) : 0);
+      int role_user_len = (role_user ? strlen(role_user) : 0);
+      int role_host_len = (role_host ? strlen(role_host) : 0);
 
       if (user_len == 0 || role_user_len == 0) {
         LogErr(WARNING_LEVEL, ER_AUTHCACHE_DEFAULT_ROLES_IGNORED_EMPTY_NAME);

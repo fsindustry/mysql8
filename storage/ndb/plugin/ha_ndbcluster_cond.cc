@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,8 +36,6 @@
 #include "storage/ndb/plugin/ha_ndbcluster.h"
 #include "storage/ndb/plugin/ndb_log.h"
 #include "storage/ndb/plugin/ndb_thd.h"
-
-struct CHARSET_INFO;
 
 /**
  * The SqlScanFilter is a regular NdbScanFilter, except that it
@@ -224,13 +222,13 @@ class Ndb_func : public Ndb_item {
   const uint m_arg_count;
 };
 
-// A Ndb_Item referring a Field from 'this' table
+// A Ndb_Item refering a Field from 'this' table
 class Ndb_field : public Ndb_item {
   Ndb_field &operator=(const Ndb_field &) = delete;
   Ndb_field(const Ndb_field &) = delete;
 
  public:
-  // A Ndb_Item referring a Field from 'this' table
+  // A Ndb_Item refering a Field from 'this' table
   Ndb_field(Field *field, int column_no)
       : m_field(field), m_column_no(column_no) {}
 
@@ -295,11 +293,7 @@ class Ndb_value : public Ndb_item {
         const_cast<Item *>(item)->save_in_field(field, false);
     dbug_tmp_restore_column_map(field->table->write_set, old_map);
 
-    if (unlikely(status != TYPE_OK) &&
-        // 'TYPE_NOTE*': Minor truncation considered insignificant -> Still ok
-        status != TYPE_NOTE_TRUNCATED && status != TYPE_NOTE_TIME_TRUNCATED) {
-      return -1;
-    }
+    if (unlikely(status != TYPE_OK)) return -1;
 
     return 0;  // OK
   }
@@ -341,7 +335,7 @@ class Ndb_expect_stack {
   }
   ~Ndb_expect_stack() {
     if (next) destroy(next);
-    next = nullptr;
+    next = NULL;
   }
   void push(Ndb_expect_stack *expect_next) { next = expect_next; }
   void pop() {
@@ -434,7 +428,7 @@ class Ndb_expect_stack {
   void expect_collation(const CHARSET_INFO *col) { collation = col; }
   bool expecting_collation(const CHARSET_INFO *col) {
     bool matching = (!collation) ? true : (collation == col);
-    collation = nullptr;
+    collation = NULL;
 
     return matching;
   }
@@ -464,7 +458,7 @@ class Ndb_expect_stack {
 class Ndb_rewrite_context {
  public:
   Ndb_rewrite_context(const Item_func *func)
-      : func_item(func), left_hand_item(nullptr), count(0) {}
+      : func_item(func), left_hand_item(NULL), count(0) {}
   ~Ndb_rewrite_context() {
     if (next) destroy(next);
   }
@@ -492,7 +486,7 @@ class Ndb_cond_traverse_context {
         m_param_expr_tables(param_expr_tables),
         supported(true),
         skip(0),
-        rewrite_stack(nullptr) {}
+        rewrite_stack(NULL) {}
   ~Ndb_cond_traverse_context() {
     if (rewrite_stack) destroy(rewrite_stack);
   }
@@ -623,7 +617,7 @@ static uint operand_count(const Item *item) {
 }
 
 /*
-  Serialize the item tree into a List of Ndb_item objects
+  Serialize the item tree into a List of Ndb_item objecs
   for fast generation of NbdScanFilter. Adds information such as
   position of fields that is not directly available in the Item tree.
   Also checks if condition is supported.
@@ -708,7 +702,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
         cmp_func->update_used_tables();
 
         // Traverse and serialize the rewritten predicate
-        context->rewrite_stack = nullptr;  // Disable rewrite mode
+        context->rewrite_stack = NULL;  // Disable rewrite mode
         context->expect_only(Item::FUNC_ITEM);
         context->expect(Item::COND_ITEM);
         cmp_func->traverse_cond(&ndb_serialize_cond, context, Item::PREFIX);
@@ -723,7 +717,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
           context->items.push_back(new (*THR_MALLOC) Ndb_end_cond());
           // Pop rewrite stack
           context->rewrite_stack = rewrite_context->next;
-          rewrite_context->next = nullptr;
+          rewrite_context->next = NULL;
           destroy(rewrite_context);
         }
       }
@@ -763,7 +757,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
 #endif
           if (item->type() == Item::VARBIN_ITEM) {
             // VARBIN_ITEM is special as no similar VARBIN_RESULT type is
-            // defined, so it needs to be explicitly handled here.
+            // defined, so it need to be explicitely handled here.
             DBUG_PRINT("info", ("VARBIN_ITEM 'VALUE' expression: '%s'",
                                 str.c_ptr_safe()));
             if (context->expecting(Item::VARBIN_ITEM)) {
@@ -889,9 +883,8 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
                     // collation
                     if (!context->expecting_collation(
                             item->collation.collation)) {
-                      DBUG_PRINT("info",
-                                 ("Found non-matching collation %s",
-                                  item->collation.collation->m_coll_name));
+                      DBUG_PRINT("info", ("Found non-matching collation %s",
+                                          item->collation.collation->name));
                       context->supported = false;
                     }
                   }
@@ -1017,9 +1010,8 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
                   // same
                   if (!context->expecting_collation(
                           item->collation.collation)) {
-                    DBUG_PRINT("info",
-                               ("Found non-matching collation %s",
-                                item->collation.collation->m_coll_name));
+                    DBUG_PRINT("info", ("Found non-matching collation %s",
+                                        item->collation.collation->name));
                     context->supported = false;
                     break;
                   }
@@ -1457,7 +1449,7 @@ static int create_and_conditions(Item_cond *cond, List<Item> pushed_list,
   2) If the OR condition is not completely pushed (there is
      a remainder), the entire original condition has to be
      reevaluated on the server side, or in the AND condition
-     containing this OR condition if such exists.
+     containg this OR condition if such exists.
 
   @param cond            Original condition we tried to push
   @param pushed_list     A list of predicate terms to be pushed.
@@ -2255,7 +2247,7 @@ int ha_ndbcluster_cond::generate_scan_filter_from_key(
     for (uint j = 0; j <= 1; j++) {
       char buf[8192];
       const key_range *key = keylist[j];
-      if (key == nullptr) {
+      if (key == 0) {
         sprintf(buf, "key range %u: none", j);
       } else {
         sprintf(buf, "key range %u: flag:%u part", j, key->flag);
@@ -2290,8 +2282,8 @@ int ha_ndbcluster_cond::generate_scan_filter_from_key(
       Not seen with index(x,y) for any combination of bounds
       which include "is not null".
     */
-    if (start_key != nullptr && start_key->flag == HA_READ_AFTER_KEY &&
-        end_key == nullptr && key_info->user_defined_key_parts == 1) {
+    if (start_key != 0 && start_key->flag == HA_READ_AFTER_KEY &&
+        end_key == 0 && key_info->user_defined_key_parts == 1) {
       const KEY_PART_INFO *key_part = key_info->key_part;
       if (key_part->null_bit != 0)  // nullable (must be)
       {
@@ -2314,8 +2306,8 @@ int ha_ndbcluster_cond::generate_scan_filter_from_key(
       Seen only when all key parts are present (but there is
       no reason to limit the code to this case).
     */
-    if (start_key != nullptr && start_key->flag == HA_READ_KEY_EXACT &&
-        end_key != nullptr && end_key->flag == HA_READ_AFTER_KEY &&
+    if (start_key != 0 && start_key->flag == HA_READ_KEY_EXACT &&
+        end_key != 0 && end_key->flag == HA_READ_AFTER_KEY &&
         start_key->length == end_key->length &&
         memcmp(start_key->key, end_key->key, start_key->length) == 0) {
       const KEY_PART_INFO *key_part = key_info->key_part;

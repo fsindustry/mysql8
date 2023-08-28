@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,14 +22,15 @@
 
 #include <gtest/gtest.h>
 
+#include "m_ctype.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 
 namespace charset_bug32788301_unittest {
 
 CHARSET_INFO *init_collation(const char *name) {
-  MY_CHARSET_ERRMSG errmsg;
-  return my_collation_get_by_name(name, MYF(0), &errmsg);
+  MY_CHARSET_LOADER loader;
+  my_charset_loader_init_mysys(&loader);
+  return my_collation_get_by_name(&loader, name, MYF(0));
 }
 
 TEST(CharsetBug32788301Unittest, LoadUninitLoad) {

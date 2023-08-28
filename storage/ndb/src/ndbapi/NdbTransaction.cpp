@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -145,28 +145,22 @@ class BlobBatchChecker
   /**
    * Check whether the batch contains another blob
    * operation with the same table, index + key
-   *
-   * Returns:
-   * 0 - found
-   * 1 - not found
-   * -1 - error
    */
-  int findKey(NdbBlob* blob) const
+  bool findKey(NdbBlob* blob) const
   {
     DBUG_ENTER("BlobBatchChecker::findKey");
     const Uint32 hash = blob->getBlobKeyHash();
     const Uint32 bucketIdx = hash % NumBuckets;
 
     NdbBlob* candidate = m_buckets[bucketIdx];
-    while (candidate != nullptr)
+    while (candidate != NULL)
     {
       if (candidate->getBlobKeyHash() == hash)
       {
-        int ret = candidate->getBlobKeysEqual(blob);
-        if (ret <= 0)
+        if (candidate->getBlobKeysEqual(blob) == 0)
         {
-          /* Found or error */
-          DBUG_RETURN(ret);
+          /* Found */
+          DBUG_RETURN(true);
         }
       }
 
@@ -174,7 +168,7 @@ class BlobBatchChecker
     }
 
     /* Not found */
-    DBUG_RETURN(1);
+    DBUG_RETURN(false);
   }
 
   /**
@@ -225,7 +219,7 @@ public:
     m_tables.clear();
     for (Uint32 b=0; b < NumBuckets; b++)
     {
-      m_buckets[b] = nullptr;
+      m_buckets[b] = NULL;
     }
     DBUG_VOID_RETURN;
   }
@@ -298,7 +292,7 @@ public:
           if (singleIndex)
           {
             /* Check whether key has been seen before */
-            include = (findKey(firstBlob) == 1);  // Not found, ok to include
+            include = !findKey(firstBlob);
             DBUG_PRINT("info", ("Checked key : include : %u", include));
           }
         }
@@ -343,27 +337,27 @@ Remark:        Creates a connection object.
 *****************************************************************************/
 NdbTransaction::NdbTransaction( Ndb* aNdb ) :
   theSendStatus(NotInit),
-  theCallbackFunction(nullptr),
-  theCallbackObject(nullptr),
+  theCallbackFunction(NULL),
+  theCallbackObject(NULL),
   theTransArrayIndex(0),
   theStartTransTime(0),
   theErrorLine(0),
-  theErrorOperation(nullptr),
+  theErrorOperation(NULL),
   theNdb(aNdb),
-  theNext(nullptr),
-  theFirstOpInList(nullptr),
-  theLastOpInList(nullptr),
-  theFirstExecOpInList(nullptr),
-  theLastExecOpInList(nullptr),
-  theCompletedFirstOp(nullptr),
-  theCompletedLastOp(nullptr),
+  theNext(NULL),
+  theFirstOpInList(NULL),
+  theLastOpInList(NULL),
+  theFirstExecOpInList(NULL),
+  theLastExecOpInList(NULL),
+  theCompletedFirstOp(NULL),
+  theCompletedLastOp(NULL),
   theNoOfOpSent(0),
   theNoOfOpCompleted(0),
   theMyRef(0),
   theTCConPtr(0),
   theTransactionId(0),
   theGlobalCheckpointId(0),
-  p_latest_trans_gci(nullptr),
+  p_latest_trans_gci(0),
   theStatus(NotConnected),
   theCompletionStatus(NotCompleted), 
   theCommitStatus(NotStarted),
@@ -373,11 +367,11 @@ NdbTransaction::NdbTransaction( Ndb* aNdb ) :
   theReleaseOnClose(false),
   // Scan operations
   m_waitForReply(true),
-  m_theFirstScanOperation(nullptr),
-  m_theLastScanOperation(nullptr),
-  m_firstExecutedScanOp(nullptr),
+  m_theFirstScanOperation(NULL),
+  m_theLastScanOperation(NULL),
+  m_firstExecutedScanOp(NULL),
   // Scan operations
-  theScanningOp(nullptr),
+  theScanningOp(NULL),
   theBuddyConPtr(0xFFFFFFFF),
   theBlobFlag(false),
   m_userDefinedBlobOps(false),
@@ -387,13 +381,13 @@ NdbTransaction::NdbTransaction( Ndb* aNdb ) :
   pendingBlobReadBytes(0),
   pendingBlobWriteBytes(0),
   // Lock handle
-  m_theFirstLockHandle(nullptr),
-  m_theLastLockHandle(nullptr),
+  m_theFirstLockHandle(NULL),
+  m_theLastLockHandle(NULL),
   // Composite query operations
-  m_firstQuery(nullptr),
-  m_firstExecQuery(nullptr),
-  m_firstActiveQuery(nullptr),
-  m_scanningQuery(nullptr),
+  m_firstQuery(NULL),
+  m_firstExecQuery(NULL),
+  m_firstActiveQuery(NULL),
+  m_scanningQuery(NULL),
   //
   m_tcRef(numberToRef(DBTC, 0)),
   m_enable_schema_obj_owner_check(false)
@@ -432,19 +426,19 @@ NdbTransaction::init()
   theListState            = NotInList;
   theInUseState           = true;
   theTransactionIsStarted = false;
-  theNext		  = nullptr;
+  theNext		  = NULL;
 
-  theFirstOpInList	  = nullptr;
-  theLastOpInList	  = nullptr;
+  theFirstOpInList	  = NULL;
+  theLastOpInList	  = NULL;
 
-  theScanningOp           = nullptr;
-  m_scanningQuery         = nullptr;
+  theScanningOp           = NULL;
+  m_scanningQuery         = NULL;
 
-  theFirstExecOpInList	  = nullptr;
-  theLastExecOpInList	  = nullptr;
+  theFirstExecOpInList	  = NULL;
+  theLastExecOpInList	  = NULL;
 
-  theCompletedFirstOp	  = nullptr;
-  theCompletedLastOp	  = nullptr;
+  theCompletedFirstOp	  = NULL;
+  theCompletedLastOp	  = NULL;
 
   theGlobalCheckpointId   = 0;
   p_latest_trans_gci      =
@@ -454,7 +448,7 @@ NdbTransaction::init()
 
   theError.code		  = 0;
   theErrorLine		  = 0;
-  theErrorOperation	  = nullptr;
+  theErrorOperation	  = NULL;
 
   theReleaseOnClose       = false;
   theSimpleState          = true;
@@ -462,22 +456,22 @@ NdbTransaction::init()
   theMagicNumber          = getMagicNumber();
 
   // Query operations
-  m_firstQuery            = nullptr;
-  m_firstExecQuery        = nullptr;
-  m_firstActiveQuery      = nullptr;
+  m_firstQuery            = NULL;
+  m_firstExecQuery        = NULL;
+  m_firstActiveQuery      = NULL;
 
   // Scan operations
   m_waitForReply          = true;
-  m_theFirstScanOperation = nullptr;
-  m_theLastScanOperation  = nullptr;
-  m_firstExecutedScanOp   = nullptr;
+  m_theFirstScanOperation = NULL;
+  m_theLastScanOperation  = NULL;
+  m_firstExecutedScanOp   = 0;
   theBuddyConPtr          = 0xFFFFFFFF;
   //
   theBlobFlag = false;
   m_userDefinedBlobOps = false;
   thePendingBlobOps = 0;
-  m_theFirstLockHandle    = nullptr;
-  m_theLastLockHandle     = nullptr;
+  m_theFirstLockHandle    = NULL;
+  m_theLastLockHandle     = NULL;
   pendingBlobReadBytes = 0;
   pendingBlobWriteBytes = 0;
   if (theId == NdbObjectIdMap::InvalidId)
@@ -513,7 +507,8 @@ setOperationErrorCodeAbort(int error);
 Remark:        Sets an error code on the connection object from an 
                operation object. 
 *****************************************************************************/
-void NdbTransaction::setOperationErrorCodeAbort(int error)
+void
+NdbTransaction::setOperationErrorCodeAbort(int error, int abortOption)
 {
   DBUG_ENTER("NdbTransaction::setOperationErrorCodeAbort");
   if (theTransactionIsStarted == false) {
@@ -575,13 +570,13 @@ NdbTransaction::handleExecuteCompletion()
    **************************************************************************/
   NdbOperation* tFirstExecOp = theFirstExecOpInList;
   NdbOperation* tLastExecOp = theLastExecOpInList;
-  if (tLastExecOp != nullptr) {
+  if (tLastExecOp != NULL) {
     tLastExecOp->next(theCompletedFirstOp);
     theCompletedFirstOp = tFirstExecOp;
-    if (theCompletedLastOp == nullptr)
+    if (theCompletedLastOp == NULL)
       theCompletedLastOp = tLastExecOp;
-    theFirstExecOpInList = nullptr;
-    theLastExecOpInList = nullptr;
+    theFirstExecOpInList = NULL;
+    theLastExecOpInList = NULL;
   }//if
 
   theSendStatus = InitState;
@@ -604,10 +599,6 @@ class OpList
   NdbOperation* m_savedFirst;
   NdbOperation* m_savedLast;
 
-  // Restore saved list items after or
-  // before main list items
-  bool m_savedAfter;
-
 public:
 #ifdef VM_TRACE
   void checkOpInList(const NdbOperation* op)
@@ -619,9 +610,9 @@ public:
       {
         return;
       }
-    } while (lop != nullptr &&
+    } while (lop != NULL &&
              lop != m_listLast &&
-             (lop = lop->next()) != nullptr);
+             (lop = lop->next()) != NULL);
     abort();
   }
 #endif
@@ -634,9 +625,8 @@ public:
          NdbOperation*& listLast):
     m_listFirst(listFirst),
     m_listLast(listLast),
-    m_savedFirst(nullptr),
-    m_savedLast(nullptr),
-    m_savedAfter(true)
+    m_savedFirst(NULL),
+    m_savedLast(NULL)
   {
 #ifdef VM_TRACE
     checkOpInList(m_listLast);
@@ -656,26 +646,17 @@ public:
     {
       assert(m_savedLast);
 
-      if (m_listFirst != nullptr)
+      if (m_listFirst != NULL)
       {
-        assert(m_listLast != nullptr);
-        if (m_savedAfter)
-        {
-          /* Add saved to end of list */
-          m_listLast->next(m_savedFirst);
-          m_listLast = m_savedLast;
-        }
-        else
-        {
-          /* Add saved to start of list */
-          m_savedLast->next(m_listFirst);
-          m_listFirst = m_savedFirst;
-        }
+        /* Add to end of list */
+        assert(m_listLast != NULL);
+        m_listLast->next(m_savedFirst);
+        m_listLast = m_savedLast;
       }
       else
       {
         /* Replace Whole list */
-        assert(m_listLast == nullptr);
+        assert(m_listLast == NULL);
         m_listFirst = m_savedFirst;
         m_listLast = m_savedLast;
       }
@@ -687,7 +668,7 @@ public:
    */
   bool isEmpty() const
   {
-    return (m_savedFirst == nullptr);
+    return (m_savedFirst == NULL);
   }
 
 
@@ -698,38 +679,16 @@ public:
    */
   void saveAfter(NdbOperation* op)
   {
-    assert(m_savedFirst == nullptr);
-    assert(m_savedLast == nullptr);
+    assert(m_savedFirst == NULL);
+    assert(m_savedLast == NULL);
 #ifdef VM_TRACE
     checkOpInList(op);
 #endif
     m_savedFirst = op->next();
     m_savedLast = m_listLast;
 
-    op->next(nullptr);
+    op->next(NULL);
     m_listLast = op;
-    m_savedAfter = true;
-  }
-
-  /**
-   * Save everything up to and including
-   * passed op.
-   * Will be restored to start of list
-   * on going out of scope
-   */
-  void saveBeforeAndIncluding(NdbOperation* op)
-  {
-    assert(m_savedFirst == nullptr);
-    assert(m_savedLast == nullptr);
-#ifdef VM_TRACE
-    checkOpInList(op);
-#endif
-    m_savedFirst = m_listFirst;
-    m_savedLast = op;
-
-    m_listFirst = op->next();
-    op->next(nullptr);
-    m_savedAfter = false;
   }
 
   /**
@@ -739,20 +698,19 @@ public:
    */
   void save()
   {
-    if (m_savedFirst != nullptr)
+    if (m_savedFirst != NULL)
     {
-      assert(m_savedLast != nullptr);
+      assert(m_savedLast != NULL);
       m_savedLast->next(m_listFirst);
       m_savedLast = m_listLast;
     }
     else
     {
-      assert(m_savedLast == nullptr);
+      assert(m_savedLast == NULL);
       m_savedFirst = m_listFirst;
       m_savedLast = m_listLast;
     }
-    m_listFirst = m_listLast = nullptr;
-    m_savedAfter = true;
+    m_listFirst = m_listLast = NULL;
   }
 
   /**
@@ -852,7 +810,7 @@ NdbTransaction::execute(ExecType aTypeOfExec,
      * expected behaviour is obtained when executing below
      */
     tPrepOp= theFirstOpInList;
-    while(tPrepOp != nullptr)
+    while(tPrepOp != NULL)
     {
       DBUG_PRINT("info", ("Changing abortOption from %d", 
                           tPrepOp->m_abortOption));
@@ -872,21 +830,21 @@ NdbTransaction::execute(ExecType aTypeOfExec,
   do {
     OpList nextBatchOps(theFirstOpInList,
                         theLastOpInList);
-    NdbOperation* prevOp = nullptr;
+    NdbOperation* prevOp = NULL;
 
     tExecType = aTypeOfExec;
     tPrepOp = theFirstOpInList;
-    while (tPrepOp != nullptr) {
+    while (tPrepOp != NULL) {
       if (tPrepOp->theError.code == 0) {
         NdbBlob* tBlob = tPrepOp->theBlobList;
-        if (tBlob !=nullptr) {
+        if (tBlob !=NULL) {
           if (!batchChecker.includeNextOpInBatch(tPrepOp))
           {
             DBUG_PRINT("info", ("Next op cannot be included in batch - "
                                 "split list after %p and before %p",
                                 prevOp,
                                 tPrepOp));
-            assert(prevOp != nullptr);
+            assert(prevOp != NULL);
             /* Execute what we have prepared so far */
             /* Save any remainder for later */
             assert(nextBatchOps.isEmpty());
@@ -899,16 +857,6 @@ NdbTransaction::execute(ExecType aTypeOfExec,
 
           /* Prepare this operation + blob ops now */
           {
-            /* Remove already defined ops from consideration for now
-             * for more efficient operation reordering in
-             * Blob preExecute
-             */
-            OpList precedingOps(theFirstOpInList,
-                                theLastOpInList);
-            if (prevOp)
-            {
-              precedingOps.saveBeforeAndIncluding(prevOp);
-            }
             /**
              * Hide following user defined ops for now so that
              * internal blob operations are logically placed
@@ -918,7 +866,7 @@ NdbTransaction::execute(ExecType aTypeOfExec,
                                 theLastOpInList);
             followingOps.saveAfter(tPrepOp);
 
-            while (tBlob != nullptr) {
+            while (tBlob != NULL) {
               NdbBlob::BlobAction ba = tBlob->preExecute(tExecType);
 
               if (ba == NdbBlob::BA_ERROR)
@@ -940,8 +888,8 @@ NdbTransaction::execute(ExecType aTypeOfExec,
                 assert(ba == NdbBlob::BA_DONE);
               }
               tBlob = tBlob->theNext;
-            } // while tBlob
-          } // ops lists
+            }
+          }
         }
       }
 
@@ -954,10 +902,10 @@ NdbTransaction::execute(ExecType aTypeOfExec,
 
     if (tExecType == Commit) {
       NdbOperation* tOp = theCompletedFirstOp;
-      while (tOp != nullptr) {
+      while (tOp != NULL) {
         if (tOp->theError.code == 0) {
           NdbBlob* tBlob = tOp->theBlobList;
-          while (tBlob != nullptr) {
+          while (tBlob != NULL) {
             if (tBlob->preCommit() == -1)
 	    {
 	      ret = -1;
@@ -1011,7 +959,7 @@ NdbTransaction::execute(ExecType aTypeOfExec,
 #ifdef ndb_api_crash_on_complex_blob_abort
     assert(theFirstOpInList == NULL && theLastOpInList == NULL);
 #else
-    theFirstOpInList = theLastOpInList = nullptr;
+    theFirstOpInList = theLastOpInList = NULL;
 #endif
 
     bool postexec_again;
@@ -1019,10 +967,10 @@ NdbTransaction::execute(ExecType aTypeOfExec,
     {
       postexec_again = false;
       NdbOperation* tOp = theCompletedFirstOp;
-      while (tOp != nullptr) {
+      while (tOp != NULL) {
         if (tOp->theError.code == 0) {
           NdbBlob* tBlob = tOp->theBlobList;
-          while (tBlob != nullptr) {
+          while (tBlob != NULL) {
             // may add new operations if batch
             NdbBlob::BlobAction ba = tBlob->postExecute(tExecType);
             if (ba == NdbBlob::BA_ERROR)
@@ -1052,7 +1000,7 @@ NdbTransaction::execute(ExecType aTypeOfExec,
       }
 
       const bool have_dependent_ops = !nextBatchOps.isEmpty();
-      const bool have_pending_ops = (theFirstOpInList != nullptr);
+      const bool have_pending_ops = (theFirstOpInList != NULL);
       const bool exec_now =
         postexec_again ||                           // More to do
         (have_dependent_ops && have_pending_ops);   // Flush
@@ -1084,9 +1032,9 @@ NdbTransaction::execute(ExecType aTypeOfExec,
         }
       }
     } while (postexec_again);
-    assert((theFirstOpInList == nullptr && nextBatchOps.isEmpty()) ||
+    assert((theFirstOpInList == NULL && nextBatchOps.isEmpty()) ||
            tExecType == NoCommit);
-  } while (theFirstOpInList != nullptr || tExecType != aTypeOfExec);
+  } while (theFirstOpInList != NULL || tExecType != aTypeOfExec);
 
   /* Sometimes the original error is trampled by 'Trans already aborted',
    * detect this case and attempt to restore the original error
@@ -1151,7 +1099,7 @@ NdbTransaction::executeNoBlobs(NdbTransaction::ExecType aTypeOfExec,
 
   Uint32 timeout = theNdb->theImpl->get_waitfor_timeout();
   m_waitForReply = false;
-  executeAsynchPrepare(aTypeOfExec, nullptr, nullptr, abortOption);
+  executeAsynchPrepare(aTypeOfExec, NULL, NULL, abortOption);
   if (m_waitForReply){
     while (1) {
       int noOfComp = tNdb->sendPollNdb(3 * timeout, 1, forceSend);
@@ -1219,7 +1167,7 @@ NdbTransaction::executeNoBlobs(NdbTransaction::ExecType aTypeOfExec,
 static NdbQueryImpl* getFirstLookupQuery(NdbQueryImpl* firstQuery)
 {
   NdbQueryImpl* current = firstQuery;
-  while (current != nullptr && current->getQueryDef().isScanQuery()) {
+  while (current != NULL && current->getQueryDef().isScanQuery()) {
     current = current->getNext();
   }
   return current;
@@ -1232,8 +1180,8 @@ static NdbQueryImpl* getFirstLookupQuery(NdbQueryImpl* firstQuery)
 static NdbQueryImpl* getLastLookupQuery(NdbQueryImpl* firstQuery)
 {
   NdbQueryImpl* current = firstQuery;
-  NdbQueryImpl* last = nullptr;
-  while (current != nullptr) {
+  NdbQueryImpl* last = NULL;
+  while (current != NULL) {
     if (!current->getQueryDef().isScanQuery()) {
       last = current;
     }
@@ -1360,7 +1308,7 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
   NdbQueryImpl* const lastLookupQuery = getLastLookupQuery(m_firstQuery);
 
   if (tTransactionIsStarted == true) {
-    if (tLastOp != nullptr) {
+    if (tLastOp != NULL) {
       if (aTypeOfExec == Commit) {
 /*****************************************************************************
  *	Set commit indicator on last operation when commit has been ordered
@@ -1368,11 +1316,11 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
 ******************************************************************************/
         tLastOp->theCommitIndicator = 1;
       }//if
-    } else if (lastLookupQuery != nullptr) {
+    } else if (lastLookupQuery != NULL) {
       if (aTypeOfExec == Commit) {
         lastLookupQuery->setCommitIndicator();
       }
-    } else if (m_firstQuery == nullptr) {
+    } else if (m_firstQuery == NULL) {
       if (aTypeOfExec == Commit && !theSimpleState) {
 	/**********************************************************************
 	 *   A Transaction have been started and no more operations exist. 
@@ -1403,21 +1351,21 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
      * on a query root lookup, and the commit indicator on a non-linked 
      * lookup.
      */
-    if (lastLookupQuery != nullptr) {
+    if (lastLookupQuery != NULL) {
       getFirstLookupQuery(m_firstQuery)->setStartIndicator();
-    } else if (tFirstOp != nullptr) {
+    } else if (tFirstOp != NULL) {
       tFirstOp->setStartIndicator();
     }
 
-    if (tFirstOp != nullptr) {
+    if (tFirstOp != NULL) {
       if (aTypeOfExec == Commit) {
         tLastOp->theCommitIndicator = 1;
       }//if
-    } else if (lastLookupQuery != nullptr) {
+    } else if (lastLookupQuery != NULL) {
       if (aTypeOfExec == Commit) {
         lastLookupQuery->setCommitIndicator();
       }//if
-    } else if (m_firstQuery == nullptr) {
+    } else if (m_firstQuery == NULL) {
       /***********************************************************************
        *    No operations are defined and we have not started yet. 
        *    Simply return OK. Set commit status if Commit.
@@ -1444,8 +1392,8 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
   // Prepare sending of all pending NdbQuery's
   if (m_firstQuery) {
     NdbQueryImpl* query = m_firstQuery;
-    NdbQueryImpl* last = nullptr;
-    while (query!=nullptr) {
+    NdbQueryImpl* last = NULL;
+    while (query!=NULL) {
       const int tReturnCode = query->prepareSend();
       if (unlikely(tReturnCode != 0)) {
         theSendStatus = sendABORTfail;
@@ -1454,10 +1402,10 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
       last  = query;
       query = query->getNext();
     }
-    assert (m_firstExecQuery==nullptr);
+    assert (m_firstExecQuery==NULL);
     last->setNext(m_firstExecQuery);
     m_firstExecQuery = m_firstQuery;
-    m_firstQuery = nullptr;
+    m_firstQuery = NULL;
   }
 
   // Prepare sending of all pending (non-scan) NdbOperations's
@@ -1498,8 +1446,8 @@ NdbTransaction::executeAsynchPrepare(NdbTransaction::ExecType aTypeOfExec,
   NdbOperation* tLastOpInList = theLastOpInList;
   NdbOperation* tFirstOpInList = theFirstOpInList;
 
-  theFirstOpInList = nullptr;
-  theLastOpInList = nullptr;
+  theFirstOpInList = NULL;
+  theLastOpInList = NULL;
   theFirstExecOpInList = tFirstOpInList;
   theLastExecOpInList = tLastOpInList;
 
@@ -1527,7 +1475,7 @@ void NdbTransaction::close()
 int NdbTransaction::refresh()
 {
   for(NdbIndexScanOperation* scan_op = m_firstExecutedScanOp;
-      scan_op != nullptr; scan_op = (NdbIndexScanOperation *) scan_op->theNext)
+      scan_op != 0; scan_op = (NdbIndexScanOperation *) scan_op->theNext)
   {
     NdbTransaction* scan_trans = scan_op->theNdbCon;
     if (scan_trans)
@@ -1553,7 +1501,7 @@ NdbTransaction::sendTC_HBREP()		// Send a TC_HBREP signal;
   Uint32 tTransId1, tTransId2;
 
   tSignal = tNdb->getSignal();
-  if (tSignal == nullptr) {
+  if (tSignal == NULL) {
     return -1;
   }
 
@@ -1602,9 +1550,9 @@ NdbTransaction::doSend()
   This is ensured by the caller of this routine (=execute).
   */
   NdbScanOperation* tcOp = m_theFirstScanOperation;
-  if (tcOp != nullptr){
+  if (tcOp != 0){
     // Execute any cursor operations
-    while (tcOp != nullptr) {
+    while (tcOp != NULL) {
       int tReturnCode;
       tReturnCode = tcOp->executeCursor(theDBnode);
       /**
@@ -1627,21 +1575,21 @@ NdbTransaction::doSend()
     // Discard cursor operations, since these are also
     // in the complete operations list we do not need
     // to release them.
-    m_theFirstScanOperation = m_theLastScanOperation = nullptr;
+    m_theFirstScanOperation = m_theLastScanOperation = NULL;
   }
 
   switch(theSendStatus){
   case sendOperations: {
-    assert (m_firstExecQuery!=nullptr || theFirstExecOpInList!=nullptr);
+    assert (m_firstExecQuery!=NULL || theFirstExecOpInList!=NULL);
 
     const NdbQueryImpl* const lastLookupQuery 
       = getLastLookupQuery(m_firstExecQuery);
-    if (m_firstExecQuery!=nullptr) {
+    if (m_firstExecQuery!=NULL) {
       NdbQueryImpl* query = m_firstExecQuery;
-      NdbQueryImpl* last  = nullptr;
-      while (query!=nullptr) {
+      NdbQueryImpl* last  = NULL;
+      while (query!=NULL) {
         const bool lastFlag = 
-          query == lastLookupQuery && theFirstExecOpInList == nullptr;
+          query == lastLookupQuery && theFirstExecOpInList == NULL;
         const int tReturnCode = query->doSend(theDBnode, lastFlag);
         if (tReturnCode == -1) {
           goto fail;
@@ -1653,13 +1601,13 @@ NdbTransaction::doSend()
       // Append to list of active queries
       last->setNext(m_firstActiveQuery);
       m_firstActiveQuery = m_firstExecQuery;
-      m_firstExecQuery = nullptr;
+      m_firstExecQuery = NULL;
     }
 
     NdbOperation * tOp = theFirstExecOpInList;
-    while (tOp != nullptr) {
+    while (tOp != NULL) {
       NdbOperation* tNext = tOp->next();
-      const Uint32 lastFlag = ((tNext == nullptr) ? 1 : 0);
+      const Uint32 lastFlag = ((tNext == NULL) ? 1 : 0);
       const int tReturnCode = tOp->doSend(theDBnode, lastFlag);
       if (tReturnCode == -1) {
         goto fail;
@@ -1667,7 +1615,7 @@ NdbTransaction::doSend()
       tOp = tNext;
     }
 
-    if (theFirstExecOpInList || lastLookupQuery != nullptr) {
+    if (theFirstExecOpInList || lastLookupQuery != NULL) {
       theSendStatus = sendTC_OP;
       theTransactionIsStarted = true;
       theNdb->insert_sent_list(this);      // Lookup: completes with KEYCONF/REF
@@ -1840,7 +1788,7 @@ NdbTransaction::release(){
 
 void
 NdbTransaction::releaseOps(NdbOperation* tOp){
-  while (tOp != nullptr) {
+  while (tOp != NULL) {
     NdbOperation* tmp = tOp;
     tOp->release();
     tOp = tOp->next();
@@ -1867,18 +1815,18 @@ NdbTransaction::releaseOperations()
   releaseOps(theFirstOpInList);
   releaseOps(theFirstExecOpInList);
 
-  theCompletedFirstOp = nullptr;
-  theCompletedLastOp = nullptr;
-  theFirstOpInList = nullptr;
-  theFirstExecOpInList = nullptr;
-  theLastOpInList = nullptr;
-  theLastExecOpInList = nullptr;
-  m_theFirstScanOperation = nullptr;
-  m_theLastScanOperation = nullptr;
-  m_firstExecutedScanOp = nullptr;
-  m_firstQuery = nullptr;
-  m_firstExecQuery = nullptr;
-  m_firstActiveQuery = nullptr;
+  theCompletedFirstOp = NULL;
+  theCompletedLastOp = NULL;
+  theFirstOpInList = NULL;
+  theFirstExecOpInList = NULL;
+  theLastOpInList = NULL;
+  theLastExecOpInList = NULL;
+  m_theFirstScanOperation = NULL;
+  m_theLastScanOperation = NULL;
+  m_firstExecutedScanOp = NULL;
+  m_firstQuery = NULL;
+  m_firstExecQuery = NULL;
+  m_firstActiveQuery = NULL;
 
 }//NdbTransaction::releaseOperations()
 
@@ -1886,10 +1834,10 @@ void
 NdbTransaction::releaseCompletedOperations()
 {
   releaseOps(theCompletedFirstOp);
-  theCompletedFirstOp = nullptr;
-  theCompletedLastOp = nullptr;
+  theCompletedFirstOp = NULL;
+  theCompletedLastOp = NULL;
   theErrorLine = 0;
-  theErrorOperation = nullptr;
+  theErrorOperation = NULL;
 }//NdbTransaction::releaseCompletedOperations()
 
 
@@ -1899,9 +1847,9 @@ NdbTransaction::releaseCompletedQueries()
   /**
    * Find & release all active queries which as completed.
    */
-  NdbQueryImpl* prev  = nullptr;
+  NdbQueryImpl* prev  = NULL;
   NdbQueryImpl* query = m_firstActiveQuery;
-  while (query != nullptr) {
+  while (query != NULL) {
     NdbQueryImpl* next = query->getNext();
 
     if (query->hasCompleted()) {
@@ -1928,7 +1876,7 @@ Remark:         Release all queries
 void
 NdbTransaction::releaseQueries(NdbQueryImpl* query)
 {
-  while (query != nullptr) {
+  while (query != NULL) {
     NdbQueryImpl* next = query->getNext();
     query->release();
     query = next;
@@ -1944,7 +1892,7 @@ Remark:         Release all cursor operations.
 void 
 NdbTransaction::releaseScanOperations(NdbIndexScanOperation* cursorOp)
 {
-  while(cursorOp != nullptr){
+  while(cursorOp != 0){
     NdbIndexScanOperation* next = (NdbIndexScanOperation*)cursorOp->next();
     cursorOp->release();
     theNdb->releaseScanOperation(cursorOp);
@@ -1962,39 +1910,39 @@ NdbTransaction::releaseScanOperation(NdbIndexScanOperation** listhead,
     * listhead = (NdbIndexScanOperation*)op->theNext;
     if (listtail && *listtail == op)
     {
-      assert(* listhead == nullptr);
-      * listtail = nullptr;
+      assert(* listhead == 0);
+      * listtail = 0;
     }
       
   }
   else
   {
     NdbIndexScanOperation* tmp = * listhead;
-    while (tmp != nullptr)
+    while (tmp != NULL)
     {
       if (tmp->theNext == op)
       {
 	tmp->theNext = (NdbIndexScanOperation*)op->theNext;
 	if (listtail && *listtail == op)
 	{
-	  assert(op->theNext == nullptr);
+	  assert(op->theNext == 0);
 	  *listtail = tmp;
 	}
 	break;
       }
       tmp = (NdbIndexScanOperation*)tmp->theNext;
     }
-    if (tmp == nullptr)
-      op = nullptr;
+    if (tmp == NULL)
+      op = NULL;
   }
   
-  if (op != nullptr)
+  if (op != NULL)
   {
     if (unlikely(theErrorOperation == op))
     {
       /* Remove ref to scan op before release */
       theErrorLine = 0;
-      theErrorOperation = nullptr;
+      theErrorOperation = NULL;
     }
     op->release();
     theNdb->releaseScanOperation(op);
@@ -2012,21 +1960,21 @@ NdbTransaction::releaseLockHandles()
   while (lh)
   {
     NdbLockHandle* next = lh->next();
-    lh->next(nullptr);
+    lh->next(NULL);
     
     theNdb->releaseLockHandle(lh);
     lh = next;
   }
 
-  m_theFirstLockHandle = nullptr;
-  m_theLastLockHandle = nullptr;
+  m_theFirstLockHandle = NULL;
+  m_theLastLockHandle = NULL;
 }
 
 /*****************************************************************************
 NdbOperation* getNdbOperation(const char* aTableName);
 
 Return Value    Return a pointer to a NdbOperation object if getNdbOperation 
-                was successful.
+                was succesful.
                 Return NULL : In all other case. 	
 Parameters:     aTableName : Name of the database table. 	
 Remark:         Get an operation from NdbOperation idlelist and get the 
@@ -2040,17 +1988,17 @@ NdbTransaction::getNdbOperation(const char* aTableName)
 {
   if (theCommitStatus == Started){
     NdbTableImpl* table = theNdb->theDictionary->getTable(aTableName);
-    if (table != nullptr){
+    if (table != 0){
       return getNdbOperation(table);
     } else {
       setErrorCode(theNdb->theDictionary->getNdbError().code);
-      return nullptr;
+      return NULL;
     }//if
   }
 
   setOperationErrorCodeAbort(4114);
   
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbOperation()
 
 /*****************************************************************************
@@ -2086,8 +2034,8 @@ NdbTransaction::checkSchemaObjects(const NdbTableImpl *tab,
     if(change_db && (strcmp(db, "") != 0)) // switch to db of current table if not blank
       theNdb->setDatabaseName(db);
 
-    NdbDictionary::Table *dictTab = nullptr;
-    NdbDictionary::Index *dictIdx = nullptr;
+    NdbDictionary::Table *dictTab = NULL;
+    NdbDictionary::Index *dictIdx = NULL;
  
     dictTab = theNdb->theDictionary->getTable(tab->getName());
     if(idx)
@@ -2125,9 +2073,9 @@ NdbTransaction::checkSchemaObjects(const NdbTableImpl *tab,
 NdbOperation* getNdbOperation(const NdbTableImpl* tab, NdbOperation* aNextOp)
 
 Return Value    Return a pointer to a NdbOperation object if getNdbOperation 
-                was successful.
+                was succesful.
                 Return NULL: In all other case. 	
-Parameters:     tableId : Id of the database table being deleted.
+Parameters:     tableId : Id of the database table beeing deleted.
 Remark:         Get an operation from NdbOperation object idlelist and 
                 get the NdbTransaction object who was fetch by 
                 startTransaction pointing to this operation 
@@ -2138,38 +2086,38 @@ NdbOperation*
 NdbTransaction::getNdbOperation(const NdbTableImpl * tab,
                                 NdbOperation* aNextOp)
 { 
-  if (theScanningOp != nullptr || m_scanningQuery != nullptr){
+  if (theScanningOp != NULL || m_scanningQuery != NULL){
     setErrorCode(4607);
-    return nullptr;
+    return NULL;
   }
   if (!checkSchemaObjects(tab))
   {
     setErrorCode(1231);
-    return nullptr;
+    return NULL;
   }
   
   NdbOperation* tOp = theNdb->getOperation();
-  if (tOp == nullptr)
+  if (tOp == NULL)
     goto getNdbOp_error1;
 
-  if (aNextOp == nullptr) {
-    if (theLastOpInList != nullptr) {
+  if (aNextOp == NULL) {
+    if (theLastOpInList != NULL) {
        theLastOpInList->next(tOp);
        theLastOpInList = tOp;
     } else {
        theLastOpInList = tOp;
        theFirstOpInList = tOp;
     }//if
-    tOp->next(nullptr);
+    tOp->next(NULL);
   } else {
     // add before the given op
     if (theFirstOpInList == aNextOp) {
       theFirstOpInList = tOp;
     } else {
       NdbOperation* aLoopOp = theFirstOpInList;
-      while (aLoopOp != nullptr && aLoopOp->next() != aNextOp)
+      while (aLoopOp != NULL && aLoopOp->next() != aNextOp)
         aLoopOp = aLoopOp->next();
-      assert(aLoopOp != nullptr);
+      assert(aLoopOp != NULL);
       aLoopOp->next(tOp);
     }
     tOp->next(aNextOp);
@@ -2179,11 +2127,11 @@ NdbTransaction::getNdbOperation(const NdbTableImpl * tab,
   } else {
     theNdb->releaseOperation(tOp);
   }//if
-  return nullptr;
+  return NULL;
   
  getNdbOp_error1:
   setOperationErrorCodeAbort(4000);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbOperation()
 
 NdbOperation* NdbTransaction::getNdbOperation(const NdbDictionary::Table * table)
@@ -2191,7 +2139,7 @@ NdbOperation* NdbTransaction::getNdbOperation(const NdbDictionary::Table * table
   if (table)
     return getNdbOperation(& NdbTableImpl::getImpl(*table));
   else
-    return nullptr;
+    return NULL;
 }//NdbTransaction::getNdbOperation()
 
 
@@ -2199,7 +2147,7 @@ NdbOperation* NdbTransaction::getNdbOperation(const NdbDictionary::Table * table
 /*****************************************************************************
 NdbScanOperation* getNdbScanOperation(const char* aTableName);
 
-Return Value    Return a pointer to a NdbScanOperation object if getNdbScanOperation was successful.
+Return Value    Return a pointer to a NdbScanOperation object if getNdbScanOperation was succesful.
                 Return NULL : In all other case. 	
 Parameters:     aTableName : Name of the database table. 	
 Remark:         Get an operation from NdbScanOperation idlelist and get the NdbTransaction object 
@@ -2211,22 +2159,22 @@ NdbTransaction::getNdbScanOperation(const char* aTableName)
 {
   if (theCommitStatus == Started){
     NdbTableImpl* tab = theNdb->theDictionary->getTable(aTableName);
-    if (tab != nullptr){
+    if (tab != 0){
       return getNdbScanOperation(tab);
     } else {
       setOperationErrorCodeAbort(theNdb->theDictionary->m_error.code);
-      return nullptr;
+      return NULL;
     }//if
   } 
   
   setOperationErrorCodeAbort(4114);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbScanOperation()
 
 /*****************************************************************************
 NdbScanOperation* getNdbIndexScanOperation(const char* anIndexName, const char* aTableName);
 
-Return Value    Return a pointer to a NdbIndexScanOperation object if getNdbIndexScanOperation was successful.
+Return Value    Return a pointer to a NdbIndexScanOperation object if getNdbIndexScanOperation was succesful.
                 Return NULL : In all other case. 	
 Parameters:     anIndexName : Name of the index to use. 	
                 aTableName : Name of the database table. 	
@@ -2240,16 +2188,16 @@ NdbTransaction::getNdbIndexScanOperation(const char* anIndexName,
 {
   NdbIndexImpl* index = 
     theNdb->theDictionary->getIndex(anIndexName, aTableName);
-  if (index == nullptr)
+  if (index == 0)
   {
     setOperationErrorCodeAbort(theNdb->theDictionary->getNdbError().code);
-    return nullptr;
+    return 0;
   }
   NdbTableImpl* table = theNdb->theDictionary->getTable(aTableName);
-  if (table == nullptr)
+  if (table == 0)
   {
     setOperationErrorCodeAbort(theNdb->theDictionary->getNdbError().code);
-    return nullptr;
+    return 0;
   }
 
   return getNdbIndexScanOperation(index, table);
@@ -2261,11 +2209,11 @@ NdbTransaction::getNdbIndexScanOperation(const NdbIndexImpl* index,
 {
   if (theCommitStatus == Started){
     const NdbTableImpl * indexTable = index->getIndexTable();
-    if (indexTable != nullptr){
+    if (indexTable != 0){
       if (!checkSchemaObjects(table, index))
       {
         setErrorCode(1231);
-        return nullptr;
+        return NULL;
       } 
       NdbIndexScanOperation* tOp = getNdbScanOperation(indexTable);
       if(tOp)
@@ -2277,12 +2225,12 @@ NdbTransaction::getNdbIndexScanOperation(const NdbIndexImpl* index,
       return tOp;
     } else {
       setOperationErrorCodeAbort(4271);
-      return nullptr;
+      return NULL;
     }//if
   } 
   
   setOperationErrorCodeAbort(4114);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbIndexScanOperation()
 
 NdbIndexScanOperation* 
@@ -2298,10 +2246,10 @@ NdbTransaction::getNdbIndexScanOperation(const NdbDictionary::Index * index)
       return getNdbIndexScanOperation(index, table);
 
     setOperationErrorCodeAbort(theNdb->theDictionary->getNdbError().code);
-    return nullptr;
+    return NULL;
   }
   setOperationErrorCodeAbort(4271);
-  return nullptr;
+  return NULL;
 }
 
 NdbIndexScanOperation* 
@@ -2312,15 +2260,15 @@ NdbTransaction::getNdbIndexScanOperation(const NdbDictionary::Index * index,
     return getNdbIndexScanOperation(& NdbIndexImpl::getImpl(*index),
 				    & NdbTableImpl::getImpl(*table));
   setOperationErrorCodeAbort(4271);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbIndexScanOperation()
 
 /*****************************************************************************
 NdbScanOperation* getNdbScanOperation(int aTableId);
 
-Return Value    Return a pointer to a NdbScanOperation object if getNdbScanOperation was successful.
+Return Value    Return a pointer to a NdbScanOperation object if getNdbScanOperation was succesful.
                 Return NULL: In all other case. 	
-Parameters:     tableId : Id of the database table being deleted.
+Parameters:     tableId : Id of the database table beeing deleted.
 Remark:         Get an operation from NdbScanOperation object idlelist and get the NdbTransaction 
                 object who was fetch by startTransaction pointing to this  operation 
   	        getOperation will set the theTableId in the NdbScanOperation object, synchronous.
@@ -2331,11 +2279,11 @@ NdbTransaction::getNdbScanOperation(const NdbTableImpl * tab)
   if (!checkSchemaObjects(tab))
   {
     setErrorCode(1231);
-    return nullptr;
+    return NULL;
   } 
   
   NdbIndexScanOperation* tOp = theNdb->getScanOperation();
-  if (tOp == nullptr)
+  if (tOp == NULL)
     goto getNdbOp_error1;
 
   if (tOp->init(tab, this) != -1) {
@@ -2347,11 +2295,11 @@ NdbTransaction::getNdbScanOperation(const NdbTableImpl * tab)
     tOp->release();
     theNdb->releaseScanOperation(tOp);
   }//if
-  return nullptr;
+  return NULL;
 
 getNdbOp_error1:
   setOperationErrorCodeAbort(4000);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbScanOperation()
 
 void
@@ -2364,19 +2312,19 @@ NdbTransaction::remove_list(NdbOperation*& list, NdbOperation* op){
     if(tmp)
       tmp->next(op->next());
   }
-  op->next(nullptr);
+  op->next(NULL);
 }
 
 void
 NdbTransaction::define_scan_op(NdbIndexScanOperation * tOp){
   // Link scan operation into list of cursor operations
-  if (m_theLastScanOperation == nullptr)
+  if (m_theLastScanOperation == NULL)
     m_theFirstScanOperation = m_theLastScanOperation = tOp;
   else {
     m_theLastScanOperation->next(tOp);
     m_theLastScanOperation = tOp;
   }
-  tOp->next(nullptr);
+  tOp->next(NULL);
 }
 
 NdbScanOperation* 
@@ -2385,7 +2333,7 @@ NdbTransaction::getNdbScanOperation(const NdbDictionary::Table * table)
   if (table)
     return getNdbScanOperation(& NdbTableImpl::getImpl(*table));
   else
-    return nullptr;
+    return NULL;
 }//NdbTransaction::getNdbScanOperation()
 
 
@@ -2395,7 +2343,7 @@ NdbIndexOperation* getNdbIndexOperation(const char* anIndexName,
 					const char* aTableName);
 
 Return Value    Return a pointer to an NdbIndexOperation object if
-                getNdbIndexOperation was successful.
+                getNdbIndexOperation was succesful.
                 Return NULL : In all other case. 	
 Parameters:     aTableName : Name of the database table. 	
 Remark:         Get an operation from NdbIndexOperation idlelist and get the NdbTransaction object 
@@ -2410,10 +2358,10 @@ NdbTransaction::getNdbIndexOperation(const char* anIndexName,
     NdbTableImpl * table = theNdb->theDictionary->getTable(aTableName);
     NdbIndexImpl * index;
 
-    if (table == nullptr)
+    if (table == 0)
     {
       setOperationErrorCodeAbort(theNdb->theDictionary->getNdbError().code);
-      return nullptr;
+      return NULL;
     }
 
     if (table->m_frm.get_data())
@@ -2428,29 +2376,29 @@ NdbTransaction::getNdbIndexOperation(const char* anIndexName,
     else
       index = theNdb->theDictionary->getIndex(anIndexName,
 					      aTableName);
-    if(table != nullptr && index != nullptr){
+    if(table != 0 && index != 0){
       return getNdbIndexOperation(index, table);
     }
     
-    if(index == nullptr){
+    if(index == 0){
       setOperationErrorCodeAbort(4243);
-      return nullptr;
+      return NULL;
     }
 
     setOperationErrorCodeAbort(4243);
-    return nullptr;
+    return NULL;
   } 
   
   setOperationErrorCodeAbort(4114);
-  return nullptr;
+  return 0;
 }//NdbTransaction::getNdbIndexOperation()
 
 /*****************************************************************************
 NdbIndexOperation* getNdbIndexOperation(int anIndexId, int aTableId);
 
-Return Value    Return a pointer to a NdbIndexOperation object if getNdbIndexOperation was successful.
+Return Value    Return a pointer to a NdbIndexOperation object if getNdbIndexOperation was succesful.
                 Return NULL: In all other case. 	
-Parameters:     tableId : Id of the database table being deleted.
+Parameters:     tableId : Id of the database table beeing deleted.
 Remark:         Get an operation from NdbIndexOperation object idlelist and get the NdbTransaction 
                 object who was fetch by startTransaction pointing to this  operation 
   	        getOperation will set the theTableId in the NdbIndexOperation object, synchronous.
@@ -2463,30 +2411,30 @@ NdbTransaction::getNdbIndexOperation(const NdbIndexImpl * anIndex,
   if (!checkSchemaObjects(aTable, anIndex))
   {
     setErrorCode(1231);
-    return nullptr;
+    return NULL;
   } 
   NdbIndexOperation* tOp = theNdb->getIndexOperation();
-  if (tOp == nullptr)
+  if (tOp == NULL)
     goto getNdbOp_error1;
 
-  if (aNextOp == nullptr) {
-    if (theLastOpInList != nullptr) {
+  if (aNextOp == NULL) {
+    if (theLastOpInList != NULL) {
        theLastOpInList->next(tOp);
        theLastOpInList = tOp;
     } else {
        theLastOpInList = tOp;
        theFirstOpInList = tOp;
     }//if
-    tOp->next(nullptr);
+    tOp->next(NULL);
   } else {
     // add before the given op
     if (theFirstOpInList == aNextOp) {
       theFirstOpInList = tOp;
     } else {
       NdbOperation* aLoopOp = theFirstOpInList;
-      while (aLoopOp != nullptr && aLoopOp->next() != aNextOp)
+      while (aLoopOp != NULL && aLoopOp->next() != aNextOp)
         aLoopOp = aLoopOp->next();
-      assert(aLoopOp != nullptr);
+      assert(aLoopOp != NULL);
       aLoopOp->next(tOp);
     }
     tOp->next(aNextOp);
@@ -2496,11 +2444,11 @@ NdbTransaction::getNdbIndexOperation(const NdbIndexImpl * anIndex,
   } else {
     theNdb->releaseOperation(tOp);
   }//if
-  return nullptr;
+  return NULL;
   
  getNdbOp_error1:
   setOperationErrorCodeAbort(4000);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbIndexOperation()
 
 NdbIndexOperation* 
@@ -2515,10 +2463,10 @@ NdbTransaction::getNdbIndexOperation(const NdbDictionary::Index * index)
       return getNdbIndexOperation(index, table);
 
     setOperationErrorCodeAbort(theNdb->theDictionary->getNdbError().code);
-    return nullptr;
+    return NULL;
   }
   setOperationErrorCodeAbort(4271);
-  return nullptr;
+  return NULL;
 }
 
 NdbIndexOperation* 
@@ -2530,7 +2478,7 @@ NdbTransaction::getNdbIndexOperation(const NdbDictionary::Index * index,
 				& NdbTableImpl::getImpl(*table));
   
   setOperationErrorCodeAbort(4271);
-  return nullptr;
+  return NULL;
 }//NdbTransaction::getNdbIndexOperation()
 
 
@@ -2601,7 +2549,8 @@ Return Value:  Return 0 : receiveTCRELEASECONF was successful.
 Parameters:    aSignal: The signal object pointer.
 Remark:         DisConnect TC Connect pointer to NDBAPI. 
 *******************************************************************************/
-int NdbTransaction::receiveTCRELEASECONF(const NdbApiSignal* /*aSignal*/)
+int			
+NdbTransaction::receiveTCRELEASECONF(const NdbApiSignal* aSignal)
 {
   if (theStatus != DisConnecting)
   {
@@ -2750,7 +2699,7 @@ NdbTransaction::receiveTCROLLBACKREF(const NdbApiSignal* aSignal)
 /*****************************************************************************
 int receiveTCROLLBACKREP( NdbApiSignal* aSignal)
 
-Return Value:   Return 0 : send was successful.
+Return Value:   Return 0 : send was succesful.
                 Return -1: In all other case.   
 Parameters:     aSignal: the signal object that contains the 
                 TCROLLBACKREP signal from TC.
@@ -2817,7 +2766,7 @@ from other transactions.
     const Uint32 tNoOfOperations = TcKeyConf::getNoOfOperations(tTemp);
     const Uint32 tCommitFlag = TcKeyConf::getCommitFlag(tTemp);
 
-    const Uint32* tPtr = (const Uint32*)&keyConf->operations[0];
+    const Uint32* tPtr = (Uint32 *)&keyConf->operations[0];
     Uint32 tNoComp = theNoOfOpCompleted;
     for (Uint32 i = 0; i < tNoOfOperations ; i++) {
       NdbReceiver* const tReceiver = 
@@ -2862,7 +2811,7 @@ from other transactions.
     {
       theCommitStatus = Committed;
       theGlobalCheckpointId = tGCI;
-      if (tGCI) // Read(dirty) only transaction doesn't get GCI
+      if (tGCI) // Read(dirty) only transaction doesnt get GCI
       {
 	*p_latest_trans_gci = tGCI;
       }
@@ -2915,7 +2864,7 @@ NdbTransaction::receiveTCKEY_FAILCONF(const TcKeyFailConf * failConf)
     theCommitStatus = Committed;
     theTransactionId = InvalidTransactionId; /* No further signals please */
     tOp = theFirstExecOpInList;
-    while (tOp != nullptr) {
+    while (tOp != NULL) {
       /*
        * Check if the transaction expected read values...
        * If it did some of them might have gotten lost even if we succeeded
@@ -2937,7 +2886,7 @@ NdbTransaction::receiveTCKEY_FAILCONF(const TcKeyFailConf * failConf)
 	theCompletionStatus = CompletedFailure;
 	theReturnStatus = NdbTransaction::ReturnFailure;
 	setOperationErrorCodeAbort(4115);
-	tOp = nullptr;
+	tOp = NULL;
 	break;
       case NdbOperation::NotDefined:
       case NdbOperation::NotDefined2:
@@ -3119,7 +3068,7 @@ NdbTransaction::getNdbErrorOperation() const
 
 const NdbOperation * 
 NdbTransaction::getNextCompletedOperation(const NdbOperation * current) const {
-  if(current == nullptr)
+  if(current == 0)
     return theCompletedFirstOp;
   return current->theNext;
 }
@@ -3145,7 +3094,7 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
     /* Result or attribute record must be a base 
        table ndbrecord, not an index ndbrecord */
     setOperationErrorCodeAbort(4340);
-    return nullptr;
+    return NULL;
   }
   /*
     We are actually passing the table object for the index here, not the table
@@ -3157,19 +3106,19 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
   if (key_record->flags & NdbRecord::RecIsIndex)
   {
     op= getNdbIndexOperation(key_record->table->m_index,
-                             attribute_record->table, nullptr);
+                             attribute_record->table, NULL);
   }
   else
   {
     if (key_record->tableId != attribute_record->tableId)
     {
       setOperationErrorCodeAbort(4287);
-      return nullptr;
+      return NULL;
     }
-    op= getNdbOperation(attribute_record->table, nullptr);
+    op= getNdbOperation(attribute_record->table, NULL);
   }
   if(!op)
-    return nullptr;
+    return NULL;
 
   op->theStatus= NdbOperation::UseNdbRecord;
   op->theOperationType= type;
@@ -3188,7 +3137,7 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
   /*
    * Handle options
    */
-  if (opts != nullptr)
+  if (opts != NULL)
   {
     /* Delegate to static method in NdbOperation */
     Uint32 result = NdbOperation::handleOperationOptions (type,
@@ -3198,7 +3147,7 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
     if (result !=0)
     {
       setOperationErrorCodeAbort(result);
-      return nullptr;
+      return NULL;
     }
   }
 
@@ -3211,16 +3160,16 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
      * been asked for
      */
     if (op->getBlobHandlesNdbRecordDelete(this,
-                                          (attribute_row != nullptr),
+                                          (attribute_row != NULL),
                                           readMask.rep.data) == -1)
-      return nullptr;
+      return NULL;
   }
   else if (unlikely((attribute_record->flags & NdbRecord::RecHasBlob) &&
                     (type != NdbOperation::UnlockRequest)))
   {
     /* Create blob handles for non-delete, non-unlock operations */
     if (op->getBlobHandlesNdbRecord(this, readMask.rep.data) == -1)
-      return nullptr;
+      return NULL;
   }
 
   /*
@@ -3234,7 +3183,7 @@ NdbTransaction::setupRecordOp(NdbOperation::OperationType type,
   {
     // buildSignalsNdbRecord should have set the error status
     // So we can return NULL
-    return nullptr;
+    return NULL;
   }
 
   return op;
@@ -3255,7 +3204,7 @@ NdbTransaction::readTuple(const NdbRecord *key_rec, const char *key_row,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   if (key_rec->flags & NdbRecord::RecIsIndex &&
@@ -3275,7 +3224,7 @@ NdbTransaction::readTuple(const NdbRecord *key_rec, const char *key_row,
                                   opts,
                                   sizeOfOptions);
   if (!op)
-    return nullptr;
+    return NULL;
 
   if (upgraded_lock)
   {
@@ -3315,7 +3264,7 @@ NdbTransaction::insertTuple(const NdbRecord *key_rec, const char *key_row,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   NdbOperation *op= setupRecordOp(NdbOperation::InsertRequest,
@@ -3326,7 +3275,7 @@ NdbTransaction::insertTuple(const NdbRecord *key_rec, const char *key_row,
                                   opts,
                                   sizeOfOptions);
   if (!op)
-    return nullptr;
+    return NULL;
 
   theSimpleState= 0;
 
@@ -3357,7 +3306,7 @@ NdbTransaction::updateTuple(const NdbRecord *key_rec, const char *key_row,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   NdbOperation *op= setupRecordOp(NdbOperation::UpdateRequest,
@@ -3388,7 +3337,7 @@ NdbTransaction::deleteTuple(const NdbRecord *key_rec,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   NdbOperation *op= setupRecordOp(NdbOperation::DeleteRequest,
@@ -3403,7 +3352,7 @@ NdbTransaction::deleteTuple(const NdbRecord *key_rec,
 
   theSimpleState= 0;
 
-  if (result_row != nullptr) // readBeforeDelete
+  if (result_row != NULL) // readBeforeDelete
   {
     /* Setup the record/row for receiving the results. */
     op->theReceiver.getValues(result_rec, result_row);
@@ -3423,7 +3372,7 @@ NdbTransaction::writeTuple(const NdbRecord *key_rec, const char *key_row,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   NdbOperation *op= setupRecordOp(NdbOperation::WriteRequest,
@@ -3450,14 +3399,14 @@ NdbTransaction::refreshTuple(const NdbRecord *key_rec, const char *key_row,
   if (!(key_rec->flags & NdbRecord::RecHasAllKeys))
   {
     setOperationErrorCodeAbort(4292);
-    return nullptr;
+    return NULL;
   }
 
   if (key_rec->flags & NdbRecord::RecTableHasBlob)
   {
     // Table with blobs does not support refreshTuple()
     setOperationErrorCodeAbort(4343);
-    return nullptr;
+    return NULL;
   }
 
   Uint8 keymask[NDB_MAX_ATTRIBUTES_IN_TABLE/8];
@@ -3502,7 +3451,7 @@ NdbTransaction::scanTable(const NdbRecord *result_record,
   NdbIndexScanOperation *op_idx= 
     getNdbScanOperation(result_record->table);
 
-  if (op_idx == nullptr)
+  if (op_idx == NULL)
   {
     /* Memory allocation error */
     setOperationErrorCodeAbort(4000);
@@ -3543,11 +3492,11 @@ NdbTransaction::scanIndex(const NdbRecord *key_record,
     objects.
   */
   NdbIndexScanOperation *op= getNdbScanOperation(key_record->table);
-  if (op==nullptr)
+  if (op==NULL)
   {
     /* Memory allocation error */
     setOperationErrorCodeAbort(4000);
-    return nullptr;
+    return NULL;
   }
 
   op->m_scanUsingOldApi= false;
@@ -3562,7 +3511,7 @@ NdbTransaction::scanIndex(const NdbRecord *key_record,
                         sizeOfOptions) != 0)
   {
     releaseScanOperation(&m_theFirstScanOperation, &m_theLastScanOperation, op);
-    return nullptr;
+    return NULL;
   }
   
   return op;
@@ -3594,8 +3543,6 @@ NdbTransaction::setMaxPendingBlobReadBytes(Uint32 bytes)
 void
 NdbTransaction::setMaxPendingBlobWriteBytes(Uint32 bytes)
 {
-  DBUG_PRINT("info", ("Setting Blob max pending bytes %d",
-                      bytes));
   /* 0 == max */
   maxPendingBlobWriteBytes = (bytes?bytes : (~ Uint32(0)));
 }
@@ -3676,7 +3623,7 @@ NdbTransaction::report_node_failure(Uint32 id){
   Uint32 tNoComp = theNoOfOpCompleted;
   Uint32 tNoSent = theNoOfOpSent;
   Uint32 count = 0;
-  while(tmp != nullptr)
+  while(tmp != 0)
   {
     if(tmp->theReceiver.m_expected_result_length == len && 
        tmp->theReceiver.m_received_result_length == 0)
@@ -3691,7 +3638,7 @@ NdbTransaction::report_node_failure(Uint32 id){
    * TODO, only abort ones really needing abort
    */
   NdbQueryImpl* qtmp = m_firstActiveQuery;
-  while (qtmp != nullptr)
+  while (qtmp != 0)
   {
     if (qtmp->getQueryDef().isScanQuery() == false)
     {
@@ -3719,18 +3666,18 @@ NdbTransaction::report_node_failure(Uint32 id){
 NdbQuery*
 NdbTransaction::createQuery(const NdbQueryDef* def,
                             const NdbQueryParamValue paramValues[],
-                            NdbOperation::LockMode)
+                            NdbOperation::LockMode lock_mode)
 {
   NdbQueryImpl* query = NdbQueryImpl::buildQuery(*this, def->getImpl());
-  if (unlikely(query == nullptr)) {
-    return nullptr; // Error code for transaction is already set.
+  if (unlikely(query == NULL)) {
+    return NULL; // Error code for transaction is already set.
   }
 
   const int error = query->assignParameters(paramValues);
   if (unlikely(error)) {
     // Error code for transaction is already set.
     query->release();
-    return nullptr;
+    return NULL;
   }
 
   query->setNext(m_firstQuery);
@@ -3752,14 +3699,14 @@ NdbTransaction::getLockHandle()
   if (lh)
   {
     lh->thePrev = m_theLastLockHandle;
-    if (m_theLastLockHandle == nullptr)
+    if (m_theLastLockHandle == NULL)
     {
       m_theFirstLockHandle = lh;
       m_theLastLockHandle = lh;
     }
     else
     {
-      lh->next(nullptr);
+      lh->next(NULL);
       m_theLastLockHandle->next(lh);
       m_theLastLockHandle = lh;
     }
@@ -3777,7 +3724,7 @@ NdbTransaction::unlock(const NdbLockHandle* lockHandle,
   case NdbLockHandle::FREE:
     /* LockHandle already released */
     setErrorCode(4551);
-    return nullptr;
+    return NULL;
   case NdbLockHandle::PREPARED:
     if (likely(lockHandle->isLockRefValid()))
     {
@@ -3788,17 +3735,17 @@ NdbTransaction::unlock(const NdbLockHandle* lockHandle,
   case NdbLockHandle::ALLOCATED:
     /* NdbLockHandle original operation not executed successfully */
     setErrorCode(4553);
-    return nullptr;
+    return NULL;
   default:
     abort();
-    return nullptr;
+    return NULL;
   }
 
-  if (m_theFirstLockHandle == nullptr)
+  if (m_theFirstLockHandle == NULL)
   {
     /* NdbLockHandle does not belong to transaction */
     setErrorCode(4552);
-    return nullptr;
+    return NULL;
   }
 
 #ifdef VM_TRACE
@@ -3814,7 +3761,7 @@ NdbTransaction::unlock(const NdbLockHandle* lockHandle,
     {
       /* NdbLockHandle does not belong to transaction */
       setErrorCode(4552);
-      return nullptr;
+      return NULL;
     }
   }
 #endif
@@ -3841,10 +3788,10 @@ NdbTransaction::unlock(const NdbLockHandle* lockHandle,
                                          NdbOperation::LM_CommittedRead,
                                          NdbOperation::AbortOnError, // Default
                                          lockHandle->m_table->m_ndbrecord,
-                                         nullptr, // key_row
+                                         NULL, // key_row
                                          lockHandle->m_table->m_ndbrecord,
-                                         nullptr,             // attr_row
-                                         nullptr,             // mask
+                                         NULL,             // attr_row
+                                         NULL,             // mask
                                          &opts,            // opts,
                                          sizeof(opts),     // sizeOfOptions
                                          lockHandle);
@@ -3922,8 +3869,8 @@ NdbTransaction::releaseLockHandle(const NdbLockHandle* lockHandle)
   /* Now return it to the Ndb's freelist */
   NdbLockHandle* lh = const_cast<NdbLockHandle*>(lockHandle);
 
-  lh->thePrev = nullptr;
-  lh->theNext = nullptr;
+  lh->thePrev = NULL;
+  lh->theNext = NULL;
   
   theNdb->releaseLockHandle(lh);
 

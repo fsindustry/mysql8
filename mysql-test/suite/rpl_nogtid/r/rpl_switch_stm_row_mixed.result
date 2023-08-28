@@ -1,53 +1,37 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 drop database if exists mysqltest1;
 create database mysqltest1;
 use mysqltest1;
 set @my_binlog_format= @@global.binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set session binlog_format='mixed';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show session variables like "binlog_format%";
 Variable_name	Value
 binlog_format	MIXED
 set session binlog_format='statement';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show session variables like "binlog_format%";
 Variable_name	Value
 binlog_format	STATEMENT
 set session binlog_format='row';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show session variables like "binlog_format%";
 Variable_name	Value
 binlog_format	ROW
 set global binlog_format=DEFAULT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	ROW
 set global binlog_format=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	MIXED
 set global binlog_format=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	STATEMENT
 set global binlog_format='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	ROW
@@ -57,9 +41,6 @@ binlog_format	ROW
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 ROW	ROW
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TABLE t1 (a varchar(100));
 prepare stmt1 from 'insert into t1 select concat(UUID(),?)';
 set @string="emergency_1_";
@@ -79,8 +60,6 @@ ERROR HY000: Changing @@session.binlog_format is disallowed when the session has
 insert into t1 select * from tmp;
 drop temporary table tmp;
 set binlog_format=statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	ROW
@@ -90,12 +69,7 @@ binlog_format	STATEMENT
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 ROW	STATEMENT
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set global binlog_format=statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 show global variables like "binlog_format%";
 Variable_name	Value
 binlog_format	STATEMENT
@@ -105,9 +79,6 @@ binlog_format	STATEMENT
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 STATEMENT	STATEMENT
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 prepare stmt1 from 'insert into t1 select ?';
 set @string="emergency_7_";
 insert into t1 values("work_8_");
@@ -120,23 +91,13 @@ deallocate prepare stmt1;
 insert into t1 values("for_10_");
 insert into t1 select "yesterday_11_";
 set binlog_format=statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 STATEMENT	STATEMENT
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set global binlog_format=statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 STATEMENT	STATEMENT
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 prepare stmt1 from 'insert into t1 select ?';
 set @string="emergency_12_";
 insert into t1 values("work_13_");
@@ -149,23 +110,13 @@ deallocate prepare stmt1;
 insert into t1 values("for_15_");
 insert into t1 select "yesterday_16_";
 set global binlog_format=mixed;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 MIXED	STATEMENT
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set binlog_format=default;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	@@session.binlog_format
 MIXED	MIXED
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 prepare stmt1 from 'insert into t1 select concat(UUID(),?)';
 set @string="emergency_17_";
 insert into t1 values("work_18_");
@@ -215,8 +166,6 @@ insert into t1 select "yesterday_270_";
 end|
 call foo();
 call foo2();
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 call foo4("hello");
 call foo4(UUID());
 call foo4("world");
@@ -451,17 +400,11 @@ count(*)
 include/sync_slave_sql_with_master.inc
 DROP TABLE IF EXISTS t11;
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TABLE t11 (song VARCHAR(255));
 LOCK TABLES t11 WRITE;
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t11 VALUES('Several Species of Small Furry Animals Gathered Together in a Cave and Grooving With a Pict');
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 INSERT INTO t11 VALUES('Careful With That Axe, Eugene');
 UNLOCK TABLES;
 SELECT * FROM t11;
@@ -474,8 +417,6 @@ song	Several Species of Small Furry Animals Gathered Together in a Cave and Groo
 song	Careful With That Axe, Eugene
 DROP TABLE IF EXISTS t12;
 SET SESSION BINLOG_FORMAT=MIXED;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TABLE t12 (data LONG);
 LOCK TABLES t12 WRITE;
 INSERT INTO t12 VALUES(UUID());
@@ -505,6 +446,4 @@ include/sync_slave_sql_with_master.inc
 drop database mysqltest1;
 include/sync_slave_sql_with_master.inc
 set global binlog_format =@my_binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 include/rpl_end.inc

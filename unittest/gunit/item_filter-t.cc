@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -60,13 +60,14 @@ class ItemFilterTest : public ::testing::Test {
   void SetUp() override {
     initializer.SetUp();
     init_sql_alloc(PSI_NOT_INSTRUMENTED, &m_alloc,
-                   thd()->variables.range_alloc_block_size);
+                   thd()->variables.range_alloc_block_size, 0);
   }
 
   void TearDown() override {
     delete m_table;
 
     initializer.TearDown();
+    m_alloc.Clear();
   }
 
   THD *thd() { return initializer.thd(); }
@@ -177,7 +178,7 @@ class ItemFilterTest : public ::testing::Test {
       TestFailLinePrinter called_from_line) {
     SCOPED_TRACE(called_from_line);
 
-    PT_item_list *list = new (thd()->mem_root) PT_item_list(POS());
+    PT_item_list *list = new (thd()->mem_root) PT_item_list;
     list->value = lst;
     Item_func_in *in_item = new Item_func_in(POS(), list, false);
     Parse_context pc(thd(), thd()->lex->current_query_block());
@@ -205,7 +206,7 @@ class ItemFilterTest : public ::testing::Test {
   MEM_ROOT m_alloc;
 
   Fake_TABLE *m_table;
-  Table_ref *m_table_list;
+  TABLE_LIST *m_table_list;
   /*
     Pointer to m_table->field. Only valid if the table was
     created by calling one of ItemFilterTest::create_table*()
@@ -296,7 +297,7 @@ TEST_F(ItemFilterTest, BasicDefaultRows) {
                            m_field[0], unused_int, unused_int, used_tables,
                            &no_ignore_flds);
   // Check filtering for predicate: field0 IS NOT NULL
-  create_item_check_filter(1.0F - COND_FILTER_EQUALITY,
+  create_item_check_filter(1.0 - COND_FILTER_EQUALITY,
                            Item_func::ISNOTNULL_FUNC, m_field[0], unused_int,
                            unused_int, used_tables, &no_ignore_flds);
   // Check filtering for predicate: field0 BETWEEN 10 AND 12

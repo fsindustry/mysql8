@@ -1,4 +1,4 @@
-/*  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/*  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,6 @@
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "my_thread.h"  // my_thread_handle needed by mysql_memory.h
-#include "template_utils.h"
 
 /* instrument the memory allocation */
 #ifdef HAVE_PSI_INTERFACE
@@ -58,7 +57,7 @@ static int rewrite_lower(MYSQL_THD, mysql_event_class_t event_class,
     const struct mysql_event_parse *event_parse =
         static_cast<const struct mysql_event_parse *>(event);
     if (event_parse->event_subclass == MYSQL_AUDIT_PARSE_PREPARSE) {
-      const size_t query_length = event_parse->query.length;
+      size_t query_length = event_parse->query.length;
       char *rewritten_query = static_cast<char *>(
           my_malloc(key_memory_rewrite_example, query_length + 1, MYF(0)));
 
@@ -103,6 +102,6 @@ mysql_declare_plugin(audit_log){
     0x0002,             /* version                       */
     nullptr,            /* status variables              */
     nullptr,            /* system variables              */
-    nullptr,            /* reserved                      */
+    nullptr,            /* reserverd                     */
     0                   /* flags                         */
 } mysql_declare_plugin_end;

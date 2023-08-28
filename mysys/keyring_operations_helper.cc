@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@ int read_secret(SERVICE_TYPE(keyring_reader_with_status) * keyring_reader,
 
   size_t secret_type_length = 0;
   my_h_keyring_reader_object reader_object = nullptr;
-  const bool retval = keyring_reader->init(secret_id, auth_id, &reader_object);
+  bool retval = keyring_reader->init(secret_id, auth_id, &reader_object);
 
   /* Keyring error */
   if (retval == true) return -1;
@@ -55,12 +55,12 @@ int read_secret(SERVICE_TYPE(keyring_reader_with_status) * keyring_reader,
 
   /* Fetch length */
   if (keyring_reader->fetch_length(reader_object, secret_length,
-                                   &secret_type_length) != 0)
+                                   &secret_type_length) == true)
     return 0;
 
   if (*secret_length == 0 || secret_type_length == 0) return 0;
 
-  /* Allocate required memory for key and secret_type */
+  /* Allocate requried memory for key and secret_type */
   *secret = reinterpret_cast<unsigned char *>(
       my_malloc(psi_memory_key, *secret_length, MYF(MY_WME)));
   if (*secret == nullptr) return 0;
@@ -77,7 +77,7 @@ int read_secret(SERVICE_TYPE(keyring_reader_with_status) * keyring_reader,
 
   if (keyring_reader->fetch(reader_object, *secret, *secret_length,
                             secret_length, *secret_type, secret_type_length,
-                            &secret_type_length) != 0) {
+                            &secret_type_length) == true) {
     my_free(*secret);
     my_free(*secret_type);
     *secret = nullptr;

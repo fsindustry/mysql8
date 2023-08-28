@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 #include "ndbapi/NdbApi.hpp"
 #include "ndbapi/NdbInfo.hpp"
 #include "portlib/NdbDir.hpp"
-#include "util/Bitmask.hpp"
 #include "util/ndb_opts.h"
 #include "util/ndb_rand.h"
 #include "util/random.h"
@@ -65,13 +64,6 @@ _ndbclient_exports(void)
   myRandom48Init(0);
   ndb_rand();
   (void)NdbDir::chdir("");
-  /*
-   * The below calls will export symbols for BitmaskImpl::getFieldImpl and
-   * BitmaskImpl::setFieldImpl.
-   */
-  Uint32 d[2]={218,921};
-  const Uint32 s[2]={9842,27124};
-  (void)BitmaskImpl::setField(64, d, 0, 37, s);
-  (void)BitmaskImpl::getField(37, s, 0, 64, d);
+  (void)BitmaskImpl::setField(0, 0, 0, 37, (Uint32*)0);
   ndb_end(0);
 }

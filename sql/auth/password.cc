@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -72,7 +72,7 @@
 #include <sys/types.h>
 
 #include "crypt_genhash_impl.h"
-#include "dig_vec.h"
+#include "m_string.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "mysql_com.h"
@@ -138,8 +138,8 @@ static inline uint8 char_val(uint8 X) {
 char *octet2hex(char *to, const char *str, uint len) {
   const char *str_end = str + len;
   for (; str != str_end; ++str) {
-    *to++ = dig_vec_upper[((uchar)*str) >> 4];
-    *to++ = dig_vec_upper[((uchar)*str) & 0x0F];
+    *to++ = _dig_vec_upper[((uchar)*str) >> 4];
+    *to++ = _dig_vec_upper[((uchar)*str) & 0x0F];
   }
   *to = '\0';
   return to;
@@ -158,18 +158,18 @@ char *octet2hex(char *to, const char *str, uint len) {
 static void hex2octet(uint8 *to, const char *str, uint len) {
   const char *str_end = str + len;
   while (str < str_end) {
-    const char tmp = char_val(*str++);
+    char tmp = char_val(*str++);
     *to++ = (tmp << 4) | char_val(*str++);
   }
 }
 
 /*
     Encrypt/Decrypt function used for password encryption in authentication.
-    Simple XOR is used here, but it is OK as we crypt random strings. Note
+    Simple XOR is used here but it is OK as we crypt random strings. Note,
     that XOR(s1, XOR(s1, s2)) == s2, XOR(s1, s2) == XOR(s2, s1)
   SYNOPSIS
     my_crypt()
-    to      OUT buffer to hold encrypted string; must be at least len bytes
+    to      OUT buffer to hold crypted string; must be at least len bytes
                 long; to and s1 (or s2) may be the same.
     s1, s2  IN  input strings (of equal length)
     len     IN  length of s1 and s2

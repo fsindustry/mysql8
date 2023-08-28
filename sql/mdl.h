@@ -1,6 +1,6 @@
 #ifndef MDL_H
 #define MDL_H
-/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,19 +29,19 @@
 #include <new>
 #include <unordered_map>
 
+#include "m_string.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
-#include "strmake.h"
 
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
 #include "my_systime.h"  // Timout_type
-#include "mysql/components/services/bits/mysql_cond_bits.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
-#include "mysql/components/services/bits/mysql_rwlock_bits.h"
-#include "mysql/components/services/bits/psi_mdl_bits.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
+#include "mysql/components/services/mysql_cond_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/mysql_rwlock_bits.h"
+#include "mysql/components/services/psi_mdl_bits.h"
+#include "mysql/components/services/psi_stage_bits.h"
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql_com.h"
 #include "sql/sql_plist.h"
@@ -535,10 +535,10 @@ struct MDL_key {
     end = strmake(start, name, NAME_LEN);
     m_object_name_length = static_cast<uint16>(end - start);
 
-    const size_t col_len = strlen(column_name);
+    size_t col_len = strlen(column_name);
     assert(col_len <= NAME_LEN);
     start = end + 1;
-    const size_t remaining =
+    size_t remaining =
         MAX_MDLKEY_LENGTH - m_db_name_length - m_object_name_length - 3;
     uint16 extra_length = 0;
 
@@ -608,25 +608,23 @@ struct MDL_key {
 
     @remark The key for a routine/event/resource group/trigger is
       @<mdl_namespace@>+@<database name@>+@<normalized object name@>
-      additionally @<object name@> is stored in the same buffer for information
-      purpose if buffer has sufficient space.
+      additionaly @<object name@> is stored in the same buffer for information
+      purpose if buffer has sufficent space.
 
     Routine, Event and Resource group names are case sensitive and accent
     sensitive. So normalized object name is used to form a MDL_key.
 
-    With the UTF8MB3 charset space reserved for the db name/object
-    name is 64 * 3 bytes. utf8mb3_general_ci collation is used for the
-    Routine, Event and Resource group names. With this collation, the
-    normalized object name uses just 2 bytes for each character (max
-    length = 64 * 2 bytes). MDL_key has still some space to store the
-    object names. If there is a sufficient space for the object name
-    in the MDL_key then it is stored in the MDL_key (similar to the
-    column names in the MDL_key). Actual object name is used by the
-    PFS.  Not listing actual object name from the PFS should be OK
-    when there is no space to store it (instead of increasing the
-    MDL_key size). Object name is not used in the key comparisons. So
-    only (mdl_namespace + strlen(db) + 1 + normalized_name_len + 1)
-    value is stored in the m_length member.
+    With the UTF8MB3 charset space reserved for the db name/object name is
+    64 * 3  bytes. utf8_general_ci collation is used for the Routine, Event and
+    Resource group names. With this collation, the normalized object name uses
+    just 2 bytes for each character (max length = 64 * 2 bytes). MDL_key has
+    still some space to store the object names. If there is a sufficient space
+    for the object name in the MDL_key then it is stored in the MDL_key (similar
+    to the column names in the MDL_key). Actual object name is used by the PFS.
+    Not listing actual object name from the PFS should be OK when there is no
+    space to store it (instead of increasing the MDL_key size). Object name is
+    not used in the key comparisons. So only (mdl_namespace + strlen(db) + 1 +
+    normalized_name_len + 1) value is stored in the m_length member.
 
     @param  mdl_namespace       Id of namespace of object to be locked.
     @param  db                  Name of database to which the object belongs.
@@ -710,10 +708,9 @@ struct MDL_key {
     m_object_name_length = m_length - m_db_name_length - 3;
   }
   void mdl_key_init(const MDL_key *rhs) {
-    const uint16 copy_length =
-        rhs->use_normalized_object_name()
-            ? rhs->m_length + rhs->m_object_name_length + 1
-            : rhs->m_length;
+    uint16 copy_length = rhs->use_normalized_object_name()
+                             ? rhs->m_length + rhs->m_object_name_length + 1
+                             : rhs->m_length;
     memcpy(m_ptr, rhs->m_ptr, copy_length);
     m_length = rhs->m_length;
     m_db_name_length = rhs->m_db_name_length;
@@ -873,15 +870,14 @@ class MDL_request {
   /**
     This constructor exists for two reasons:
 
-    - Table_ref objects are sometimes default-constructed. We plan to
-      remove this as there is no practical reason, the call to the default
-      constructor is always followed by either a call to
-      Table_ref::operator= or memberwise assignments.
+    - TABLE_LIST objects are sometimes default-constructed. We plan to remove
+      this as there is no practical reason, the call to the default
+      constructor is always followed by either a call to TABLE_LIST::operator=
+      or memberwise assignments.
 
-    - In some legacy cases Table_ref objects are copy-assigned without
-      intention to copy the Table_ref::mdl_request member. In this cases
-      they are overwritten with an uninitialized MDL_request object. The cases
-      are:
+    - In some legacy cases TABLE_LIST objects are copy-assigned without
+      intention to copy the TABLE_LIST::mdl_request member. In this cases they
+      are overwritten with an uninitialized MDL_request object. The cases are:
 
       - Sql_cmd_handler_open::execute()
       - mysql_execute_command()
@@ -1742,5 +1738,38 @@ const int32 MDL_LOCKS_UNUSED_LOCKS_LOW_WATER_DEFAULT = 1000;
 const double MDL_LOCKS_UNUSED_LOCKS_MIN_RATIO = 0.25;
 
 int32 mdl_get_unused_locks_count();
+
+/**
+  Inspect if MDL_context is owned by any thread.
+*/
+class MDL_lock_is_owned_visitor : public MDL_context_visitor {
+ public:
+  MDL_lock_is_owned_visitor() : m_exists(false) {}
+
+  /**
+    Collects relevant information about the MDL lock owner.
+
+    This function is only called by MDL_context::find_lock_owner() when
+    searching for MDL lock owners to collect extra information about the
+    owner. As we only need to know that the MDL lock is owned, setting
+    m_exists to true is enough.
+  */
+
+  void visit_context(const MDL_context *ctx [[maybe_unused]]) override {
+    m_exists = true;
+  }
+
+  /**
+    Returns if an owner for the MDL lock being inspected exists.
+
+    @return true when MDL lock is owned, false otherwise.
+  */
+
+  bool exists() const { return m_exists; }
+
+ private:
+  /* holds information about MDL being owned by any thread */
+  bool m_exists;
+};
 
 #endif

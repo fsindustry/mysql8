@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -71,10 +71,6 @@ class Global_shared_latch_guard : private ut::Non_copyable {
  public:
   Global_shared_latch_guard(ut::Location location);
   ~Global_shared_latch_guard();
-  /** Checks if there is a thread requesting the global_latch in exclusive mode
-  blocked by our thread.
-  @return true iff there is an x-latcher blocked by our s-latch. */
-  bool is_x_blocked_by_us();
 };
 
 /**
@@ -93,7 +89,7 @@ class Shard_naked_latch_guard : private ut::Non_copyable {
 
  public:
   explicit Shard_naked_latch_guard(ut::Location location,
-                                   const table_id_t &table_id);
+                                   const dict_table_t &table);
 
   explicit Shard_naked_latch_guard(ut::Location location,
                                    const page_id_t &page_id);
@@ -118,7 +114,7 @@ class Shard_latch_guard {
  public:
   explicit Shard_latch_guard(ut::Location location, const dict_table_t &table)
       : m_global_shared_latch_guard{location},
-        m_shard_naked_latch_guard{location, table.id} {}
+        m_shard_naked_latch_guard{location, table} {}
 
   explicit Shard_latch_guard(ut::Location location, const page_id_t &page_id)
       : m_global_shared_latch_guard{location},

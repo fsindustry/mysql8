@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,14 +24,11 @@
 
 #include "test_utils.h"
 
-#include "my_inttypes.h"
 #include "my_io.h"
 #include "my_thread.h"
-#include "nulls.h"
 #include "sql/log.h"
 #include "sql/named_pipe.h"
 #include "sql/sql_class.h"
-#include "strxnmov.h"
 
 #include <sddl.h>
 

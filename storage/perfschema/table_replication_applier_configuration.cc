@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -55,14 +55,12 @@ Plugin_table table_replication_applier_configuration::m_table_def(
     /* Definition */
     "  CHANNEL_NAME CHAR(64) not null,\n"
     "  DESIRED_DELAY INTEGER not null,\n"
-    "  PRIVILEGE_CHECKS_USER TEXT CHARACTER SET utf8mb3 COLLATE utf8mb3_bin "
-    "null"
+    "  PRIVILEGE_CHECKS_USER TEXT CHARACTER SET utf8 COLLATE utf8_bin null"
     "    COMMENT 'User name for the security context of the applier.',\n"
     "  REQUIRE_ROW_FORMAT ENUM('YES', 'NO') not null COMMENT "
     "    'Indicates whether the channel shall only accept row based events.',\n"
-    "  REQUIRE_TABLE_PRIMARY_KEY_CHECK ENUM('STREAM','ON','OFF','GENERATE')"
-    " not null"
-    " COMMENT 'Indicates what is the channel policy regarding tables without"
+    "  REQUIRE_TABLE_PRIMARY_KEY_CHECK ENUM('STREAM','ON','OFF') not null"
+    "    COMMENT 'Indicates what is the channel policy regarding tables having"
     " primary keys on create and alter table queries',\n"
     "  ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_TYPE "
     "ENUM('OFF','LOCAL','UUID')  not null "
@@ -72,8 +70,8 @@ Plugin_table table_replication_applier_configuration::m_table_def(
     " newly generated GTID based on server_uuid. UUID indicates that"
     " anonymous transactions will be assigned a newly generated GTID based on"
     " Assign_gtids_to_anonymous_transactions_value',\n"
-    "  ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_VALUE TEXT CHARACTER SET utf8mb3 "
-    "COLLATE utf8mb3_bin null "
+    "  ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_VALUE TEXT CHARACTER SET utf8 "
+    "COLLATE utf8_bin null "
     "    COMMENT 'Indicates the UUID used while generating GTIDs for anonymous"
     " transactions',\n"
     "  PRIMARY KEY (CHANNEL_NAME) USING HASH\n",
@@ -126,7 +124,7 @@ table_replication_applier_configuration::
 table_replication_applier_configuration::
     ~table_replication_applier_configuration() = default;
 
-void table_replication_applier_configuration::reset_position() {
+void table_replication_applier_configuration::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -135,7 +133,7 @@ ha_rows table_replication_applier_configuration::get_row_count() {
   return channel_map.get_max_channels();
 }
 
-int table_replication_applier_configuration::rnd_next() {
+int table_replication_applier_configuration::rnd_next(void) {
   Master_info *mi;
   channel_map.rdlock();
 
@@ -163,8 +161,7 @@ int table_replication_applier_configuration::rnd_pos(const void *pos) {
 
   channel_map.rdlock();
 
-  mi = channel_map.get_mi_at_pos(m_pos.m_index);
-  if (mi) {
+  if ((mi = channel_map.get_mi_at_pos(m_pos.m_index))) {
     res = make_row(mi);
   }
 
@@ -184,7 +181,7 @@ int table_replication_applier_configuration::index_init(uint idx
   return 0;
 }
 
-int table_replication_applier_configuration::index_next() {
+int table_replication_applier_configuration::index_next(void) {
   int res = HA_ERR_END_OF_FILE;
 
   Master_info *mi;
@@ -226,7 +223,7 @@ int table_replication_applier_configuration::make_row(Master_info *mi) {
   if (mi->rli->is_privilege_checks_user_corrupted())
     oss << "<INVALID>" << std::flush;
   else if (mi->rli->get_privilege_checks_username().length() != 0) {
-    const std::string username{replace_all_in_str(
+    std::string username{replace_all_in_str(
         mi->rli->get_privilege_checks_username(), "'", "\\'")};
 
     oss << "'" << username << "'@";
@@ -272,8 +269,7 @@ int table_replication_applier_configuration::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /**channel_name*/
-          set_field_char_utf8mb4(f, m_row.channel_name,
-                                 m_row.channel_name_length);
+          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
           break;
         case 1: /** desired_delay */
           set_field_ulong(f, static_cast<ulong>(m_row.desired_delay));

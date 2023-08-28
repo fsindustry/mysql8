@@ -2,12 +2,12 @@
 .\"     Title: ndb_redo_log_reader
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/21/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "NDB_REDO_LOG_READER" "1" "06/21/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "NDB_REDO_LOG_READER" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -76,8 +76,6 @@ lB l l
 lB l l
 lB l l
 lB l l
-lB l l
-lB l l
 lB l l.
 T{
 .PP
@@ -86,27 +84,7 @@ T}:T{
 Print dump info
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
-T}
-T{
-.PP
-\fB--file-key=key\fR,
-.PP
-\fB \fR\fB-K key\fR\fB \fR
-T}:T{
-Supply decryption key
-T}:T{
-.PP
-(Supported in all NDB releases based on MySQL 8.1)
-T}
-T{
-.PP
-\fB \fR\fB--file-key-from-stdin\fR\fB \fR
-T}:T{
-Supply decryption key using stdin
-T}:T{
-.PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -115,16 +93,16 @@ T}:T{
 Print file descriptors only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
 \fB \fR\fB--help\fR\fB \fR
 T}:T{
-Print usage information (has no short form)
+Print usage information
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -133,7 +111,7 @@ T}:T{
 Provide lap info, with max GCI started and completed
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -142,7 +120,7 @@ T}:T{
 Starting megabyte
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -151,7 +129,7 @@ T}:T{
 Show only first page header of each megabyte in file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -160,7 +138,7 @@ T}:T{
 Do not check records for errors
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -169,7 +147,7 @@ T}:T{
 Do not print records
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -178,7 +156,7 @@ T}:T{
 Start with this page
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -187,7 +165,7 @@ T}:T{
 Show page headers only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -196,7 +174,7 @@ T}:T{
 Start with this page index
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -205,7 +183,7 @@ T}:T{
 Bit-shifted dump
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 .TE
 .sp 1
@@ -249,11 +227,23 @@ The name of the file to be read may be followed by one or more of the options li
 \fB\-dump\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -dump
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -268,63 +258,25 @@ Print dump info\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fB\-\-file\-key\fR,
-\fB\-K\fR
 .TS
 allbox tab(:);
-lB l.
-T{
-Command-Line Format
-T}:T{
---file-key=key
-T}
-.TE
-.sp 1
-Supply file decryption key using
-stdin,
-tty, or a
-my\&.cnf
-file\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-file\-key\-from\-stdin\fR
-.TS
-allbox tab(:);
-lB l.
-T{
-Command-Line Format
-T}:T{
---file-key-from-stdin
-T}
-.TE
-.sp 1
-Supply file decryption key using
-stdin\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.TS
-allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -filedescriptors
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -363,11 +315,23 @@ T}
 \fB\-lap\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -lap
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -432,11 +396,23 @@ is an integer in the range 0 to 15, inclusive\&.
 .\}
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -mbyteheaders
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -453,11 +429,23 @@ T}
 .\}
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -noprint
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -474,11 +462,23 @@ T}
 .\}
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -nocheck
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -543,11 +543,23 @@ is an integer in the range 0 to 31, inclusive\&.
 .\}
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -pageheaders
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -613,11 +625,23 @@ is an integer between 12 and 8191, inclusive\&.
 \fB\-twiddle\fR
 .TS
 allbox tab(:);
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 -twiddle
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -636,7 +660,7 @@ must be run on a cluster data node, since it accesses the data node file system 
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

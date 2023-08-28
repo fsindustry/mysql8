@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -259,10 +259,6 @@ static void AssertSupportedPath(const AccessPath *path) {
     case AccessPath::EQ_REF:
     case AccessPath::PUSHED_JOIN_REF:
     case AccessPath::INDEX_RANGE_SCAN:
-    case AccessPath::INDEX_SKIP_SCAN:
-    case AccessPath::GROUP_INDEX_SKIP_SCAN:
-    case AccessPath::ROWID_INTERSECTION:
-    case AccessPath::ROWID_UNION:
     case AccessPath::DYNAMIC_INDEX_RANGE_SCAN:
       assert(false); /* purecov: deadcode */
       break;
@@ -322,7 +318,7 @@ static bool CompareJoinCost(THD *thd, const JOIN &join, double optimizer_cost,
   DBUG_EXECUTE_IF("secondary_engine_mock_change_join_order", {
     double cost = join.tables;
     for (size_t i = 0; i < join.tables; ++i) {
-      const Table_ref *ref = join.positions[i].table->table_ref;
+      const TABLE_LIST *ref = join.positions[i].table->table_ref;
       if (std::string(ref->alias) == "X") {
         cost += i;
       }

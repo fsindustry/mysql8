@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 **** On Slave ****
 STOP SLAVE;
@@ -10,8 +10,6 @@ Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release.
 include/wait_for_slave_to_stop.inc
 **** On Master ****
 SET SESSION BINLOG_FORMAT='ROW';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 CREATE TABLE t1 (a INT, b INT) ENGINE=MyISAM;
 CREATE TABLE t2 (c INT, d INT) ENGINE=MyISAM;
 INSERT INTO t1 VALUES (1,1),(2,4),(3,9);
@@ -76,8 +74,6 @@ Warnings:
 Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 RESET MASTER;
 SET SESSION BINLOG_FORMAT=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET @foo = 12;
 INSERT INTO t1 VALUES(@foo, 2*@foo);
 include/show_binlog_events.inc

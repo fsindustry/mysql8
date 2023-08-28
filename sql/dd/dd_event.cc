@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,9 +27,9 @@
 
 #include "lex_string.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysqld_error.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client
 #include "sql/dd/impl/utils.h"
@@ -43,8 +43,6 @@
 #include "sql/system_variables.h"
 #include "sql/tztime.h"  // Time_zone
 #include "sql_string.h"
-
-struct CHARSET_INFO;
 
 namespace dd {
 
@@ -73,7 +71,7 @@ int get_old_status(Event::enum_event_status event_status) {
 
   @param  event_status  Legacy event_status
 
-  @returns dd::Event::enum_event_status value corresponding to
+  @returns dd::Event::enum_event_status value corressponding to
            legacy event_status.
 */
 
@@ -116,7 +114,7 @@ int get_old_on_completion(Event::enum_on_completion on_completion) {
 
   @param  on_completion  Legacy on completion behaviour value
 
-  @returns dd::Event::enum_on_compeltion corresponding to legacy
+  @returns dd::Event::enum_on_compeltion corressponding to legacy
            event on completion value.
 */
 
@@ -194,7 +192,7 @@ interval_type get_old_interval_type(Event::enum_interval_field interval_field) {
 
   @param  interval_type_val  Interval type value.
 
-  @returns dd::Event::enum_interval_field corresponding to legacy
+  @returns dd::Event::enum_interval_field corressponding to legacy
            interval type value.
 */
 

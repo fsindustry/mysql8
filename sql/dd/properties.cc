@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,9 @@
 #include <assert.h>
 #include <limits>
 
-#include "my_sys.h"  // strmake_root
-#include "mysql/strings/my_strtoll10.h"
+#include "m_string.h"  // my_strtoll10
+
+#include "my_sys.h"              // strmake_root
 #include "sql/dd/types/table.h"  // enum_row_format
 #include "sql/field.h"           // geometry_type
 #include "sql/handler.h"         // row_type

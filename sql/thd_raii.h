@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -134,7 +134,7 @@ class Implicit_substatement_state_guard {
       return;
     }
 
-    const bool disable_gtid_and_spco =
+    bool disable_gtid_and_spco =
         (mode != enum_implicit_substatement_guard_mode ::
                      ENABLE_GTID_AND_SPCO_IF_SPCO_ACTIVE);
     m_thd->is_operating_substatement_implicitly = disable_gtid_and_spco;
@@ -375,7 +375,7 @@ class Pushed_lex_guard {
   }
   ~Pushed_lex_guard() {
     // Clean up this statement context and restore the old one:
-    m_thd->lex->cleanup(true);
+    m_thd->lex->cleanup(m_thd, true);
     lex_end(m_thd->lex);
 
     m_thd->lex = m_old_lex;

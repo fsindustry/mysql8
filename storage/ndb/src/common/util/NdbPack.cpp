@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,8 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "mysql/strings/m_ctype.h"
-#include "util/require.h"
+#include "m_ctype.h"
 #include <ndb_global.h>
 #include <NdbPack.hpp>
 #include <NdbOut.hpp>
@@ -167,30 +166,20 @@ NdbPack::Type::complete()
     set_error(TypeNullableNotBool, __LINE__);
     return -1;
   }
-  if (unlikely(info.m_charType))
+  if (unlikely(info.m_charType && m_csNumber == 0))
   {
-    if (unlikely(m_csNumber == 0))
-    {
-      set_error(CharsetNotSpecified, __LINE__);
-      return -1;
-    }
-
-    if (unlikely(m_csNumber >= NDB_ARRAY_SIZE(all_charsets)))
+    set_error(CharsetNotSpecified, __LINE__);
+    return -1;
+  }
+  if (info.m_charType && all_charsets[m_csNumber] == 0)
+  {
+    CHARSET_INFO* cs = get_charset(m_csNumber, MYF(0));
+    if (unlikely(cs == 0))
     {
       set_error(CharsetNotFound, __LINE__);
       return -1;
     }
-
-    if (unlikely(all_charsets[m_csNumber] == nullptr))
-    {
-      CHARSET_INFO* cs = get_charset(m_csNumber, MYF(0));
-      if (unlikely(cs == nullptr))
-      {
-        set_error(CharsetNotFound, __LINE__);
-        return -1;
-      }
-      all_charsets[m_csNumber] = cs; // yes caller must do this
-    }
+    all_charsets[m_csNumber] = cs; // yes caller must do this
   }
   if (unlikely(!info.m_charType && m_csNumber != 0))
   {
@@ -331,7 +320,7 @@ void NdbPack::DataArray::init_bound(const BoundC& b,
   for (Uint32 i = 0; i < cnt; i++)
   {
     data.desc(iter);
-    m_entries[i].m_data_ptr = (const Uint8*)&data.m_buf[iter.m_itemPos];
+    m_entries[i].m_data_ptr = (Uint8*)&data.m_buf[iter.m_itemPos];
     m_entries[i].m_data_len = iter.m_itemLen;
   }
   m_null_cnt = iter.m_nullCnt;
@@ -358,13 +347,13 @@ NdbPack::DataArray::init_poai(const Uint32 *buffer,
       Uint32 byte_size = ah.getByteSize();
       Uint32 word_size = ah.getDataSize();
       m_entries[i].m_data_len = byte_size;
-      m_entries[i].m_data_ptr = (const Uint8*)&buffer[inx];
+      m_entries[i].m_data_ptr = (Uint8*)&buffer[inx];
       inx += word_size;
     }
     else
     {
       m_null_cnt++;
-      m_entries[i].m_data_ptr = nullptr;
+      m_entries[i].m_data_ptr = 0;
       m_entries[i].m_data_len = 0;
     }
   }
@@ -384,7 +373,7 @@ NdbPack::DataArray::cmp(const Spec* spec,
     const NdbSqlUtil::Type& sqlType = getSqlType(type.m_typeId);
     const Uint8* p2 = d2->m_entries[i].m_data_ptr;
     const Uint32 n2 = d2->m_entries[i].m_data_len;
-    const CHARSET_INFO* cs = all_charsets[type.m_csNumber];
+    CHARSET_INFO* cs = all_charsets[type.m_csNumber];
     if (n1 != 0)
     {
       if (n2 != 0)
@@ -425,7 +414,7 @@ NdbPack::Iter::cmp(const Iter& r2, const Uint8* buf1, const Uint8* buf2) const
       const NdbSqlUtil::Type& sqlType = getSqlType(type.m_typeId);
       const Uint8* p1 = &buf1[r1.m_itemPos];
       const Uint8* p2 = &buf2[r2.m_itemPos];
-      const CHARSET_INFO* cs = all_charsets[type.m_csNumber];
+      CHARSET_INFO* cs = all_charsets[type.m_csNumber];
       res = (*sqlType.m_cmp)(cs, p1, n1, p2, n2);
     }
     else
@@ -507,7 +496,7 @@ NdbPack::DataC::cmp(const DataC& d2, Uint32 cnt, Uint32& num_eq) const
 int
 NdbPack::Data::add(const void* data, Uint32* len_out)
 {
-  assert(data != nullptr);
+  assert(data != 0);
   const Uint8* item = (const Uint8*)data;
   const Uint32 i = m_cnt; // item index
   if (unlikely(i >= m_spec.m_cnt))
@@ -544,7 +533,7 @@ NdbPack::Data::add(const void* data, Uint32 cnt, Uint32* len_out)
     Uint32 len;
     if (unlikely(add(data_ptr, &len) == -1))
       return -1;
-    if (data != nullptr)
+    if (data != 0)
       data_ptr += len;
     len_tot += len;
   }
@@ -723,7 +712,7 @@ NdbPack::Data::copy(const DataC& d2)
 }
 
 int
-NdbPack::Data::convert_impl()
+NdbPack::Data::convert_impl(Endian::Value to_endian)
 {
   const Spec& spec = m_spec;
   Iter r(*this);
@@ -1377,9 +1366,9 @@ struct Tdata {
     m_isBound(isBound)
   {
     m_cnt = tspec.m_spec.get_cnt();
-    m_xbuf = nullptr;
-    m_poaiBuf = nullptr;
-    m_packBuf = nullptr;
+    m_xbuf = 0;
+    m_poaiBuf = 0;
+    m_packBuf = 0;
   }
   ~Tdata() {
     delete [] m_xbuf;
@@ -1592,11 +1581,11 @@ Tdata::xcmp(const Tdata& tdata2, int* num_eq) const
         const NdbPack::Type& type = tspec.m_spec.get_type(i);
         const int typeId = type.get_type_id();
         const int csNumber = type.get_cs_number();
-        const CHARSET_INFO* cs = all_charsets[csNumber];
+        CHARSET_INFO* cs = all_charsets[csNumber];
         switch (typeId) {
         case NDB_TYPE_INT:
           {
-            require(cs == nullptr);
+            require(cs == 0);
             Int32 x1 = *(const Int32*)xptr1;
             Int32 x2 = *(const Int32*)xptr2;
             if (x1 < x2)
@@ -1608,7 +1597,7 @@ Tdata::xcmp(const Tdata& tdata2, int* num_eq) const
           break;
         case NDB_TYPE_UNSIGNED:
           {
-            require(cs == nullptr);
+            require(cs == 0);
             Uint32 x1 = *(const Uint32*)xptr1;
             Uint32 x2 = *(const Uint32*)xptr2;
             if (x1 < x2)
@@ -1620,7 +1609,7 @@ Tdata::xcmp(const Tdata& tdata2, int* num_eq) const
           break;
         case NDB_TYPE_CHAR:
           {
-            require(cs != nullptr && cs->coll != nullptr);
+            require(cs != 0 && cs->coll != 0);
             const uint n1 = xlen1;
             const uint n2 = xlen2;
             const uchar* t1 = &xptr1[0];
@@ -1635,7 +1624,7 @@ Tdata::xcmp(const Tdata& tdata2, int* num_eq) const
           break;
         case NDB_TYPE_VARCHAR:
           {
-            require(cs != nullptr && cs->coll != nullptr);
+            require(cs != 0 && cs->coll != 0);
             const uint n1 = xptr1[0];
             const uint n2 = xptr2[0];
             const uchar* t1 = &xptr1[1];
@@ -1650,7 +1639,7 @@ Tdata::xcmp(const Tdata& tdata2, int* num_eq) const
           break;
         case NDB_TYPE_LONGVARCHAR:
           {
-            require(cs != nullptr && cs->coll != nullptr);
+            require(cs != 0 && cs->coll != 0);
             const uint n1 = xptr1[0] | (xptr1[1] << 8);
             const uint n2 = xptr2[0] | (xptr2[1] << 8);
             const uchar* t1 = &xptr1[2];
@@ -1809,8 +1798,8 @@ Tdatalist::create()
 static int
 data_cmp(const void* a1, const void* a2)
 {
-  const Tdata& tdata1 = **(const Tdata* const*)a1;
-  const Tdata& tdata2 = **(const Tdata* const*)a2;
+  const Tdata& tdata1 = **(const Tdata**)a1;
+  const Tdata& tdata2 = **(const Tdata**)a2;
   require(tdata1.m_cnt == tdata2.m_cnt);
   const Uint32 cnt = tdata1.m_cnt;
   Uint32 num_eq = ~(Uint32)0;
@@ -1901,8 +1890,8 @@ Tboundlist::create()
 static int
 bound_cmp(const void* a1, const void* a2)
 {
-  const Tbound& tbound1 = **(const Tbound* const*)a1;
-  const Tbound& tbound2 = **(const Tbound* const*)a2;
+  const Tbound& tbound1 = **(const Tbound**)a1;
+  const Tbound& tbound2 = **(const Tbound**)a2;
   const Uint32 cnt = xmin(tbound1.m_tdata.m_cnt, tbound2.m_tdata.m_cnt);
   Uint32 num_eq = ~(Uint32)0;
   int res = tbound1.m_bound.cmp(tbound2.m_bound, cnt, num_eq);
@@ -2128,8 +2117,8 @@ testmain()
 {
   ndb_init();
   signal(SIGABRT, SIG_DFL);
-  { const char* p = NdbEnv_GetEnv("TEST_NDB_PACK_VERBOSE", (char*)nullptr, 0);
-    if (p != nullptr)
+  { const char* p = NdbEnv_GetEnv("TEST_NDB_PACK_VERBOSE", (char*)0, 0);
+    if (p != 0)
       verbose = atoi(p);
   }
   if (seed == 0)

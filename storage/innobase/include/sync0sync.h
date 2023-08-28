@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2023, Oracle and/or its affiliates.
+Copyright (c) 1995, 2021, Oracle and/or its affiliates.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2012, Facebook Inc.
 
@@ -55,7 +55,7 @@ struct mysql_pfs_key_t {
   /** Constructor */
   mysql_pfs_key_t(unsigned int val) : m_value(val) {}
 
-  /** Retrieve the count.
+  /** Retreive the count.
   @return number of keys defined */
   static int get_count() { return s_count; }
 
@@ -94,6 +94,7 @@ extern mysql_pfs_key_t buf_pool_free_list_mutex_key;
 extern mysql_pfs_key_t buf_pool_zip_free_mutex_key;
 extern mysql_pfs_key_t buf_pool_zip_hash_mutex_key;
 extern mysql_pfs_key_t buf_pool_zip_mutex_key;
+extern mysql_pfs_key_t cache_last_read_mutex_key;
 extern mysql_pfs_key_t ddl_autoinc_mutex_key;
 extern mysql_pfs_key_t dict_foreign_err_mutex_key;
 extern mysql_pfs_key_t dict_persist_dirty_tables_mutex_key;
@@ -119,7 +120,6 @@ extern mysql_pfs_key_t log_flusher_mutex_key;
 extern mysql_pfs_key_t log_write_notifier_mutex_key;
 extern mysql_pfs_key_t log_flush_notifier_mutex_key;
 extern mysql_pfs_key_t log_limits_mutex_key;
-extern mysql_pfs_key_t log_files_mutex_key;
 extern mysql_pfs_key_t log_cmdq_mutex_key;
 extern mysql_pfs_key_t log_sn_lock_key;
 extern mysql_pfs_key_t log_sn_mutex_key;
@@ -179,7 +179,6 @@ extern mysql_pfs_key_t clone_task_mutex_key;
 extern mysql_pfs_key_t clone_snapshot_mutex_key;
 extern mysql_pfs_key_t parallel_read_mutex_key;
 extern mysql_pfs_key_t dblwr_mutex_key;
-extern mysql_pfs_key_t ahi_enabled_mutex_key;
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -217,7 +216,7 @@ extern mysql_pfs_key_t PFS_NOT_INSTRUMENTED;
 #endif /* HAVE_PFS_INTERFACE */
 
 /** Prints info of the sync system.
-@param[in]      file    where to print */
+@param[in]	file	where to print */
 void sync_print(FILE *file);
 
 #endif /* !sync0sync_h */

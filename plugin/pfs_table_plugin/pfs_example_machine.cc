@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -138,17 +138,17 @@ int machine_read_column_value(PSI_table_handle *handle, PSI_field *field,
 
   switch (index) {
     case 0: /* MACHINE_SL_NUMBER */
-      col_int_svc->set(field, h->current_row.machine_number);
+      table_svc->set_field_integer(field, h->current_row.machine_number);
       break;
     case 1: /* MACHINE_TYPE */
-      col_enum_svc->set(field, h->current_row.machine_type);
+      table_svc->set_field_enum(field, h->current_row.machine_type);
       break;
     case 2: /* MACHINE_MADE */
-      col_string_svc->set_char_utf8mb4(field, h->current_row.machine_made,
-                                       h->current_row.machine_made_length);
+      table_svc->set_field_char_utf8(field, h->current_row.machine_made,
+                                     h->current_row.machine_made_length);
       break;
     case 3: /* EMPLOYEE_NUMBER */
-      col_int_svc->set(field, h->current_row.employee_number);
+      table_svc->set_field_integer(field, h->current_row.employee_number);
       break;
     default: /* We should never reach here */
       assert(0);
@@ -195,17 +195,16 @@ int machine_write_column_value(PSI_table_handle *handle, PSI_field *field,
 
   switch (index) {
     case 0: /* MACHINE_SL_NUMBER */
-      col_int_svc->get(field, &h->current_row.machine_number);
+      table_svc->get_field_integer(field, &h->current_row.machine_number);
       break;
     case 1: /* MACHINE_TYPE */
-      col_enum_svc->get(field, &h->current_row.machine_type);
+      table_svc->get_field_enum(field, &h->current_row.machine_type);
       break;
     case 2: /* MACHINE_MADE */
-      col_string_svc->get_char_utf8mb4(field, machine_made,
-                                       machine_made_length);
+      table_svc->get_field_char_utf8(field, machine_made, machine_made_length);
       break;
     case 3: /* EMPLOYEE_NUMBER */
-      col_int_svc->get(field, &h->current_row.employee_number);
+      table_svc->get_field_integer(field, &h->current_row.employee_number);
       break;
     default: /* We should never reach here */
       assert(0);
@@ -239,17 +238,16 @@ int machine_update_column_value(PSI_table_handle *handle, PSI_field *field,
 
   switch (index) {
     case 0: /* MACHINE_SL_NUMBER */
-      col_int_svc->get(field, &h->current_row.machine_number);
+      table_svc->get_field_integer(field, &h->current_row.machine_number);
       break;
     case 1: /* MACHINE_TYPE */
-      col_enum_svc->get(field, &h->current_row.machine_type);
+      table_svc->get_field_enum(field, &h->current_row.machine_type);
       break;
     case 2: /* MACHINE_MADE */
-      col_string_svc->get_char_utf8mb4(field, machine_made,
-                                       machine_made_length);
+      table_svc->get_field_char_utf8(field, machine_made, machine_made_length);
       break;
     case 3: /* EMPLOYEE_NUMBER */
-      col_int_svc->get(field, &h->current_row.employee_number);
+      table_svc->get_field_integer(field, &h->current_row.employee_number);
       break;
     default: /* We should never reach here */
       assert(0);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -68,10 +68,12 @@ struct row_prepared_stmt_instances {
   enum_object_type m_owner_object_type;
 
   /** Column OWNER_OBJECT_SCHEMA */
-  PFS_schema_name m_owner_object_schema;
+  char m_owner_object_schema[COL_OBJECT_SCHEMA_SIZE];
+  int m_owner_object_schema_length;
 
   /** Column OWNER_OBJECT_NAME */
-  PFS_object_name m_owner_object_name;
+  char m_owner_object_name[COL_OBJECT_NAME_SIZE];
+  int m_owner_object_name_length;
 
   /** Columns TIMER_PREPARE. */
   PFS_stat_row m_prepare_stat;
@@ -79,16 +81,13 @@ struct row_prepared_stmt_instances {
   /** Columns COUNT_REPREPARE. */
   PFS_stat_row m_reprepare_stat;
 
-  /** Column EXECUTION_ENGINE. */
-  bool m_secondary;
-
   /** Columns COUNT_STAR...SUM_NO_GOOD_INDEX_USED. */
   PFS_statement_stat_row m_execute_stat;
 };
 
 class PFS_index_prepared_stmt_instances : public PFS_engine_index {
  public:
-  explicit PFS_index_prepared_stmt_instances(PFS_engine_key *key_1)
+  PFS_index_prepared_stmt_instances(PFS_engine_key *key_1)
       : PFS_engine_index(key_1) {}
 
   PFS_index_prepared_stmt_instances(PFS_engine_key *key_1,
@@ -176,7 +175,7 @@ class PFS_index_prepared_stmt_instances_by_owner_object
 
   ~PFS_index_prepared_stmt_instances_by_owner_object() override = default;
 
-  bool match(const PFS_prepared_stmt *pfs) override;
+  bool match(const PFS_prepared_stmt *table) override;
 
  private:
   PFS_key_object_type_enum m_key_1;
@@ -193,7 +192,7 @@ class table_prepared_stmt_instances : public PFS_engine_table {
   static int delete_all_rows();
   static ha_rows get_row_count();
 
-  void reset_position() override;
+  void reset_position(void) override;
 
   int rnd_next() override;
   int rnd_pos(const void *pos) override;

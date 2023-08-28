@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -28,7 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0dbg.h"
 
 [[noreturn]] void ut_dbg_assertion_failed(const char *expr, const char *file,
-                                          uint64_t line) {
+                                          ulint line) {
   fflush(stderr);
   fflush(stdout);
   abort();

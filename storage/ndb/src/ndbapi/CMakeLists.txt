@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,8 @@ INCLUDE_DIRECTORIES(
   ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi)
 
 ADD_CONVENIENCE_LIBRARY(ndbapi
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/blocks/dblqh/DblqhStateDesc.cpp
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/blocks/dbtc/DbtcStateDesc.cpp
   AssembleFragments.cpp
   ClusterMgr.cpp
   DictCache.cpp
@@ -47,6 +49,7 @@ ADD_CONVENIENCE_LIBRARY(ndbapi
   NdbOperationDefine.cpp
   NdbOperationExec.cpp
   NdbOperationInt.cpp
+  NdbOperationScan.cpp
   NdbOperationSearch.cpp
   NdbPool.cpp
   NdbPoolImpl.cpp
@@ -66,7 +69,6 @@ ADD_CONVENIENCE_LIBRARY(ndbapi
   Ndblist.cpp
   ObjectMap.cpp
   SignalSender.cpp
-  SectionIterators.cpp
   TransporterFacade.cpp
   WakeupHandler.cpp
   ndb_cluster_connection.cpp
@@ -75,8 +77,4 @@ ADD_CONVENIENCE_LIBRARY(ndbapi
   trp_buffer.cpp
   trp_client.cpp
   trp_node.cpp
-  LINK_LIBRARIES ext::zlib
   )
-
-
-NDB_ADD_TEST(SectionIterators-t SectionIterators.cpp NdbApiSignal.cpp)

@@ -1,4 +1,4 @@
-# Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -26,12 +26,9 @@ ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="replication_observers_example")
 MYSQL_ADD_PLUGIN(replication_observers_example
   gr_message_service_example.cc
   replication_observers_example.cc
-  src/binlog/service/iterator/tests/pfs.cc
-  src/binlog/service/iterator/tests/status_vars.cc
   MODULE_ONLY
   MODULE_OUTPUT_NAME "replication_observers_example_plugin"
   TEST_ONLY
-  LINK_LIBRARIES extra::rapidjson
   )
 
 ADD_DEFINITIONS(-DMYSQL_SERVER)

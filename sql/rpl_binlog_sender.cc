@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,7 +21,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/rpl_binlog_sender.h"
-#include "libbinlogevents/include/codecs/factory.h"
 
 #include <stdio.h>
 #include <algorithm>
@@ -31,26 +30,25 @@
 #include <utility>
 
 #include "lex_string.h"
-#include "libbinlogevents/include/binlog_event.h"  // binary_log::max_log_event_size
+#include "m_string.h"
 #include "map_helpers.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_pointer_arithmetic.h"
 #include "my_sys.h"
 #include "my_thread.h"
-#include "mysql.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/psi_stage_bits.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "scope_guard.h"
 #include "sql/binlog_reader.h"
 #include "sql/debug_sync.h"  // debug_sync_set_action
 #include "sql/derror.h"      // ER_THD
 #include "sql/item_func.h"   // user_var_entry
 #include "sql/log.h"
+#include "sql/log_event.h"  // MAX_MAX_ALLOWED_PACKET
 #include "sql/mdl.h"
 #include "sql/mysqld.h"  // global_system_variables ...
 #include "sql/protocol.h"
@@ -63,7 +61,6 @@
 #include "sql/sql_class.h"      // THD
 #include "sql/system_variables.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 #include "typelib.h"
 #include "unsafe_string_append.h"
 
@@ -102,6 +99,8 @@ class Observe_transmission_guard {
     @param flag            The flag variable to guard
     @param event_type      The type of the event being processed
     @param event_ptr       The raw content of the event being processed
+    @param event_len       The size of the raw content of the event being
+                           processed
     @param checksum_alg    The checksum algorithm being used currently
     @param prev_event_type The type of the event processed just before the
                            current one
@@ -261,8 +260,9 @@ void Binlog_sender::init() {
   init_heartbeat_period();
   m_last_event_sent_ts = now_in_nanosecs();
 
-  m_linfo.thread_id = thd->thread_id();
-  mysql_bin_log.register_log_info(&m_linfo);
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+  thd->current_linfo = &m_linfo;
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
 
   /* Initialize the buffer only once. */
   m_packet.mem_realloc(PACKET_MIN_SIZE);  // size of the buffer
@@ -276,7 +276,7 @@ void Binlog_sender::init() {
   }
 
   if (DBUG_EVALUATE_IF("simulate_no_server_id", true, server_id == 0)) {
-    set_fatal_error("Misconfigured source - source server_id is 0");
+    set_fatal_error("Misconfigured master - master server_id is 0");
     return;
   }
 
@@ -344,12 +344,12 @@ void Binlog_sender::init() {
   m_wait_new_events =
       !((thd->server_id == 0) || ((m_flag & BINLOG_DUMP_NON_BLOCK) != 0));
   /* Binary event can be vary large. So set it to max allowed packet. */
-  thd->variables.max_allowed_packet = binary_log::max_log_event_size;
+  thd->variables.max_allowed_packet = MAX_MAX_ALLOWED_PACKET;
 
 #ifndef NDEBUG
   if (opt_sporadic_binlog_dump_fail && (binlog_dump_count++ % 2))
     set_unknown_error(
-        "Source fails in COM_BINLOG_DUMP because of "
+        "Master fails in COM_BINLOG_DUMP because of "
         "--sporadic-binlog-dump-fail");
   m_event_count = 0;
 #endif
@@ -363,7 +363,9 @@ void Binlog_sender::cleanup() {
   if (m_transmit_started)
     (void)RUN_HOOK(binlog_transmit, transmit_stop, (thd, m_flag));
 
-  mysql_bin_log.unregister_log_info(&m_linfo);
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+  thd->current_linfo = nullptr;
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
 
   thd->variables.max_allowed_packet =
       global_system_variables.max_allowed_packet;
@@ -377,7 +379,6 @@ void Binlog_sender::cleanup() {
 
 void Binlog_sender::run() {
   DBUG_TRACE;
-
   init();
 
   unsigned int max_event_size =
@@ -408,7 +409,7 @@ void Binlog_sender::run() {
     }
 
     THD_STAGE_INFO(m_thd, stage_sending_binlog_event_to_replica);
-    if (send_binlog(reader, start_pos)) break;
+    if (send_binlog(&reader, start_pos)) break;
 
     /* Will go to next file, need to copy log file name */
     set_last_file(log_file);
@@ -465,8 +466,8 @@ void Binlog_sender::run() {
   mysql_mutex_unlock(&m_thd->LOCK_thd_data);
   if (was_killed_by_duplicate_slave_id)
     set_fatal_error(
-        "A replica with the same server_uuid/server_id as this replica "
-        "has connected to the source");
+        "A slave with the same server_uuid/server_id as this slave "
+        "has connected to the master");
 
   if (reader.is_open()) {
     if (is_fatal_error()) {
@@ -486,10 +487,10 @@ void Binlog_sender::run() {
   cleanup();
 }
 
-int Binlog_sender::send_binlog(File_reader &reader, my_off_t start_pos) {
+int Binlog_sender::send_binlog(File_reader *reader, my_off_t start_pos) {
   if (unlikely(send_format_description_event(reader, start_pos))) return 1;
 
-  if (start_pos == BIN_LOG_HEADER_SIZE) start_pos = reader.position();
+  if (start_pos == BIN_LOG_HEADER_SIZE) start_pos = reader->position();
 
   if (m_check_previous_gtid_event) {
     bool has_prev_gtid_ev;
@@ -502,12 +503,12 @@ int Binlog_sender::send_binlog(File_reader &reader, my_off_t start_pos) {
     Slave is requesting a position which is in the middle of a file,
     so seek to the correct position.
   */
-  if (reader.position() != start_pos && reader.seek(start_pos)) return 1;
+  if (reader->position() != start_pos && reader->seek(start_pos)) return 1;
 
   while (!m_thd->killed) {
-    auto [end_pos, code] = get_binlog_end_pos(reader);
+    my_off_t end_pos = 0;
 
-    if (code) return 1;
+    if (get_binlog_end_pos(reader, &end_pos)) return 1;
     if (send_events(reader, end_pos)) return 1;
     /*
       It is not active binlog, send_events should not return unless
@@ -526,47 +527,45 @@ int Binlog_sender::send_binlog(File_reader &reader, my_off_t start_pos) {
   return 1;
 }
 
-std::pair<my_off_t, int> Binlog_sender::get_binlog_end_pos(
-    File_reader &reader) {
+int Binlog_sender::get_binlog_end_pos(File_reader *reader, my_off_t *end_pos) {
   DBUG_TRACE;
-  my_off_t read_pos = reader.position();
+  my_off_t read_pos = reader->position();
 
-  std::pair<my_off_t, int> result = std::make_pair(read_pos, 1);
+  do {
+    /*
+      MYSQL_BIN_LOG::binlog_end_pos is atomic. We should only acquire the
+      LOCK_binlog_end_pos if we reached the end of the hot log and are going
+      to wait for updates on the binary log (Binlog_sender::wait_new_event()).
+    */
+    *end_pos = mysql_bin_log.get_binlog_end_pos();
 
-  if (m_wait_new_events) {
-    if (unlikely(wait_new_events(read_pos))) return result;
-  }
+    /* If this is a cold binlog file, we are done getting the end pos */
+    if (unlikely(!mysql_bin_log.is_active(m_linfo.log_file_name))) {
+      *end_pos = 0;
+      return 0;
+    }
 
-  result.first = mysql_bin_log.get_binlog_end_pos();
+    DBUG_PRINT("info", ("Reading file %s, seek pos %llu, end_pos is %llu",
+                        m_linfo.log_file_name, read_pos, *end_pos));
+    DBUG_PRINT("info", ("Active file is %s", mysql_bin_log.get_log_fname()));
 
-  DBUG_PRINT("info", ("Reading file %s, seek pos %llu, end_pos is %llu",
-                      m_linfo.log_file_name, read_pos, result.first));
-  DBUG_PRINT("info", ("Active file is %s", mysql_bin_log.get_log_fname()));
+    if (read_pos < *end_pos) return 0;
 
-  /* If this is a cold binlog file, we are done getting the end pos */
-  if (unlikely(!mysql_bin_log.is_active(m_linfo.log_file_name))) {
-    return std::make_pair(0, 0);
-  }
-  if (read_pos < result.first) {
-    result.second = 0;
-    return result;
-  }
-  flush_net();
-  return result;
+    /* Some data may be in net buffer, it should be flushed before waiting */
+    if (!m_wait_new_events || flush_net()) return 1;
+
+    if (unlikely(wait_new_events(read_pos))) return 1;
+  } while (unlikely(!m_thd->killed));
+
+  return 1;
 }
 
-int Binlog_sender::send_heartbeat_event(my_off_t log_pos) {
-  uint32 hb_version_flag = m_flag & USE_HEARTBEAT_EVENT_V2;
-  DBUG_EXECUTE_IF("use_old_heartbeat_version", { hb_version_flag = 0; });
-  return (hb_version_flag ? send_heartbeat_event_v2(log_pos)
-                          : send_heartbeat_event_v1(log_pos));
-}
-int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
+int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
   DBUG_TRACE;
 
   THD *thd = m_thd;
   const char *log_file = m_linfo.log_file_name;
-  my_off_t log_pos = reader.position();
+  my_off_t log_pos = reader->position();
   my_off_t exclude_group_end_pos = 0;
   bool in_exclude_group = false;
 
@@ -606,9 +605,14 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
     });
 
     Sender_context_guard ctx_guard(*this, event_type);
+    Observe_transmission_guard obs_guard(
+        m_observe_transmission, event_type,
+        const_cast<const char *>(reinterpret_cast<char *>(event_ptr)),
+        m_event_checksum_alg, m_prev_event_type);
 
-    log_pos = reader.position();
+    log_pos = reader->position();
 
+    if (before_send_hook(log_file, log_pos)) return 1;
     /*
       TODO: Set m_exclude_gtid to NULL if all gtids in m_exclude_gtid has
       be skipped. and maybe removing the gtid from m_exclude_gtid will make
@@ -626,9 +630,8 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       assert(now >= m_last_event_sent_ts);
 
       // if enough time has elapsed so that we should send another heartbeat
-      if (m_heartbeat_period > std::chrono::nanoseconds(0) &&
-          (now - m_last_event_sent_ts) >= m_heartbeat_period) {
-        if (send_heartbeat_event(log_pos)) return 1;
+      if ((now - m_last_event_sent_ts) >= m_heartbeat_period) {
+        if (unlikely(send_heartbeat_event(log_pos))) return 1;
         exclude_group_end_pos = 0;
       } else {
         exclude_group_end_pos = log_pos;
@@ -647,7 +650,7 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
         tmp.copy(m_packet);
         tmp.length(m_packet.length());
 
-        if (send_heartbeat_event(exclude_group_end_pos)) return 1;
+        if (unlikely(send_heartbeat_event(exclude_group_end_pos))) return 1;
         exclude_group_end_pos = 0;
 
         /* Restore the copy back. */
@@ -655,16 +658,11 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
         m_packet.length(tmp.length());
       }
 
-      Observe_transmission_guard obs_guard(
-          m_observe_transmission, event_type,
-          const_cast<const char *>(reinterpret_cast<char *>(event_ptr)),
-          m_event_checksum_alg, m_prev_event_type);
-
-      if (before_send_hook(log_file, log_pos)) return 1;
       if (unlikely(send_packet())) return 1;
-      if (unlikely(after_send_hook(log_file, in_exclude_group ? log_pos : 0)))
-        return 1;
     }
+
+    if (unlikely(after_send_hook(log_file, in_exclude_group ? log_pos : 0)))
+      return 1;
   }
 
   /*
@@ -761,19 +759,16 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
   int ret = 0;
   PSI_stage_info old_stage;
 
-  /*
-    MYSQL_BIN_LOG::binlog_end_pos is atomic. We should only acquire the
-    LOCK_binlog_end_pos if we reached the end of the hot log and are going
-    to wait for updates on the binary log (Binlog_sender::wait_new_event()).
-  */
-  if (stop_waiting_for_update(log_pos)) {
-    return 0;
-  }
-
-  /* Some data may be in net buffer, it should be flushed before waiting */
-  if (flush_net()) return 1;
-
   mysql_bin_log.lock_binlog_end_pos();
+  /*
+    If the binary log was updated before reaching this waiting point,
+    there is no need to wait.
+  */
+  if (mysql_bin_log.get_binlog_end_pos() > log_pos ||
+      !mysql_bin_log.is_active(m_linfo.log_file_name)) {
+    mysql_bin_log.unlock_binlog_end_pos();
+    return ret;
+  }
 
   m_thd->ENTER_COND(mysql_bin_log.get_log_cond(),
                     mysql_bin_log.get_binlog_end_pos_lock(),
@@ -782,39 +777,28 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
   if (m_heartbeat_period.count() > 0)
     ret = wait_with_heartbeat(log_pos);
   else
-    ret = wait_without_heartbeat(log_pos);
+    ret = wait_without_heartbeat();
 
   mysql_bin_log.unlock_binlog_end_pos();
   m_thd->EXIT_COND(&old_stage);
-
   return ret;
-}
-
-bool Binlog_sender::stop_waiting_for_update(my_off_t log_pos) const {
-  if (mysql_bin_log.get_binlog_end_pos() > log_pos ||
-      !mysql_bin_log.is_active(m_linfo.log_file_name) || m_thd->killed) {
-    return true;
-  }
-  return false;
 }
 
 inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
 #ifndef NDEBUG
   ulong hb_info_counter = 0;
 #endif
+  struct timespec ts;
+  int ret;
 
-  while (!stop_waiting_for_update(log_pos)) {
-    // ignoring timeout on conditional variable
-    mysql_bin_log.wait_for_update(m_heartbeat_period);
+  do {
+    set_timespec_nsec(&ts, m_heartbeat_period.count());
+    ret = mysql_bin_log.wait_for_update(&ts);
+    if (!is_timeout(ret)) break;
 
-    if (stop_waiting_for_update(log_pos)) {
-      return 0;
-    }
-    mysql_bin_log.unlock_binlog_end_pos();
-    Scope_guard lock([]() { mysql_bin_log.lock_binlog_end_pos(); });
 #ifndef NDEBUG
     if (hb_info_counter < 3) {
-      LogErr(INFORMATION_LEVEL, ER_RPL_BINLOG_SOURCE_SENDS_HEARTBEAT);
+      LogErr(INFORMATION_LEVEL, ER_RPL_BINLOG_MASTER_SENDS_HEARTBEAT);
       hb_info_counter++;
       if (hb_info_counter == 3)
         LogErr(INFORMATION_LEVEL,
@@ -822,17 +806,13 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
     }
 #endif
     if (send_heartbeat_event(log_pos)) return 1;
-  }
+  } while (!m_thd->killed);
 
-  return 0;
+  return ret ? 1 : 0;
 }
 
-inline int Binlog_sender::wait_without_heartbeat(my_off_t log_pos) {
-  int res = 0;
-  while (!stop_waiting_for_update(log_pos)) {
-    res = mysql_bin_log.wait_for_update();
-  }
-  return res;
+inline int Binlog_sender::wait_without_heartbeat() {
+  return mysql_bin_log.wait_for_update(nullptr);
 }
 
 void Binlog_sender::init_heartbeat_period() {
@@ -892,7 +872,7 @@ int Binlog_sender::check_start_file() {
                                            gtid_state->get_server_sidno(),
                                            subset_sidno)) {
       global_sid_lock->unlock();
-      set_fatal_error(ER_THD(m_thd, ER_REPLICA_HAS_MORE_GTIDS_THAN_SOURCE));
+      set_fatal_error(ER_THD(m_thd, ER_SLAVE_HAS_MORE_GTIDS_THAN_MASTER));
       return 1;
     }
     /*
@@ -918,7 +898,7 @@ int Binlog_sender::check_start_file() {
       is not set by the user, the following if condition cannot catch it.
       But that is not a problem because in find_first_log_not_in_gtid_set()
       while checking for subset previous_gtids binary log, the logic
-      will not find one and an error ER_SOURCE_HAS_PURGED_REQUIRED_GTIDS
+      will not find one and an error ER_MASTER_HAS_PURGED_REQUIRED_GTIDS
       is thrown from there.
     */
     if (!gtid_state->get_lost_gtids()->is_subset(m_exclude_gtid)) {
@@ -966,7 +946,7 @@ int Binlog_sender::check_start_file() {
 
   if (m_start_pos < BIN_LOG_HEADER_SIZE) {
     set_fatal_error(
-        "Client requested source to start replication "
+        "Client requested master to start replication "
         "from position < 4");
     return 1;
   }
@@ -980,7 +960,7 @@ int Binlog_sender::check_start_file() {
 
   if (m_start_pos > binlog_ifile.length()) {
     set_fatal_error(
-        "Client requested source to start replication from "
+        "Client requested master to start replication from "
         "position > file size");
     return 1;
   }
@@ -1001,7 +981,7 @@ void Binlog_sender::init_checksum_alg() {
   const auto &uv = get_user_var_from_alternatives(
       m_thd, "source_binlog_checksum", "master_binlog_checksum");
   // Get value of user_var.
-  if (uv && uv->ptr()) {
+  if (uv) {
     m_slave_checksum_alg = static_cast<enum_binlog_checksum_alg>(
         find_type(uv->ptr(), &binlog_checksum_typelib, 1) - 1);
     assert(m_slave_checksum_alg < binary_log::BINLOG_CHECKSUM_ALG_ENUM_END);
@@ -1087,7 +1067,7 @@ inline int Binlog_sender::reset_transmit_packet(ushort flags,
   return 0;
 }
 
-int Binlog_sender::send_format_description_event(File_reader &reader,
+int Binlog_sender::send_format_description_event(File_reader *reader,
                                                  my_off_t start_pos) {
   DBUG_TRACE;
   uchar *event_ptr = nullptr;
@@ -1108,12 +1088,12 @@ int Binlog_sender::send_format_description_event(File_reader &reader,
 
   Log_event *ev = nullptr;
   Binlog_read_error binlog_read_error = binlog_event_deserialize(
-      event_ptr, event_len, &reader.format_description_event(), false, &ev);
+      event_ptr, event_len, reader->format_description_event(), false, &ev);
   if (binlog_read_error.has_error()) {
     set_fatal_error(binlog_read_error.get_str());
     return 1;
   }
-  reader.set_format_description_event(
+  reader->set_format_description_event(
       dynamic_cast<Format_description_log_event &>(*ev));
   delete ev;
 
@@ -1128,10 +1108,10 @@ int Binlog_sender::send_format_description_event(File_reader &reader,
   if (m_slave_checksum_alg == binary_log::BINLOG_CHECKSUM_ALG_UNDEF &&
       event_checksum_on()) {
     set_fatal_error(
-        "Replica can not handle replication events with the "
-        "checksum that source is configured to log");
+        "Slave can not handle replication events with the "
+        "checksum that master is configured to log");
 
-    LogErr(WARNING_LEVEL, ER_RPL_BINLOG_SOURCE_USES_CHECKSUM_AND_REPLICA_CANT);
+    LogErr(WARNING_LEVEL, ER_RPL_BINLOG_MASTER_USES_CHECKSUM_AND_SLAVE_CANT);
     return 1;
   }
 
@@ -1173,15 +1153,15 @@ int Binlog_sender::send_format_description_event(File_reader &reader,
   return send_packet();
 }
 
-int Binlog_sender::has_previous_gtid_log_event(File_reader &reader,
+int Binlog_sender::has_previous_gtid_log_event(File_reader *reader,
                                                bool *found) {
   uchar *event = nullptr;
   uint32 event_len;
   *found = false;
 
   if (read_event(reader, &event, &event_len) || event == nullptr) {
-    if (reader.get_error_type() == Binlog_read_error::READ_EOF) return 0;
-    set_fatal_error(log_read_error_msg(reader.get_error_type()));
+    if (reader->get_error_type() == Binlog_read_error::READ_EOF) return 0;
+    set_fatal_error(log_read_error_msg(reader->get_error_type()));
     return 1;
   }
 
@@ -1196,12 +1176,12 @@ const char *Binlog_sender::log_read_error_msg(
       return "bogus data in log event";
     case Binlog_read_error::EVENT_TOO_LARGE:
       return "log event entry exceeded max_allowed_packet; Increase "
-             "max_allowed_packet on source";
+             "max_allowed_packet on master";
     case Binlog_read_error::MEM_ALLOCATE:
       return "memory allocation failed reading log event";
     case Binlog_read_error::TRUNC_EVENT:
       return "binlog truncated in the middle of event; consider out of disk "
-             "space on source";
+             "space on master";
     case Binlog_read_error::CHECKSUM_FAILURE:
       return "event read from binlog did not pass crc check";
     default:
@@ -1209,7 +1189,7 @@ const char *Binlog_sender::log_read_error_msg(
   }
 }
 
-inline int Binlog_sender::read_event(File_reader &reader, uchar **event_ptr,
+inline int Binlog_sender::read_event(File_reader *reader, uchar **event_ptr,
                                      uint32 *event_len) {
   DBUG_TRACE;
 
@@ -1224,17 +1204,17 @@ inline int Binlog_sender::read_event(File_reader &reader, uchar **event_ptr,
     assert(!debug_sync_set_action(m_thd, STRING_WITH_LEN(act)));
   };);
 
-  if (reader.read_event_data(event_ptr, event_len)) {
-    if (reader.get_error_type() == Binlog_read_error::READ_EOF) {
+  if (reader->read_event_data(event_ptr, event_len)) {
+    if (reader->get_error_type() == Binlog_read_error::READ_EOF) {
       *event_ptr = nullptr;
       *event_len = 0;
       return 0;
     }
-    set_fatal_error(log_read_error_msg(reader.get_error_type()));
+    set_fatal_error(log_read_error_msg(reader->get_error_type()));
     return 1;
   }
 
-  set_last_pos(reader.position());
+  set_last_pos(reader->position());
 
   /*
     As we pre-allocate the buffer to store the event at reset_transmit_packet,
@@ -1253,7 +1233,7 @@ inline int Binlog_sender::read_event(File_reader &reader, uchar **event_ptr,
   return 0;
 }
 
-int Binlog_sender::send_heartbeat_event_v1(my_off_t log_pos) {
+int Binlog_sender::send_heartbeat_event(my_off_t log_pos) {
   DBUG_TRACE;
   const char *filename = m_linfo.log_file_name;
   const char *p = filename + dirname_length(filename);
@@ -1262,6 +1242,7 @@ int Binlog_sender::send_heartbeat_event_v1(my_off_t log_pos) {
                      (event_checksum_on() ? BINLOG_CHECKSUM_LEN : 0);
 
   DBUG_PRINT("info", ("log_file_name %s, log_pos %llu", p, log_pos));
+
   if (reset_transmit_packet(0, event_len)) return 1;
 
   size_t event_offset = m_packet.length();
@@ -1276,50 +1257,6 @@ int Binlog_sender::send_heartbeat_event_v1(my_off_t log_pos) {
   int4store(header + LOG_POS_OFFSET, static_cast<uint32>(log_pos));
   int2store(header + FLAGS_OFFSET, 0);
   memcpy(header + LOG_EVENT_HEADER_LEN, p, ident_len);
-  if (event_checksum_on()) calc_event_checksum(header, event_len);
-  return send_packet_and_flush();
-}
-int Binlog_sender::send_heartbeat_event_v2(my_off_t log_pos) {
-  DBUG_TRACE;
-  DBUG_EXECUTE_IF("heartbeat_event_with_position_greater_than_4_gb",
-                  { assert(log_pos > 4294967296); };);
-  auto codec = binary_log::codecs::Factory::build_codec(
-      binary_log::HEARTBEAT_LOG_EVENT_V2);
-  const char *filename = m_linfo.log_file_name;
-  const char *p = filename + dirname_length(filename);
-  const std::string log_filename{p, strlen(p)};
-  binary_log::Heartbeat_event_v2 hb{};
-  const size_t binlog_checksum_size =
-      (event_checksum_on() ? BINLOG_CHECKSUM_LEN : 0);
-  const size_t max_event_len =
-      LOG_EVENT_HEADER_LEN + hb.max_encoding_length() + binlog_checksum_size;
-
-  DBUG_PRINT("info", ("log_file_name %s, log_pos %llu", p, log_pos));
-  if (reset_transmit_packet(0, max_event_len)) return 1;
-
-  size_t packet_header_len = m_packet.length();
-  uchar *header = pointer_cast<uchar *>(m_packet.ptr()) + packet_header_len;
-  uchar *payload = header + LOG_EVENT_HEADER_LEN;
-
-  // encode the payload of the HB event
-  hb.set_log_filename(log_filename);
-  hb.set_log_position(log_pos);
-  auto result = codec->encode(hb, payload, hb.max_encoding_length());
-  if (result.second) return 1;
-
-  auto event_len{LOG_EVENT_HEADER_LEN + result.first + binlog_checksum_size};
-
-  // craft the header by hand
-  /* Timestamp field */
-  int4store(header, 0);
-  header[EVENT_TYPE_OFFSET] = binary_log::HEARTBEAT_LOG_EVENT_V2;
-  int4store(header + SERVER_ID_OFFSET, server_id);
-  int4store(header + EVENT_LEN_OFFSET, event_len);
-  int4store(header + LOG_POS_OFFSET, static_cast<uint32>(log_pos));
-  int2store(header + FLAGS_OFFSET, 0);
-
-  // set the effective length
-  m_packet.length(event_len + packet_header_len);
 
   if (event_checksum_on()) calc_event_checksum(header, event_len);
 

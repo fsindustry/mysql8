@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -109,7 +109,7 @@ Converter::Arch Checker::detect_architecture(File file, size_t file_size) {
     return native_arch;
 
   // determine detection order for candidates
-  const Converter::Arch detection_order[] = {
+  Converter::Arch detection_order[] = {
       Converter::Arch::LE_64, Converter::Arch::LE_32, Converter::Arch::BE_64,
       Converter::Arch::BE_32};
 

@@ -192,9 +192,7 @@ SET global.delayed_insert_limit = 1;
 --Error ER_UNKNOWN_TABLE
 SELECT global.delayed_insert_limit;
 --Error ER_BAD_FIELD_ERROR
-SELECT delayed_insert_limit;
---Error ER_INCORRECT_GLOBAL_LOCAL_VAR
-SELECT @@session.delayed_insert_limit;
+SELECT delayed_insert_limit = @@session.delayed_insert_limit;
 
 ##############################
 #   Restore initial value    #

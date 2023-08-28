@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,14 +22,13 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 #include <NdbOut.hpp>
 #include <OutputStream.hpp>
 #include <NdbSleep.h>
 #include <NdbTest.hpp>
 #include <NdbTick.h>
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "my_sys.h"
 
 #include <NdbRestarter.hpp>
@@ -3929,7 +3928,7 @@ static int bugtest_62321()
   DBG("bugtest_62321 : Error code from other ops in batch obscured");
 
   /*
-     1) Setup table : 1 row exists, another doesn't
+     1) Setup table : 1 row exists, another doesnt
      2) Start transaction
      3) Define failing before op
      4) Define Blob op with/without post-exec part

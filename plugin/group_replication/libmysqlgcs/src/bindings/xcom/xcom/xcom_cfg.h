@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "xcom/network/include/network_provider.h"
-#include "xcom/statistics/include/statistics_storage_interface.h"
 #include "xdr_gen/xcom_vp.h"
 
 typedef struct cfg_app_xcom {
@@ -51,12 +50,6 @@ typedef struct cfg_app_xcom {
    operations
    */
   Network_namespace_manager *network_ns_manager;
-
-  /**
-   This is the implementation of XCom_Statistics_Storage_Interface in order to
-   store statistics
-   */
-  Xcom_statistics_storage_interface *statistics_storage{nullptr};
 } cfg_app_xcom_st;
 
 /*
@@ -71,8 +64,6 @@ void deinit_cfg_app_xcom();
 node_address *cfg_app_xcom_get_identity();
 
 Network_namespace_manager *cfg_app_get_network_namespace_manager();
-
-Xcom_statistics_storage_interface *cfg_app_get_storage_statistics();
 
 /*
  Takes ownership of @c identity.

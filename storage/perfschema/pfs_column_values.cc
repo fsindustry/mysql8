@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,9 +27,6 @@
 */
 
 #include "storage/perfschema/pfs_column_values.h"
-
-#include "lex_string.h"
-#include "string_with_len.h"
 
 LEX_CSTRING PERFORMANCE_SCHEMA_str = {STRING_WITH_LEN("performance_schema")};
 

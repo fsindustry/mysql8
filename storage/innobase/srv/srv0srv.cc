@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2023, Oracle and/or its affiliates.
+Copyright (c) 1995, 2021, Oracle and/or its affiliates.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 
@@ -51,7 +51,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <time.h>
 
 #include <chrono>
-#include <limits>
 
 #include "btr0sea.h"
 #include "buf0flu.h"
@@ -66,11 +65,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ibuf0ibuf.h"
 #ifndef UNIV_HOTBACKUP
 #include "lock0lock.h"
-#include "log0buf.h"
-#include "log0chkp.h"
-#include "log0encryption.h"
 #include "log0recv.h"
-#include "log0write.h"
 #include "mem0mem.h"
 #include "os0proc.h"
 #include "os0thread-create.h"
@@ -119,10 +114,6 @@ bool srv_downgrade_partition_files = false;
 ulong srv_fatal_semaphore_wait_threshold = 600;
 std::atomic<int> srv_fatal_semaphore_wait_extend{0};
 
-std::chrono::seconds get_srv_fatal_semaphore_wait_threshold() {
-  return std::chrono::seconds{srv_fatal_semaphore_wait_threshold};
-}
-
 /* How much data manipulation language (DML) statements need to be delayed,
 in microseconds, in order to reduce the lagging of the purge thread. */
 ulint srv_dml_needed_delay = 0;
@@ -131,13 +122,13 @@ const char *srv_main_thread_op_info = "";
 
 /* Server parameters which are read from the initfile */
 
-/* The following three are dir paths which are concatenated before file
+/* The following three are dir paths which are catenated before file
 names, where the file name itself may also contain a path */
 
 char *srv_data_home = nullptr;
 
 /** Separate directory for doublewrite files, if it is not NULL */
-char *srv_doublewrite_dir = nullptr;
+char *srv_doublewrite_dir = NULL;
 
 /** The innodb_directories variable value. This a list of directories
 deliminated by ';', i.e the FIL_PATH_SEPARATOR. */
@@ -178,10 +169,10 @@ Note: If enabled then UNDO tablespace will be selected for truncate.
 While Server waits for undo-tablespace to truncate if user disables
 it, truncate action is completed but no new tablespace is marked
 for truncate (action is never aborted). */
-bool srv_undo_log_truncate = false;
+bool srv_undo_log_truncate = FALSE;
 
 /** Enable or disable Encrypt of UNDO tablespace. */
-bool srv_undo_log_encrypt = false;
+bool srv_undo_log_encrypt = FALSE;
 
 /** Maximum size of undo tablespace. */
 unsigned long long srv_max_undo_tablespace_size;
@@ -237,15 +228,22 @@ char *srv_log_group_home_dir = nullptr;
 /** Enable or disable Encrypt of REDO tablespace. */
 bool srv_redo_log_encrypt = false;
 
-ulong srv_log_n_files = 100; /* Deprecated (used only for deprecated sysvar). */
-
-ulonglong srv_log_file_size; /* Deprecated (used only for deprecated sysvar). */
-
-ulonglong srv_redo_log_capacity, srv_redo_log_capacity_used;
+ulong srv_n_log_files = SRV_N_LOG_FILES_MAX;
 
 #ifdef UNIV_DEBUG_DEDICATED
 ulong srv_debug_system_mem_size;
 #endif /* UNIV_DEBUG_DEDICATED */
+
+/** At startup, this is the current redo log file size.
+During startup, if this is different from srv_log_file_size_requested
+(innodb_log_file_size), the redo log will be rebuilt and this size
+will be initialized to srv_log_file_size_requested.
+When upgrading from a previous redo log format, this will be set to 0,
+and writing to the redo log is not allowed. Expressed in bytes. */
+ulonglong srv_log_file_size;
+
+/** The value of the startup parameter innodb_log_file_size. */
+ulonglong srv_log_file_size_requested;
 
 /** Space for log buffer, expressed in bytes. Note, that log buffer
 will use only the largest power of two, which is not greater than
@@ -302,10 +300,6 @@ ulong srv_log_wait_for_write_spin_delay =
 ulong srv_log_wait_for_write_timeout =
     INNODB_LOG_WAIT_FOR_WRITE_TIMEOUT_DEFAULT;
 
-std::chrono::microseconds get_srv_log_wait_for_write_timeout() {
-  return std::chrono::microseconds{srv_log_wait_for_write_timeout};
-}
-
 /** Number of spin iterations, when spinning and waiting for log flushed. */
 ulong srv_log_wait_for_flush_spin_delay =
     INNODB_LOG_WAIT_FOR_FLUSH_SPIN_DELAY_DEFAULT;
@@ -314,10 +308,6 @@ ulong srv_log_wait_for_flush_spin_delay =
 ulong srv_log_wait_for_flush_timeout =
     INNODB_LOG_WAIT_FOR_FLUSH_TIMEOUT_DEFAULT;
 
-std::chrono::microseconds get_srv_log_wait_for_flush_timeout() {
-  return std::chrono::microseconds{srv_log_wait_for_flush_timeout};
-}
-
 /** Number of spin iterations, for which log writer thread is waiting
 for new data to write or flush without sleeping. */
 ulong srv_log_writer_spin_delay = INNODB_LOG_WRITER_SPIN_DELAY_DEFAULT;
@@ -325,18 +315,10 @@ ulong srv_log_writer_spin_delay = INNODB_LOG_WRITER_SPIN_DELAY_DEFAULT;
 /** Initial timeout used to wait on writer_event. */
 ulong srv_log_writer_timeout = INNODB_LOG_WRITER_TIMEOUT_DEFAULT;
 
-std::chrono::microseconds get_srv_log_writer_timeout() {
-  return std::chrono::microseconds{srv_log_writer_timeout};
-}
-
 /** Number of milliseconds every which a periodical checkpoint is written
 by the log checkpointer thread (unless periodical checkpoints are disabled,
 which is a case during initial phase of startup). */
 ulong srv_log_checkpoint_every = INNODB_LOG_CHECKPOINT_EVERY_DEFAULT;
-
-std::chrono::milliseconds get_srv_log_checkpoint_every() {
-  return std::chrono::milliseconds{srv_log_checkpoint_every};
-}
 
 /** Number of spin iterations, for which log flusher thread is waiting
 for new data to flush, without sleeping. */
@@ -344,10 +326,6 @@ ulong srv_log_flusher_spin_delay = INNODB_LOG_FLUSHER_SPIN_DELAY_DEFAULT;
 
 /** Initial timeout used to wait on flusher_event. */
 ulong srv_log_flusher_timeout = INNODB_LOG_FLUSHER_TIMEOUT_DEFAULT;
-
-std::chrono::microseconds get_srv_log_flusher_timeout() {
-  return std::chrono::microseconds{srv_log_flusher_timeout};
-}
 
 /** Number of spin iterations, for which log write notifier thread is waiting
 for advanced flushed_to_disk_lsn without sleeping. */
@@ -358,10 +336,6 @@ ulong srv_log_write_notifier_spin_delay =
 ulong srv_log_write_notifier_timeout =
     INNODB_LOG_WRITE_NOTIFIER_TIMEOUT_DEFAULT;
 
-std::chrono::microseconds get_srv_log_write_notifier_timeout() {
-  return std::chrono::microseconds{srv_log_write_notifier_timeout};
-}
-
 /** Number of spin iterations, for which log flush notifier thread is waiting
 for advanced flushed_to_disk_lsn without sleeping. */
 ulong srv_log_flush_notifier_spin_delay =
@@ -370,10 +344,6 @@ ulong srv_log_flush_notifier_spin_delay =
 /** Initial timeout used to wait on flush_notifier_event. */
 ulong srv_log_flush_notifier_timeout =
     INNODB_LOG_FLUSH_NOTIFIER_TIMEOUT_DEFAULT;
-
-std::chrono::microseconds get_srv_log_flush_notifier_timeout() {
-  return std::chrono::microseconds{srv_log_flush_notifier_timeout};
-}
 
 /* End of EXPERIMENTAL sys vars */
 
@@ -390,9 +360,6 @@ bool srv_inject_too_many_concurrent_trxs = false;
 
 ulong srv_flush_log_at_trx_commit = 1;
 uint srv_flush_log_at_timeout = 1;
-std::chrono::seconds get_srv_flush_log_at_timeout() {
-  return std::chrono::seconds(srv_flush_log_at_timeout);
-}
 ulong srv_page_size = UNIV_PAGE_SIZE_DEF;
 ulong srv_page_size_shift = UNIV_PAGE_SIZE_SHIFT_DEF;
 
@@ -400,10 +367,10 @@ page_size_t univ_page_size(0, 0, false);
 
 /* Try to flush dirty pages so as to avoid IO bursts at
 the checkpoints. */
-bool srv_adaptive_flushing = true;
+bool srv_adaptive_flushing = TRUE;
 
 /* Allow IO bursts at the checkpoints ignoring io_capacity setting. */
-bool srv_flush_sync = true;
+bool srv_flush_sync = TRUE;
 
 /** Maximum number of times allowed to conditionally acquire
 mutex before switching to blocking wait on the mutex */
@@ -469,7 +436,7 @@ ulong srv_n_read_io_threads;
 ulong srv_n_write_io_threads;
 
 /* Switch to enable random read ahead. */
-bool srv_random_read_ahead = false;
+bool srv_random_read_ahead = FALSE;
 /* User settable value of the number of pages that must be present
 in the buffer cache and accessed sequentially for InnoDB to trigger a
 readahead request. */
@@ -484,6 +451,8 @@ enum srv_unix_flush_t srv_unix_file_flush_method = SRV_UNIX_FSYNC;
 #else
 enum srv_win_flush_t srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 #endif /* _WIN32 */
+
+ulint srv_max_n_open_files = 300;
 
 /* Number of IO operations per second the server can do */
 ulong srv_io_capacity = 200;
@@ -539,13 +508,13 @@ ulong srv_force_recovery_crash;
 #endif /* UNIV_DEBUG */
 
 /** Print all user-level transactions deadlocks to mysqld stderr */
-bool srv_print_all_deadlocks = false;
+bool srv_print_all_deadlocks = FALSE;
 
 /** Print all DDL logs to mysqld stderr */
 bool srv_print_ddl_logs = false;
 
 /** Enable INFORMATION_SCHEMA.innodb_cmp_per_index */
-bool srv_cmp_per_index_enabled = false;
+bool srv_cmp_per_index_enabled = FALSE;
 
 /** If innodb redo logging is enabled. */
 bool srv_redo_log = true;
@@ -565,7 +534,7 @@ If innodb_fast_shutdown=2, shutdown will effectively 'crash' InnoDB
 ulong srv_fast_shutdown;
 
 /* Generate a innodb_status.<pid> file */
-bool srv_innodb_status = false;
+ibool srv_innodb_status = FALSE;
 
 /* When estimating number of different key values in an index, sample
 this many index pages, there are 2 ways to calculate statistics:
@@ -574,20 +543,17 @@ this many index pages, there are 2 ways to calculate statistics:
 * quick transient stats, that are used if persistent stats for the given
   table/index are not found in the innodb database */
 unsigned long long srv_stats_transient_sample_pages = 8;
-bool srv_stats_persistent = true;
-bool srv_stats_include_delete_marked = false;
+bool srv_stats_persistent = TRUE;
+bool srv_stats_include_delete_marked = FALSE;
 unsigned long long srv_stats_persistent_sample_pages = 20;
-bool srv_stats_auto_recalc = true;
+bool srv_stats_auto_recalc = TRUE;
 
 ulong srv_replication_delay = 0;
-std::chrono::milliseconds get_srv_replication_delay() {
-  return std::chrono::milliseconds{srv_replication_delay};
-}
 
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
 ulong srv_spin_wait_delay = 6;
-bool srv_priority_boost = true;
+ibool srv_priority_boost = TRUE;
 
 #ifndef UNIV_HOTBACKUP
 static ulint srv_n_rows_inserted_old = 0;
@@ -603,9 +569,8 @@ static ulint srv_n_system_rows_read_old = 0;
 
 ulint srv_truncated_status_writes = 0;
 
-bool srv_print_innodb_monitor = false;
-std::atomic_uint32_t srv_innodb_needs_monitoring{0};
-bool srv_print_innodb_lock_monitor = false;
+bool srv_print_innodb_monitor = FALSE;
+bool srv_print_innodb_lock_monitor = FALSE;
 
 /* Array of English strings describing the current state of an
 i/o handler thread */
@@ -614,7 +579,7 @@ const char *srv_io_thread_op_info[SRV_MAX_N_IO_THREADS];
 const char *srv_io_thread_function[SRV_MAX_N_IO_THREADS];
 
 #ifndef UNIV_HOTBACKUP
-static std::chrono::steady_clock::time_point srv_monitor_stats_refreshed_at;
+static ib_time_monotonic_t srv_last_monitor_time;
 #endif /* !UNIV_HOTBACKUP */
 
 static ib_mutex_t srv_innodb_monitor_mutex;
@@ -631,7 +596,7 @@ FILE *srv_monitor_file;
 This mutex has a very low rank; threads reserving it should not
 acquire any further latches or sleep before releasing this one. */
 ib_mutex_t srv_misc_tmpfile_mutex;
-/** Temporary file for miscellaneous diagnostic output */
+/** Temporary file for miscellanous diagnostic output */
 FILE *srv_misc_tmpfile;
 
 #ifndef UNIV_HOTBACKUP
@@ -659,7 +624,7 @@ defined as 5, 10, 15, 60 then all tasks will be performed when
 current_time % 60 == 0 and no tasks will be performed when
 current_time % 5 != 0. */
 
-constexpr std::chrono::seconds SRV_MASTER_DICT_LRU_INTERVAL{47};
+#define SRV_MASTER_DICT_LRU_INTERVAL (47)
 
 /** Acquire the system_mutex. */
 #define srv_sys_mutex_enter()     \
@@ -684,21 +649,21 @@ constexpr std::chrono::seconds SRV_MASTER_DICT_LRU_INTERVAL{47};
 There is the following analogue between this database
 server and an operating system kernel:
 
-DB concept                      equivalent OS concept
-----------                      ---------------------
-transaction             --      process;
+DB concept			equivalent OS concept
+----------			---------------------
+transaction		--	process;
 
-query thread            --      thread;
+query thread		--	thread;
 
-lock                    --      semaphore;
+lock			--	semaphore;
 
-kernel                  --      kernel;
+kernel			--	kernel;
 
 query thread execution:
 (a) without lock mutex
-reserved                --      process executing in user mode;
+reserved		--	process executing in user mode;
 (b) with lock mutex reserved
-                        --      process executing in kernel mode;
+                        --	process executing in kernel mode;
 
 The server has several backgroind threads all running at the same
 priority as user threads. It periodically checks if here is anything
@@ -890,7 +855,7 @@ void srv_reset_io_thread_op_info() {
 #ifdef UNIV_DEBUG
 /** Validates the type of a thread table slot.
  @return true if ok */
-static bool srv_thread_type_validate(
+static ibool srv_thread_type_validate(
     srv_thread_type type) /*!< in: thread type */
 {
   switch (type) {
@@ -899,7 +864,7 @@ static bool srv_thread_type_validate(
     case SRV_WORKER:
     case SRV_PURGE:
     case SRV_MASTER:
-      return true;
+      return (TRUE);
   }
   ut_error;
 }
@@ -948,8 +913,8 @@ static srv_slot_t *srv_reserve_slot(
 
   ut_a(!slot->in_use);
 
-  slot->in_use = true;
-  slot->suspended = false;
+  slot->in_use = TRUE;
+  slot->suspended = FALSE;
   slot->type = type;
 
   ut_ad(srv_slot_get_type(slot) == type);
@@ -996,7 +961,7 @@ static int64_t srv_suspend_thread_low(
   }
 
   ut_a(!slot->suspended);
-  slot->suspended = true;
+  slot->suspended = TRUE;
 
   ut_a(srv_sys->n_threads_active[type] > 0);
 
@@ -1066,7 +1031,7 @@ ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
           break;
       }
 
-      slot->suspended = false;
+      slot->suspended = FALSE;
 
       ++srv_sys->n_threads_active[type];
 
@@ -1095,7 +1060,7 @@ static void srv_free_slot(srv_slot_t *slot) /*!< in/out: thread slot */
 
   /* Free the slot for reuse. */
   ut_ad(slot->in_use);
-  slot->in_use = false;
+  slot->in_use = FALSE;
 
   srv_sys_mutex_exit();
 }
@@ -1104,16 +1069,6 @@ static void srv_free_slot(srv_slot_t *slot) /*!< in/out: thread slot */
 static void srv_init(void) {
   ulint n_sys_threads = 0;
   ulint srv_sys_sz = sizeof(*srv_sys);
-
-  /* Create mutex to protect encryption master_key_id. */
-  {
-    /* This is defined in ha_innodb.cc and used during create_log_files(), which
-    we call after calling srv_boot() which defines types of mutexes, so we have
-    to create this mutex in between the two calls. */
-    extern ib_mutex_t master_key_id_mutex;
-
-    mutex_create(LATCH_ID_MASTER_KEY_ID_MUTEX, &master_key_id_mutex);
-  }
 
   mutex_create(LATCH_ID_SRV_INNODB_MONITOR, &srv_innodb_monitor_mutex);
 
@@ -1293,7 +1248,7 @@ void srv_boot(void) {
 static void srv_refresh_innodb_monitor_stats(void) {
   mutex_enter(&srv_innodb_monitor_mutex);
 
-  srv_monitor_stats_refreshed_at = std::chrono::steady_clock::now();
+  srv_last_monitor_time = ut_time_monotonic();
 
   os_aio_refresh_stats();
 
@@ -1342,22 +1297,19 @@ static void srv_printf_locks_and_transactions(FILE *file,
 bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
                                ulint *trx_end) {
   ulint n_reserved;
-  bool ret;
+  ibool ret;
 
   mutex_enter(&srv_innodb_monitor_mutex);
 
-  const auto current_time = std::chrono::steady_clock::now();
+  const auto current_time = ut_time_monotonic();
 
   /* We add 0.001 seconds to time_elapsed to prevent division
   by zero if two users happen to call SHOW ENGINE INNODB STATUS at the
   same time */
 
-  const auto time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                                current_time - srv_monitor_stats_refreshed_at)
-                                .count() +
-                            0.001;
+  const auto time_elapsed = current_time - srv_last_monitor_time + 0.001;
 
-  srv_monitor_stats_refreshed_at = current_time;
+  srv_last_monitor_time = ut_time_monotonic();
 
   fputs("\n=====================================\n", file);
 
@@ -1443,10 +1395,9 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   ibuf_print(file);
 
   for (ulint i = 0; i < btr_ahi_parts; ++i) {
-    auto &part = btr_search_sys->parts[i];
-    rw_lock_s_lock(&part.latch, UT_LOCATION_HERE);
-    ha_print_info(file, part.hash_table);
-    rw_lock_s_unlock(&part.latch);
+    rw_lock_s_lock(btr_search_latches[i]);
+    ha_print_info(file, btr_search_sys->hash_tables[i]);
+    rw_lock_s_unlock(btr_search_latches[i]);
   }
 
   fprintf(file, "%.2f hash searches/s, %.2f non-hash searches/s\n",
@@ -1470,7 +1421,7 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   fprintf(file,
           "Total large memory allocated " ULINTPF
           "\n"
-          "Dictionary memory allocated %zu\n",
+          "Dictionary memory allocated " ULINTPF "\n",
           os_total_large_mem_allocated.load(), dict_sys->size);
 
   buf_print_io(file);
@@ -1581,13 +1532,7 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_data_pending_writes = os_n_pending_writes;
 
   export_vars.innodb_data_pending_fsyncs =
-      log_pending_flushes() + fil_n_pending_tablespace_flushes.load();
-
-  // Check against unsigned underflow in debug - values close to max value
-  // may be result of mismatched increment/decrement or data race; investigate
-  // on failure
-  ut_ad(export_vars.innodb_data_pending_fsyncs <=
-        std::numeric_limits<ulint>::max() - 1000);
+      fil_n_pending_log_flushes + fil_n_pending_tablespace_flushes;
 
   export_vars.innodb_data_fsyncs = os_n_fsyncs;
 
@@ -1629,16 +1574,13 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_buffer_pool_pages_free = free_len;
 
+#ifdef UNIV_DEBUG
+  export_vars.innodb_buffer_pool_pages_latched = buf_get_latched_pages_number();
+#endif /* UNIV_DEBUG */
   export_vars.innodb_buffer_pool_pages_total = buf_pool_get_n_pages();
 
   export_vars.innodb_buffer_pool_pages_misc =
       buf_pool_get_n_pages() - LRU_len - free_len;
-
-  export_vars.innodb_buffer_pool_resize_status_code =
-      buf_pool_resize_status_code.load();
-
-  export_vars.innodb_buffer_pool_resize_status_progress =
-      buf_pool_resize_status_progress.load();
 
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
 
@@ -1646,9 +1588,9 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_os_log_written = srv_stats.os_log_written;
 
-  export_vars.innodb_os_log_fsyncs = log_total_flushes();
+  export_vars.innodb_os_log_fsyncs = fil_n_log_flushes;
 
-  export_vars.innodb_os_log_pending_fsyncs = log_pending_flushes();
+  export_vars.innodb_os_log_pending_fsyncs = fil_n_pending_log_flushes;
 
   export_vars.innodb_os_log_pending_writes = srv_stats.os_log_pending_writes;
 
@@ -1683,10 +1625,7 @@ void srv_export_innodb_status(void) {
     export_vars.innodb_row_lock_time_avg = 0;
   }
 
-  export_vars.innodb_row_lock_time_max =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          lock_sys->n_lock_max_wait_time)
-          .count();
+  export_vars.innodb_row_lock_time_max = lock_sys->n_lock_max_wait_time / 1000;
 
   export_vars.innodb_rows_read = srv_stats.n_rows_read;
 
@@ -1731,7 +1670,7 @@ void srv_export_innodb_status(void) {
   undo::spaces->s_unlock();
 
 #ifdef UNIV_DEBUG
-  rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+  rw_lock_s_lock(&purge_sys->latch);
   trx_id_t done_trx_no = purge_sys->done.trx_no;
 
   /* Purge always deals with transaction end points represented by
@@ -1769,18 +1708,38 @@ void srv_export_innodb_status(void) {
 
 /** A thread which prints the info output by various InnoDB monitors. */
 void srv_monitor_thread() {
-  uint16_t mutex_skipped{0};
+  int64_t sig_count;
+  ib_time_monotonic_t current_time;
+  ib_time_monotonic_t time_elapsed;
+  ulint mutex_skipped;
   bool last_srv_print_monitor = srv_print_innodb_monitor;
 
   ut_ad(!srv_read_only_mode);
 
-  srv_monitor_stats_refreshed_at = std::chrono::steady_clock::now();
-  const auto sleep_interval = std::chrono::seconds{15};
-  while (0 != os_event_wait_time(srv_monitor_event, sleep_interval)) {
-    if (srv_print_innodb_monitor || 0 < srv_innodb_needs_monitoring.load()) {
-      /* Reset mutex_skipped counter every time the condition above becomes
-      true. This is to ensure we will not be blocked by lock_sys global
-      latch for short duration information printing, such as requested by
+  auto last_monitor_time = ut_time_monotonic();
+  srv_last_monitor_time = last_monitor_time;
+
+  mutex_skipped = 0;
+
+loop:
+  /* Wake up every 5 seconds to see if we need to print
+  monitor information or if signaled at shutdown. */
+
+  sig_count = os_event_reset(srv_monitor_event);
+
+  os_event_wait_time_low(srv_monitor_event, 5000000, sig_count);
+
+  current_time = ut_time_monotonic();
+
+  time_elapsed = current_time - last_monitor_time;
+
+  if (time_elapsed > 15) {
+    last_monitor_time = ut_time_monotonic();
+
+    if (srv_print_innodb_monitor) {
+      /* Reset mutex_skipped counter every time srv_print_innodb_monitor
+      changes. This is to ensure we will not be blocked by lock_sys global latch
+      for short duration information printing, such as requested by
       sync_array_print_long_waits() */
       if (!last_srv_print_monitor) {
         mutex_skipped = 0;
@@ -1798,7 +1757,8 @@ void srv_monitor_thread() {
       last_srv_print_monitor = false;
     }
 
-    /* We don't create the temp files or associated mutexes in read-only-mode */
+    /* We don't create the temp files or associated
+    mutexes in read-only-mode */
 
     if (!srv_read_only_mode && srv_innodb_status) {
       mutex_enter(&srv_monitor_file_mutex);
@@ -1814,16 +1774,11 @@ void srv_monitor_thread() {
       os_file_set_eof(srv_monitor_file);
       mutex_exit(&srv_monitor_file_mutex);
     }
-
-    if (srv_monitor_stats_refreshed_at + std::chrono::minutes{1} <
-        std::chrono::steady_clock::now() + sleep_interval) {
-      /* We refresh InnoDB Monitor values so that averages are printed from at
-      most 60 last seconds and at least 15 seconds*/
-
-      srv_refresh_innodb_monitor_stats();
-    }
   }
-  ut_ad(SRV_SHUTDOWN_CLEANUP <= srv_shutdown_state.load());
+
+  if (srv_shutdown_state.load() < SRV_SHUTDOWN_CLEANUP) {
+    goto loop;
+  }
 }
 
 /** A thread which prints warnings about semaphore waits which have lasted
@@ -1853,23 +1808,27 @@ loop:
 
   if (new_lsn < old_lsn) {
     ib::error(ER_IB_MSG_1046, ulonglong{old_lsn}, ulonglong{new_lsn});
-    ut_d(ut_error);
+    ut_ad(0);
   }
 
   old_lsn = new_lsn;
 
-  /* Update the statistics collected for deciding LRU eviction policy.
-  NOTE: While this doesn't relate to error monitoring, it's here for historical
-  reasons, as it depends on being called ~1Hz. It is lock-free, so can't cause a
-  deadlock itself. */
+  if (ut_difftime(ut_time_monotonic(), srv_last_monitor_time) > 60) {
+    /* We refresh InnoDB Monitor values so that averages are
+    printed from at most 60 last seconds */
+
+    srv_refresh_innodb_monitor_stats();
+  }
+
+  /* Update the statistics collected for deciding LRU
+  eviction policy. */
   buf_LRU_stat_update();
 
   /* In case mutex_exit is not a memory barrier, it is
   theoretically possible some threads are left waiting though
   the semaphore is already released. Wake up those threads: */
-  sync_arr_wake_threads_if_sema_free();
 
-  sync_array_detect_deadlock();
+  sync_arr_wake_threads_if_sema_free();
 
   if (sync_array_print_long_waits(&waiter, &sema) && sema == old_sema &&
       waiter == old_waiter) {
@@ -1891,7 +1850,7 @@ loop:
 
   sig_count = os_event_reset(srv_error_event);
 
-  os_event_wait_time_low(srv_error_event, std::chrono::seconds{1}, sig_count);
+  os_event_wait_time_low(srv_error_event, 1000000, sig_count);
 
   if (srv_shutdown_state.load() < SRV_SHUTDOWN_CLEANUP) {
     goto loop;
@@ -1906,8 +1865,8 @@ This is polled during the final phase of shutdown.
 The first phase of server shutdown must have already been executed
 (or the server must not have been fully started up).
 @see srv_pre_dd_shutdown()
-@retval true    if any thread is active
-@retval false   if no thread is active */
+@retval true	if any thread is active
+@retval false	if no thread is active */
 bool srv_master_thread_is_active() {
   return (srv_thread_is_active(srv_threads.m_master));
 }
@@ -1936,7 +1895,7 @@ void srv_active_wake_master_thread_low() {
       ut_a(srv_slot_get_type(slot) == SRV_MASTER);
 
       if (slot->suspended) {
-        slot->suspended = false;
+        slot->suspended = FALSE;
 
         ++srv_sys->n_threads_active[SRV_MASTER];
 
@@ -1980,7 +1939,8 @@ ulint srv_get_activity_count(void) {
 
 /** Check if there has been any activity.
  @return false if no change in activity counter. */
-bool srv_check_activity(ulint old_activity_count) /*!< in: old activity count */
+ibool srv_check_activity(
+    ulint old_activity_count) /*!< in: old activity count */
 {
   return (srv_sys == nullptr ? false
                              : srv_sys->activity_count != old_activity_count);
@@ -1993,7 +1953,7 @@ static ulint srv_master_evict_from_table_cache(
 {
   ulint n_tables_evicted = 0;
 
-  rw_lock_x_lock(dict_operation_lock, UT_LOCATION_HERE);
+  rw_lock_x_lock(dict_operation_lock);
 
   dict_mutex_enter_for_mysql();
 
@@ -2010,19 +1970,19 @@ static ulint srv_master_evict_from_table_cache(
 /** This function prints progress message every 60 seconds during server
  shutdown, for any activities that master thread is pending on. */
 static void srv_shutdown_print_master_pending(
-    std::chrono::steady_clock::time_point *last_print_time, /*!< last time the
-                                          function print the message */
-    ulint n_tables_to_drop, /*!< number of tables to
-                            be dropped */
-    ulint n_bytes_merged)   /*!< number of change buffer
-                            just merged */
+    ib_time_monotonic_t *last_print_time, /*!< last time the function
+                                          print the message */
+    ulint n_tables_to_drop,               /*!< number of tables to
+                                          be dropped */
+    ulint n_bytes_merged)                 /*!< number of change buffer
+                                          just merged */
 {
-  const auto current_time = std::chrono::steady_clock::now();
+  const auto current_time = ut_time_monotonic();
 
   const auto time_elapsed = current_time - *last_print_time;
 
-  if (time_elapsed > std::chrono::seconds(60)) {
-    *last_print_time = std::chrono::steady_clock::now();
+  if (time_elapsed > 60) {
+    *last_print_time = ut_time_monotonic();
 
     if (n_tables_to_drop) {
       ib::info(ER_IB_MSG_1048, ulonglong{n_tables_to_drop});
@@ -2058,8 +2018,14 @@ static void srv_master_do_disabled_loop(void) {
   srv_main_thread_op_info = "";
 }
 
-void srv_master_thread_disabled_debug_update(THD *, SYS_VAR *, void *,
-                                             const void *save) {
+/** Disables master thread. It's used by:
+        SET GLOBAL innodb_master_thread_disabled_debug = 1 (0).
+@param[in]	thd		thread handle
+@param[in]	var		pointer to system variable
+@param[out]	var_ptr		where the formal string goes
+@param[in]	save		immediate result from check function */
+void srv_master_thread_disabled_debug_update(THD *thd, SYS_VAR *var,
+                                             void *var_ptr, const void *save) {
   /* This method is protected by mutex, as every SET GLOBAL .. */
   ut_ad(srv_master_thread_disabled_event != nullptr);
 
@@ -2075,14 +2041,15 @@ void srv_master_thread_disabled_debug_update(THD *, SYS_VAR *, void *,
 }
 #endif /* UNIV_DEBUG */
 
-#ifdef UNIV_LINUX
 /** Calculates difference between two timeval values.
-@param[in]      a       later timeval
-@param[in]      b       earlier timeval
+@param[in]	a	later timeval
+@param[in]	b	earlier timeval
 @return a - b; number of microseconds between b and a */
 [[maybe_unused]] static int64_t timeval_diff_us(timeval a, timeval b) {
   return ((a.tv_sec - b.tv_sec) * 1000000LL + a.tv_usec - b.tv_usec);
 }
+
+#ifdef UNIV_LINUX
 
 /** Updates statistics about current CPU usage. */
 static void srv_update_cpu_usage() {
@@ -2171,7 +2138,7 @@ static void srv_update_cpu_usage() {
 Do not cast a pointer to a FILETIME structure to either a ULARGE_INTEGER* or
 __int64* value because it can cause alignment faults on 64-bit Windows.
 */
-static uint64_t FILETIME_to_microseconds(const FILETIME &ft) {
+static uint64 FILETIME_to_microseconds(const FILETIME &ft) {
   ULARGE_INTEGER ulg;
   ulg.HighPart = ft.dwHighDateTime;
   ulg.LowPart = ft.dwLowDateTime;
@@ -2185,8 +2152,8 @@ static void srv_update_cpu_usage() {
 
   static Clock_point last_time = Clock::now();
 
-  static uint64_t last_cpu_utime;
-  static uint64_t last_cpu_stime;
+  static uint64 last_cpu_utime;
+  static uint64 last_cpu_stime;
   static bool last_cpu_times_set = false;
 
   Clock_point cur_time = Clock::now();
@@ -2211,8 +2178,8 @@ static void srv_update_cpu_usage() {
     return;
   }
 
-  uint64_t cur_cpu_utime = FILETIME_to_microseconds(process_user_time);
-  uint64_t cur_cpu_stime = FILETIME_to_microseconds(process_kernel_time);
+  uint64 cur_cpu_utime = FILETIME_to_microseconds(process_user_time);
+  uint64 cur_cpu_stime = FILETIME_to_microseconds(process_kernel_time);
   if (!last_cpu_times_set) {
     last_cpu_utime = cur_cpu_utime;
     last_cpu_stime = cur_cpu_stime;
@@ -2255,7 +2222,7 @@ static void srv_update_cpu_usage() {
 
   int n_cpu = 0;
   constexpr int MAX_CPU_N = 64;
-  uint64_t j = 1;
+  uint64 j = 1;
   for (int i = 0; i < MAX_CPU_N; ++i) {
     if (j & process_affinity_mask) {
       ++n_cpu;
@@ -2292,13 +2259,13 @@ static void srv_update_cpu_usage() {
 
 /** Perform the tasks that the master thread is supposed to do when the
  server is active. There are two types of tasks. The first category is
- of such tasks which are performed at each invocation of this function.
+ of such tasks which are performed at each inovcation of this function.
  We assume that this function is called roughly every second when the
  server is active. The second category is of such tasks which are
  performed at some interval e.g.: purge, dict_LRU cleanup etc. */
 static void srv_master_do_active_tasks(void) {
-  const auto cur_time = std::chrono::steady_clock::now();
-  static std::chrono::steady_clock::time_point last_dict_lru_check;
+  const auto cur_time = ut_time_monotonic();
+  auto counter_time = ut_time_monotonic_us();
 
   /* First do the tasks that we are suppose to do at each
   invocation of this function. */
@@ -2310,13 +2277,10 @@ static void srv_master_do_active_tasks(void) {
   /* ALTER TABLE in MySQL requires on Unix that the table handler
   can drop tables lazily after there no longer are SELECT
   queries to them. */
-  {
-    srv_main_thread_op_info = "doing background drop tables";
-    const auto counter_time = std::chrono::steady_clock::now();
-    row_drop_tables_for_mysql_in_background();
-    MONITOR_INC_TIME(MONITOR_SRV_BACKGROUND_DROP_TABLE_MICROSECOND,
-                     counter_time);
-  }
+  srv_main_thread_op_info = "doing background drop tables";
+  row_drop_tables_for_mysql_in_background();
+  MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_BACKGROUND_DROP_TABLE_MICROSECOND,
+                                 counter_time);
 
   ut_d(srv_master_do_disabled_loop());
 
@@ -2326,13 +2290,11 @@ static void srv_master_do_active_tasks(void) {
   }
 
   /* Do an ibuf merge */
-  {
-    srv_main_thread_op_info = "doing insert buffer merge";
-    const auto counter_time = std::chrono::steady_clock::now();
-
-    ibuf_merge_in_background(false);
-    MONITOR_INC_TIME(MONITOR_SRV_IBUF_MERGE_MICROSECOND, counter_time);
-  }
+  srv_main_thread_op_info = "doing insert buffer merge";
+  counter_time = ut_time_monotonic_us();
+  ibuf_merge_in_background(false);
+  MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_IBUF_MERGE_MICROSECOND,
+                                 counter_time);
 
   /* Flush logs if needed */
   log_buffer_sync_in_background();
@@ -2351,15 +2313,14 @@ static void srv_master_do_active_tasks(void) {
     srv_wake_purge_thread_if_not_active();
   }
 
-  if (cur_time - last_dict_lru_check > SRV_MASTER_DICT_LRU_INTERVAL) {
-    last_dict_lru_check = cur_time;
+  if (cur_time % SRV_MASTER_DICT_LRU_INTERVAL == 0) {
     srv_main_thread_op_info = "enforcing dict cache limit";
-    const auto counter_time = std::chrono::steady_clock::now();
     ulint n_evicted = srv_master_evict_from_table_cache(50);
     if (n_evicted != 0) {
       MONITOR_INC_VALUE(MONITOR_SRV_DICT_LRU_EVICT_COUNT, n_evicted);
     }
-    MONITOR_INC_TIME(MONITOR_SRV_DICT_LRU_MICROSECOND, counter_time);
+    MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_DICT_LRU_MICROSECOND,
+                                   counter_time);
   }
 }
 
@@ -2371,6 +2332,8 @@ static void srv_master_do_active_tasks(void) {
  function but we don't check for that as we are suppose to perform more
  or less same tasks when server is active. */
 static void srv_master_do_idle_tasks(void) {
+  uintmax_t counter_time;
+
   ++srv_main_idle_loops;
 
   MONITOR_INC(MONITOR_MASTER_IDLE_LOOPS);
@@ -2378,28 +2341,25 @@ static void srv_master_do_idle_tasks(void) {
   /* ALTER TABLE in MySQL requires on Unix that the table handler
   can drop tables lazily after there no longer are SELECT
   queries to them. */
-  {
-    srv_main_thread_op_info = "doing background drop tables";
-    const auto counter_time = std::chrono::steady_clock::now();
-    row_drop_tables_for_mysql_in_background();
-    MONITOR_INC_TIME(MONITOR_SRV_BACKGROUND_DROP_TABLE_MICROSECOND,
-                     counter_time);
+  counter_time = ut_time_monotonic_us();
+  srv_main_thread_op_info = "doing background drop tables";
+  row_drop_tables_for_mysql_in_background();
+  MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_BACKGROUND_DROP_TABLE_MICROSECOND,
+                                 counter_time);
 
-    ut_d(srv_master_do_disabled_loop());
+  ut_d(srv_master_do_disabled_loop());
 
-    if (srv_shutdown_state.load() >=
-        SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) {
-      return;
-    }
+  if (srv_shutdown_state.load() >=
+      SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) {
+    return;
   }
 
   /* Do an ibuf merge */
-  {
-    srv_main_thread_op_info = "doing insert buffer merge";
-    const auto counter_time = std::chrono::steady_clock::now();
-    ibuf_merge_in_background(true);
-    MONITOR_INC_TIME(MONITOR_SRV_IBUF_MERGE_MICROSECOND, counter_time);
-  }
+  counter_time = ut_time_monotonic_us();
+  srv_main_thread_op_info = "doing insert buffer merge";
+  ibuf_merge_in_background(true);
+  MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_IBUF_MERGE_MICROSECOND,
+                                 counter_time);
 
   if (srv_shutdown_state.load() >=
       SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) {
@@ -2413,12 +2373,12 @@ static void srv_master_do_idle_tasks(void) {
   }
 
   srv_main_thread_op_info = "enforcing dict cache limit";
-  const auto counter_time = std::chrono::steady_clock::now();
   ulint n_evicted = srv_master_evict_from_table_cache(100);
   if (n_evicted != 0) {
     MONITOR_INC_VALUE(MONITOR_SRV_DICT_LRU_EVICT_COUNT, n_evicted);
   }
-  MONITOR_INC_TIME(MONITOR_SRV_DICT_LRU_MICROSECOND, counter_time);
+  MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_DICT_LRU_MICROSECOND,
+                                 counter_time);
 
   /* Flush logs if needed */
   log_buffer_sync_in_background();
@@ -2432,8 +2392,8 @@ static void srv_master_do_idle_tasks(void) {
                                         operations of shutdown) was printed
  @return true if there might be some work left to be done, false otherwise */
 static bool srv_master_do_pre_dd_shutdown_tasks(
-    std::chrono::steady_clock::time_point *last_print_time) /*!< last time the
-                                          function print the message */
+    ib_time_monotonic_t *last_print_time) /*!< last time the function
+                                          print the message */
 {
   ulint n_tables_to_drop = 0;
 
@@ -2473,8 +2433,8 @@ static bool srv_master_do_pre_dd_shutdown_tasks(
                                         operations of shutdown) was printed
  @return true if there might be some work left to be done, false otherwise */
 static bool srv_master_do_shutdown_tasks(
-    std::chrono::steady_clock::time_point *last_print_time) /*!< last time the
-                                          function print the message */
+    ib_time_monotonic_t *last_print_time) /*!< last time the function
+                                          print the message */
 {
   ulint n_bytes_merged = 0;
 
@@ -2506,31 +2466,38 @@ static bool srv_master_do_shutdown_tasks(
 }
 
 /* Enable REDO tablespace encryption */
-bool srv_enable_redo_encryption() {
-  log_t &log = *log_sys;
+bool srv_enable_redo_encryption(bool is_boot) {
+  /* Start to encrypt the redo log block from now on. */
+  fil_space_t *space = fil_space_get(dict_sys_t::s_log_space_first_id);
 
-  /* While enabling encryption, make sure not to overwrite the existing
-  redo log encryption key (if it has already been generated).
-
-  Note that we can safely check log.m_encryption_metadata without acquiring
-  any of mutexes which are enlisted as required to protect updates of this
-  field. That's because srv_enable_redo_encryption() is called either in
-  startup phase, or during update of innodb_redo_log_encrypt. Server ensures
-  that sysvars are not being updated concurrently and that they are not being
-  updated during startup phase. */
-  if (log_can_encrypt(log)) {
+  /* While enabling encryption, make sure not to overwrite the tablespace
+  key. */
+  if (FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
     return false;
   }
 
   Clone_notify notifier(Clone_notify::Type::SPACE_ALTER_ENCRYPT,
-                        dict_sys_t::s_log_space_id, false);
+                        dict_sys_t::s_log_space_first_id, false);
   if (notifier.failed()) {
     return true;
   }
 
-  /* Start to encrypt the redo log block from now on. */
-  if (log_encryption_generate_metadata(log) != DB_SUCCESS) {
-    ib::error(ER_IB_MSG_LOG_FILES_ENCRYPTION_INIT_FAILED);
+  dberr_t err;
+  byte key[Encryption::KEY_LEN];
+  byte iv[Encryption::KEY_LEN];
+
+  Encryption::random_value(key);
+  Encryption::random_value(iv);
+
+  if (!log_write_encryption(key, iv, is_boot)) {
+    ib::error(ER_IB_MSG_1243);
+    return true;
+  }
+
+  fsp_flags_set_encryption(space->flags);
+  err = fil_set_encryption(space->id, Encryption::AES, key, iv);
+  if (err != DB_SUCCESS) {
+    ib::warn(ER_IB_MSG_1244);
     return true;
   }
 
@@ -2540,24 +2507,24 @@ bool srv_enable_redo_encryption() {
 }
 
 /* Set encryption for UNDO tablespace with given space id. */
-bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
+bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
+                                    bool is_boot) {
   ut_ad(fsp_is_undo_tablespace(space_id));
   fil_space_t *space = fil_space_get(space_id);
 
   dberr_t err;
   byte encrypt_info[Encryption::INFO_SIZE];
+  byte key[Encryption::KEY_LEN];
+  byte iv[Encryption::KEY_LEN];
 
-  Encryption_metadata encryption_metadata;
-
-  Encryption::set_or_generate(Encryption::AES, nullptr, nullptr,
-                              encryption_metadata);
+  Encryption::random_value(key);
+  Encryption::random_value(iv);
 
   /* 0 fill encryption info */
   memset(encrypt_info, 0, Encryption::INFO_SIZE);
 
   /* Fill up encryption info to be set */
-  if (!Encryption::fill_encryption_info(encryption_metadata, true,
-                                        encrypt_info)) {
+  if (!Encryption::fill_encryption_info(key, iv, encrypt_info, is_boot, true)) {
     ib::error(ER_IB_MSG_1052, space->name);
     return true;
   }
@@ -2573,8 +2540,7 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
 
   /* Update In-Mem encryption information for UNDO tablespace */
   fsp_flags_set_encryption(space->flags);
-  err = fil_set_encryption(space->id, encryption_metadata.m_type,
-                           encryption_metadata.m_key, encryption_metadata.m_iv);
+  err = fil_set_encryption(space->id, Encryption::AES, key, iv);
   if (err != DB_SUCCESS) {
     ib::error(ER_IB_MSG_1054, space->name, int{err}, ut_strerr(err));
     return true;
@@ -2584,7 +2550,7 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
 }
 
 /* Enable UNDO tablespace encryption */
-bool srv_enable_undo_encryption() {
+bool srv_enable_undo_encryption(bool is_boot) {
   /* Make sure undo::ddl_mutex is owned. */
   ut_ad(mutex_own(&undo::ddl_mutex));
   bool ret_val = false;
@@ -2622,7 +2588,7 @@ bool srv_enable_undo_encryption() {
     mtr_start(&mtr);
     mtr_x_lock_space(space, &mtr);
 
-    if (set_undo_tablespace_encryption(undo_space->id(), &mtr)) {
+    if (set_undo_tablespace_encryption(undo_space->id(), &mtr, is_boot)) {
       mtr_commit(&mtr);
       undo_space->rsegs()->s_unlock();
       ret_val = true;
@@ -2656,8 +2622,10 @@ static void srv_master_wait(srv_slot_t *slot) {
 
   srv_suspend_thread(slot);
 
-  /* DO NOT CHANGE THIS STRING.
-  InnoDB manual also mentions this string in several places. */
+  /* DO NOT CHANGE THIS STRING. innobase_start_or_create_for_mysql()
+  waits for database activity to die down when converting < 4.1.x
+  databases, and relies on this string being exactly as it is. InnoDB
+  manual also mentions this string in several places. */
   srv_main_thread_op_info = "waiting for server activity";
 
   os_event_wait(slot->event);
@@ -2712,7 +2680,7 @@ static void srv_master_pre_dd_shutdown_loop() {
     return state == SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS ||
            state == SRV_SHUTDOWN_EXIT_THREADS;
   }));
-  auto last_print_time = std::chrono::steady_clock::now();
+  auto last_print_time = ut_time_monotonic();
   while (srv_shutdown_state.load() < SRV_SHUTDOWN_EXIT_THREADS &&
          srv_master_do_pre_dd_shutdown_tasks(&last_print_time)) {
     /* Shouldn't loop here in case of very fast shutdown */
@@ -2726,7 +2694,7 @@ static void srv_master_shutdown_loop() {
     return state == SRV_SHUTDOWN_MASTER_STOP ||
            state == SRV_SHUTDOWN_EXIT_THREADS;
   }));
-  auto last_print_time = std::chrono::steady_clock::now();
+  auto last_print_time = ut_time_monotonic();
   while (srv_shutdown_state.load() < SRV_SHUTDOWN_EXIT_THREADS &&
          srv_master_do_shutdown_tasks(&last_print_time)) {
     /* Shouldn't loop here in case of very fast shutdown */
@@ -2842,7 +2810,11 @@ void srv_worker_thread() {
 
   THD *thd = create_internal_thd();
 
-  purge_sys->is_this_a_purge_thread = true;
+  rw_lock_x_lock(&purge_sys->latch);
+
+  purge_sys->thds.insert(thd);
+
+  rw_lock_x_unlock(&purge_sys->latch);
 
   slot = srv_reserve_slot(SRV_WORKER);
 
@@ -2876,7 +2848,7 @@ void srv_worker_thread() {
 
   srv_free_slot(slot);
 
-  rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
+  rw_lock_x_lock(&purge_sys->latch);
 
   ut_a(!purge_sys->running);
   ut_a(purge_sys->state == PURGE_STATE_EXIT);
@@ -2979,15 +2951,15 @@ static void srv_purge_coordinator_suspend(
 
   bool stop = false;
 
-  /** Maximum wait time on the purge event. */
-  constexpr std::chrono::milliseconds SRV_PURGE_MAX_TIMEOUT{10};
+  /** Maximum wait time on the purge event, in micro-seconds. */
+  static const ulint SRV_PURGE_MAX_TIMEOUT = 10000;
 
   int64_t sig_count = srv_suspend_thread(slot);
 
   do {
     ulint ret;
 
-    rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
+    rw_lock_x_lock(&purge_sys->latch);
 
     purge_sys->running = false;
 
@@ -3015,7 +2987,7 @@ static void srv_purge_coordinator_suspend(
     but before this check if another thread sent a wakeup signal. */
 
     if (slot->suspended) {
-      slot->suspended = false;
+      slot->suspended = FALSE;
       ++srv_sys->n_threads_active[slot->type];
       ut_a(srv_sys->n_threads_active[slot->type] == 1);
     }
@@ -3024,7 +2996,7 @@ static void srv_purge_coordinator_suspend(
 
     sig_count = srv_suspend_thread(slot);
 
-    rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
+    rw_lock_x_lock(&purge_sys->latch);
 
     stop = (srv_shutdown_state.load() < SRV_SHUTDOWN_PURGE &&
             purge_sys->state == PURGE_STATE_STOP);
@@ -3068,7 +3040,7 @@ static void srv_purge_coordinator_suspend(
   srv_sys_mutex_enter();
 
   if (slot->suspended) {
-    slot->suspended = false;
+    slot->suspended = FALSE;
     ++srv_sys->n_threads_active[slot->type];
     ut_a(srv_sys->n_threads_active[slot->type] == 1);
   }
@@ -3082,7 +3054,11 @@ void srv_purge_coordinator_thread() {
 
   THD *thd = create_internal_thd();
 
-  purge_sys->is_this_a_purge_thread = true;
+  rw_lock_x_lock(&purge_sys->latch);
+
+  purge_sys->thds.insert(thd);
+
+  rw_lock_x_unlock(&purge_sys->latch);
 
   ulint n_total_purged = ULINT_UNDEFINED;
 
@@ -3091,7 +3067,7 @@ void srv_purge_coordinator_thread() {
   ut_a(trx_purge_state() == PURGE_STATE_INIT);
   ut_a(srv_force_recovery < SRV_FORCE_NO_BACKGROUND);
 
-  rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
+  rw_lock_x_lock(&purge_sys->latch);
 
   purge_sys->running = true;
   purge_sys->state = PURGE_STATE_RUN;
@@ -3166,7 +3142,7 @@ void srv_purge_coordinator_thread() {
   srv_free_slot(slot);
 
   /* Note that we are shutting down. */
-  rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
+  rw_lock_x_lock(&purge_sys->latch);
 
   purge_sys->state = PURGE_STATE_EXIT;
 
@@ -3191,7 +3167,7 @@ void srv_purge_coordinator_thread() {
 }
 
 /** Enqueues a task to server task queue and releases a worker thread, if there
-is a suspended one. */
+ is a suspended one. */
 void srv_que_task_enqueue_low(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(!srv_read_only_mode);

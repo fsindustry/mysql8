@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <cstring>
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
@@ -351,7 +350,7 @@ int runTestMaxOperations(NDBT_Context* ctx, NDBT_Step* step){
   ndbout << "Found max operations limit " << maxOpsLimit << endl;
 
   /**
-   * After the peak usage of NdbOperations comes a cool down period
+   * After the peak usage of NdbOperations comes a cool down periode
    * with lower usage. Check that the NdbOperations free list manager
    * will gradually reduce number of free NdbOperations kept for 
    * later reuse.
@@ -421,7 +420,7 @@ int runTestMaxOperations(NDBT_Context* ctx, NDBT_Step* step){
   } //while (coolDownLoops...
 
   /**
-   * It is a pass criteria that cool down period
+   * It is a pass criteria that cool down periode
    * reduced the number of free NdbOperations kept.
    */
   if (freeOperations >= hiFreeOperations)
@@ -1136,7 +1135,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
     }
   }
 
-  // Don't call any setValues
+  // Dont' call any setValues
 
   // Execute should work
   int check = pCon->execute(Commit);
@@ -1191,7 +1190,7 @@ int runUpdateWithoutKeys(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;
   }
 
-  // Don't call any equal or setValues
+  // Dont' call any equal or setValues
 
   // Execute should not work
   int check = pCon->execute(Commit);
@@ -1251,7 +1250,7 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
 	}
       }
     
-      // Don't call any getValues
+      // Dont' call any getValues
     
       // Execute should work
       int check = pCon->execute(cm == 0 ? NoCommit : Commit);
@@ -1291,7 +1290,7 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
     }
     
     
-    // Don't call any getValues
+    // Dont' call any getValues
     
     // Execute should work
     int check = pCon->execute(NoCommit);
@@ -1542,7 +1541,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
     scans.push_back(pOp);
   }
 
-  // Don't call any equal or setValues
+  // Dont' call any equal or setValues
 
   // Execute should not work
   int check = pCon->execute(NoCommit);
@@ -1953,7 +1952,7 @@ int runNdbClusterConnectionDelete_connection_owner(NDBT_Context* ctx,
 
   g_cluster_connection = con;
 
-  // Signal other thread that cluster connection has been created
+  // Signal other thread that cluster connection has been creted
   ctx->setProperty("CREATED", 1);
 
   // Now wait for the other thread to use the connection
@@ -2090,7 +2089,7 @@ int runTestExecuteAsynch(NDBT_Context* ctx, NDBT_Step* step){
 
   NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
   if (pOp == NULL){
-    NDB_ERR(pCon->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     pNdb->closeTransaction(pCon);
     delete pNdb;
     return NDBT_FAILED;
@@ -2885,372 +2884,7 @@ testNdbRecordCICharPKUpdate(NDBT_Context* ctx, NDBT_Step* step)
   pNdb->getDictionary()->dropTable(tab.getName());
 
   return NDBT_OK;
-}
-
-int
-testPKUpdateWithSetValue(NDBT_Context* ctx, NDBT_Step* step)
-{
-  /* Bug#35106292:
-   *    NDB API should allow to setValue() of a PK column
-   *    to the same or equal value
-   *
-   * Test change a PK value using setValue() and its related
-   * interpreter and OO_SETVALUE methods.
-   *
-   * Update to an identival value, or a value 'compared as equal',
-   * should be allowed. We cant check this in the API (without first reading
-   * the value). Thus we have to relly on the data nodes returning an
-   * error:897 for such PK update violations.
-   *
-   * Note that similar functionality has been provided by the NdbRecord
-   * interface for years, but the set value's interface used to be stricter
-   * by returning error 4202 for any PK value assignments. (Even identical
-   * NOOP value updates)
-   */
-  Ndb* pNdb = GETNDB(step);
-  const NdbDictionary::Table* pTab= ctx->getTab();
   
-  /* Run as a 'T1' testcase - do nothing for other tables */
-  if (strcmp(pTab->getName(), "T1") != 0)
-    return NDBT_OK;
-
-  CHARSET_INFO* charset= NULL;
-  const char* csname="latin1_general_ci";
-  charset= get_charset_by_name(csname, MYF(0));
-
-  if (charset == NULL)
-  {
-    ndbout << "Couldn't get charset " << csname << endl;
-    return NDBT_FAILED;
-  }
-
-  /* Create table with required schema */
-  NdbDictionary::Table tab;
-  tab.setName("TAB_PKUPD");
-
-  NdbDictionary::Column pk1;
-  pk1.setName("PK1");
-  pk1.setType(NdbDictionary::Column::Char);
-  pk1.setLength(3);
-  pk1.setNullable(false);
-  pk1.setPrimaryKey(true);
-  pk1.setCharset(charset);
-  tab.addColumn(pk1);
-
-  NdbDictionary::Column pk2;
-  pk2.setName("PK2");
-  pk2.setType(NdbDictionary::Column::Unsigned);
-  pk2.setNullable(false);
-  pk2.setPrimaryKey(true);
-  tab.addColumn(pk2);
-
-  NdbDictionary::Column col1;
-  col1.setName("COL1");
-  col1.setType(NdbDictionary::Column::Unsigned);
-  col1.setNullable(false);
-  tab.addColumn(col1);
-
-  NdbDictionary::Column col2;
-  col2.setName("COL2");
-  col2.setType(NdbDictionary::Column::Unsigned);
-  col2.setNullable(false);
-  tab.addColumn(col2);
-
-  pNdb->getDictionary()->dropTable(tab.getName());
-  CHECKE(pNdb->getDictionary()->createTable(tab) == 0, (*pNdb->getDictionary()));
-  pTab= pNdb->getDictionary()->getTable(tab.getName());
-
-  NdbTransaction *pTrans;
-  NdbOperation *pOp;
-
-  // Insert the test tuple ['xyz',1]
-  CHECK(pTrans = pNdb->startTransaction());
-  CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-  CHECK(pOp->insertTuple() == 0);
-  CHECK(pOp->setValue("PK1", "xyz") == 0);
-  CHECK(pOp->setValue("PK2", 1) == 0);
-  CHECK(pOp->setValue("COL1", 1) == 0);
-  CHECK(pOp->setValue("COL2", 2) == 0);
-  CHECK(pTrans->execute(Commit) == 0);
-  pTrans->close();
-
-  //////////////////////////////////////////////////////////
-  // Test using either update(i==0) or write(i==1) operations.
-  for (int i = 0; i < 2; i++) {
-    // Start test: Update of both PK's to an identical value is OK:
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->updateTuple() == 0);
-    } else {
-      CHECK(pOp->writeTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->setValue("PK1", "xyz") == 0);
-    CHECK(pOp->setValue("PK2", 1) == 0);
-    CHECK(pTrans->execute(NoCommit) == 0);
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // Update of the case insensitive char key to upper case is OK (xyz->XYZ)
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->updateTuple() == 0);
-    } else {
-      CHECK(pOp->writeTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->setValue("PK1", "XYZ") == 0);
-    CHECK(pTrans->execute(NoCommit) == 0);
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // Update of char key to an unequal 'xxx' value should fail -> error 897
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->updateTuple() == 0);
-    } else {
-      CHECK(pOp->writeTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->setValue("PK1", "xxx") == 0);
-    CHECK(pTrans->execute(NoCommit) != 0);
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // Update of numeric key to an unequal value should fail -> error 897
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->updateTuple() == 0);
-    } else {
-      CHECK(pOp->writeTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->setValue("PK2", 2) == 0);
-    CHECK(pTrans->execute(NoCommit) != 0);
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    /////////////////
-    // Similar test cases using interpreter code to write_attr() value
-    // Reassign '1' to PK2 should be allowed
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->load_const_u32(1, 1) == 0);           // Reg#1 <- 1
-    CHECKE(pOp->write_attr("PK2", 1) == 0, (*pOp));  // Reg#1 -> PK2
-    CHECKE(pTrans->execute(NoCommit) == 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // Change PK2 to '2' -> error 897
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->load_const_u32(1, 2) == 0);           // Reg#1 <- 2
-    CHECKE(pOp->write_attr("PK2", 1) == 0, (*pOp));  // Reg#1 -> PK2
-    CHECKE(pTrans->execute(NoCommit) != 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    ///////////////
-    // Test cases using incValue() to change the PK value.
-    //  - Incrementing with '0' should be allowed
-    //  - Any other increment, which actually change the value -> Error 897
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->incValue("PK2", (Uint32)0) == 0);
-    CHECKE(pTrans->execute(NoCommit) == 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // incValue(1) -> Error 897
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->incValue("PK2", (Uint32)1) == 0);
-    CHECKE(pTrans->execute(NoCommit) != 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // Assign PK2 value from some other column value.
-    // OK if value didn't change
-    // PK2 <- COL1  -> Ok as values are still the same
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->read_attr("COL1", 1) == 0);
-    CHECK(pOp->write_attr("PK2", 1) == 0);
-    CHECKE(pTrans->execute(NoCommit) == 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // PK2 <- COL2 -> Error 897 as values did change
-    CHECK(pTrans = pNdb->startTransaction());
-    CHECK(pOp = pTrans->getNdbOperation(pTab->getName()));
-    if (i == 0) {
-      CHECK(pOp->interpretedUpdateTuple() == 0);
-    } else {
-      CHECK(pOp->interpretedWriteTuple() == 0);
-    }
-    CHECK(pOp->equal("PK1", "xyz") == 0);
-    CHECK(pOp->equal("PK2", 1) == 0);
-    CHECK(pOp->read_attr("COL2", 1) == 0);
-    CHECK(pOp->write_attr("PK2", 1) == 0);
-    CHECKE(pTrans->execute(NoCommit) != 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    ///////////////
-    // Test usage of OO_SETVALUE.
-    // It is part of the NdbRecord updateTuple() interface, but
-    // allows value updates in a NdbRecAttr like fashion ... and with
-    // the NdbRecAttr value check semantics as well.
-    //
-    // First set up the NdbRecord requires stuff
-    const NdbRecord* tabRec= pTab->getDefaultRecord();
-    const Uint32 rowLen= NDB_MAX_TUPLE_SIZE_IN_WORDS << 2;
-    char rowBuf[rowLen];
-    char* pk1Ptr= NdbDictionary::getValuePtr(tabRec, rowBuf, 0);
-    Uint32* pk2Ptr= (Uint32*) NdbDictionary::getValuePtr(tabRec, rowBuf, 1);
-    memcpy(pk1Ptr, "xyz", 3);
-    *pk2Ptr = 1;
-    unsigned char mask = 0x03;
-
-    // In this test case we update the PK1 char-key
-    NdbOperation::SetValueSpec setValueSpec;
-    setValueSpec.column = pTab->getColumn("PK1");
-    NdbOperation::OperationOptions opts;
-    opts.optionsPresent= NdbOperation::OperationOptions::OO_SETVALUE;
-    opts.extraSetValues= &setValueSpec;
-    opts.numExtraSetValues = 1;
-
-    // OO_SETVALUE PK to the identical 'xyz' value -> OK
-    setValueSpec.value = "xyz";
-    CHECK(pTrans = pNdb->startTransaction());
-    if (i == 0) {
-      CHECKE(pTrans->updateTuple(tabRec,
-                                 rowBuf,
-                                 tabRec,
-                                 NULL,
-                                 &mask,
-                                 &opts,
-                                 sizeof(opts)), (*pTrans));
-    } else {
-      CHECKE(pTrans->writeTuple(tabRec,
-                                rowBuf,
-                                tabRec,
-                                NULL,
-                                &mask,
-                                &opts,
-                                sizeof(opts)), (*pTrans));
-    }
-    CHECKE(pTrans->execute(NoCommit) == 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // OO_SETVALUE PK to the equal 'XYZ' value -> OK
-    setValueSpec.value = "XYZ";
-    CHECK(pTrans = pNdb->startTransaction());
-    if (i == 0) {
-      CHECKE(pTrans->updateTuple(tabRec,
-                                 rowBuf,
-                                 tabRec,
-                                 NULL,
-                                 &mask,
-                                 &opts,
-                                 sizeof(opts)), (*pTrans));
-    } else {
-      CHECKE(pTrans->writeTuple(tabRec,
-                                rowBuf,
-                                tabRec,
-                                NULL,
-                                &mask,
-                                &opts,
-                                sizeof(opts)), (*pTrans));
-    }
-    CHECKE(pTrans->execute(NoCommit) == 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 0);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-
-    // OO_SETVALUE PK to the non equal 'XXX' value -> Error 897
-    setValueSpec.value = "XXX";
-    CHECK(pTrans = pNdb->startTransaction());
-    if (i == 0) {
-      CHECKE(pTrans->updateTuple(tabRec,
-                                 rowBuf,
-                                 tabRec,
-                                 NULL,
-                                 &mask,
-                                 &opts,
-                                 sizeof(opts)), (*pTrans));
-    } else {
-      CHECKE(pTrans->writeTuple(tabRec,
-                                rowBuf,
-                                tabRec,
-                                NULL,
-                                &mask,
-                                &opts,
-                                sizeof(opts)), (*pTrans));
-    }
-    CHECKE(pTrans->execute(NoCommit) != 0, (*pTrans));
-    CHECK(pTrans->getNdbError().code == 897);
-    CHECK(pTrans->execute(Rollback) == 0);
-    pTrans->close();
-  }
-
-  pNdb->getDictionary()->dropTable(tab.getName());
-  return NDBT_OK;
 }
 
 int
@@ -3980,7 +3614,7 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
     NdbOperation * pOp = pTrans1->getNdbOperation(ctx->getTab()->getName());
     if (pOp == NULL)
     {
-      NDB_ERR(pTrans1->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
@@ -3998,7 +3632,7 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
     NdbOperation * pOp = pTrans2->getNdbOperation(ctx->getTab()->getName());
     if (pOp == NULL)
     {
-      NDB_ERR(pTrans2->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
@@ -5770,9 +5404,9 @@ public:
 
   void freeStorage()
   {
-    delete[] ptrs[0].p;
-    delete[] ptrs[1].p;
-    delete[] ptrs[2].p;
+    free(ptrs[0].p);
+    free(ptrs[1].p);
+    free(ptrs[2].p);
   }
 
   int appendToSection(Uint32 secId, LinearSectionPtr ptr) override
@@ -5781,15 +5415,10 @@ public:
     require(secId < 3);
     
     Uint32 existingSz = ptrs[secId].sz;
-    const Uint32* existingBuff = ptrs[secId].p;
+    Uint32* existingBuff = ptrs[secId].p;
 
     Uint32 newSize = existingSz + ptr.sz;
-    Uint32* newBuff = new Uint32[newSize];
-    if (existingBuff)
-    {
-      memcpy(newBuff, existingBuff, existingSz * 4);
-      delete[] existingBuff;
-    }
+    Uint32* newBuff = (Uint32*) realloc(existingBuff, newSize * 4);
 
     if (!newBuff)
       return -1;
@@ -7223,7 +6852,7 @@ static void unusedCallback(int, NdbTransaction*, void*)
 
 /**
  * Test that Ndb::closeTransaction() and/or Ndb-d'tor is
- * able to do proper cleanup of NdbTransactions which
+ * able to do propper cleanup of NdbTransactions which
  * are in some 'incomplete' states:
  *  - Transactions being closed before executed.
  *  - Transactions being closed without, or only partially
@@ -8168,81 +7797,6 @@ int runDatabaseAndSchemaName(NDBT_Context* ctx, NDBT_Step*)
   return NDBT_OK;
 }
 
-int
-testSlowConnectEnable(NDBT_Context* ctx, NDBT_Step* step)
-{
-  /**
-   * Test behaviour of API client with slow connection
-   * enabling at the data node
-   */
-  NdbRestarter restarter;
-
-  ndbout_c("Delay ENABLE_COM on data nodes");
-  restarter.insertErrorInAllNodes(9500);
-
-  Ndb_cluster_connection* otherConnection = NULL;
-  Ndb* otherNdb = NULL;
-  int result = NDBT_FAILED;
-
-  do
-  {
-    ndbout_c("Setup new connection");
-    char connectString[256];
-    ctx->m_cluster_connection.get_connectstring(connectString,
-                                                sizeof(connectString));
-    otherConnection= new Ndb_cluster_connection(connectString);
-    if (otherConnection == NULL)
-    {
-      ndbout << "Could not create extra API connection" << endl;
-      break;
-    }
-
-    int rc = otherConnection->connect();
-    if (rc != 0)
-    {
-      ndbout << "Connection failed with " << rc << endl;
-      break;
-    }
-
-    if (otherConnection->wait_until_ready(30,30) != 0)
-    {
-      ndbout << "Connection wait until ready failed." << endl;
-      break;
-    }
-
-    ndbout_c("Connection ready");
-
-    otherNdb = new Ndb(otherConnection, "TEST_DB");
-    otherNdb->init();
-
-    if (otherNdb->waitUntilReady(30) != 0)
-    {
-      ndbout << "Ndb wait until ready failed." << endl;
-      break;
-    }
-
-    ndbout_c("Ndb ready");
-
-    const char* tabName = ctx->getTab()->getName();
-    if (otherNdb->getDictionary()->getTable(tabName) == NULL)
-    {
-      ndbout << "Get table failed with error "
-             << otherNdb->getNdbError() << endl;
-      break;
-    }
-
-    ndbout_c("Table retrieved");
-
-    result = NDBT_OK;
-  } while (0);
-
-  restarter.insertErrorInAllNodes(0);
-
-  delete otherNdb;
-  delete otherConnection;
-  return result;
-}
-
 
 NDBT_TESTSUITE(testNdbApi);
 TESTCASE("MaxNdb", 
@@ -8379,14 +7933,8 @@ TESTCASE("NdbRecordPKUpdate",
   INITIALIZER(testNdbRecordPKUpdate);
 }
 TESTCASE("NdbRecordCICharPKUpdate",
-         "Verify that a case-insensitive char pk column can be updated "
-         "using the NdbRecord ::updateTuple() interface"){
+         "Verify that a case-insensitive char pk column can be updated"){
   INITIALIZER(testNdbRecordCICharPKUpdate);
-}
-TESTCASE("NdbPKUpdateWithSetValue",
-         "Verify that primary key columns can be updated to 'equal' values "
-         "using NdbRecAttr::setValue()"){
-  INITIALIZER(testPKUpdateWithSetValue);
 }
 TESTCASE("NdbRecordRowLength",
          "Verify that the record row length calculation is correct") {
@@ -8675,11 +8223,6 @@ TESTCASE("DatabaseAndSchemaName",
          "Test functions depending on database and schema name")
 {
   STEP(runDatabaseAndSchemaName);
-}
-TESTCASE("TestSlowConnectEnable",
-         "Test behaviour with slow connection enale")
-{
-  STEP(testSlowConnectEnable);
 }
 
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,22 +28,21 @@
 #include <algorithm>
 #include <utility>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/key.h"
 #include "sql/key_spec.h"
 #include "sql/mem_root_array.h"
 #include "sql/opt_costmodel.h"
 #include "sql/opt_hints.h"
 #include "sql/opt_trace.h"
-#include "sql/range_optimizer/index_range_scan.h"
-#include "sql/range_optimizer/index_range_scan_plan.h"
 #include "sql/range_optimizer/internal.h"
-#include "sql/range_optimizer/path_helpers.h"
 #include "sql/range_optimizer/range_opt_param.h"
+#include "sql/range_optimizer/range_scan.h"
+#include "sql/range_optimizer/range_scan_plan.h"
 #include "sql/range_optimizer/rowid_ordered_retrieval.h"
 #include "sql/range_optimizer/tree.h"
 #include "sql/sql_bitmap.h"
@@ -55,87 +54,161 @@
 #include "sql_string.h"
 
 class Opt_trace_context;
+class QUICK_SELECT_I;
 
-using std::max;
 using std::min;
 
 #ifndef NDEBUG
-static void print_ror_scans(TABLE *table, const char *msg,
-                            const Mem_root_array<ROR_SCAN_INFO *> &ror_scans) {
+static void print_ror_scans_arr(TABLE *table, const char *msg,
+                                ROR_SCAN_INFO **start, ROR_SCAN_INFO **end) {
   DBUG_TRACE;
 
-  StringBuffer<1024> tmp;
-  for (ROR_SCAN_INFO *scan : ror_scans) {
-    if (!tmp.is_empty()) tmp.append(',');
-    tmp.append(table->key_info[scan->keynr].name);
+  char buff[1024];
+  String tmp(buff, sizeof(buff), &my_charset_bin);
+  tmp.length(0);
+  for (; start != end; start++) {
+    if (tmp.length()) tmp.append(',');
+    tmp.append(table->key_info[(*start)->keynr].name);
   }
-  if (tmp.is_empty()) tmp.append(STRING_WITH_LEN("(empty)"));
+  if (!tmp.length()) tmp.append(STRING_WITH_LEN("(empty)"));
   DBUG_PRINT("info", ("ROR key scans (%s): %s", msg, tmp.ptr()));
   fprintf(DBUG_FILE, "ROR key scans (%s): %s", msg, tmp.ptr());
 }
 #endif
 
-/*
-  Get the needed fields used in the query.
-  NOTES
-  Clustered PK members are not put into the bitmap as they are implicitly
-  present in all keys (and it is impossible to avoid reading them).
-*/
-
-OverflowBitset get_needed_fields(const RANGE_OPT_PARAM *param) {
-  TABLE *table = param->table;
-
-  MutableOverflowBitset fields(param->temp_mem_root, table->s->fields);
-
-  for (size_t i = bitmap_get_first_set(table->read_set); i != MY_BIT_NONE;
-       i = bitmap_get_next_set(table->read_set, i)) {
-    fields.SetBit(i);
-  }
-  for (size_t i = bitmap_get_first_set(table->write_set); i != MY_BIT_NONE;
-       i = bitmap_get_next_set(table->write_set, i)) {
-    fields.SetBit(i);
-  }
-
-  uint pk = table->s->primary_key;
-  if (pk != MAX_KEY && table->file->primary_key_is_clustered()) {
-    /* The table uses clustered PK and it is not internally generated */
-    KEY_PART_INFO *key_part = table->key_info[pk].key_part;
-    KEY_PART_INFO *key_part_end =
-        key_part + table->key_info[pk].user_defined_key_parts;
-    for (; key_part != key_part_end; ++key_part)
-      fields.ClearBit(key_part->fieldnr - 1);
-  }
-  return fields;
-}
-
-void trace_basic_info_rowid_intersection(THD *thd, const AccessPath *path,
-                                         const RANGE_OPT_PARAM *param,
-                                         Opt_trace_object *trace_object) {
+void TRP_ROR_INTERSECT::trace_basic_info(THD *thd, const RANGE_OPT_PARAM *,
+                                         Opt_trace_object *trace_object) const {
   trace_object->add_alnum("type", "index_roworder_intersect")
-      .add("rows", path->num_output_rows())
-      .add("cost", path->cost)
-      .add("covering", path->rowid_intersection().is_covering)
-      .add("clustered_pk_scan",
-           path->rowid_intersection().cpk_child != nullptr);
+      .add("rows", records)
+      .add("cost", cost_est)
+      .add("covering", is_covering)
+      .add("clustered_pk_scan", cpk_scan != nullptr);
 
   Opt_trace_context *const trace = &thd->opt_trace;
   Opt_trace_array ota(trace, "intersect_of");
-  for (AccessPath *child : *path->rowid_intersection().children) {
+  for (ROR_SCAN_INFO *cur_scan : intersect_scans) {
+    const KEY &cur_key = table->key_info[cur_scan->keynr];
+    const KEY_PART_INFO *key_part = cur_key.key_part;
+
     Opt_trace_object trace_isect_idx(trace);
-    trace_basic_info(thd, child, param, &trace_isect_idx);
+    trace_isect_idx.add_alnum("type", "range_scan")
+        .add_utf8("index", cur_key.name)
+        .add("rows", cur_scan->records);
+
+    Opt_trace_array trace_range(trace, "ranges");
+    for (const SEL_ARG *current = cur_scan->sel_root->root->first(); current;
+         current = current->next) {
+      String range_info;
+      range_info.set_charset(system_charset_info);
+      for (const SEL_ARG *part = current; part;
+           part = part->next_key_part ? part->next_key_part->root : nullptr) {
+        const KEY_PART_INFO *cur_key_part = key_part + part->part;
+        append_range(&range_info, cur_key_part, part->min_value,
+                     part->max_value, part->min_flag | part->max_flag);
+      }
+      trace_range.add_utf8(range_info.ptr(), range_info.length());
+    }
   }
 }
 
-void trace_basic_info_rowid_union(THD *thd, const AccessPath *path,
-                                  const RANGE_OPT_PARAM *param,
-                                  Opt_trace_object *trace_object) {
+void TRP_ROR_UNION::trace_basic_info(THD *thd, const RANGE_OPT_PARAM *param,
+                                     Opt_trace_object *trace_object) const {
   Opt_trace_context *const trace = &thd->opt_trace;
   trace_object->add_alnum("type", "index_roworder_union");
   Opt_trace_array ota(trace, "union_of");
-  for (AccessPath *child : *path->rowid_union().children) {
-    Opt_trace_object path_info(trace);
-    ::trace_basic_info(thd, child, param, &path_info);
+  for (TABLE_READ_PLAN **current = first_ror; current != last_ror; current++) {
+    Opt_trace_object trp_info(trace);
+    (*current)->trace_basic_info(thd, param, &trp_info);
   }
+}
+
+// A replacement for get_quick_select() for when you already have
+// the ranges available, instead of a SEL_TREE that you need to extract
+// ranges from. Does not support reverse range scans.
+static QUICK_RANGE_SELECT *get_quick_select_local(
+    MEM_ROOT *return_mem_root, TABLE *table, KEY_PART *key, uint keyno,
+    uint mrr_flags, uint mrr_buf_size, uint used_key_parts,
+    Bounds_checked_array<QUICK_RANGE *> ranges) {
+  DBUG_TRACE;
+
+  if (table->key_info[keyno].flags & HA_SPATIAL) {
+    return new (return_mem_root)
+        QUICK_RANGE_SELECT_GEOM(table, keyno, return_mem_root, mrr_flags,
+                                mrr_buf_size, key, ranges, used_key_parts);
+  } else {
+    QUICK_RANGE_SELECT *quick = new (return_mem_root)
+        QUICK_RANGE_SELECT(table, keyno, return_mem_root, mrr_flags,
+                           mrr_buf_size, key, ranges, used_key_parts);
+    return quick;
+  }
+}
+
+QUICK_SELECT_I *TRP_ROR_INTERSECT::make_quick(bool retrieve_full_rows,
+                                              MEM_ROOT *return_mem_root) {
+  QUICK_RANGE_SELECT *quick;
+  DBUG_TRACE;
+
+  QUICK_ROR_INTERSECT_SELECT *quick_intrsect = new (return_mem_root)
+      QUICK_ROR_INTERSECT_SELECT(table,
+                                 (retrieve_full_rows ? (!is_covering) : false),
+                                 return_mem_root);
+  if (quick_intrsect) {
+    assert(quick_intrsect->index == index);
+    DBUG_EXECUTE("info",
+                 print_ror_scans_arr(
+                     table, "creating ROR-intersect", &intersect_scans[0],
+                     &intersect_scans[0] + intersect_scans.size()););
+    for (ROR_SCAN_INFO *current : intersect_scans) {
+      uint idx = current->idx;
+      if (!(quick = get_quick_select_local(
+                return_mem_root, table, key[idx], real_keynr[idx],
+                HA_MRR_SORTED, 0, current->used_key_parts, current->ranges)) ||
+          quick_intrsect->push_quick_back(quick)) {
+        destroy(quick_intrsect);
+        return nullptr;
+      }
+    }
+    if (cpk_scan) {
+      uint idx = cpk_scan->idx;
+      if (!(quick = get_quick_select_local(return_mem_root, table, key[idx],
+                                           real_keynr[idx], HA_MRR_SORTED, 0,
+                                           cpk_scan->used_key_parts,
+                                           cpk_scan->ranges))) {
+        destroy(quick_intrsect);
+        return nullptr;
+      }
+      quick->file = nullptr;
+      quick_intrsect->cpk_quick = quick;
+    }
+    quick_intrsect->records = records;
+    quick_intrsect->cost_est = cost_est;
+  }
+  quick_intrsect->forced_by_hint = forced_by_hint;
+  return quick_intrsect;
+}
+
+QUICK_SELECT_I *TRP_ROR_UNION::make_quick(bool, MEM_ROOT *return_mem_root) {
+  QUICK_ROR_UNION_SELECT *quick_roru;
+  TABLE_READ_PLAN **scan;
+  QUICK_SELECT_I *quick;
+  DBUG_TRACE;
+  /*
+    It is impossible to construct a ROR-union that will not retrieve full
+    rows, ignore retrieve_full_rows parameter.
+  */
+  if ((quick_roru = new (return_mem_root)
+           QUICK_ROR_UNION_SELECT(return_mem_root, table))) {
+    assert(quick_roru->index == index);
+    for (scan = first_ror; scan != last_ror; scan++) {
+      if (!(quick = (*scan)->make_quick(false, return_mem_root)) ||
+          quick_roru->push_quick_back(quick))
+        return nullptr;
+    }
+    quick_roru->records = records;
+    quick_roru->cost_est = cost_est;
+  }
+  quick_roru->forced_by_hint = forced_by_hint;
+  return quick_roru;
 }
 
 /*
@@ -154,9 +227,12 @@ void trace_basic_info_rowid_union(THD *thd, const AccessPath *path,
     ROR scan structure containing a scan for {idx, sel_arg}
 */
 
-ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
-                             SEL_ROOT *sel_root, OverflowBitset needed_fields) {
+static ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
+                                    SEL_ROOT *sel_root,
+                                    const MY_BITMAP *needed_fields) {
   ROR_SCAN_INFO *ror_scan;
+  my_bitmap_map *bitmap_buf1;
+  my_bitmap_map *bitmap_buf2;
   uint keynr;
   DBUG_TRACE;
 
@@ -167,26 +243,39 @@ ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
   ror_scan->sel_root = sel_root;
   ror_scan->records = param->table->quick_rows[keynr];
 
+  if (!(bitmap_buf1 = (my_bitmap_map *)param->return_mem_root->Alloc(
+            param->table->s->column_bitmap_size)))
+    return nullptr;
+  if (!(bitmap_buf2 = (my_bitmap_map *)param->return_mem_root->Alloc(
+            param->table->s->column_bitmap_size)))
+    return nullptr;
+
+  if (bitmap_init(&ror_scan->covered_fields, bitmap_buf1,
+                  param->table->s->fields))
+    return nullptr;
+  if (bitmap_init(&ror_scan->covered_fields_remaining, bitmap_buf2,
+                  param->table->s->fields))
+    return nullptr;
+
+  bitmap_clear_all(&ror_scan->covered_fields);
+
   KEY_PART_INFO *key_part = param->table->key_info[keynr].key_part;
   KEY_PART_INFO *key_part_end =
       key_part + param->table->key_info[keynr].user_defined_key_parts;
-  MutableOverflowBitset covered_fields(param->temp_mem_root,
-                                       needed_fields.capacity());
   for (; key_part != key_part_end; ++key_part) {
-    if (IsBitSet(key_part->fieldnr - 1, needed_fields))
-      covered_fields.SetBit(key_part->fieldnr - 1);
+    if (bitmap_is_set(needed_fields, key_part->fieldnr - 1))
+      bitmap_set_bit(&ror_scan->covered_fields, key_part->fieldnr - 1);
   }
-  ror_scan->covered_fields = std::move(covered_fields);
+  bitmap_copy(&ror_scan->covered_fields_remaining, &ror_scan->covered_fields);
+
   double rows = rows2double(param->table->quick_rows[ror_scan->keynr]);
   ror_scan->index_read_cost =
       param->table->file->index_scan_cost(ror_scan->keynr, 1, rows);
 
   Quick_ranges ranges(param->return_mem_root);
-  unsigned num_exact_key_parts_unused;
   if (get_ranges_from_tree(param->return_mem_root, param->table,
                            param->key[idx], param->real_keynr[idx], sel_root,
-                           MAX_REF_PARTS, &ror_scan->used_key_parts,
-                           &num_exact_key_parts_unused, &ranges)) {
+                           MAX_REF_PARTS, &ror_scan->used_key_parts, &ranges)) {
     return nullptr;
   }
   ror_scan->ranges = {&ranges[0], ranges.size()};
@@ -195,9 +284,33 @@ ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
 }
 
 /**
+  Compare two ROR_SCAN_INFO* by
+    1. Number of fields in this index that are not already covered
+       by other indexes earlier in the intersect ordering: descending
+    2. E(Number of records): ascending
+
+  @param scan1   first ror scan to compare
+  @param scan2   second ror scan to compare
+
+  @return true if scan1 > scan2, false otherwise
+*/
+static bool is_better_intersect_match(const ROR_SCAN_INFO *scan1,
+                                      const ROR_SCAN_INFO *scan2) {
+  if (scan1 == scan2) return false;
+
+  if (scan1->num_covered_fields_remaining > scan2->num_covered_fields_remaining)
+    return false;
+
+  if (scan1->num_covered_fields_remaining < scan2->num_covered_fields_remaining)
+    return true;
+
+  return (scan1->records > scan2->records);
+}
+
+/**
   Sort indexes in an order that is likely to be a good index merge
-  intersection order. After running this function ror_scans are
-  ordered according to this strategy:
+  intersection order. After running this function, [start, ..., end-1]
+  is ordered according to this strategy:
 
     1) Minimize the number of indexes that must be used in the
        intersection. I.e., the index covering most fields not already
@@ -208,68 +321,151 @@ ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
   Note that all permutations of index ordering are not tested, so this
   function may not find the optimal order.
 
-  @param[in,out] ror_scans      ror scans to be used in index merge intersection
+  @param[in,out] start     Pointer to the start of indexes that may
+                           be used in index merge intersection
+  @param         end       Pointer past the last index that may be used.
+  @param         param     Parameter from test_quick_select function.
   @param         needed_fields  Bitmask of fields needed by the query.
-  @param         mem_root       memory root to be used.
 */
-void find_intersect_order(Mem_root_array<ROR_SCAN_INFO *> *ror_scans,
-                          OverflowBitset needed_fields, MEM_ROOT *mem_root) {
-  for (uint index = 0; index < ror_scans->size(); index++) {
-    std::stable_sort(
-        ror_scans->begin() + index, ror_scans->end(),
-        [needed_fields](ROR_SCAN_INFO *a, ROR_SCAN_INFO *b) {
-          /*
-           Compare two ROR_SCAN_INFO* by
-           1. Number of fields in this index that are not already
-           covered by other indexes earlier in the intersect
-           ordering: descending
-           2. E(Number of records): ascending
-          */
-          auto fields_in_a = BitsSetInBoth(a->covered_fields, needed_fields);
-          uint num_fields_a =
-              std::distance(fields_in_a.begin(), fields_in_a.end());
-          auto fields_in_b = BitsSetInBoth(b->covered_fields, needed_fields);
-          uint num_fields_b =
-              std::distance(fields_in_b.begin(), fields_in_b.end());
-          if (num_fields_a < num_fields_b) return false;
-          if (num_fields_a > num_fields_b) return true;
-          return a->records < b->records;
-        });
-    MutableOverflowBitset fields_to_be_covered = needed_fields.Clone(mem_root);
-    for (uint i : BitsSetIn((*ror_scans)[index]->covered_fields))
-      fields_to_be_covered.ClearBit(i);
-    needed_fields = std::move(fields_to_be_covered);
-    if (needed_fields.empty()) break;
+static void find_intersect_order(ROR_SCAN_INFO **start, ROR_SCAN_INFO **end,
+                                 const RANGE_OPT_PARAM *param,
+                                 const MY_BITMAP *needed_fields) {
+  // nothing to sort if there are only zero or one ROR scans
+  if ((start == end) || (start + 1 == end)) return;
+
+  /*
+    Bitmap of fields we would like the ROR scans to cover. Will be
+    modified by the loop below so that when we're looking for a ROR
+    scan in position 'x' in the ordering, all fields covered by ROR
+    scans 0,...,x-1 have been removed.
+  */
+  MY_BITMAP fields_to_cover;
+  my_bitmap_map *map;
+  if (!(map = (my_bitmap_map *)param->temp_mem_root->Alloc(
+            param->table->s->column_bitmap_size)))
+    return;
+  bitmap_init(&fields_to_cover, map, needed_fields->n_bits);
+  bitmap_copy(&fields_to_cover, needed_fields);
+
+  // Sort ROR scans in [start,...,end-1]
+  for (ROR_SCAN_INFO **place = start; place < (end - 1); place++) {
+    /* Placeholder for the best ROR scan found for position 'place' so far */
+    ROR_SCAN_INFO **best = place;
+    ROR_SCAN_INFO **current = place + 1;
+
+    {
+      /*
+        Calculate how many fields in 'fields_to_cover' not already
+        covered by [start,...,place-1] the 'best' index covers. The
+        result is used in is_better_intersect_match() and is valid
+        when finding the best ROR scan for position 'place' only.
+      */
+      bitmap_intersect(&(*best)->covered_fields_remaining, &fields_to_cover);
+      (*best)->num_covered_fields_remaining =
+          bitmap_bits_set(&(*best)->covered_fields_remaining);
+    }
+    for (; current < end; current++) {
+      {
+        /*
+          Calculate how many fields in 'fields_to_cover' not already
+          covered by [start,...,place-1] the 'current' index covers.
+          The result is used in is_better_intersect_match() and is
+          valid when finding the best ROR scan for position 'place' only.
+        */
+        bitmap_intersect(&(*current)->covered_fields_remaining,
+                         &fields_to_cover);
+        (*current)->num_covered_fields_remaining =
+            bitmap_bits_set(&(*current)->covered_fields_remaining);
+
+        /*
+          No need to compare with 'best' if 'current' does not
+          contribute with uncovered fields.
+        */
+        if ((*current)->num_covered_fields_remaining == 0) continue;
+      }
+
+      if (is_better_intersect_match(*best, *current)) best = current;
+    }
+
+    /*
+      'best' is now the ROR scan that will be sorted in position
+      'place'. When searching for the best ROR scans later in the sort
+      sequence we do not need coverage of the fields covered by 'best'
+    */
+    bitmap_subtract(&fields_to_cover, &(*best)->covered_fields);
+    if (best != place) std::swap(*best, *place);
+
+    if (bitmap_is_clear_all(&fields_to_cover))
+      return;  // No more fields to cover
   }
 }
 
-ROR_intersect_plan::ROR_intersect_plan(const RANGE_OPT_PARAM *param,
-                                       size_t num_fields)
-    : m_param(param),
-      m_ror_scans(param->return_mem_root, 0),
-      m_out_rows(m_param->table->file->stats.records),
-      m_covered_fields(
-          MutableOverflowBitset(param->temp_mem_root, num_fields)) {}
+/* Auxiliary structure for incremental ROR-intersection creation */
+typedef struct {
+  const RANGE_OPT_PARAM *param;
+  MY_BITMAP covered_fields; /* union of fields covered by all scans */
+  /*
+    Fraction of table records that satisfies conditions of all scans.
+    This is the number of full records that will be retrieved if a
+    non-index_only index intersection will be employed.
+  */
+  double out_rows;
+  /* true if covered_fields is a superset of needed_fields */
+  bool is_covering;
 
-ROR_intersect_plan &ROR_intersect_plan::operator=(
-    const ROR_intersect_plan &plan) {
-  m_param = plan.m_param;
-  m_ror_scans.clear();
-  for (ROR_SCAN_INFO *scan : plan.m_ror_scans) m_ror_scans.push_back(scan);
-  m_is_covering = plan.m_is_covering;
-  m_covered_fields = plan.m_covered_fields;
-  m_out_rows = plan.m_out_rows;
-  m_total_cost = plan.m_total_cost;
-  m_index_records = plan.m_index_records;
-  m_index_read_cost = plan.m_index_read_cost;
-  return *this;
+  ha_rows index_records;         /* sum(#records to look in indexes) */
+  Cost_estimate index_scan_cost; /* SUM(cost of 'index-only' scans) */
+  Cost_estimate total_cost;
+} ROR_INTERSECT_INFO;
+
+/*
+  Allocate a ROR_INTERSECT_INFO and initialize it to contain zero scans.
+
+  SYNOPSIS
+    ror_intersect_init()
+      param         Parameter from test_quick_select
+
+  RETURN
+    allocated structure
+    NULL on error
+*/
+
+static ROR_INTERSECT_INFO *ror_intersect_init(const RANGE_OPT_PARAM *param) {
+  ROR_INTERSECT_INFO *info;
+  my_bitmap_map *buf;
+  if (!(info = new (param->return_mem_root) ROR_INTERSECT_INFO)) return nullptr;
+  info->param = param;
+  if (!(buf = (my_bitmap_map *)param->temp_mem_root->Alloc(
+            param->table->s->column_bitmap_size)))
+    return nullptr;
+  if (bitmap_init(&info->covered_fields, buf, param->table->s->fields))
+    return nullptr;
+  info->is_covering = false;
+  info->index_scan_cost.reset();
+  info->total_cost.reset();
+  info->index_records = 0;
+  info->out_rows = (double)param->table->file->stats.records;
+  bitmap_clear_all(&info->covered_fields);
+  return info;
+}
+
+static void ror_intersect_cpy(ROR_INTERSECT_INFO *dst,
+                              const ROR_INTERSECT_INFO *src) {
+  dst->param = src->param;
+  memcpy(dst->covered_fields.bitmap, src->covered_fields.bitmap,
+         no_bytes_in_map(&src->covered_fields));
+  dst->out_rows = src->out_rows;
+  dst->is_covering = src->is_covering;
+  dst->index_records = src->index_records;
+  dst->index_scan_cost = src->index_scan_cost;
+  dst->total_cost = src->total_cost;
 }
 
 /*
   Get selectivity of adding a ROR scan to the ROR-intersection.
 
   SYNOPSIS
-    get_scan_selectivity()
+    ror_scan_selectivity()
       info  ROR-interection, an intersection of ROR index scans
       scan  ROR scan that may or may not improve the selectivity
             of 'info'
@@ -366,10 +562,10 @@ ROR_intersect_plan &ROR_intersect_plan::operator=(
     adding 'scan' to the intersection does not improve the selectivity.
 */
 
-double ROR_intersect_plan::get_scan_selectivity(
-    const ROR_SCAN_INFO *scan) const {
+static double ror_scan_selectivity(const ROR_INTERSECT_INFO *info,
+                                   const ROR_SCAN_INFO *scan) {
   double selectivity_mult = 1.0;
-  const TABLE *const table = m_param->table;
+  const TABLE *const table = info->param->table;
   const KEY_PART_INFO *const key_part = table->key_info[scan->keynr].key_part;
   /**
     key values tuple, used to store both min_range.key and
@@ -383,7 +579,8 @@ double ROR_intersect_plan::get_scan_selectivity(
   SEL_ARG *tuple_arg = nullptr;
   key_part_map keypart_map = 0;
   bool cur_covered;
-  bool prev_covered = IsBitSet(key_part->fieldnr - 1, m_covered_fields);
+  bool prev_covered =
+      bitmap_is_set(&info->covered_fields, key_part->fieldnr - 1);
   key_range min_range;
   key_range max_range;
   min_range.key = key_val;
@@ -396,8 +593,8 @@ double ROR_intersect_plan::get_scan_selectivity(
   for (SEL_ROOT *sel_root = scan->sel_root; sel_root;
        sel_root = sel_root->root->next_key_part) {
     DBUG_PRINT("info", ("sel_root step"));
-    cur_covered =
-        IsBitSet(key_part[sel_root->root->part].fieldnr - 1, m_covered_fields);
+    cur_covered = bitmap_is_set(&info->covered_fields,
+                                key_part[sel_root->root->part].fieldnr - 1);
     if (cur_covered != prev_covered) {
       /* create (part1val, ..., part{n-1}val) tuple. */
       bool is_null_range = false;
@@ -431,15 +628,13 @@ double ROR_intersect_plan::get_scan_selectivity(
           3) Index statistics is available.
         @see key_val
       */
-      if (!m_param->use_index_statistics ||  // (1)
-          is_null_range ||                   // (2)
+      if (!info->param->use_index_statistics ||  // (1)
+          is_null_range ||                       // (2)
           !table->key_info[scan->keynr].has_records_per_key(
               tuple_arg->part))  // (3)
       {
         DBUG_EXECUTE_IF("crash_records_in_range", DBUG_SUICIDE(););
         assert(min_range.length > 0);
-        assert(
-            !table->pos_in_table_list->is_derived_unfinished_materialization());
         records =
             table->file->records_in_range(scan->keynr, &min_range, &max_range);
       } else {
@@ -479,14 +674,15 @@ double ROR_intersect_plan::get_scan_selectivity(
   including its cost.
 
   SYNOPSIS
-      add()
+    ror_intersect_add()
+      info         ROR-intersection structure to add the scan to.
       needed_fields  Bitmask of fields needed by the query.
-      ror_scan       ROR scan info to add.
-      is_cpk_scan    If true, add the scan as CPK scan (this can be inferred
-                     from other parameters and is passed separately only to
-                     avoid duplicating the inference code)
-      trace_costs    Optimizer trace object cost details are added to
-      ignore_cost    Ignore cost check due to use of INDEX_MERGE hint
+      ror_scan     ROR scan info to add.
+      is_cpk_scan  If true, add the scan as CPK scan (this can be inferred
+                   from other parameters and is passed separately only to
+                   avoid duplicating the inference code)
+      trace_costs  Optimizer trace object cost details are added to
+      ignore_cost  Ignore cost check due to use of INDEX_MERGE hint
 
   NOTES
     Adding a ROR scan to ROR-intersect "makes sense" iff the cost of ROR-
@@ -510,25 +706,26 @@ double ROR_intersect_plan::get_scan_selectivity(
     false  It doesn't make sense to add this ROR scan to this ROR-intersection.
 */
 
-bool ROR_intersect_plan::add(OverflowBitset needed_fields,
-                             ROR_SCAN_INFO *ror_scan, bool is_cpk_scan,
-                             Opt_trace_object *trace_costs, bool ignore_cost) {
+static bool ror_intersect_add(ROR_INTERSECT_INFO *info,
+                              const MY_BITMAP *needed_fields,
+                              ROR_SCAN_INFO *ror_scan, bool is_cpk_scan,
+                              Opt_trace_object *trace_costs, bool ignore_cost) {
   double selectivity_mult = 1.0;
 
   DBUG_TRACE;
-  DBUG_PRINT("info", ("Current out_rows= %g", m_out_rows));
+  DBUG_PRINT("info", ("Current out_rows= %g", info->out_rows));
   DBUG_PRINT("info", ("Adding scan on %s",
-                      m_param->table->key_info[ror_scan->keynr].name));
+                      info->param->table->key_info[ror_scan->keynr].name));
   DBUG_PRINT("info", ("is_cpk_scan: %d", is_cpk_scan));
 
-  selectivity_mult = get_scan_selectivity(ror_scan);
+  selectivity_mult = ror_scan_selectivity(info, ror_scan);
   if (selectivity_mult == 1.0 && !ignore_cost) {
     /* Don't add this scan if it doesn't improve selectivity. */
     DBUG_PRINT("info", ("The scan doesn't improve selectivity."));
     return false;
   }
 
-  m_out_rows *= selectivity_mult;
+  info->out_rows *= selectivity_mult;
 
   if (is_cpk_scan) {
     /*
@@ -536,76 +733,42 @@ bool ROR_intersect_plan::add(OverflowBitset needed_fields,
       record of every scan. For each record we assume that one key
       compare is done:
     */
-    const Cost_model_table *const cost_model = m_param->table->cost_model();
+    const Cost_model_table *const cost_model = info->param->table->cost_model();
     const double idx_cost =
-        cost_model->key_compare_cost(rows2double(m_index_records));
-    m_index_read_cost.add_cpu(idx_cost);
-    if (trace_costs != nullptr) trace_costs->add("index_scan_cost", idx_cost);
+        cost_model->key_compare_cost(rows2double(info->index_records));
+    info->index_scan_cost.add_cpu(idx_cost);
+    trace_costs->add("index_scan_cost", idx_cost);
   } else {
-    m_index_records += m_param->table->quick_rows[ror_scan->keynr];
-    m_index_read_cost += ror_scan->index_read_cost;
-    if (trace_costs != nullptr)
-      trace_costs->add("index_scan_cost", ror_scan->index_read_cost);
-    m_covered_fields = OverflowBitset::Or(
-        m_param->temp_mem_root, m_covered_fields, ror_scan->covered_fields);
-    if (!m_is_covering && IsSubset(needed_fields, m_covered_fields)) {
+    info->index_records += info->param->table->quick_rows[ror_scan->keynr];
+    info->index_scan_cost += ror_scan->index_read_cost;
+    trace_costs->add("index_scan_cost", ror_scan->index_read_cost);
+    bitmap_union(&info->covered_fields, &ror_scan->covered_fields);
+    if (!info->is_covering &&
+        bitmap_is_subset(needed_fields, &info->covered_fields)) {
       DBUG_PRINT("info", ("ROR-intersect is covering now"));
-      m_is_covering = true;
+      info->is_covering = true;
     }
-    m_ror_scans.push_back(ror_scan);
   }
 
-  m_total_cost = m_index_read_cost;
-  if (trace_costs != nullptr)
-    trace_costs->add("cumulated_index_scan_cost", m_index_read_cost);
+  info->total_cost = info->index_scan_cost;
+  trace_costs->add("cumulated_index_scan_cost", info->index_scan_cost);
 
-  if (!m_is_covering) {
+  if (!info->is_covering) {
     Cost_estimate sweep_cost;
-    JOIN *join = m_param->query_block->join;
+    JOIN *join = info->param->query_block->join;
     const bool is_interrupted = join && join->tables != 1;
 
-    get_sweep_read_cost(m_param->table, double2rows(m_out_rows), is_interrupted,
-                        &sweep_cost);
-    m_total_cost += sweep_cost;
-    if (trace_costs != nullptr) trace_costs->add("disk_sweep_cost", sweep_cost);
-  } else if (trace_costs != nullptr)
+    get_sweep_read_cost(info->param->table, double2rows(info->out_rows),
+                        is_interrupted, &sweep_cost);
+    info->total_cost += sweep_cost;
+    trace_costs->add("disk_sweep_cost", sweep_cost);
+  } else
     trace_costs->add("disk_sweep_cost", 0);
 
-  DBUG_PRINT("info", ("New out_rows: %g", m_out_rows));
-  DBUG_PRINT("info", ("New cost: %g, %scovering", m_total_cost.total_cost(),
-                      m_is_covering ? "" : "non-"));
+  DBUG_PRINT("info", ("New out_rows: %g", info->out_rows));
+  DBUG_PRINT("info", ("New cost: %g, %scovering", info->total_cost.total_cost(),
+                      info->is_covering ? "" : "non-"));
   return true;
-}
-
-AccessPath *MakeRowIdOrderedIndexScanAccessPath(ROR_SCAN_INFO *scan,
-                                                TABLE *table,
-                                                KEY_PART *used_key_part,
-                                                bool reuse_handler,
-                                                MEM_ROOT *mem_root) {
-  AccessPath *path = new (mem_root) AccessPath;
-  path->type = AccessPath::INDEX_RANGE_SCAN;
-
-  // TODO(sgunders): The initial cost is high (it needs to read all rows and
-  // sort), so we should not have zero init_cost.
-  path->cost = path->cost_before_filter = scan->index_read_cost.total_cost();
-  path->init_cost = 0.0;
-  path->set_num_output_rows(scan->records);
-  path->num_output_rows_before_filter = path->num_output_rows();
-  path->index_range_scan().used_key_part = used_key_part;
-  path->index_range_scan().ranges = &scan->ranges[0];
-  path->index_range_scan().num_ranges = scan->ranges.size();
-  path->index_range_scan().mrr_flags = HA_MRR_SORTED;
-  path->index_range_scan().mrr_buf_size = 0;
-  path->index_range_scan().index = scan->keynr;
-  path->index_range_scan().num_used_key_parts = scan->used_key_parts;
-  path->index_range_scan().can_be_used_for_ror = true;
-  path->index_range_scan().need_rows_in_rowid_order = true;
-  path->index_range_scan().can_be_used_for_imerge = false;  // Irrelevant.
-  path->index_range_scan().reuse_handler = reuse_handler;
-  path->index_range_scan().geometry =
-      Overlaps(table->key_info[scan->keynr].flags, HA_SPATIAL);
-  path->index_range_scan().reverse = false;
-  return path;
 }
 
 /*
@@ -615,6 +778,8 @@ AccessPath *MakeRowIdOrderedIndexScanAccessPath(ROR_SCAN_INFO *scan,
   SYNOPSIS
     get_best_ror_intersect()
       param            Parameter from test_quick_select function.
+      order_direction  The sort order the range access method must be able
+                       to provide. Three-value logic: asc/desc/don't care
       tree             Transformed restriction condition to be used to look
                        for ROR scans.
       cost_est         Do not return read plans with cost > cost_est.
@@ -660,7 +825,7 @@ AccessPath *MakeRowIdOrderedIndexScanAccessPath(ROR_SCAN_INFO *scan,
       return min_scan;
     }
 
-    See add function for ROR intersection costs.
+    See ror_intersect_add function for ROR intersection costs.
 
     Special handling for Clustered PK scans
     Clustered PK contains all table fields, so using it as a regular scan in
@@ -675,12 +840,11 @@ AccessPath *MakeRowIdOrderedIndexScanAccessPath(ROR_SCAN_INFO *scan,
     NULL if out of memory or no suitable plan found.
 */
 
-AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
-                                   TABLE *table,
-                                   bool index_merge_intersect_allowed,
-                                   SEL_TREE *tree, double cost_est,
-                                   bool force_index_merge_result,
-                                   bool reuse_handler) {
+TRP_ROR_INTERSECT *get_best_ror_intersect(
+    THD *thd, const RANGE_OPT_PARAM *param, TABLE *table,
+    bool index_merge_intersect_allowed, enum_order order_direction,
+    SEL_TREE *tree, const MY_BITMAP *needed_fields,
+    const Cost_estimate *cost_est, bool force_index_merge_result) {
   uint idx;
   Cost_estimate min_cost;
   Opt_trace_context *const trace = &thd->opt_trace;
@@ -705,19 +869,24 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
     return nullptr;
   }
 
+  if (order_direction == ORDER_DESC) return nullptr;
+
   /*
     Step1: Collect ROR-able SEL_ARGs and create ROR_SCAN_INFO for each of
     them. Also find and save clustered PK scan if there is one.
   */
+  ROR_SCAN_INFO **cur_ror_scan;
   ROR_SCAN_INFO *cpk_scan = nullptr;
   uint cpk_no;
   bool cpk_scan_used = false;
 
+  if (!(tree->ror_scans =
+            param->temp_mem_root->ArrayAlloc<ROR_SCAN_INFO *>(param->keys)))
+    return nullptr;
   cpk_no = ((table->file->primary_key_is_clustered()) ? table->s->primary_key
                                                       : MAX_KEY);
-  Mem_root_array<ROR_SCAN_INFO *> ror_scans(param->temp_mem_root);
-  OverflowBitset needed_fields = get_needed_fields(param);
-  for (idx = 0; idx < param->keys; idx++) {
+
+  for (idx = 0, cur_ror_scan = tree->ror_scans; idx < param->keys; idx++) {
     ROR_SCAN_INFO *scan;
     if (!tree->ror_scans_map.is_set(idx)) continue;
     if (!(scan = make_ror_scan(param, idx, tree->keys[idx], needed_fields)))
@@ -725,54 +894,76 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
     if (param->real_keynr[idx] == cpk_no) {
       cpk_scan = scan;
       tree->n_ror_scans--;
-    } else {
-      ror_scans.push_back(scan);
-    }
+    } else
+      *(cur_ror_scan++) = scan;
   }
 
-  DBUG_EXECUTE("info", print_ror_scans(table, "original", ror_scans););
-
+  tree->ror_scans_end = cur_ror_scan;
+  DBUG_EXECUTE("info", print_ror_scans_arr(table, "original", tree->ror_scans,
+                                           tree->ror_scans_end););
   /*
-    Get best ROR-intersection using an approximate algorithm.
+    Ok, [ror_scans, ror_scans_end) is array of ptrs to initialized
+    ROR_SCAN_INFO's.
+    Step 2: Get best ROR-intersection using an approximate algorithm.
   */
-  find_intersect_order(&ror_scans, needed_fields, param->temp_mem_root);
+  find_intersect_order(tree->ror_scans, tree->ror_scans_end, param,
+                       needed_fields);
 
-  DBUG_EXECUTE("info", print_ror_scans(table, "ordered", ror_scans););
+  DBUG_EXECUTE("info", print_ror_scans_arr(table, "ordered", tree->ror_scans,
+                                           tree->ror_scans_end););
+
+  ROR_SCAN_INFO **intersect_scans; /* ROR scans used in index intersection */
+  ROR_SCAN_INFO **intersect_scans_end;
+  if (!(intersect_scans = param->return_mem_root->ArrayAlloc<ROR_SCAN_INFO *>(
+            tree->n_ror_scans)))
+    return nullptr;
+  intersect_scans_end = intersect_scans;
+
+  /* Create and incrementally update ROR intersection. */
+  ROR_INTERSECT_INFO *intersect, *intersect_best = nullptr;
+  if (!(intersect = ror_intersect_init(param)) ||
+      !(intersect_best = ror_intersect_init(param)))
+    return nullptr;
+
+  /* [intersect_scans,intersect_scans_best) will hold the best intersection */
+  ROR_SCAN_INFO **intersect_scans_best;
+  cur_ror_scan = tree->ror_scans;
+  intersect_scans_best = intersect_scans;
   /*
     Note: trace_isect_idx.end() is called to close this object after
     this while-loop.
   */
   Opt_trace_array trace_isect_idx(trace, "intersecting_indexes");
-  ROR_intersect_plan cur_plan(param, needed_fields.capacity()),
-      best_plan(param, needed_fields.capacity());
-
-  for (uint index = 0; index < ror_scans.size() && !cur_plan.m_is_covering;
-       index++) {
-    ROR_SCAN_INFO *cur_scan = ror_scans[index];
+  while (cur_ror_scan != tree->ror_scans_end && !intersect->is_covering) {
     Opt_trace_object trace_idx(trace);
-    trace_idx.add_utf8("index", table->key_info[cur_scan->keynr].name);
+    trace_idx.add_utf8("index", table->key_info[(*cur_ror_scan)->keynr].name);
 
-    if (!compound_hint_key_enabled(table, cur_scan->keynr,
+    if (!compound_hint_key_enabled(table, (*cur_ror_scan)->keynr,
                                    INDEX_MERGE_HINT_ENUM)) {
       trace_idx.add("usable", false).add_alnum("cause", "index_merge_hint");
+      cur_ror_scan++;
       continue;
     }
 
     /* S= S + first(R);  R= R - first(R); */
-    if (!cur_plan.add(needed_fields, cur_scan, false, &trace_idx,
-                      force_index_merge && !use_cheapest_index_merge)) {
-      trace_idx.add("cumulated_total_cost", cur_plan.m_total_cost)
+    if (!ror_intersect_add(intersect, needed_fields, *cur_ror_scan, false,
+                           &trace_idx,
+                           force_index_merge && !use_cheapest_index_merge)) {
+      trace_idx.add("cumulated_total_cost", intersect->total_cost)
           .add("usable", false)
           .add_alnum("cause", "does_not_reduce_cost_of_intersect");
+      cur_ror_scan++;
       continue;
     }
 
-    trace_idx.add("cumulated_total_cost", cur_plan.m_total_cost)
+    trace_idx.add("cumulated_total_cost", intersect->total_cost)
         .add("usable", true)
-        .add("matching_rows_now", cur_plan.m_out_rows)
-        .add("isect_covering_with_this_index", cur_plan.m_is_covering);
+        .add("matching_rows_now", intersect->out_rows)
+        .add("isect_covering_with_this_index", intersect->is_covering);
 
-    if (cur_plan.m_total_cost < min_cost ||
+    *(intersect_scans_end++) = *(cur_ror_scan++);
+
+    if (intersect->total_cost < min_cost ||
         (force_index_merge &&
          /*
            If INDEX_MERGE hint is used without only specified index,
@@ -785,12 +976,13 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
            combination of first index and primary key is considered as
            a cheapest intersection.
          */
-         ((best_plan.num_scans() < 2 && force_index_merge_result &&
-           (!cpk_scan || cur_plan.m_is_covering)) ||
+         ((intersect_scans_best - intersect_scans < 2 &&
+           force_index_merge_result && (!cpk_scan || intersect->is_covering)) ||
           !use_cheapest_index_merge))) {
       /* Local minimum found, save it */
-      best_plan = cur_plan;
-      min_cost = cur_plan.m_total_cost;
+      ror_intersect_cpy(intersect_best, intersect);
+      intersect_scans_best = intersect_scans_end;
+      min_cost = intersect->total_cost;
       trace_idx.add("chosen", true);
     } else {
       trace_idx.add("chosen", false).add_alnum("cause", "does_not_reduce_cost");
@@ -799,18 +991,20 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
   // Note: trace_isect_idx trace object is closed here
   trace_isect_idx.end();
 
-  uint num_scans = best_plan.num_scans();
-  if (num_scans == 0) {
+  if (intersect_scans_best == intersect_scans) {
     trace_ror.add("chosen", false)
         .add_alnum("cause", "does_not_increase_selectivity");
     DBUG_PRINT("info", ("None of scans increase selectivity"));
     return nullptr;
   }
 
-  DBUG_EXECUTE("info", print_ror_scans(table, "best ROR-intersection",
-                                       cur_plan.m_ror_scans););
+  DBUG_EXECUTE("info",
+               print_ror_scans_arr(table, "best ROR-intersection",
+                                   intersect_scans, intersect_scans_best););
 
-  cur_plan = best_plan;
+  uint best_num = intersect_scans_best - intersect_scans;
+  ror_intersect_cpy(intersect, intersect_best);
+
   /*
     Ok, found the best ROR-intersection of non-CPK key scans.
     Check if we should add a CPK scan. If the obtained ROR-intersection is
@@ -818,17 +1012,18 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
   */
   {  // Scope for trace object
     Opt_trace_object trace_cpk(trace, "clustered_pk");
-    if (cpk_scan && !cur_plan.m_is_covering &&
+    if (cpk_scan && !intersect->is_covering &&
         compound_hint_key_enabled(table, cpk_no, INDEX_MERGE_HINT_ENUM)) {
-      if (cur_plan.add(needed_fields, cpk_scan, true, &trace_cpk, true) &&
-          ((cur_plan.m_total_cost < min_cost) ||
+      if (ror_intersect_add(intersect, needed_fields, cpk_scan, true,
+                            &trace_cpk, true) &&
+          ((intersect->total_cost < min_cost) ||
            (force_index_merge &&
             (!use_cheapest_index_merge ||
-             (num_scans == 1 && force_index_merge_result))))) {
+             (best_num == 1 && force_index_merge_result))))) {
         trace_cpk.add("clustered_pk_scan_added_to_intersect", true)
-            .add("cumulated_cost", cur_plan.m_total_cost);
+            .add("cumulated_cost", intersect->total_cost);
         cpk_scan_used = true;
-        best_plan = cur_plan;
+        intersect_best = intersect;  // just set pointer here
       } else
         trace_cpk.add("clustered_pk_added_to_intersect", false)
             .add_alnum("cause", "cost");
@@ -839,141 +1034,35 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
     }
   }
   /* Ok, return ROR-intersect plan if we have found one */
-  if ((min_cost.total_cost() < cost_est || force_index_merge) &&
-      (cpk_scan_used || num_scans > 1)) {
-    // Create AccessPaths from the ROR child scans.
-    auto *children = new (param->return_mem_root)
-        Mem_root_array<AccessPath *>(param->return_mem_root);
-    children->resize(num_scans);
-    for (unsigned i = 0; i < num_scans; ++i) {
-      (*children)[i] = MakeRowIdOrderedIndexScanAccessPath(
-          best_plan.m_ror_scans[i], table,
-          param->key[best_plan.m_ror_scans[i]->idx],
-          /*reuse_handler=*/reuse_handler && best_plan.m_is_covering && i == 0,
-          param->return_mem_root);
+  TRP_ROR_INTERSECT *trp = nullptr;
+  if ((min_cost < *cost_est || force_index_merge) &&
+      (cpk_scan_used || best_num > 1)) {
+    if (!(trp = new (param->return_mem_root) TRP_ROR_INTERSECT(
+              table, force_index_merge, param->key, param->real_keynr,
+              {intersect_scans, best_num}, intersect_best->index_scan_cost,
+              intersect_best->is_covering,
+              cpk_scan_used ? cpk_scan : nullptr))) {
+      return trp;
     }
-    AccessPath *cpk_child =
-        cpk_scan_used ? MakeRowIdOrderedIndexScanAccessPath(
-                            cpk_scan, table, param->key[cpk_scan->idx],
-                            /*reuse_handler=*/false, param->return_mem_root)
-                      : nullptr;
-
-    AccessPath *path = new (param->return_mem_root) AccessPath;
-    path->type = AccessPath::ROWID_INTERSECTION;
-    path->cost = best_plan.m_total_cost.total_cost();
+    trp->cost_est = intersect_best->total_cost;
     /* Prevent divisons by zero */
-    double best_rows = max(best_plan.m_out_rows, 1.0);
-    table->quick_condition_rows =
-        min<ha_rows>(table->quick_condition_rows, best_rows);
-    path->set_num_output_rows(best_rows);
+    ha_rows best_rows = double2rows(intersect_best->out_rows);
+    if (!best_rows) best_rows = 1;
+    table->quick_condition_rows = min(table->quick_condition_rows, best_rows);
+    trp->records = best_rows;
 
-    path->rowid_intersection().table = table;
-    path->rowid_intersection().children = children;
-    path->rowid_intersection().cpk_child = cpk_child;
-    path->rowid_intersection().forced_by_hint = force_index_merge;
-    path->rowid_intersection().retrieve_full_rows =
-        !best_plan.m_is_covering;  // Can be overridden later.
-    path->rowid_intersection().need_rows_in_rowid_order =
-        false;  // Can be overridden later.
-    path->rowid_intersection().reuse_handler = reuse_handler;
-    path->rowid_intersection().is_covering = best_plan.m_is_covering;
-
-    trace_ror.add("rows", path->num_output_rows())
-        .add("cost", path->cost)
-        .add("covering", best_plan.m_is_covering)
+    trace_ror.add("rows", trp->records)
+        .add("cost", trp->cost_est)
+        .add("covering", intersect_best->is_covering)
         .add("chosen", true);
 
     DBUG_PRINT("info", ("Returning non-covering ROR-intersect plan:"
-                        "cost %g, records %g",
-                        path->cost, path->num_output_rows()));
-    return path;
+                        "cost %g, records %lu",
+                        trp->cost_est.total_cost(), (ulong)trp->records));
   } else {
     trace_ror.add("chosen", false)
-        .add_alnum("cause", (cost_est > min_cost.total_cost())
-                                ? "too_few_indexes_to_merge"
-                                : "cost");
-    return nullptr;
+        .add_alnum("cause", (*cost_est > min_cost) ? "too_few_indexes_to_merge"
+                                                   : "cost");
   }
+  return trp;
 }
-
-static int find_max_used_key_length(const AccessPath *scan) {
-  int max_used_key_length = 0;
-  for (const QUICK_RANGE *range :
-       Bounds_checked_array{scan->index_range_scan().ranges,
-                            scan->index_range_scan().num_ranges}) {
-    max_used_key_length = std::max<int>(max_used_key_length, range->min_length);
-    max_used_key_length = std::max<int>(max_used_key_length, range->max_length);
-  }
-  return max_used_key_length;
-}
-
-void add_keys_and_lengths_rowid_intersection(const AccessPath *path,
-                                             String *key_names,
-                                             String *used_lengths) {
-  TABLE *table = path->rowid_intersection().table;
-
-  char buf[64];
-  size_t length;
-  bool first = true;
-  for (AccessPath *current : *path->rowid_intersection().children) {
-    KEY *key_info = table->key_info + current->index_range_scan().index;
-    if (first)
-      first = false;
-    else {
-      key_names->append(',');
-      used_lengths->append(',');
-    }
-    key_names->append(key_info->name);
-
-    length =
-        longlong10_to_str(find_max_used_key_length(current), buf, 10) - buf;
-    used_lengths->append(buf, length);
-  }
-
-  AccessPath *cpk_child = path->rowid_intersection().cpk_child;
-  if (cpk_child) {
-    KEY *key_info = table->key_info + cpk_child->index_range_scan().index;
-    key_names->append(',');
-    key_names->append(key_info->name);
-    length =
-        longlong10_to_str(find_max_used_key_length(cpk_child), buf, 10) - buf;
-    used_lengths->append(',');
-    used_lengths->append(buf, length);
-  }
-}
-
-void add_keys_and_lengths_rowid_union(const AccessPath *path, String *key_names,
-                                      String *used_lengths) {
-  bool first = true;
-  for (AccessPath *current : *path->rowid_union().children) {
-    if (first) {
-      first = false;
-    } else {
-      used_lengths->append(',');
-      key_names->append(',');
-    }
-    ::add_keys_and_lengths(current, key_names, used_lengths);
-  }
-}
-
-#ifndef NDEBUG
-void dbug_dump_rowid_intersection(
-    int indent, bool verbose, const Mem_root_array<AccessPath *> &children) {
-  fprintf(DBUG_FILE, "%*squick ROR-intersect select\n", indent, ""),
-      fprintf(DBUG_FILE, "%*smerged scans {\n", indent, "");
-  for (AccessPath *range_scan : children) {
-    dbug_dump(range_scan, indent + 2, verbose);
-  }
-  fprintf(DBUG_FILE, "%*s}\n", indent, "");
-}
-
-void dbug_dump_rowid_union(int indent, bool verbose,
-                           const Mem_root_array<AccessPath *> &children) {
-  fprintf(DBUG_FILE, "%*squick ROR-union select\n", indent, "");
-  fprintf(DBUG_FILE, "%*smerged scans {\n", indent, "");
-  for (AccessPath *child : children) {
-    ::dbug_dump(child, indent + 2, verbose);
-  }
-  fprintf(DBUG_FILE, "%*s}\n", indent, "");
-}
-#endif

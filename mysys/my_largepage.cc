@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,8 +35,8 @@
 
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"

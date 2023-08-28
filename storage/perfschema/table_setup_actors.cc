@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -40,8 +40,6 @@
 #include "storage/perfschema/pfs_global.h"
 #include "storage/perfschema/pfs_instr_class.h"
 #include "storage/perfschema/pfs_setup_actor.h"
-
-struct CHARSET_INFO;
 
 THR_LOCK table_setup_actors::m_table_lock;
 
@@ -121,13 +119,13 @@ int table_setup_actors::write_row(PFS_engine_table *, TABLE *table,
     if (bitmap_is_set(table->write_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* HOST */
-          host = get_field_char_utf8mb4(f, &host_data);
+          host = get_field_char_utf8(f, &host_data);
           break;
         case 1: /* USER */
-          user = get_field_char_utf8mb4(f, &user_data);
+          user = get_field_char_utf8(f, &user_data);
           break;
         case 2: /* ROLE */
-          role = get_field_char_utf8mb4(f, &role_data);
+          role = get_field_char_utf8(f, &role_data);
           break;
         case 3: /* ENABLED */
           enabled_value = (enum_yes_no)get_field_enum(f);
@@ -156,30 +154,22 @@ int table_setup_actors::write_row(PFS_engine_table *, TABLE *table,
     return HA_ERR_WRONG_COMMAND;
   }
 
-  enabled = (enabled_value == ENUM_YES);
-  history = (history_value == ENUM_YES);
+  enabled = (enabled_value == ENUM_YES) ? true : false;
+  history = (history_value == ENUM_YES) ? true : false;
 
-  PFS_user_name user_value;
-  PFS_host_name host_value;
-  PFS_role_name role_value;
-  user_value.set(user->ptr(), user->length());
-  host_value.set(host->ptr(), host->length());
-  role_value.set(role->ptr(), role->length());
-
-  return insert_setup_actor(&user_value, &host_value, &role_value, enabled,
-                            history);
+  return insert_setup_actor(user, host, role, enabled, history);
 }
 
-int table_setup_actors::delete_all_rows() { return reset_setup_actor(); }
+int table_setup_actors::delete_all_rows(void) { return reset_setup_actor(); }
 
-ha_rows table_setup_actors::get_row_count() {
+ha_rows table_setup_actors::get_row_count(void) {
   return global_setup_actor_container.get_row_count();
 }
 
 table_setup_actors::table_setup_actors()
     : PFS_engine_table(&m_share, &m_pos), m_pos(0), m_next_pos(0) {}
 
-void table_setup_actors::reset_position() {
+void table_setup_actors::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -247,9 +237,30 @@ int table_setup_actors::make_row(PFS_setup_actor *pfs) {
   pfs_optimistic_state lock;
   pfs->m_lock.begin_optimistic_lock(&lock);
 
-  m_row.m_user_name = pfs->m_key.m_user_name;
-  m_row.m_host_name = pfs->m_key.m_host_name;
-  m_row.m_role_name = pfs->m_key.m_role_name;
+  m_row.m_hostname_length = pfs->m_hostname_length;
+
+  if (unlikely((m_row.m_hostname_length == 0) ||
+               (m_row.m_hostname_length > sizeof(m_row.m_hostname)))) {
+    return HA_ERR_RECORD_DELETED;
+  }
+
+  memcpy(m_row.m_hostname, pfs->m_hostname, m_row.m_hostname_length);
+  m_row.m_username_length = pfs->m_username_length;
+
+  if (unlikely((m_row.m_username_length == 0) ||
+               (m_row.m_username_length > sizeof(m_row.m_username)))) {
+    return HA_ERR_RECORD_DELETED;
+  }
+
+  memcpy(m_row.m_username, pfs->m_username, m_row.m_username_length);
+  m_row.m_rolename_length = pfs->m_rolename_length;
+
+  if (unlikely((m_row.m_rolename_length == 0) ||
+               (m_row.m_rolename_length > sizeof(m_row.m_rolename)))) {
+    return HA_ERR_RECORD_DELETED;
+  }
+
+  memcpy(m_row.m_rolename, pfs->m_rolename, m_row.m_rolename_length);
   m_row.m_enabled_ptr = &pfs->m_enabled;
   m_row.m_history_ptr = &pfs->m_history;
 
@@ -271,16 +282,13 @@ int table_setup_actors::read_row_values(TABLE *table, unsigned char *,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* HOST */
-          set_field_char_utf8mb4(f, m_row.m_host_name.ptr(),
-                                 m_row.m_host_name.length());
+          set_field_char_utf8(f, m_row.m_hostname, m_row.m_hostname_length);
           break;
         case 1: /* USER */
-          set_field_char_utf8mb4(f, m_row.m_user_name.ptr(),
-                                 m_row.m_user_name.length());
+          set_field_char_utf8(f, m_row.m_username, m_row.m_username_length);
           break;
         case 2: /* ROLE */
-          set_field_char_utf8mb4(f, m_row.m_role_name.ptr(),
-                                 m_row.m_role_name.length());
+          set_field_char_utf8(f, m_row.m_rolename, m_row.m_rolename_length);
           break;
         case 3: /* ENABLED */
           set_field_enum(f, (*m_row.m_enabled_ptr) ? ENUM_YES : ENUM_NO);
@@ -306,13 +314,17 @@ int table_setup_actors::update_row_values(TABLE *table, const unsigned char *,
   for (; (f = *fields); fields++) {
     if (bitmap_is_set(table->write_set, f->field_index())) {
       switch (f->field_index()) {
+        case 0: /* HOST */
+        case 1: /* USER */
+        case 2: /* ROLE */
+          return HA_ERR_WRONG_COMMAND;
         case 3: /* ENABLED */
           value = (enum_yes_no)get_field_enum(f);
           /* Reject illegal enum values in ENABLED */
           if ((value != ENUM_YES) && (value != ENUM_NO)) {
             return HA_ERR_NO_REFERENCED_ROW;
           }
-          *m_row.m_enabled_ptr = (value == ENUM_YES);
+          *m_row.m_enabled_ptr = (value == ENUM_YES) ? true : false;
           break;
         case 4: /* HISTORY */
           value = (enum_yes_no)get_field_enum(f);
@@ -320,10 +332,10 @@ int table_setup_actors::update_row_values(TABLE *table, const unsigned char *,
           if ((value != ENUM_YES) && (value != ENUM_NO)) {
             return HA_ERR_NO_REFERENCED_ROW;
           }
-          *m_row.m_history_ptr = (value == ENUM_YES);
+          *m_row.m_history_ptr = (value == ENUM_YES) ? true : false;
           break;
         default:
-          return HA_ERR_WRONG_COMMAND;
+          assert(false);
       }
     }
   }
@@ -334,6 +346,10 @@ int table_setup_actors::update_row_values(TABLE *table, const unsigned char *,
 
 int table_setup_actors::delete_row_values(TABLE *, const unsigned char *,
                                           Field **) {
-  return delete_setup_actor(&m_row.m_user_name, &m_row.m_host_name,
-                            &m_row.m_role_name);
+  CHARSET_INFO *cs = &my_charset_utf8mb4_bin;
+  String user(m_row.m_username, m_row.m_username_length, cs);
+  String role(m_row.m_rolename, m_row.m_rolename_length, cs);
+  String host(m_row.m_hostname, m_row.m_hostname_length, cs);
+
+  return delete_setup_actor(&user, &host, &role);
 }

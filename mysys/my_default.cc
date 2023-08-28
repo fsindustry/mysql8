@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,6 +57,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_aes.h"
 #include "my_alloc.h"
@@ -68,18 +69,14 @@
 #include "my_getopt.h"
 #include "my_inttypes.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_psi_config.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_file.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_version.h"  // MYSQL_PERSIST_CONFIG_NAME
 #include "mysys/my_default_priv.h"
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"
-#include "nulls.h"
-#include "strmake.h"
-#include "strxmov.h"
 #include "typelib.h"
 #ifdef _WIN32
 #include <winbase.h>
@@ -153,7 +150,7 @@ PSI_memory_key key_memory_defaults;
    check the pointer, use "----args-separator----" here to ease debug
    if someone misused it.
 
-   The args separator will only be added when
+   The args seprator will only be added when
    my_getopt_use_args_seprator is set to TRUE before calling
    load_defaults();
 
@@ -361,7 +358,7 @@ int my_search_option_files(const char *conf_file, int *argc, char ***argv,
       my_defaults_group_suffix = getenv("MYSQL_GROUP_SUFFIX");
 
     if (forced_extra_defaults && !defaults_already_read) {
-      const int error =
+      int error =
           fn_expand(forced_extra_defaults, my_defaults_extra_file_buffer);
       if (error) return error;
 
@@ -369,7 +366,7 @@ int my_search_option_files(const char *conf_file, int *argc, char ***argv,
     }
 
     if (forced_default_file && !defaults_already_read) {
-      const int error = fn_expand(forced_default_file, my_defaults_file_buffer);
+      int error = fn_expand(forced_default_file, my_defaults_file_buffer);
       if (error) return error;
       my_defaults_file = my_defaults_file_buffer;
     }
@@ -614,7 +611,7 @@ int get_defaults_options(int argc, char **argv, char **defaults,
     load_defaults()
     conf_file			Basename for configuration file to search for.
                                 If this is a path, then only this file is read.
-    groups			Which [group] entries to read.
+    groups			Which [group] entrys to read.
                                 Points to an null terminated array of pointers
     argc			Pointer to argc of original program
     argv			Pointer to argv of original program
@@ -644,7 +641,7 @@ bool my_defaults_read_login_file = true;
     my_load_defaults()
     conf_file			Basename for configuration file to search for.
                                 If this is a path, then only this file is read.
-    groups			Which [group] entries to read.
+    groups			Which [group] entrys to read.
                                 Points to an null terminated array of pointers
     argc			Pointer to argc of original program
     argv			Pointer to argv of original program
@@ -689,7 +686,7 @@ int my_load_defaults(const char *conf_file, const char **groups, int *argc,
   const char **dirs;
   char my_login_file[FN_REFLEN];
   bool found_no_defaults = false;
-  const uint args_sep = my_getopt_use_args_separator ? 1 : 0;
+  uint args_sep = my_getopt_use_args_separator ? 1 : 0;
   DBUG_TRACE;
 
   if ((dirs = init_default_directories(alloc)) == nullptr) goto err;
@@ -744,7 +741,7 @@ int my_load_defaults(const char *conf_file, const char **groups, int *argc,
   (*argv) += args_used;
 
   /*
-    Check if we want to see the new argument list
+    Check if we wan't to see the new argument list
     This options must always be the last of the default options
   */
   if (*argc >= 2 && !strcmp(argv[0][1], "--print-defaults")) {
@@ -801,7 +798,7 @@ static int search_default_file(Process_option_func opt_handler,
                                const char *config_file, bool is_login_file) {
   const char **ext;
   const char *empty_list[] = {"", nullptr};
-  const bool have_ext = fn_ext(config_file)[0] != 0;
+  bool have_ext = fn_ext(config_file)[0] != 0;
   const char **exts_to_use = have_ext ? empty_list : f_extensions;
 
   for (ext = exts_to_use; *ext; ext++) {
@@ -821,7 +818,7 @@ static int search_default_file(Process_option_func opt_handler,
    get_argument()
    keyword		Include directive keyword
    kwlen		Length of keyword
-   ptr			Pointer to the keyword in the line under process
+   ptr			Pointer to the keword in the line under process
    line			line number
 
   RETURN
@@ -899,7 +896,7 @@ static int search_default_file_with_ext(Process_option_func opt_handler,
   uint i, rc;
   MY_DIR *search_dir;
   FILEINFO *search_file;
-  const myf flags = MYF(report_os_error_on_open ? MY_WME : 0);
+  myf flags = MYF(report_os_error_on_open ? MY_WME : 0);
 
   if ((dir ? strlen(dir) : 0) + strlen(config_file) >= FN_REFLEN - 3)
     return 0; /* Ignore wrong paths */
@@ -1197,10 +1194,8 @@ static mysql_file_getline_ret mysql_file_getline(char *buff, int size,
   static unsigned char my_key[LOGIN_KEY_LEN];
   int length = 0, cipher_len = 0;
 
-  /*
-    If the supplied buff/size is enough to store the line, then we return the
-    buff itself. In this case, we use this noop deleter
-  */
+  /* If the supplied buff/size is enough to store the line, then we return the
+   * buff itself. In this case, we use this noop deleter */
   static auto noop_free = [](void *) noexcept {};
 
   if (is_login_file) {
@@ -1211,25 +1206,31 @@ static mysql_file_getline_ret mysql_file_getline(char *buff, int size,
           LOGIN_KEY_LEN)
         return {nullptr, noop_free};
     }
+
     if (mysql_file_fread(file, len_buf, MAX_CIPHER_STORE_LEN, MYF(MY_WME)) ==
         MAX_CIPHER_STORE_LEN) {
       cipher_len = sint4korr(len_buf);
-      /*
-        This is safe to do since mysql_config_editor never writes
-        lines longer than 4k
-      */
-      if (cipher_len > size) return {nullptr, noop_free};
     } else
       return {nullptr, noop_free};
+
+    mysql_file_getline_ret str = {buff, noop_free};
+    if (cipher_len >= size) {
+      char *strbuff = static_cast<char *>(malloc(cipher_len + 1));
+      if (strbuff == nullptr) return {nullptr, noop_free};
+      str = {strbuff, std::free};
+    }
+
     mysql_file_fread(file, cipher, cipher_len, MYF(MY_WME));
-    if ((length =
-             my_aes_decrypt(cipher, cipher_len, (unsigned char *)buff, my_key,
-                            LOGIN_KEY_LEN, my_aes_128_ecb, nullptr)) < 0) {
+    if ((length = my_aes_decrypt(
+             cipher, cipher_len, pointer_cast<unsigned char *>(str.get()),
+             my_key, LOGIN_KEY_LEN, my_aes_128_ecb, nullptr)) < 0) {
       /* Attempt to decrypt failed. */
       return {nullptr, noop_free};
     }
-    buff[length] = 0;
-    return {buff, noop_free};
+    str.get()[length] = 0;
+
+    return str;
+
   } else {
     mysql_file_getline_ret line{nullptr, noop_free}; /* The output line */
     size_t lineLen = 0;                              /* Cached length of line */
@@ -1278,7 +1279,7 @@ static mysql_file_getline_ret mysql_file_getline(char *buff, int size,
 
 void my_print_default_files(const char *conf_file) {
   const char *empty_list[] = {"", nullptr};
-  const bool have_ext = fn_ext(conf_file)[0] != 0;
+  bool have_ext = fn_ext(conf_file)[0] != 0;
   const char **exts_to_use = have_ext ? empty_list : f_extensions;
   char name[FN_REFLEN];
   const char **ext;
@@ -1440,7 +1441,7 @@ void init_variable_default_paths() {
   /etc/my.cnf has max_connections
   /$datadir/mysqld.auto.cnf has max_user_connections
   ./mysqld --server-id=47
-  with this setup, variables_hash has 3 entries of the above options
+  with this setup, variables_hash has 3 entires of the above options
   along with path of config files and its enum value which is as below:
   max_connections -> (/etc/my.cnf , enum_variable_source::GLOBAL)
   max_user_connections -> ($datadir/mysqld.auto.cnf ,
@@ -1453,10 +1454,9 @@ void init_variable_default_paths() {
 */
 void update_variable_source(const char *opt_name, const char *value) {
   string var_name = string(opt_name);
-  const string path = (value ? value : string(""));
-  const string prefix[] = {"loose_", "disable_", "enable_", "maximum_",
-                           "skip_"};
-  const uint prefix_count = sizeof(prefix) / sizeof(prefix[0]);
+  string path = (value ? value : string(""));
+  string prefix[] = {"loose_", "disable_", "enable_", "maximum_", "skip_"};
+  uint prefix_count = sizeof(prefix) / sizeof(prefix[0]);
 
   /* opt_name must be of form --XXXXX which means min length must be 3 */
   if (var_name.length() < 3) return;
@@ -1484,7 +1484,7 @@ void update_variable_source(const char *opt_name, const char *value) {
       /* check if variables are prefixed with skip_ */
       if (id == 4) {
         bool skip_variable = false;
-        const string skip_variables[] = {
+        string skip_variables[] = {
             "skip_name_resolve",     "skip_networking",  "skip_show_database",
             "skip_external_locking", "skip_slave_start", "skip_replica_start"};
         for (uint skip_index = 0;
@@ -1750,10 +1750,6 @@ int check_file_permissions(const char *file_name, bool is_login_file,
                      file_name);
     return 0;
   }
-#else
-  (void)file_name;      // maybe_unused
-  (void)is_login_file;  // maybe_unused
-  (void)flags;          // maybe_unused
 #endif
   return 2; /* Success */
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -148,12 +148,14 @@ int ToDescr(size_t hi) { return hi + MY_FILE_MIN; }
 bool IsValidIndex(size_t hi) {
   const HandleInfoVector &hiv = *hivp;
   mysql_mutex_assert_owner(&THR_LOCK_open);
-  return (hi < hiv.size());
+  return (hi >= 0 && hi < hiv.size());
 }
 
+bool IsValidDescr(File fd) { return IsValidIndex(ToIndex(fd)); }
+
 HandleInfo GetHandleInfo(File fd) {
-  const HandleInfoVector &hiv = *hivp;
-  const size_t hi = ToIndex(fd);
+  HandleInfoVector &hiv = *hivp;
+  size_t hi = ToIndex(fd);
   MUTEX_LOCK(g, &THR_LOCK_open);
   if (!IsValidIndex(hi) || hiv[hi].handle == INVALID_HANDLE_VALUE) {
     SetLastError(ERROR_INVALID_HANDLE);
@@ -182,7 +184,7 @@ File RegisterHandle(HANDLE handle, int oflag) {
 
 HandleInfo UnregisterHandle(File fd) {
   HandleInfoVector &hiv = *hivp;
-  const size_t hi = ToIndex(fd);
+  size_t hi = ToIndex(fd);
   MUTEX_LOCK(g, &THR_LOCK_open);
   assert(IsValidIndex(hi));
   HandleInfo unreg = hiv[hi];
@@ -205,10 +207,10 @@ LARGE_INTEGER MakeLargeInteger(int64_t src) {
   return li;
 }
 
-OVERLAPPED MakeOverlapped(DWORD l, DWORD h) { return {0, 0, {{l, h}}, 0}; }
+OVERLAPPED MakeOverlapped(DWORD l, DWORD h) { return {0, 0, {l, h}, 0}; }
 
 OVERLAPPED MakeOverlapped(int64_t src) {
-  const LARGE_INTEGER li = MakeLargeInteger(src);
+  LARGE_INTEGER li = MakeLargeInteger(src);
   return MakeOverlapped(li.LowPart, li.HighPart);
 }
 
@@ -227,7 +229,7 @@ OVERLAPPED MakeOverlapped(int64_t src) {
 
 File my_win_sopen(const char *path, int oflag, int shflag, int pmode) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
   if (check_if_legal_filename(path)) {
     assert(GetLastError() == ERROR_SUCCESS);
     errno = EACCES;
@@ -358,8 +360,7 @@ File my_win_sopen(const char *path, int oflag, int shflag, int pmode) {
     return -1;
   }
 
-  const int fh =
-      RegisterHandle(osfh, oflag & (_O_APPEND | _O_RDONLY | _O_TEXT));
+  int fh = RegisterHandle(osfh, oflag & (_O_APPEND | _O_RDONLY | _O_TEXT));
   if (fh == -1) {
     // No scope_guard for this since we only close in one place.
     CloseHandle(osfh);
@@ -439,8 +440,8 @@ File my_win_open(const char *path, int mode) {
 int my_win_close(File fd) {
   DBUG_TRACE;
 
-  const WindowsErrorGuard weg;
-  const HandleInfo unreg = UnregisterHandle(fd);
+  WindowsErrorGuard weg;
+  HandleInfo unreg = UnregisterHandle(fd);
   if (unreg.handle == INVALID_HANDLE_VALUE) return -1;
 
   if (!CloseHandle(unreg.handle)) return -1;
@@ -472,7 +473,7 @@ int64_t my_win_pread(File fd, uchar *buffer, size_t count, int64_t offset) {
   if (!count) return 0;
   if (count > UINT_MAX) count = UINT_MAX;
 
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
   HANDLE hFile = my_get_osfhandle(fd);
   if (hFile == INVALID_HANDLE_VALUE) return -1;
 
@@ -481,7 +482,7 @@ int64_t my_win_pread(File fd, uchar *buffer, size_t count, int64_t offset) {
   DWORD nBytesRead;
   if (!ReadFile(hFile, buffer, count, &nBytesRead,
                 (offset == -1 ? nullptr : &ov))) {
-    const DWORD lastError = GetLastError();
+    DWORD lastError = GetLastError();
     /*
       ERROR_BROKEN_PIPE is returned when no more data coming
       through e.g. a command pipe in windows : see MSDN on ReadFile.
@@ -512,8 +513,8 @@ int64_t my_win_pwrite(File fd, const uchar *buffer, size_t count,
   if (!count) return 0;
   if (count > UINT_MAX) count = UINT_MAX;
 
-  const WindowsErrorGuard weg;
-  const HandleInfo hi = GetHandleInfo(fd);
+  WindowsErrorGuard weg;
+  HandleInfo hi = GetHandleInfo(fd);
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
 
   OVERLAPPED ov = MakeOverlapped(offset);
@@ -537,13 +538,13 @@ int64_t my_win_pwrite(File fd, const uchar *buffer, size_t count,
 */
 int64_t my_win_lseek(File fd, int64_t pos, int whence) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
   static_assert(FILE_BEGIN == SEEK_SET && FILE_CURRENT == SEEK_CUR &&
                     FILE_END == SEEK_END,
                 "Windows and POSIX seek constants must be compatible.");
 
-  const HandleInfo hi = GetHandleInfo(fd);
+  HandleInfo hi = GetHandleInfo(fd);
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
 
   LARGE_INTEGER newpos;
@@ -570,9 +571,9 @@ int64_t my_win_write(File fd, const uchar *Buffer, size_t Count) {
   if (!Count) return 0;
   if (Count > UINT_MAX) Count = UINT_MAX;
 
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
-  const HandleInfo hi = GetHandleInfo(fd);
+  HandleInfo hi = GetHandleInfo(fd);
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
 
   // The msdn docs state: "To write to the end of file, specify
@@ -600,9 +601,9 @@ int64_t my_win_write(File fd, const uchar *Buffer, size_t Count) {
 */
 int my_win_chsize(File fd, int64_t newlength) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
-  const HandleInfo hi = GetHandleInfo(fd);
+  HandleInfo hi = GetHandleInfo(fd);
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
 
   if (!SetFilePointerEx(hi.handle, MakeLargeInteger(newlength), nullptr,
@@ -631,16 +632,16 @@ int my_win_chsize(File fd, int64_t newlength) {
 
 File my_win_fileno(FILE *stream) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
-  const File stream_fd = _fileno(stream);
+  File stream_fd = _fileno(stream);
   if (stream_fd < 0)
     return -1;  // Only EINVAL if stream == nullptr, according to msdn
 
   HANDLE hFile = reinterpret_cast<HANDLE>(_get_osfhandle(stream_fd));
   if (hFile == INVALID_HANDLE_VALUE) return -1;
 
-  const File retval = FileIndex(hFile);
+  File retval = FileIndex(hFile);
   if (retval == -1) /* try std stream */
     return my_get_stdfile_descriptor(stream);
   return retval;
@@ -658,7 +659,7 @@ File my_win_fileno(FILE *stream) {
 */
 FILE *my_win_fopen(const char *filename, const char *mode) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
   /*
     If we are not creating, then we need to use my_access to make sure
@@ -674,7 +675,7 @@ FILE *my_win_fopen(const char *filename, const char *mode) {
   if (!stream) return nullptr;
   auto sg = create_scope_guard([stream]() { fclose(stream); });
 
-  const int flags = (strchr(mode, 'a') != nullptr) ? O_APPEND : 0;
+  int flags = (strchr(mode, 'a') != nullptr) ? O_APPEND : 0;
 
   /*
      Register file handle in my_table_info.
@@ -703,15 +704,15 @@ FILE *my_win_fopen(const char *filename, const char *mode) {
 */
 FILE *my_win_fdopen(File fd, const char *mode) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
-  const int flags = (strchr(mode, 'a') != nullptr) ? O_APPEND : 0;
+  int flags = (strchr(mode, 'a') != nullptr) ? O_APPEND : 0;
 
   HANDLE hFile = my_get_osfhandle(fd);
   if (hFile == INVALID_HANDLE_VALUE) return nullptr;
 
   /* Convert OS file handle to CRT file descriptor and then call fdopen*/
-  const int crt_fd = _open_osfhandle((intptr_t)hFile, flags);
+  int crt_fd = _open_osfhandle((intptr_t)hFile, flags);
   if (crt_fd < 0) return nullptr;
 
   return fdopen(crt_fd, mode);
@@ -731,8 +732,8 @@ FILE *my_win_fdopen(File fd, const char *mode) {
 */
 int my_win_fclose(FILE *stream) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
-  const File fd = my_fileno(stream);
+  WindowsErrorGuard weg;
+  File fd = my_fileno(stream);
   if (fd < 0) return -1;
   if (fd >= MY_FILE_MIN) UnregisterHandle(fd);
   if (fclose(stream) < 0) return -1;
@@ -757,7 +758,7 @@ int my_win_fclose(FILE *stream) {
 FILE *my_win_freopen(const char *path, const char *mode, FILE *stream) {
   DBUG_TRACE;
   assert(path && stream);
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
   /* Services don't have stdout/stderr on Windows, so _fileno returns -1. */
   File fd = _fileno(stream);
@@ -776,7 +777,7 @@ FILE *my_win_freopen(const char *path, const char *mode, FILE *stream) {
   if (osfh == INVALID_HANDLE_VALUE) return nullptr;
 
   auto chg = create_scope_guard([osfh]() { CloseHandle(osfh); });
-  const int handle_fd = _open_osfhandle((intptr_t)osfh, _O_APPEND | _O_TEXT);
+  int handle_fd = _open_osfhandle((intptr_t)osfh, _O_APPEND | _O_TEXT);
 
   if (handle_fd == -1) return nullptr;
   auto chfdg = create_scope_guard([handle_fd]() { _close(handle_fd); });
@@ -806,9 +807,9 @@ FILE *my_win_freopen(const char *path, const char *mode, FILE *stream) {
 */
 int my_win_fstat(File fd, struct _stati64 *buf) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
 
-  const HandleInfo hi = GetHandleInfo(fd);
+  HandleInfo hi = GetHandleInfo(fd);
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
 
   HANDLE hDup;
@@ -816,7 +817,7 @@ int my_win_fstat(File fd, struct _stati64 *buf) {
                        &hDup, 0, false, DUPLICATE_SAME_ACCESS))
     return -1;
 
-  const int crt_fd = _open_osfhandle((intptr_t)hDup, 0);
+  int crt_fd = _open_osfhandle((intptr_t)hDup, 0);
   if (crt_fd < 0) return -1;
   auto cg = create_scope_guard([crt_fd]() { _close(crt_fd); });
 
@@ -844,7 +845,7 @@ int my_win_fstat(File fd, struct _stati64 *buf) {
 */
 int my_win_stat(const char *path, struct _stati64 *buf) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
+  WindowsErrorGuard weg;
   if (_stati64(path, buf) < 0) {
     return -1;
   }
@@ -855,7 +856,7 @@ int my_win_stat(const char *path, struct _stati64 *buf) {
   if (!GetFileAttributesEx(path, GetFileExInfoStandard, &data)) return -1;
 
   buf->st_size =
-      LARGE_INTEGER{{data.nFileSizeLow, (LONG)data.nFileSizeHigh}}.QuadPart;
+      LARGE_INTEGER{data.nFileSizeLow, (LONG)data.nFileSizeHigh}.QuadPart;
 
   return 0;
 }
@@ -871,8 +872,8 @@ int my_win_stat(const char *path, struct _stati64 *buf) {
 */
 int my_win_fsync(File fd) {
   DBUG_TRACE;
-  const WindowsErrorGuard weg;
-  const HandleInfo hi = GetHandleInfo(fd);
+  WindowsErrorGuard weg;
+  HandleInfo hi = GetHandleInfo(fd);
 
   if (hi.handle == INVALID_HANDLE_VALUE) return -1;
   if (!FlushFileBuffers(hi.handle)) return -1;

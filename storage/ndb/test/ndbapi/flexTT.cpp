@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -477,11 +477,14 @@ Uint32
 getKey(Uint32 aBase, Uint32 aThreadBase) {
   Uint32 Tfound = aBase;
   Uint32 hash;
-  Uint32 tKey32[2];
+  union {
+    Uint64 Tkey64;
+    Uint32 tKey32[2];
+  };
   tKey32[0] = aThreadBase;
   for (Uint32 i = aBase; i < (aBase + MAX_SEEK); i++) {
     tKey32[1] = i;
-    hash = md5_hash(tKey32, (Uint32)2);
+    hash = md5_hash((Uint64*)&Tkey64, (Uint32)2);
     hash = (hash >> 6) & (MAX_PARTS - 1);
     if (hash == (Uint32)tLocalPart) {
       Tfound = i;
@@ -690,7 +693,7 @@ createTables(Ndb* pMyNdb){
     MySchemaTransaction = NdbSchemaCon::startSchemaTrans(pMyNdb);
       
     if(MySchemaTransaction == NULL && 
-       (!error_handler(pMyNdb->getNdbError())))
+       (!error_handler(MySchemaTransaction->getNdbError())))
       return -1;
       
     MySchemaOp = MySchemaTransaction->getNdbSchemaOp();       

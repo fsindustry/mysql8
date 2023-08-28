@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,8 +23,6 @@
 */
 
 #include "BufferedLogHandler.hpp"
-#include "util/cstrbuf.h"
-#include "util/require.h"
 
 #include <time.h>
 
@@ -52,23 +50,23 @@ void* async_log_function(void* args)
 
   delete data;
 
-  return nullptr;
+  return NULL;
 }
 
 BufferedLogHandler::BufferedLogHandler(LogHandler* dest_loghandler)
  : LogHandler(), m_dest_loghandler(dest_loghandler),
-   m_log_threadvar(nullptr), m_stop_logging(false)
+   m_log_threadvar(NULL), m_stop_logging(false)
 {
   m_logbuf = new LogBuffer(32768, new MessageStreamLostMsgHandler()); // 32kB
   ThreadData *thr_data = new ThreadData();
   thr_data->buf_loghandler = this;
 
   m_log_threadvar = NdbThread_Create(async_log_function,
-                                     (void**)thr_data,
-                                     0,
-                                     "async_local_log_thread",
-                                     NDB_THREAD_PRIO_MEAN);
-  if (m_log_threadvar == nullptr)
+                   (void**)thr_data,
+                   0,
+                   (char*)"async_local_log_thread",
+                   NDB_THREAD_PRIO_MEAN);
+  if (m_log_threadvar == NULL)
   {
     abort();
   }
@@ -78,7 +76,7 @@ BufferedLogHandler::~BufferedLogHandler()
 {
   m_stop_logging = true;
   m_logbuf->stop();
-  NdbThread_WaitFor(m_log_threadvar, nullptr);
+  NdbThread_WaitFor(m_log_threadvar, NULL);
   NdbThread_Destroy(&m_log_threadvar);
   delete m_logbuf;
   delete m_dest_loghandler;
@@ -99,7 +97,7 @@ BufferedLogHandler::close()
 bool
 BufferedLogHandler::is_open()
 {
-  if (m_log_threadvar == nullptr)
+  if (m_log_threadvar == NULL)
   {
     return false;
   }
@@ -163,8 +161,7 @@ BufferedLogHandler::isStopSet()
 }
 
 bool
-BufferedLogHandler::setParam(const BaseString &/*param*/,
-			     const BaseString &/*value*/)
+BufferedLogHandler::setParam(const BaseString &param, const BaseString &value)
 {
   return true;
 }
@@ -195,54 +192,47 @@ BufferedLogHandler::writeToDestLogHandler()
 void
 BufferedLogHandler::writeLostMsgDestLogHandler()
 {
-  const size_t lost_count = m_logbuf->getLostCount();
+  size_t lost_count = m_logbuf->getLostCount();
+  char category[LogHandler::MAX_HEADER_LENGTH + 1];
+  char msg[MAX_LOG_MESSAGE_SIZE + 1];
 
   if (lost_count)
   {
-    cstrbuf<LostMsgHandler::MAX_LOST_MESSAGE_SIZE> msg;
-    require(msg.appendf(LostMsgHandler::LOST_MESSAGES_FMT, lost_count) != -1);
-    assert(!msg.is_truncated());
-    time_t now = ::time(nullptr);
-    constexpr char category[] = "MgmtSrvr";
-    m_dest_loghandler->append(category, Logger::LL_INFO, msg.c_str(), now);
+    strcpy(category, "MgmtSrvr");
+    Logger::LoggerLevel level = Logger::LL_INFO;
+    BaseString::snprintf(msg, MAX_LOG_MESSAGE_SIZE,
+                         "*** %lu MESSAGES LOST ***",
+                         (unsigned long)lost_count);
+    time_t now = ::time((time_t*)NULL);
+    m_dest_loghandler->append(category, level, msg, now);
   }
 }
 
-size_t MessageStreamLostMsgHandler::getSizeOfLostMsg(size_t /*lost_bytes*/,
-                                                     size_t lost_msgs)
+size_t
+MessageStreamLostMsgHandler::getSizeOfLostMsg(size_t lost_bytes, size_t lost_msgs)
 {
-  cstrbuf<0> nullbuf;
-  require(nullbuf.append(m_category) != -1);
-  require(nullbuf.appendf(LOST_MESSAGES_FMT, lost_msgs) != -1);
   size_t lost_msg_len = sizeof(BufferedLogHandler::LogMessageFixedPart) +
-                        nullbuf.untruncated_length();
+      snprintf(NULL, 0, m_lost_msg_fmt, lost_msgs) +
+      strlen(m_category);
   return lost_msg_len;
 }
 
-bool MessageStreamLostMsgHandler::writeLostMsg(char* buf,
-                                               size_t buf_size,
-                                               size_t /*lost_bytes*/,
-                                               size_t lost_msgs)
+bool
+MessageStreamLostMsgHandler::writeLostMsg(char* buf, size_t buf_size, size_t lost_bytes, size_t lost_msgs)
 {
   BufferedLogHandler::LogMessageFixedPart lost_message_fixedpart;
   lost_message_fixedpart.level = Logger::LL_DEBUG;
-  lost_message_fixedpart.log_timestamp = time((time_t*)nullptr);
+  lost_message_fixedpart.log_timestamp = time((time_t*)NULL);
+
+  lost_message_fixedpart.varpart_length[0] = strlen(m_category);
+  lost_message_fixedpart.varpart_length[1] =
+      snprintf(NULL, 0, m_lost_msg_fmt, lost_msgs);
 
   const size_t sz_fixedpart = sizeof(lost_message_fixedpart);
-  require(sz_fixedpart <= buf_size);
-
-  cstrbuf strbuf({buf + sz_fixedpart, buf + buf_size});
-
-  require(strbuf.append(m_category) != -1);
-  lost_message_fixedpart.varpart_length[0] = strbuf.length();
-  assert(!strbuf.is_truncated());
-
-  require(strbuf.appendf(LOST_MESSAGES_FMT, lost_msgs) != -1);
-  lost_message_fixedpart.varpart_length[1] =
-      strbuf.length() - lost_message_fixedpart.varpart_length[0];
-  assert(!strbuf.is_truncated());
-
   memcpy(buf, &lost_message_fixedpart, sz_fixedpart);
-
+  memcpy(buf + sz_fixedpart, m_category, strlen(m_category));
+  snprintf(buf + sz_fixedpart + strlen(m_category),
+                      lost_message_fixedpart.varpart_length[1],
+                      m_lost_msg_fmt, lost_msgs);
   return true;
 }

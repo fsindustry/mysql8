@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -211,7 +211,7 @@ bool Event_db_repository::drop_event(THD *thd, LEX_CSTRING db, LEX_CSTRING name,
     When we are going out of the function scope, the original binary
     format state will be restored.
   */
-  const Save_and_Restore_binlog_format_state binlog_format_state(thd);
+  Save_and_Restore_binlog_format_state binlog_format_state(thd);
 
   DBUG_PRINT("enter", ("%s@%s", db.str, name.str));
 
@@ -298,7 +298,7 @@ bool Event_db_repository::load_named_event(THD *thd, LEX_CSTRING dbname,
   DBUG_TRACE;
   DBUG_PRINT("enter", ("thd: %p  name: %*s", thd, (int)name.length, name.str));
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
   if (thd->dd_client()->acquire(dbname.str, name.str, &event_obj)) {
     // Error is reported by the dictionary subsystem.
@@ -328,7 +328,7 @@ bool Event_db_repository::update_timing_fields_for_event(
     my_time_t last_executed, ulonglong status) {
   DBUG_TRACE;
   // Turn off autocommit.
-  const Disable_autocommit_guard autocommit_guard(thd);
+  Disable_autocommit_guard autocommit_guard(thd);
 
   /*
     Turn off row binlogging of this statement and use statement-based
@@ -336,12 +336,12 @@ bool Event_db_repository::update_timing_fields_for_event(
     When we are going out of the function scope, the original binary
     format state will be restored.
   */
-  const Save_and_Restore_binlog_format_state binlog_format_state(thd);
+  Save_and_Restore_binlog_format_state binlog_format_state(thd);
 
   assert(thd->security_context()->check_access(SUPER_ACL));
 
   dd::Event *event = nullptr;
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   if (thd->dd_client()->acquire_for_modification(event_db_name.str,
                                                  event_name.str, &event))
     return true;

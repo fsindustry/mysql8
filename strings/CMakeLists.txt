@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -23,14 +23,13 @@
 ADD_WSHADOW_WARNING()
 
 SET(STRINGS_SOURCES
-  collations.cc
-  collations_internal.cc
   ctype-big5.cc
   ctype-bin.cc
+  ctype.cc
   ctype-cp932.cc
   ctype-czech.cc
-  ctype-euc_kr.cc
   ctype-eucjpms.cc
+  ctype-euc_kr.cc
   ctype-extra.cc
   ctype-gb18030.cc
   ctype-gb2312.cc
@@ -45,16 +44,27 @@ SET(STRINGS_SOURCES
   ctype-ujis.cc
   ctype-utf8.cc
   ctype-win1250ch.cc
-  ctype.cc
+  decimal.cc
   dtoa.cc
   int2str.cc
   my_strchr.cc
   my_strtoll10.cc
-  my_uctype.cc
-  sql_chars.cc
+  str2int.cc
   str_alloc.cc
+  strcont.cc
+  strmake.cc
+  strxmov.cc
+  strxnmov.cc
   xml.cc
 )
+
+# Aliasing bug in union in Clang
+# Bug#26161442 MAIN.SELECT* TESTS ARE FAILING WITH CLANG 4.0
+# Problem: wrong results for some corner cases when converting string to double.
+IF(MY_COMPILER_IS_CLANG AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "4.0")
+  ADD_COMPILE_FLAGS(dtoa.cc COMPILE_FLAGS "-fno-strict-aliasing")
+ENDIF()
 
 MYSQL_ADD_EXECUTABLE(uca9dump uca9-dump.cc SKIP_INSTALL)
 
@@ -67,24 +77,16 @@ SET(ZH_HANS_SRC_FILE ${CMAKE_SOURCE_DIR}/strings/lang_data/zh_hans.txt)
 SET(ZH_HANS_DST_FILE ${CMAKE_BINARY_DIR}/strings/uca900_zh_tbls.cc)
 SET(JA_HANS_SRC_FILE ${CMAKE_SOURCE_DIR}/strings/lang_data/ja_hans.txt)
 SET(JA_HANS_DST_FILE ${CMAKE_BINARY_DIR}/strings/uca900_ja_tbls.cc)
-
-ADD_CUSTOM_COMMAND(
-  OUTPUT ${JA_HANS_DST_FILE}
-  COMMAND uca9dump ja
-  --in_file=${JA_HANS_SRC_FILE}
-  --out_file=${JA_HANS_DST_FILE}
-  DEPENDS uca9dump ${JA_HANS_SRC_FILE}
-  )
-ADD_CUSTOM_TARGET(strings_ja_hans DEPENDS ${JA_HANS_DST_FILE})
-
-ADD_CUSTOM_COMMAND(
-  OUTPUT ${ZH_HANS_DST_FILE}
-  COMMAND uca9dump zh
-  --in_file=${ZH_HANS_SRC_FILE}
-  --out_file=${ZH_HANS_DST_FILE}
-  DEPENDS uca9dump ${ZH_HANS_SRC_FILE}
-  )
-ADD_CUSTOM_TARGET(strings_zh_hans DEPENDS ${ZH_HANS_DST_FILE})
+ADD_CUSTOM_COMMAND(OUTPUT ${ZH_HANS_DST_FILE}
+                          ${JA_HANS_DST_FILE}
+                   COMMAND uca9dump zh
+                     --in_file=${ZH_HANS_SRC_FILE}
+                     --out_file=${ZH_HANS_DST_FILE}
+                   COMMAND uca9dump ja
+                     --in_file=${JA_HANS_SRC_FILE}
+                     --out_file=${JA_HANS_DST_FILE}
+                   DEPENDS uca9dump ${ZH_HANS_SRC_FILE} ${JA_HANS_SRC_FILE}
+                  )
 
 SET_SOURCE_FILES_PROPERTIES(
   ${JA_HANS_DST_FILE} ${ZH_HANS_DST_FILE}
@@ -94,43 +96,9 @@ SET_SOURCE_FILES_PROPERTIES(
 LIST(APPEND STRINGS_SOURCES ${JA_HANS_DST_FILE} ${ZH_HANS_DST_FILE})
 # Avoid dependencies on perschema data defined in mysys
 ADD_DEFINITIONS(-DDISABLE_MYSQL_THREAD_H)
-
-IF(NOT WIN32)
-  SET(STRINGS_COMPILE_OPTIONS COMPILE_OPTIONS "-fvisibility=hidden")
-ENDIF()
-
 ADD_CONVENIENCE_LIBRARY(strings ${STRINGS_SOURCES}
-  ${STRINGS_COMPILE_OPTIONS}
-  DEPENDENCIES strings_ja_hans strings_zh_hans
+  LINK_LIBRARIES mysys
   )
-
-# This is built to ensure that the strings library is indeed independent
-# of other MySQL libraries.
-IF(APPLE)
-  # We do not build object libraries on Mac, so compile everything twice.
-  ADD_SHARED_LIBRARY(strings_shared
-    ${STRINGS_SOURCES}
-    NO_UNDEFINED
-    SKIP_INSTALL
-    DEPENDENCIES strings_ja_hans strings_zh_hans
-    )
-ELSEIF(WIN32)
-  # We need to export the desired symbols, and generate the import library.
-  # Note the definition of MYSQL_LIBSTRINGS_DLL.
-  ADD_SHARED_LIBRARY(strings_shared
-    ${STRINGS_SOURCES}
-    SKIP_INSTALL
-    COMPILE_DEFINITIONS MYSQL_LIBSTRINGS_DLL
-    DEPENDENCIES strings_ja_hans strings_zh_hans
-    )
-ELSE()
-  ADD_SHARED_LIBRARY(strings_shared
-    $<TARGET_OBJECTS:strings_objlib>
-    NO_UNDEFINED
-    SKIP_INSTALL
-    DEPENDENCIES strings_ja_hans strings_zh_hans
-    )
-ENDIF()
 
 MYSQL_ADD_EXECUTABLE(conf_to_src conf_to_src.cc SKIP_INSTALL)
 TARGET_LINK_LIBRARIES(conf_to_src strings)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #include <atomic>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_io.h"
@@ -33,12 +34,11 @@
 #include "my_sqlcommand.h"
 #include "my_thread.h"
 #include "my_thread_local.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
-#include "mysql/components/services/bits/psi_thread_bits.h"
+#include "mysql/components/services/psi_stage_bits.h"
+#include "mysql/components/services/psi_thread_bits.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_thd_engine_lock.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/sql_security_ctx.h"
@@ -64,7 +64,6 @@
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 #include "violite.h"
 
 struct MYSQL_LEX_STRING;
@@ -73,7 +72,7 @@ using std::min;
 
 //////////////////////////////////////////////////////////
 //
-//  Definitions of functions declared in thread_pool_priv.h
+//  Defintions of functions declared in thread_pool_priv.h
 //
 //////////////////////////////////////////////////////////
 
@@ -160,13 +159,9 @@ void thd_clear_errors(THD *thd [[maybe_unused]]) { set_my_errno(0); }
   Close the socket used by this connection
 
   @param thd                THD object
-  @note Expects lock on thd->LOCK_thd_data.
 */
 
-void thd_close_connection(THD *thd) {
-  mysql_mutex_assert_owner(&thd->LOCK_thd_data);
-  thd->shutdown_active_vio();
-}
+void thd_close_connection(THD *thd) { thd->get_protocol_classic()->shutdown(); }
 
 /**
   Get current THD object from thread local data
@@ -213,14 +208,6 @@ void thd_unlock_data(THD *thd) { mysql_mutex_unlock(&thd->LOCK_thd_data); }
 
 bool thd_is_transaction_active(THD *thd) {
   return thd->get_transaction()->is_active(Transaction_ctx::SESSION);
-}
-
-/**
-  Predicate for determining if connection is in active multi-statement
-  transaction.
- */
-bool thd_in_active_multi_stmt_transaction(const THD *thd) {
-  return thd->in_active_multi_stmt_transaction();
 }
 
 /**
@@ -369,7 +356,7 @@ void **thd_ha_data(const MYSQL_THD thd, const struct handlerton *hton) {
 }
 
 void thd_storage_lock_wait(MYSQL_THD thd, long long value) {
-  thd->inc_lock_usec(value);
+  thd->utime_after_lock += value;
 }
 
 /**
@@ -403,15 +390,7 @@ int thd_sql_command(const MYSQL_THD thd) { return (int)thd->lex->sql_command; }
 
 int thd_tx_isolation(const MYSQL_THD thd) { return (int)thd->tx_isolation; }
 
-int thd_tx_is_read_only(const MYSQL_THD thd) {
-  // If the transaction is marked to be skipped read-only  then we ignore
-  // the value of tx_read_only variable and treat the transaction as
-  // a normal read-write trx.
-  if (thd->tx_read_only && thd->is_cmd_skip_transaction_read_only())
-    return 0;
-  else
-    return (int)thd->tx_read_only;
-}
+int thd_tx_is_read_only(const MYSQL_THD thd) { return (int)thd->tx_read_only; }
 
 int thd_tx_priority(const MYSQL_THD thd) {
   return (thd->thd_tx_priority != 0 ? thd->thd_tx_priority : thd->tx_priority);
@@ -434,33 +413,6 @@ int thd_tx_is_dd_trx(const MYSQL_THD thd) {
 
 void thd_inc_row_count(MYSQL_THD thd) {
   thd->get_stmt_da()->inc_current_row_for_condition();
-}
-
-/**
-  Returns the size of the beginning part of a (multibyte) string,
-  which can fit in max_size bytes.
-
-  @param[in] cs charset_info
-  @param[in] start pointer to the string
-  @param[in] original_size the length of the string (in bytes)
-  @param[in] max_size the size of the buffer which needs to hold the string
-  @return  the maximum length of a prefix of the string, that can be stored
-*/
-static size_t truncated_str_length(const CHARSET_INFO *cs, const char *start,
-                                   size_t original_size, size_t max_size) {
-  if (max_size >= original_size) return original_size;
-
-  uint next_char_len;
-  auto next_char = start;
-  auto end = start + original_size;
-
-  while ((next_char_len = my_mbcharlen_ptr(cs, next_char, end)) > 0 &&
-         (size_t)(next_char + next_char_len - start) <= max_size) {
-    next_char += next_char_len;
-    assert(next_char < end);
-    // *next_char is always a valid expression, since max_size < original_size
-  }
-  return next_char - start;
 }
 
 /**
@@ -526,9 +478,7 @@ char *thd_security_context(MYSQL_THD thd, char *buffer, size_t length,
     else
       len = min(thd->query().length, max_query_len);
     str.append('\n');
-    str.append(thd->query().str,
-               truncated_str_length(thd->charset(), thd->query().str,
-                                    thd->query().length, len));
+    str.append(thd->query().str, len);
   }
 
   mysql_mutex_unlock(&thd->LOCK_thd_query);
@@ -540,8 +490,7 @@ char *thd_security_context(MYSQL_THD thd, char *buffer, size_t length,
     was reallocated to a larger buffer to be able to fit.
   */
   assert(buffer != nullptr);
-  length = truncated_str_length(thd->charset(), str.c_ptr_quick(), str.length(),
-                                length - 1);
+  length = min(str.length(), length - 1);
   memcpy(buffer, str.c_ptr_quick(), length);
   /* Make sure that the new string is null terminated */
   buffer[length] = '\0';
@@ -636,23 +585,26 @@ void *thd_memdup(MYSQL_THD thd, const void *str, size_t size) {
 //
 //////////////////////////////////////////////////////////
 
-/**
+/*
   Interface for MySQL Server, plugins and storage engines to report
   when they are going to sleep/stall.
 
-  This is currently only implemented by by the threadpool and used to have
-  better knowledge of which threads that currently are actively running on CPUs.
-  When not running with TP this makes a call, possibly through a service,
-  to an empty function.
+  SYNOPSIS
+  thd_wait_begin()
+  thd                     Thread object
+  wait_type               Type of wait
+                          1 -- short wait (e.g. for mutex)
+                          2 -- medium wait (e.g. for disk io)
+                          3 -- large wait (e.g. for locked row/table)
+  NOTES
+    This is used by the threadpool to have better knowledge of which
+    threads that currently are actively running on CPUs. When a thread
+    reports that it's going to sleep/stall, the threadpool scheduler is
+    free to start another thread in the pool most likely. The expected wait
+    time is simply an indication of how long the wait is expected to
+    become, the real wait time could be very different.
 
   thd_wait_end MUST be called immediately after waking up again.
-
-  More info can be found in the TP documentation.
-
-  @param thd Calling thread context. If nullptr is passed, current_thd is used.
-  @param wait_type An enum value from the enum thd_wait_type (defined
-                   in include/mysql/service_thd_wait.h) but passed as int
-                   to preserve compatibility with exported service api.
 */
 void thd_wait_begin(MYSQL_THD thd, int wait_type) {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
@@ -663,14 +615,7 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
   Interface for MySQL Server, plugins and storage engines to report
   when they waking up from a sleep/stall.
 
-  This is currently only implemented by by the threadpool and used to have
-  better knowledge of which threads that currently are actively running on CPUs.
-  When not running with TP this makes a call, possibly through a service,
-  to an empty function.
-
-  More info can be found in the TP documentation.
-
-  @param thd Calling thread context. If nullptr is passed, current_thd is used.
+  @param  thd   Thread handle
 */
 void thd_wait_end(MYSQL_THD thd) {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,

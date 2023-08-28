@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 **** On Master ****
 drop table if exists test.marker;
@@ -22,7 +22,7 @@ set enabled='YES', timed='NO';
 **** On Master ****
 select * from performance_schema.setup_instruments
 where timed='NO' and name not like "memory/%";
-NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 select "This better be in the master" as in_master_digest;
 in_master_digest
 This better be in the master
@@ -65,7 +65,7 @@ a
 2
 select * from performance_schema.setup_instruments
 where timed='YES';
-NAME	ENABLED	TIMED	PROPERTIES	FLAGS	VOLATILITY	DOCUMENTATION
+NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 select "This better be in the slave" as in_slave_digest;
 in_slave_digest
 This better be in the slave

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,10 +29,10 @@
 #include <sys/types.h>
 #include <algorithm>
 
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_macros.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/mysqld.h"
 #include "sql/psi_memory_key.h"
 #include "sql_string.h"
@@ -42,7 +42,8 @@ using std::min;
 
 extern "C" void sql_alloc_error_handler(void);
 
-void init_sql_alloc(PSI_memory_key key, MEM_ROOT *mem_root, size_t block_size) {
+void init_sql_alloc(PSI_memory_key key, MEM_ROOT *mem_root, size_t block_size,
+                    size_t) {
   ::new ((void *)mem_root) MEM_ROOT(key, block_size);
   mem_root->set_error_handler(sql_alloc_error_handler);
 }
@@ -54,7 +55,7 @@ void *sql_calloc(size_t size) {
 }
 
 char *sql_strdup(const char *str) {
-  const size_t len = strlen(str) + 1;
+  size_t len = strlen(str) + 1;
   char *pos;
   if ((pos = (char *)(*THR_MALLOC)->Alloc(len))) memcpy(pos, str, len);
   return pos;

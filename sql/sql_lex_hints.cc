@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,7 +41,7 @@
 class PT_hint_list;
 
 /**
-  Constructor.
+  Consrtuctor.
 
   @param thd_arg          The thread handler.
   @param lineno_arg       The starting line number of a hint string in a query.
@@ -114,8 +114,8 @@ int Hint_scanner::scan() {
   }
 }
 
-void my_hint_parser_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
-                          PT_hint_list **, const char *msg) {
+void HINT_PARSER_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
+                       PT_hint_list **, const char *msg) {
   if (strcmp(msg, "syntax error") == 0)
     msg = ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR);
   scanner->syntax_warning(msg);
@@ -134,8 +134,8 @@ void my_hint_parser_error(THD *thd [[maybe_unused]], Hint_scanner *scanner,
 
 void Hint_scanner::syntax_warning(const char *msg) const {
   /* Push an error into the error stack */
-  const ErrConvString err(raw_yytext, input_buf_end - raw_yytext,
-                          thd->variables.character_set_client);
+  ErrConvString err(raw_yytext, input_buf_end - raw_yytext,
+                    thd->variables.character_set_client);
 
   push_warning_printf(thd, Sql_condition::SL_WARNING, ER_PARSE_ERROR,
                       ER_THD(thd, ER_PARSE_ERROR), msg, err.ptr(),
@@ -146,7 +146,7 @@ void Hint_scanner::syntax_warning(const char *msg) const {
   Add hint tokens to main lexer's digest calculation buffer.
 */
 void Hint_scanner::add_hint_token_digest() {
-  if (digest_state == nullptr) return;  // can't add: digest buffer is full
+  if (digest_state == nullptr) return;  // cant add: digest buffer is full
 
   if (prev_token == 0 || prev_token == HINT_ERROR) return;  // nothing to add
 

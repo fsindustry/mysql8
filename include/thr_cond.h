@@ -1,7 +1,7 @@
 #ifndef THR_COND_INCLUDED
 #define THR_COND_INCLUDED
 
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,7 @@
 
 #include "my_macros.h"
 #include "my_thread.h"
-#include "mysql/components/services/bits/thr_cond_bits.h"
+#include "mysql/components/services/thr_cond_bits.h"
 #include "thr_mutex.h"
 
 #ifdef _WIN32
@@ -62,8 +62,8 @@ static DWORD get_milliseconds(const struct timespec *abstime) {
     Convert timespec to millis and subtract current time.
     my_getsystime() returns time in 100 ns units.
   */
-  const ulonglong future = abstime->tv_sec * 1000 + abstime->tv_nsec / 1000000;
-  const ulonglong now = my_getsystime() / 10000;
+  ulonglong future = abstime->tv_sec * 1000 + abstime->tv_nsec / 1000000;
+  ulonglong now = my_getsystime() / 10000;
   /* Don't allow the timeout to be negative. */
   if (future < now) return 0;
   return (DWORD)(future - now);
@@ -92,7 +92,7 @@ static inline int native_cond_timedwait(native_cond_t *cond,
                                         native_mutex_t *mutex,
                                         const struct timespec *abstime) {
 #ifdef _WIN32
-  const DWORD timeout = get_milliseconds(abstime);
+  DWORD timeout = get_milliseconds(abstime);
   if (!SleepConditionVariableCS(cond, mutex, timeout)) return ETIMEDOUT;
   return 0;
 #else

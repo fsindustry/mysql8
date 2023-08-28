@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,13 +39,13 @@
   allowed.
 */
 
-class ndb_sockaddr;
+struct in6_addr;
 
 class LocalDnsCache {
 public:
   ~LocalDnsCache();
 
-  int getAddress(ndb_sockaddr * result, const char *hostname);
+  int getAddress(in6_addr * result, const char *hostname);
 protected:
   /* no heap allocation */
   static void * operator new(std::size_t) = delete;
@@ -55,9 +55,9 @@ private:
   // Negative cache of DNS misses
   std::unordered_set<std::string> m_failed_lookups;
   // Positive cache of DNS lookups
-  std::unordered_map<std::string, ndb_sockaddr*> m_resolver_cache;
+  std::unordered_map<std::string, in6_addr*> m_resolver_cache;
 
-  bool getCachedOrResolveAddress(ndb_sockaddr* result, const char* hostname);
+  bool getCachedOrResolveAddress(in6_addr* result, const char* hostname);
 };
 
 #endif

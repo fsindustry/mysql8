@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,22 +20,21 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "signaldata/ApiVersion.hpp"
-#include "RefConvert.hpp"
-#include "portlib/NdbTCP.h"
 
-bool printAPI_VERSION_REQ(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*recBlockNo*/)
-{
-  if (len < ApiVersionReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
+#include <signaldata/ApiVersion.hpp>
+#include <RefConvert.hpp>
+#include <NdbTCP.h>
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#endif
 
-  const ApiVersionReq *sig = (const ApiVersionReq *)&theData[0];
+bool
+printAPI_VERSION_REQ(FILE * output,
+                     const Uint32 * theData,
+                     Uint32 len,
+                     Uint16 recBlockNo){
+
+  ApiVersionReq * sig = (ApiVersionReq *)&theData[0];
 
   fprintf(output,
           " senderRef: (node: %d, block: %d), nodeId: %d\n" \
@@ -45,12 +44,13 @@ bool printAPI_VERSION_REQ(FILE *output,
   return true;
 }
 
-bool printAPI_VERSION_CONF(FILE *output,
-                           const Uint32 *theData,
-                           Uint32 len,
-                           Uint16 /*recBlockNo*/)
-{
-  const ApiVersionConf *sig = (const ApiVersionConf *)&theData[0];
+bool
+printAPI_VERSION_CONF(FILE * output,
+                      const Uint32 * theData,
+                      Uint32 len,
+                      Uint16 recBlockNo){
+
+  ApiVersionConf * sig = (ApiVersionConf *)&theData[0];
 
   if (len <= ApiVersionConf::SignalLengthIPv4)
   {
@@ -64,9 +64,13 @@ bool printAPI_VERSION_CONF(FILE *output,
   }
   else
   {
-    ndb_sockaddr in((const in6_addr*)sig->m_inet6_addr, 0);
+    struct in6_addr in;
     char addr_buf[INET6_ADDRSTRLEN];
-    char* address= Ndb_inet_ntop(&in, addr_buf, INET6_ADDRSTRLEN);
+    memcpy(in.s6_addr, sig->m_inet6_addr, sizeof(in.s6_addr));
+    char* address= Ndb_inet_ntop(AF_INET6,
+                            static_cast<void*>(&in),
+                            addr_buf,
+                            INET6_ADDRSTRLEN);
     fprintf(output,
             " senderRef: (node: %d, block: %d), nodeId: %d\n" \
             " version: %d, mysql_version: %d, inet6_addr: %s\n" \

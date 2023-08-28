@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include <utility>
 
+#include "m_string.h"
 #include "my_dbug.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
@@ -36,7 +37,6 @@
 #include "sql/psi_memory_key.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/transaction_info.h"
-#include "string_with_len.h"
 
 std::atomic<bool>
     Rpl_transaction_write_set_ctx::m_global_component_requires_write_sets(

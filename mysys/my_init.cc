@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,6 +43,8 @@
 #include <sys/types.h>
 #include <unordered_map>
 
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -65,14 +67,9 @@
 #include "mysql/psi/psi_rwlock.h"
 #include "mysql/psi/psi_stage.h"
 #include "mysql/psi/psi_thread.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysys/my_static.h"
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"
-#include "nulls.h"
-#include "str2int.h"
-#include "strxmov.h"
-#include "template_utils.h"
 
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
@@ -252,24 +249,6 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
   my_init_done = false;
 } /* my_end */
 
-/**
-  Pointer to function that handles abort. It is the std's abort() by default.
-*/
-static void (*my_abort_func)() = abort;
-
-[[noreturn]] void my_abort() {
-  my_abort_func();
-  /*
-    We should not reach here, it is required only because my_abort_func() is
-    not [[noreturn]].
-  */
-  abort();
-}
-
-void set_my_abort(void (*new_my_abort_func)()) {
-  my_abort_func = new_my_abort_func;
-}
-
 #ifdef _WIN32
 /*
   my_parameter_handler
@@ -280,11 +259,9 @@ void set_my_abort(void (*new_my_abort_func)()) {
   e.g. iterator out-of-range, but pointing to valid memory.
 */
 
-void my_parameter_handler(const wchar_t *expression [[maybe_unused]],
-                          const wchar_t *function [[maybe_unused]],
-                          const wchar_t *file [[maybe_unused]],
-                          unsigned int line [[maybe_unused]],
-                          uintptr_t pReserved [[maybe_unused]]) {
+void my_parameter_handler(const wchar_t *expression, const wchar_t *function,
+                          const wchar_t *file, unsigned int line,
+                          uintptr_t pReserved) {
 #ifndef NDEBUG
   fprintf(stderr,
           "my_parameter_handler errno %d "
@@ -403,7 +380,7 @@ static bool win32_have_tcpip() {
 
 static bool win32_init_tcp_ip() {
   if (win32_have_tcpip()) {
-    const WORD wVersionRequested = MAKEWORD(2, 2);
+    WORD wVersionRequested = MAKEWORD(2, 2);
     WSADATA wsaData;
     /* Be a good citizen: maybe another lib has already initialised
             sockets, so dont clobber them unless necessary */
@@ -457,10 +434,10 @@ PSI_stage_info stage_waiting_for_disk_space = {0, "Waiting for disk space", 0,
                                                PSI_DOCUMENT_ME};
 
 PSI_mutex_key key_IO_CACHE_append_buffer_lock, key_IO_CACHE_SHARE_mutex,
-    key_KEY_CACHE_cache_lock, key_THR_LOCK_heap, key_THR_LOCK_lock,
-    key_THR_LOCK_malloc, key_THR_LOCK_mutex, key_THR_LOCK_myisam,
-    key_THR_LOCK_net, key_THR_LOCK_open, key_THR_LOCK_threads, key_TMPDIR_mutex,
-    key_THR_LOCK_myisam_mmap;
+    key_KEY_CACHE_cache_lock, key_THR_LOCK_charset, key_THR_LOCK_heap,
+    key_THR_LOCK_lock, key_THR_LOCK_malloc, key_THR_LOCK_mutex,
+    key_THR_LOCK_myisam, key_THR_LOCK_net, key_THR_LOCK_open,
+    key_THR_LOCK_threads, key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
 
 #ifdef HAVE_PSI_MUTEX_INTERFACE
 
@@ -469,6 +446,8 @@ static PSI_mutex_info all_mysys_mutexes[] = {
      PSI_DOCUMENT_ME},
     {&key_IO_CACHE_SHARE_mutex, "IO_CACHE::SHARE_mutex", 0, 0, PSI_DOCUMENT_ME},
     {&key_KEY_CACHE_cache_lock, "KEY_CACHE::cache_lock", 0, 0, PSI_DOCUMENT_ME},
+    {&key_THR_LOCK_charset, "THR_LOCK_charset", PSI_FLAG_SINGLETON, 0,
+     PSI_DOCUMENT_ME},
     {&key_THR_LOCK_heap, "THR_LOCK_heap", PSI_FLAG_SINGLETON, 0,
      PSI_DOCUMENT_ME},
     {&key_THR_LOCK_lock, "THR_LOCK_lock", PSI_FLAG_SINGLETON, 0,
@@ -538,6 +517,8 @@ static PSI_memory_info all_mysys_memory[] = {
 #endif
 
     {&key_memory_max_alloca, "max_alloca", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
+     PSI_DOCUMENT_ME},
+    {&key_memory_charset_file, "charset_file", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      PSI_DOCUMENT_ME},
     {&key_memory_charset_loader, "charset_loader", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      PSI_DOCUMENT_ME},

@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -87,7 +87,7 @@ Json_reader::Json_reader(const std::string schema, const std::string data,
   if (schema_json.Parse(schema).HasParseError()) return;
   if (document_.Parse(data).HasParseError()) return;
 
-  const rapidjson::SchemaDocument sd(schema_json);
+  rapidjson::SchemaDocument sd(schema_json);
   rapidjson::SchemaValidator validator(sd);
   if (!document_.Accept(validator)) return;
 
@@ -139,7 +139,7 @@ bool Json_reader::get_element(
               elements[index]["user"].Get<std::string>()};
   std::string hex_data(elements[index]["data"].Get<std::string>());
   std::string unhex_data(hex_data.length() * 2, '\0');
-  const unsigned long length = unhex_string(
+  unsigned long length = unhex_string(
       hex_data.data(), hex_data.data() + hex_data.size(), &unhex_data[0]);
   unhex_data.resize(length);
   data = {unhex_data, elements[index]["data_type"].Get<std::string>()};

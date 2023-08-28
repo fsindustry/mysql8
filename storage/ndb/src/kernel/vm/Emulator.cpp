@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -410,7 +410,7 @@ static const char* const jamFileNames[] =
    "mt.hpp",                             // 275
    "Configuration.hpp",                  // 276
    "GlobalData.hpp",                     // 277
-   "RWPool.cpp",                         // 278 DELETED FILE
+   "RWPool.cpp",                         // 278
    "GlobalData.cpp",                     // 279
    "Prio.hpp",                           // 280
    "SuperPool.hpp",                      // 281 DELETED FILE
@@ -426,7 +426,7 @@ static const char* const jamFileNames[] =
    "ndbd_malloc_impl.hpp",               // 291
    "ArrayPool.hpp",                      // 292
    "Mutex.cpp",                          // 293
-   "WOPool.cpp",                         // 294 DELETED FILE
+   "WOPool.cpp",                         // 294
    "test_context.hpp",                   // 295
    "ndbd_malloc_impl.cpp",               // 296
    "mt_thr_config.cpp",                  // 297
@@ -456,7 +456,7 @@ static const char* const jamFileNames[] =
    "arrayPoolTest.cpp",                  // 321 DELETED FILE
    "SimBlockList.hpp",                   // 322
    "mt-lock.hpp",                        // 323
-   "rr.cpp",                             // 324 DELETED FILE
+   "rr.cpp",                             // 324
    "testCopy.cpp",                       // 325
    "Ndbinfo.cpp",                        // 326
    "SectionReader.cpp",                  // 327
@@ -510,7 +510,7 @@ static const char* const jamFileNames[] =
    "DbtuxTree.cpp",                      // 375
    "DbtuxProxy.hpp",                     // 376
    "DbtuxMeta.cpp",                      // 377
-   "DbtuxCmp.cpp",                       // 378 DELETED FILE
+   "DbtuxCmp.cpp",                       // 378
    "Cmvmi.hpp",                          // 379
    "Cmvmi.cpp",                          // 380
    "AsyncIoThread.hpp",                  // 381
@@ -522,7 +522,7 @@ static const char* const jamFileNames[] =
    "AsyncFile.cpp",                      // 387
    "AsyncIoThread.cpp",                  // 388
    "AsyncFileTest.cpp",                  // 389 DELETED FILE
-   "MemoryChannel.cpp",                  // 390 DELETED FILE
+   "MemoryChannel.cpp",                  // 390
    "AsyncFile.hpp",                      // 391
    "Filename.hpp",                       // 392
    "Ndbfs.cpp",                          // 393

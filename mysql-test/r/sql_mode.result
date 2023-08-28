@@ -794,8 +794,7 @@ EXECUTE stmt USING @a;
 ERROR 22007: Truncated incorrect INTEGER value: '1invalid'
 SET SQL_MODE='';
 EXECUTE stmt USING @a;
-SHOW WARNINGS;
-Level	Code	Message
+Warnings:
 Warning	1292	Truncated incorrect INTEGER value: '1invalid'
 Warning	1292	Truncated incorrect INTEGER value: '1invalid'
 Warning	1292	Truncated incorrect INTEGER value: '1invalid'

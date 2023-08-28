@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,10 +29,11 @@
 
 #include "compression.h"  // COMPRESSION_ALGORITHM_NAME_BUFFER_SIZE
 #include "libbinlogevents/include/binlog_event.h"  // enum_binlog_checksum_alg
+#include "m_string.h"
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_psi_config.h"
-#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql_com.h"
 #include "sql/binlog.h"
@@ -42,7 +43,6 @@
 #include "sql/rpl_rli.h"                  // rli->get_log_lock()
 #include "sql/rpl_trx_boundary_parser.h"  // Transaction_boundary_parser
 #include "sql/sql_const.h"
-#include "strmake.h"
 
 class Rpl_info_handler;
 class Server_ids;
@@ -124,11 +124,11 @@ class Master_info : public Rpl_info {
   */
   char start_password[MAX_PASSWORD_LENGTH + 1];
   /**
-    Stores the authentication plugin specified when running START SLAVE.
+    Stores the autentication plugin specified when running START SLAVE.
   */
   char start_plugin_auth[FN_REFLEN + 1];
   /**
-    Stores the authentication plugin directory specified when running
+    Stores the autentication plugin directory specified when running
     START SLAVE.
   */
   char start_plugin_dir[FN_REFLEN + 1];
@@ -473,7 +473,7 @@ class Master_info : public Rpl_info {
   /**
      returns the column number of a channel in the TABLE repository.
      Mainly used during server startup to load the information required
-     from the slave repository tables. See rpl_info_factory.cc
+     from the slave repostiory tables. See rpl_info_factory.cc
   */
   static uint get_channel_field_num();
 
@@ -799,8 +799,7 @@ class Master_info : public Rpl_info {
 
   /**
     Is the replica working in GTID only mode, meaning it does not
-    persist position related information when executing or queueing
-    transactions.
+    persist position related information when executing or queing transactions.
   */
   bool m_gtid_only_mode;
 
@@ -809,17 +808,6 @@ class Master_info : public Rpl_info {
     receiver position related information might be outdated.
   */
   bool m_is_receiver_position_info_invalid;
-
- public:
-  /*
-    Hostname of the server where master_uuid was last read.
-  */
-  std::string m_uuid_from_host{};
-
-  /*
-    Port of the server where master_uuid was last read.
-  */
-  uint m_uuid_from_port{0};
 };
 
 #endif /* RPL_MI_H */

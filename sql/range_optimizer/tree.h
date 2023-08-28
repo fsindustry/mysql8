@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -375,7 +375,9 @@ inline uint invert_max_flag(uint max_flag) {
    - check_quick_select() - Walk the SEL_ARG graph and find an estimate of
                             how many table records are contained within all
                             intervals.
-   - get_ranges_from_tree() - Walk the SEL_ARG, materialize the key intervals.
+   - get_quick_select()   - Walk the SEL_ARG, materialize the key intervals,
+                            and create QUICK_RANGE_SELECT object that will
+                            read records within these intervals.
 
   4. SPACE COMPLEXITY NOTES
 
@@ -559,8 +561,7 @@ class SEL_ARG {
   SEL_ARG(SEL_ARG &);
   SEL_ARG(Field *, const uchar *, const uchar *, bool asc);
   SEL_ARG(Field *field, uint8 part, uchar *min_value, uchar *max_value,
-          uint8 min_flag, uint8 max_flag, bool maybe_flag, bool asc,
-          ha_rkey_function gis_flag);
+          uint8 min_flag, uint8 max_flag, bool maybe_flag, bool asc);
   /**
     Note that almost all SEL_ARGs are created on the MEM_ROOT,
     so this destructor will only rarely be called.
@@ -612,22 +613,20 @@ class SEL_ARG {
     }
     return new (mem_root)
         SEL_ARG(field, part, new_min, new_max, flag_min, flag_max,
-                maybe_flag && arg->maybe_flag, is_ascending,
-                min_flag & GEOM_FLAG ? rkey_func_flag : HA_READ_INVALID);
+                maybe_flag && arg->maybe_flag, is_ascending);
   }
   SEL_ARG *clone_first(SEL_ARG *arg,
                        MEM_ROOT *mem_root) {  // arg->min <= X < arg->min
-    return new (mem_root) SEL_ARG(
-        field, part, min_value, arg->min_value, min_flag,
-        arg->min_flag & NEAR_MIN ? 0 : NEAR_MAX, maybe_flag || arg->maybe_flag,
-        is_ascending, min_flag & GEOM_FLAG ? rkey_func_flag : HA_READ_INVALID);
+    return new (mem_root)
+        SEL_ARG(field, part, min_value, arg->min_value, min_flag,
+                arg->min_flag & NEAR_MIN ? 0 : NEAR_MAX,
+                maybe_flag || arg->maybe_flag, is_ascending);
   }
   SEL_ARG *clone_last(SEL_ARG *arg,
                       MEM_ROOT *mem_root) {  // arg->min <= X <= key_max
     return new (mem_root)
         SEL_ARG(field, part, min_value, arg->max_value, min_flag, arg->max_flag,
-                maybe_flag || arg->maybe_flag, is_ascending,
-                min_flag & GEOM_FLAG ? rkey_func_flag : HA_READ_INVALID);
+                maybe_flag || arg->maybe_flag, is_ascending);
   }
   SEL_ARG *clone(RANGE_OPT_PARAM *param, SEL_ARG *new_parent, SEL_ARG **next);
 
@@ -884,39 +883,14 @@ class SEL_TREE {
 
     KEY: There are range predicates that can be used on at least one
       index.
+
+    KEY_SMALLER: There are range predicates that can be used on at
+      least one index. In addition, there are predicates that cannot
+      be directly utilized by range access on key parts in the same
+      index. These unused predicates makes it probable that the row
+      estimate for range access on this index is too pessimistic.
   */
-  enum Type { IMPOSSIBLE, ALWAYS, KEY } type;
-
-  /**
-    Whether this SEL_TREE is an inexact (too broad) representation of the
-    predicates it is based on; that is, if it does not necessarily subsume
-    all of them. Note that a nullptr return from get_mm_tree() (which means
-    “could not generate a tree from this predicate”) is by definition inexact.
-
-    There are two main ways a SEL_TREE can become inexact:
-
-      - The predicate references fields not contained in any indexes tracked
-        by the SEL_TREE.
-      - The predicate could be of a form that is not representable as a range.
-        E.g., x > 30 is a range, x mod 2 = 1 is not (although it could
-        in theory be converted to a large amount of disjunct ranges).
-
-    If a SEL_TREE is inexact, the predicates must be rechecked after the
-    range scan, using a filter. (Note that it is never too narrow, only ever
-    exact or too broad.) The old join optimizer always does this, no matter
-    what the inexact flag is set to.
-
-    Note that additional checks are needed to subsume a predicate even if
-    inexact == false. In particular, SEL_TREE contains information for all
-    indexes over a table, but if a regular range scan is chosen, it can use
-    only one index. So one must then go through all predicates to see if they
-    refer to fields not contained in the given index. Furthermore, range scans
-    on composite (multi-part) indexes can drop predicates on the later keyparts
-    (making predicates on those keyparts inexact), since range scans only
-    support inequalities on the last keypart in any given range. This check
-    must be done in get_ranges_from_tree().
-   */
-  bool inexact = false;
+  enum Type { IMPOSSIBLE, ALWAYS, MAYBE, KEY, KEY_SMALLER } type;
 
   SEL_TREE(enum Type type_arg, MEM_ROOT *root, size_t num_keys)
       : type(type_arg), keys(root, num_keys), n_ror_scans(0) {}
@@ -975,6 +949,10 @@ class SEL_TREE {
   /* The members below are filled/used only after get_mm_tree is done */
   Key_map ror_scans_map; /* bitmask of ROR scan-able elements in keys */
   uint n_ror_scans;      /* number of set bits in ror_scans_map */
+
+  ROR_SCAN_INFO **ror_scans;     /* list of ROR key scans */
+  ROR_SCAN_INFO **ror_scans_end; /* last ROR scan */
+  /* Note that #records for each key scan is stored in table->quick_rows */
 
   /**
     Convenience function for removing an element in keys[]. The typical

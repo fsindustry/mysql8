@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,6 @@
 #include "my_config.h"
 
 #include "my_compiler.h"
-#include "mysql/strings/m_ctype.h"
 
 MY_COMPILER_DIAGNOSTIC_PUSH()
 // include/mecab.h:1384:22: warning: empty paragraph passed to '@param' command
@@ -37,7 +36,6 @@ MY_COMPILER_DIAGNOSTIC_POP()
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/log_builtins.h>
 
-#include "m_string.h"
 #include "mysqld_error.h"
 #include "storage/innobase/include/fts0tokenize.h"
 
@@ -253,7 +251,7 @@ static int mecab_parser_parse(MYSQL_FTPARSER_PARAM *param) {
   int ret = 0;
 
   /* Mecab supports utf8mb4/utf8mb3, eucjpms(ujis) and cp932(sjis). */
-  std::string param_csname = param->cs->csname;
+  std::string param_csname = replace_utf8_utf8mb3(param->cs->csname);
   if (param_csname == "eucjpms") {
     param_csname = "ujis";
   } else if (param_csname == "cp932") {
@@ -289,7 +287,7 @@ static int mecab_parser_parse(MYSQL_FTPARSER_PARAM *param) {
   /* Allocate a new string with '\0' in the end to avoid
   valgrind error "Invalid read of size 1" in mecab. */
   assert(param->length >= 0);
-  const int doc_length = param->length;
+  int doc_length = param->length;
   char *doc = reinterpret_cast<char *>(malloc(doc_length + 1));
 
   if (doc == NULL) {

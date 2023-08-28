@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -133,7 +133,7 @@ static void test_session(void *p) {
   /*  close sessions: Must pass */
   for (int i = 0; i < nb_sessions; i++) {
     WRITE_VAL("srv_session_close %d\n", nb_sessions - 1 - i);
-    const bool session_ret = srv_session_close(sessions[nb_sessions - 1 - i]);
+    bool session_ret = srv_session_close(sessions[nb_sessions - 1 - i]);
     if (session_ret)
       LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                       "srv_session_close_%d failed.", nb_sessions - 1 - i);
@@ -162,7 +162,7 @@ static void test_session_non_reverse(void *p [[maybe_unused]]) {
   /*  close sessions: Must pass */
   for (int i = 0; i < nb_sessions; i++) {
     WRITE_VAL("srv_session_close %d\n", i);
-    const bool session_ret = srv_session_close(sessions[i]);
+    bool session_ret = srv_session_close(sessions[i]);
     if (session_ret)
       LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                       "srv_session_close_%d failed.", i);
@@ -197,7 +197,7 @@ static void test_session_only_open(void *p [[maybe_unused]]) {
   cmd.com_query.query = "SELECT * FROM test.t_int";
   cmd.com_query.length = strlen(cmd.com_query.query);
   command_service_run_command(NULL, COM_QUERY, &cmd,
-                              &my_charset_utf8mb3_general_ci, &sql_cbs,
+                              &my_charset_utf8_general_ci, &sql_cbs,
                               CS_TEXT_REPRESENTATION, ctx);
   delete ctx;
 }
@@ -271,8 +271,7 @@ static int test_session_service_plugin_init(void *p) {
   test_session(p);
   test_session_non_reverse(p);
   test_session_only_open(p);
-  const unsigned int thread_count =
-      srv_session_info_thread_count((const void *)p);
+  unsigned int thread_count = srv_session_info_thread_count((const void *)p);
   WRITE_VAL("Number of threads: %d\n", thread_count);
   WRITE_STR("Follows threaded run\n");
   test_in_spawned_thread(p, test_session);

@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -78,5 +78,4 @@ SET(CMAKE_THREAD_LIBS_INIT -lpthread CACHE INTERNAL "" FORCE)
 # Solaris specific large page support
 CHECK_SYMBOL_EXISTS(MHA_MAPSIZE_VA sys/mman.h  HAVE_SOLARIS_LARGE_PAGES)
 
-SET(LINK_FLAG_NO_UNDEFINED "-Wl,--no-undefined")
 SET(LINK_FLAG_Z_DEFS "-z,defs")

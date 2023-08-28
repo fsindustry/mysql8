@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,8 +65,7 @@ LINE_BUFFER *batch_readline_init(ulong max_size, FILE *file) {
   return line_buff;
 }
 
-char *batch_readline(LINE_BUFFER *line_buff,
-                     bool binary_mode [[maybe_unused]]) {
+char *batch_readline(LINE_BUFFER *line_buff, bool binary_mode) {
   char *pos;
   ulong out_length;
 
@@ -142,8 +141,8 @@ static bool init_line_buffer(LINE_BUFFER *buffer, File file, ulong size,
   concatenation of all strings separated by spaces
 */
 static bool init_line_buffer_from_string(LINE_BUFFER *buffer, char *str) {
-  const uint old_length = (uint)(buffer->end - buffer->buffer);
-  const uint length = (uint)strlen(str);
+  uint old_length = (uint)(buffer->end - buffer->buffer);
+  uint length = (uint)strlen(str);
   if (!(buffer->buffer = buffer->start_of_line = buffer->end_of_line =
             (char *)my_realloc(PSI_NOT_INSTRUMENTED, (uchar *)buffer->buffer,
                                old_length + length + 2,
@@ -168,14 +167,14 @@ static bool init_line_buffer_from_string(LINE_BUFFER *buffer, char *str) {
 
 static size_t fill_buffer(LINE_BUFFER *buffer) {
   size_t read_count;
-  const uint bufbytes = (uint)(buffer->end - buffer->start_of_line);
+  uint bufbytes = (uint)(buffer->end - buffer->start_of_line);
 
   if (buffer->eof) return 0; /* Everything read */
 
   /* See if we need to grow the buffer. */
 
   for (;;) {
-    const uint start_offset = (uint)(buffer->start_of_line - buffer->buffer);
+    uint start_offset = (uint)(buffer->start_of_line - buffer->buffer);
     read_count = (buffer->bufread - bufbytes) / batch_io_size;
     if ((read_count *= batch_io_size)) break;
     if (buffer->bufread * 2 > buffer->max_size) {

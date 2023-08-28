@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,28 +26,23 @@
 
 #include <Properties.hpp>
 
-#include "portlib/ndb_socket.h"  // ntohl()
+#include <NdbTCP.h>
 #include <NdbOut.hpp>
 #include <string>
-#include <string_view>
 #include <algorithm>
 #include <utility>
-#include "util/cstrbuf.h"
 
 static
-char * f_strdup(std::string_view s)
-{
-  if(s.data() == nullptr) return nullptr;
-  char* p = (char*) malloc(s.size() + 1);
-  memcpy(p, s.data(), s.size());
-  p[s.size()] = 0;
-  return p;
+char * f_strdup(const char * s){
+  if(!s) return 0;
+  return strdup(s);
 }
 
 /**
  * Note has to be a multiple of 4 bytes
  */
 const char Properties::version[] = { 2, 0, 0, 1, 1, 1, 1, 4 };
+const char Properties::delimiter = ':';
 
 /**
  * PropertyImpl
@@ -61,14 +56,14 @@ struct PropertyImpl{
   PropertyImpl();
   PropertyImpl(const char * name, Uint32 value);
   PropertyImpl(const char * name, Uint64 value);
-  PropertyImpl(const char * name, std::string_view value);
+  PropertyImpl(const char * name, const char * value);
   PropertyImpl(const char * name, const Properties * value);
   PropertyImpl(const PropertyImpl &prop);
   PropertyImpl(PropertyImpl &&prop);
   PropertyImpl& operator=(const PropertyImpl &obj);
   PropertyImpl& operator=(PropertyImpl &&obj);
 
-  bool append(std::string_view value);
+  bool append(const char * value);
 
 };
 
@@ -95,6 +90,9 @@ public:
   PropertyImpl * put(PropertyImpl*);
   void remove(const char * name);
   void clear();
+  
+  Uint32 getPackedSize(Uint32 pLen) const;
+  bool unpack(const Uint32 * buf, Uint32 &bufLen, Properties * top, int items);
   
   Uint32 getTotalItems() const;
 
@@ -127,10 +125,6 @@ Property::Property(const char * name, Uint32 value){
 }
 
 Property::Property(const char * name, const char * value){
-  impl = new PropertyImpl(name, std::string_view{value});
-}
-
-Property::Property(const char * name, std::string_view value){
   impl = new PropertyImpl(name, value);
 }
 
@@ -148,12 +142,12 @@ Property::~Property(){
  * Methods for Properties
  */
 Properties::Properties(bool case_insensitive){
-  parent = nullptr;
+  parent = 0;
   impl = new PropertiesImpl(this, case_insensitive);
 }
 
 Properties::Properties(const Properties & org){
-  parent = nullptr;
+  parent = 0;
   impl = new PropertiesImpl(this, * org.impl);
 }
 
@@ -184,7 +178,7 @@ Properties::~Properties(){
 
 void
 Properties::put(const Property * anArray, int arrayLen){
-  if(anArray == nullptr)
+  if(anArray == 0)
     return;
   for(int i = 0; i<arrayLen; i++)
     impl->put(anArray[i].impl);
@@ -193,20 +187,20 @@ Properties::put(const Property * anArray, int arrayLen){
 template <class T>
 bool
 put(PropertiesImpl * impl, const char * name, T value, bool replace){
-  if(name == nullptr){
+  if(name == 0){
     impl->setErrno(E_PROPERTIES_INVALID_NAME);
     return false;
   }
 
-  PropertiesImpl * tmp = nullptr;
+  PropertiesImpl * tmp = 0;
   const char * short_name = impl->getPropsPut(name, &tmp);
 
-  if(tmp == nullptr){
+  if(tmp == 0){
     impl->setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
   
-  if(tmp->get(short_name) != nullptr){
+  if(tmp->get(short_name) != 0){
     if(!replace)
     {
       impl->setErrno(E_PROPERTIES_ELEMENT_ALREADY_EXISTS);
@@ -216,7 +210,7 @@ put(PropertiesImpl * impl, const char * name, T value, bool replace){
   }
   PropertyImpl toPut = PropertyImpl(short_name, value);
 
-  return (tmp->put(toPut) != nullptr);
+  return (tmp->put(toPut) != 0);
 }
 
 bool
@@ -231,25 +225,14 @@ Properties::put64(const char * name, Uint64 value, bool replace){
 
 bool 
 Properties::put(const char * name, const char * value, bool replace){
-  return ::put(impl, name, std::string_view{value}, replace);
-}
-
-bool 
-Properties::put(const char * name, std::string_view value, bool replace){
   return ::put(impl, name, value, replace);
 }
 
 bool
 Properties::append(const char * name, const char * value)
 {
-  return append(name, std::string_view{value});
-}
-
-bool
-Properties::append(const char * name, std::string_view value)
-{
   PropertyImpl * nvp = impl->get(name);
-  if (nvp == nullptr)
+  if (nvp == NULL)
   {
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
@@ -279,7 +262,7 @@ Properties::put(const char * name, const Properties * value, bool replace){
 bool
 Properties::getTypeOf(const char * name, PropertiesType * type) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -291,13 +274,13 @@ Properties::getTypeOf(const char * name, PropertiesType * type) const {
 bool
 Properties::contains(const char * name) const {
   PropertyImpl * nvp = impl->get(name);
-  return nvp != nullptr;
+  return nvp != 0;
 }
 
 bool
 Properties::get(const char * name, Uint32 * value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -324,7 +307,7 @@ Properties::get(const char * name, Uint32 * value) const {
 bool
 Properties::get(const char * name, Uint64 * value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -348,7 +331,7 @@ Properties::get(const char * name, Uint64 * value) const {
 bool
 Properties::get(const char * name, const char ** value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -374,7 +357,7 @@ Properties::get(const char * name, BaseString& value) const {
 bool
 Properties::get(const char * name, const Properties ** value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -390,7 +373,7 @@ Properties::get(const char * name, const Properties ** value) const {
 bool
 Properties::getCopy(const char * name, char ** value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -407,7 +390,7 @@ Properties::getCopy(const char * name, char ** value) const {
 bool
 Properties::getCopy(const char * name, Properties ** value) const {
   PropertyImpl * nvp = impl->get(name);
-  if(nvp == nullptr){
+  if(nvp == 0){
     setErrno(E_PROPERTIES_NO_SUCH_ELEMENT);
     return false;
   }
@@ -432,37 +415,33 @@ Properties::remove(const char * name) {
 }
 
 void
-Properties::print(FILE * out, const char * prefix) const
-{
-  if (prefix == nullptr)
-  {
-    prefix = "";
-  }
+Properties::print(FILE * out, const char * prefix) const{
+  char buf[1024];
+  if(prefix == 0)
+    buf[0] = 0;
+  else
+    strncpy(buf, prefix, 1024);
   
   for (auto i : impl->content){
     switch(i.second.valueType){
     case PropertiesType_Uint32:
-      fprintf(out, "%s%s = (Uint32) %d\n", prefix, i.second.name,
+      fprintf(out, "%s%s = (Uint32) %d\n", buf, i.second.name,
 	      *(Uint32 *)i.second.value);
       break;
     case PropertiesType_Uint64:
-      fprintf(out, "%s%s = (Uint64) %lld\n", prefix, i.second.name,
+      fprintf(out, "%s%s = (Uint64) %lld\n", buf, i.second.name,
 	      *(Uint64 *)i.second.value);
       break;
     case PropertiesType_char:
-      fprintf(out, "%s%s = (char*) \"%s\"\n", prefix, i.second.name,
+      fprintf(out, "%s%s = (char*) \"%s\"\n", buf, i.second.name,
 	      (char *)i.second.value);
       break;
     case PropertiesType_Properties:
-    {
-      cstrbuf<1024> new_prefix;
-      new_prefix.append(prefix);
-      new_prefix.append(i.second.name);
-      new_prefix.append(1, delimiter);
-      new_prefix.replace_end_if_truncated(truncated_prefix_mark);
-      ((Properties *)i.second.value)->print(out, new_prefix.c_str());
+      char buf2 [1024];
+      BaseString::snprintf(buf2, sizeof(buf2), "%s%s%c",buf, i.second.name,
+	      Properties::delimiter);
+      ((Properties *)i.second.value)->print(out, buf2);
       break;
-    }
     case PropertiesType_Undefined:
       assert(0);
     }
@@ -516,8 +495,68 @@ IteratorImpl::next()
   }
   else
   {
-    return nullptr;
+    return NULL;
   }
+}
+
+
+Uint32
+Properties::getPackedSize() const {
+  Uint32 sz = 0;
+  
+  sz += sizeof(version); // Version id of properties object
+  sz += 4;               // No Of Items
+  sz += 4;               // Checksum
+
+  return sz + impl->getPackedSize(0);
+}
+
+static
+Uint32
+computeChecksum(const Uint32 * buf, Uint32 words){
+  Uint32 sum = 0;
+  for(unsigned int i = 0; i<words; i++)
+    sum ^= htonl(buf[i]);
+  
+  return sum;
+}
+
+bool
+Properties::unpack(const Uint32 * buf, Uint32 bufLen){
+  const Uint32 * bufStart = buf;
+  Uint32 bufLenOrg = bufLen;
+  
+  if(bufLen < sizeof(version)){
+    setErrno(E_PROPERTIES_INVALID_BUFFER_TO_SHORT);
+    return false;
+  }
+  
+  if(memcmp(buf, version, sizeof(version)) != 0){
+    setErrno(E_PROPERTIES_INVALID_VERSION_WHILE_UNPACKING);
+    return false;
+  }
+  bufLen -= sizeof(version);
+  
+  // Note that version must be a multiple of 4
+  buf += (sizeof(version) / 4); 
+  
+  if(bufLen < 4){
+    setErrno(E_PROPERTIES_INVALID_BUFFER_TO_SHORT);
+    return false;
+  }
+
+  Uint32 totalItems = ntohl(* buf);
+  buf++; bufLen -= 4;
+  bool res = impl->unpack(buf, bufLen, this, totalItems);
+  if(!res)
+    return res;
+
+  Uint32 sum = computeChecksum(bufStart, (bufLenOrg-bufLen)/4);
+  if(sum != ntohl(bufStart[(bufLenOrg-bufLen)/4])){
+    setErrno(E_PROPERTIES_INVALID_CHECKSUM);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -545,10 +584,10 @@ PropertiesImpl::setCaseInsensitiveNames(bool value){
 
 PropertyImpl *
 PropertiesImpl::get(const char * name) {
-  PropertiesImpl * tmp = nullptr;
+  PropertiesImpl * tmp = 0;
   const char * short_name = getProps(name, &tmp);
-  if(tmp == nullptr){
-    return nullptr;
+  if(tmp == 0){
+    return 0;
   }
 
   std::string str(short_name);
@@ -563,7 +602,7 @@ PropertiesImpl::get(const char * name) {
     return &iter->second;
   }
 
-  return nullptr;
+  return 0;
 }
 
 
@@ -656,7 +695,7 @@ PropertiesImpl::getProps(const char * name,
 			 PropertiesImpl ** impl) {
   const char * ret = name;
   const char * tmp = strchr(name, Properties::delimiter);
-  if(tmp == nullptr){
+  if(tmp == 0){
     * impl = this;
     return ret;
   } else {
@@ -669,12 +708,12 @@ PropertiesImpl::getProps(const char * name,
 
     free(tmp2);
 
-    if(nvp == nullptr){
-      * impl = nullptr;
-      return nullptr;
+    if(nvp == 0){
+      * impl = 0;
+      return 0;
     }
     if(nvp->valueType != PropertiesType_Properties){
-      * impl = nullptr;
+      * impl = 0;
       return name;
     }
     return ((Properties*)nvp->value)->impl->getProps(tmp+1, impl);
@@ -686,7 +725,7 @@ PropertiesImpl::getPropsPut(const char * name,
 			    PropertiesImpl ** impl) {
   const char * ret = name;
   const char * tmp = strchr(name, Properties::delimiter);
-  if(tmp == nullptr){
+  if(tmp == 0){
     * impl = this;
     return ret;
   } else {
@@ -697,7 +736,7 @@ PropertiesImpl::getPropsPut(const char * name,
     
     PropertyImpl * nvp = get(tmp2);
 
-    if(nvp == nullptr){
+    if(nvp == 0){
       Properties   * tmpP  = new Properties();
       PropertyImpl tmpPI = PropertyImpl(tmp2, tmpP);
       PropertyImpl * nvp2 = put(tmpPI);
@@ -709,11 +748,52 @@ PropertiesImpl::getPropsPut(const char * name,
     }
     free(tmp2);
     if(nvp->valueType != PropertiesType_Properties){
-      * impl = nullptr;
+      * impl = 0;
       return name;
     }
     return ((Properties*)nvp->value)->impl->getPropsPut(tmp+1, impl);
   }
+}
+
+int
+mod4(unsigned int i){
+  int res = i + (4 - (i % 4));
+  return res;
+}
+
+Uint32
+PropertiesImpl::getPackedSize(Uint32 pLen) const {
+  Uint32 sz = 0;
+  for (auto& x: content)
+  {
+    if(x.second.valueType == PropertiesType_Properties)
+    {
+      Properties * p = (Properties*)x.second.value;
+      sz += p->impl->getPackedSize(pLen+(Uint32)(x.first.length())+1);
+    }
+    else
+    {
+      sz += 4; // Type
+      sz += 4; // Name Len
+      sz += 4; // Value Len
+      sz += mod4(pLen + (unsigned)(x.first.length())); // Name
+      switch(x.second.valueType){
+      case PropertiesType_char:
+        sz += mod4((unsigned)strlen((char *)x.second.value));
+        break;
+      case PropertiesType_Uint32:
+        sz += mod4(4);
+        break;
+      case PropertiesType_Uint64:
+        sz += mod4(8);
+        break;
+      case PropertiesType_Properties:
+      default:
+        assert(0);
+      }
+    }
+  }
+  return sz;
 }
 
 struct CharBuf {
@@ -722,7 +802,7 @@ struct CharBuf {
   Uint32 contentLen;
 
   CharBuf(){
-    buffer     = nullptr;
+    buffer     = 0;
     bufLen     = 0;
     contentLen = 0;
   }
@@ -750,11 +830,11 @@ struct CharBuf {
       
       char * tmp = (char*)malloc(newSize + 1024);
       memset(tmp, 0, newSize + 1024);
-      if(tmp == nullptr)
+      if(tmp == 0)
 	return false;
       if(contentLen > 0)
 	memcpy(tmp, buffer, contentLen);
-      if(buffer != nullptr)
+      if(buffer != 0)
 	free(buffer);
       buffer = tmp;
       bufLen = newSize + 1024;
@@ -763,9 +843,79 @@ struct CharBuf {
   }
 };
 
+bool
+PropertiesImpl::unpack(const Uint32 * buf, Uint32 &bufLen, Properties * top,
+		       int _items){
+  CharBuf charBuf;
+  while(_items > 0){
+    Uint32 tmp[3]; 
+    
+    if(bufLen <= 12){
+      top->setErrno(E_PROPERTIES_BUFFER_TO_SMALL_WHILE_UNPACKING);
+      return false;
+    }
+
+    tmp[0] = ntohl(buf[0]);
+    tmp[1] = ntohl(buf[1]);
+    tmp[2] = ntohl(buf[2]);
+    buf    += 3;
+    bufLen -= 12;
+
+    PropertiesType pt   = (PropertiesType)tmp[0];
+    Uint32 nameLen      = tmp[1];
+    Uint32 valueLen     = tmp[2];
+    Uint32 nameLenRead  = mod4(nameLen);
+    Uint32 valueLenRead = mod4(valueLen);
+
+    Uint32 sz = nameLenRead + valueLenRead;
+    if(bufLen < sz){
+      top->setErrno(E_PROPERTIES_BUFFER_TO_SMALL_WHILE_UNPACKING);
+      return false;
+    }
+
+    if(!charBuf.expand(sz)){
+      top->setErrno(E_PROPERTIES_ERROR_MALLOC_WHILE_UNPACKING, errno);
+      return false;
+    }
+
+    memcpy(charBuf.buffer, buf, sz);
+    buf    += (sz / 4);
+    bufLen -= sz ;
+
+    char * valBuf  = charBuf.buffer;
+    char * nameBuf = charBuf.buffer + valueLenRead;
+    
+    nameBuf[nameLen] = 0;
+    valBuf[valueLen] = 0;
+    
+    bool res3 = false;
+    switch(pt){
+    case PropertiesType_Uint32:
+      res3 = top->put(nameBuf, ntohl(* (Uint32 *)valBuf), true);
+      break;
+    case PropertiesType_Uint64:{
+      Uint64 hi = ntohl(* (Uint32 *)valBuf);
+      Uint64 lo = ntohl(* (Uint32 *)(valBuf + 4));
+      res3 = top->put64(nameBuf, (hi << 32) + lo, true);
+    }
+      break;
+    case PropertiesType_char:
+      res3 = top->put(nameBuf, valBuf, true);
+      break;
+    case PropertiesType_Properties:
+    case PropertiesType_Undefined:
+      assert(0);
+    }
+    if(!res3){
+      return false;
+    }
+    _items--;
+  }
+  return true;
+}
 
 PropertyImpl::~PropertyImpl(){
-  free(const_cast<char *>(name));
+  free((char*)name);
   switch(valueType){
   case PropertiesType_Uint32:
     delete (Uint32 *)value;
@@ -801,7 +951,7 @@ PropertyImpl::PropertyImpl(const char * _name, Uint64 _value) :
     name(f_strdup(_name)),
     value(new Uint64(_value)) {}
 
-PropertyImpl::PropertyImpl(const char * _name, std::string_view _value) :
+PropertyImpl::PropertyImpl(const char * _name, const char * _value) :
     valueType(PropertiesType_char),
     name(f_strdup(_name)),
     value(f_strdup(_value)) {}
@@ -861,7 +1011,7 @@ PropertyImpl& PropertyImpl::operator = (const PropertyImpl &prop)
     return *this;
   }
 
-  free(const_cast<char *>(name));
+  free((char*)name);
   switch(valueType)
   {
   case PropertiesType_Uint32:
@@ -925,21 +1075,21 @@ PropertyImpl::operator=(PropertyImpl &&obj)
 }
 
 bool
-PropertyImpl::append(std::string_view value)
+PropertyImpl::append(const char * value)
 {
   assert(this->valueType == PropertiesType_char);
-  assert(this->value != nullptr);
-  assert(value.data() != nullptr);
+  assert(this->value != NULL);
+  assert(value != NULL);
 
   const size_t old_len = strlen(reinterpret_cast<char*>(this->value));
-  const size_t new_len = old_len + value.size();
+  const size_t new_len = old_len + strlen(value);
   char * new_value = reinterpret_cast<char*>(realloc(this->value, new_len + 1));
-  if (new_value == nullptr)
+  if (new_value == NULL)
   {
     return false;
   }
-  memcpy(new_value + old_len, value.data(), value.size());
-  new_value[new_len] = 0;
+  const size_t append_len = new_len + 1 - old_len;
+  memcpy(new_value + old_len, value, append_len);
   this->value = new_value;
   return true;
 }
@@ -950,7 +1100,13 @@ const Uint32 E_PROPERTIES_INVALID_NAME                            = 1;
 const Uint32 E_PROPERTIES_NO_SUCH_ELEMENT                         = 2;
 const Uint32 E_PROPERTIES_INVALID_TYPE                            = 3;
 const Uint32 E_PROPERTIES_ELEMENT_ALREADY_EXISTS                  = 4;
-const Uint32 E_PROPERTIES_ERROR_MALLOC_WHILE_UNPACKING            = 5;
+
+const Uint32 E_PROPERTIES_ERROR_MALLOC_WHILE_PACKING              = 5;
+const Uint32 E_PROPERTIES_INVALID_VERSION_WHILE_UNPACKING         = 6;
+const Uint32 E_PROPERTIES_INVALID_BUFFER_TO_SHORT                 = 7;
+const Uint32 E_PROPERTIES_ERROR_MALLOC_WHILE_UNPACKING            = 8;
+const Uint32 E_PROPERTIES_INVALID_CHECKSUM                        = 9;
+const Uint32 E_PROPERTIES_BUFFER_TO_SMALL_WHILE_UNPACKING         = 10;
 
 /**
  * These are methods that used to be inline
@@ -959,13 +1115,17 @@ const Uint32 E_PROPERTIES_ERROR_MALLOC_WHILE_UNPACKING            = 5;
  */
 void
 Properties::setErrno(Uint32 pErr, Uint32 osErr) const {
-  if(parent != nullptr){
+  if(parent != 0){
     parent->setErrno(pErr, osErr);
     return ;
   }
-
-  propErrno = pErr;
-  osErrno = osErr;
+  
+  /**
+   * propErrno & osErrno used to be mutable,
+   * but diab didn't know what mutable meant.
+   */
+  *((Uint32*)&propErrno) = pErr;
+  *((Uint32*)&osErrno)   = osErr;
 }
 
 /**
@@ -994,14 +1154,7 @@ Properties::put64(const char * name, Uint32 no, Uint64 val, bool replace){
 
 
 bool 
-Properties::put(const char * name, Uint32 no, const char * val, bool replace)
-{
-  return put(name, no, std::string_view{val}, replace);
-}
-
-bool 
-Properties::put(const char * name, Uint32 no, std::string_view val, bool replace)
-{
+Properties::put(const char * name, Uint32 no, const char * val, bool replace){
   size_t tmp_len = strlen(name)+20;
   char * tmp = (char*)malloc(tmp_len);
   BaseString::snprintf(tmp, tmp_len, "%s_%d", name, no);
@@ -1120,5 +1273,5 @@ Properties::getCaseInsensitiveNames() const {
 
 template bool put(PropertiesImpl *, const char *, Uint32, bool);
 template bool put(PropertiesImpl *, const char *, Uint64, bool);
-template bool put(PropertiesImpl *, const char *, std::string_view, bool);
+template bool put(PropertiesImpl *, const char *, const char *, bool);
 template bool put(PropertiesImpl *, const char *, const Properties*, bool);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,8 @@
 
 #include <assert.h>
 #include <string.h>
-#include "my_byteorder.h"
+
+
 #include "ndb_constants.h"
 #include "ndb_types.h"
 
@@ -142,7 +143,7 @@ typedef NumTypeTraits< Uint64 > Tuint64;
  * Common Traits of non-standard NDB numeric types.
  *
  * Unless distinct [U]Int24 value types are defined to represent these
- * proper subsets of [U]Int32 numbers, the corresponding Traits classes
+ * proper subsets of [U]Int32 numbers, the correspoding Traits classes
  * need to be defined as separate types (not just mere specializations).
  * Using a derived class does that and allows to partially override.
  */
@@ -244,7 +245,7 @@ typedef NumTypeHelper< Uint64 > Huint64;
  * Basic Helper functions of non-standard NDB numeric types.
  *
  * Unless distinct [U]Int24 value types are defined to represent these
- * proper subsets of [U]Int32 numbers, the corresponding Helper classes
+ * proper subsets of [U]Int32 numbers, the correspoding Helper classes
  * need to be defined as separate types (not just mere specializations).
  * This class only derives from the Traits class to avoid member access
  * ambiguities resulting from multiple inheritance.

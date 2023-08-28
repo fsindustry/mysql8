@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -66,7 +66,7 @@ class Filesort {
   // If true, we will always sort references to rows on table (and crucially,
   // the result iterators used will always position the underlying table on
   // the original row before returning from Read()).
-  bool m_force_sort_rowids;
+  bool m_force_sort_positions;
   // TODO: Consider moving this into private members of Filesort.
   Sort_param m_sort_param;
 
@@ -75,7 +75,7 @@ class Filesort {
   // so we can't do that yet.
   Filesort(THD *thd, Mem_root_array<TABLE *> tables, bool keep_buffers,
            ORDER *order, ha_rows limit_arg, bool remove_duplicates,
-           bool force_sort_rowids, bool unwrap_rollup);
+           bool force_sort_positions, bool unwrap_rollup);
 
   Addon_fields *get_addon_fields(Addon_fields_status *addon_fields_status,
                                  uint *plength, uint *ppackable_length);
@@ -117,7 +117,7 @@ void copy_integer(uchar *to, size_t to_length, const uchar *from,
 
 // Returns whether a sort involving this table would necessarily be on row ID,
 // even if not forced by other means.
-bool SortWillBeOnRowId(const TABLE *table);
+bool SortWillBeOnRowId(TABLE *table);
 
 static inline void copy_native_longlong(uchar *to, size_t to_length,
                                         longlong val, bool is_unsigned) {

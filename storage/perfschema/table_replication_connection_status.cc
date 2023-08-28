@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -53,7 +53,8 @@ static void set_channel_name(void *const, const char &, size_t) {}
 
 static void set_group_name(void *const context, const char &value,
                            size_t length) {
-  auto *row = static_cast<struct st_row_connect_status *>(context);
+  struct st_row_connect_status *row =
+      static_cast<struct st_row_connect_status *>(context);
   const size_t max = UUID_LENGTH;
   length = std::min(length, max);
 
@@ -63,7 +64,8 @@ static void set_group_name(void *const context, const char &value,
 
 static void set_source_uuid(void *const context, const char &value,
                             size_t length) {
-  auto *row = static_cast<struct st_row_connect_status *>(context);
+  struct st_row_connect_status *row =
+      static_cast<struct st_row_connect_status *>(context);
   const size_t max = UUID_LENGTH;
   length = std::min(length, max);
 
@@ -72,7 +74,8 @@ static void set_source_uuid(void *const context, const char &value,
 }
 
 static void set_service_state(void *const context, bool value) {
-  auto *row = static_cast<struct st_row_connect_status *>(context);
+  struct st_row_connect_status *row =
+      static_cast<struct st_row_connect_status *>(context);
 
   row->service_state = value ? PS_RPL_CONNECT_SERVICE_STATE_YES
                              : PS_RPL_CONNECT_SERVICE_STATE_NO;
@@ -183,7 +186,7 @@ table_replication_connection_status::table_replication_connection_status()
 table_replication_connection_status::~table_replication_connection_status() =
     default;
 
-void table_replication_connection_status::reset_position() {
+void table_replication_connection_status::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -193,7 +196,7 @@ ha_rows table_replication_connection_status::get_row_count() {
   return channel_map.get_max_channels();
 }
 
-int table_replication_connection_status::rnd_next() {
+int table_replication_connection_status::rnd_next(void) {
   Master_info *mi = nullptr;
   channel_map.rdlock();
 
@@ -221,8 +224,7 @@ int table_replication_connection_status::rnd_pos(const void *pos) {
 
   channel_map.rdlock();
 
-  mi = channel_map.get_mi_at_pos(m_pos.m_index);
-  if (mi) {
+  if ((mi = channel_map.get_mi_at_pos(m_pos.m_index))) {
     res = make_row(mi);
   }
 
@@ -250,7 +252,7 @@ int table_replication_connection_status::index_init(uint idx, bool) {
   return 0;
 }
 
-int table_replication_connection_status::index_next() {
+int table_replication_connection_status::index_next(void) {
   Master_info *mi = nullptr;
 
   channel_map.rdlock();
@@ -417,21 +419,20 @@ int table_replication_connection_status::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /** channel_name*/
-          set_field_char_utf8mb4(f, m_row.channel_name,
-                                 m_row.channel_name_length);
+          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
           break;
         case 1: /** group_name */
           if (m_row.group_name_is_null) {
             f->set_null();
           } else {
-            set_field_char_utf8mb4(f, m_row.group_name, UUID_LENGTH);
+            set_field_char_utf8(f, m_row.group_name, UUID_LENGTH);
           }
           break;
         case 2: /** source_uuid */
           if (m_row.source_uuid_is_null) {
             f->set_null();
           } else {
-            set_field_char_utf8mb4(f, m_row.source_uuid, UUID_LENGTH);
+            set_field_char_utf8(f, m_row.source_uuid, UUID_LENGTH);
           }
           break;
         case 3: /** thread_id */
@@ -458,15 +459,15 @@ int table_replication_connection_status::read_row_values(TABLE *table,
           set_field_ulong(f, m_row.last_error_number);
           break;
         case 9: /*last_error_message*/
-          set_field_varchar_utf8mb4(f, m_row.last_error_message,
-                                    m_row.last_error_message_length);
+          set_field_varchar_utf8(f, m_row.last_error_message,
+                                 m_row.last_error_message_length);
           break;
         case 10: /*last_error_timestamp*/
           set_field_timestamp(f, m_row.last_error_timestamp);
           break;
         case 11: /*last_queued_trx*/
-          set_field_char_utf8mb4(f, m_row.last_queued_trx,
-                                 m_row.last_queued_trx_length);
+          set_field_char_utf8(f, m_row.last_queued_trx,
+                              m_row.last_queued_trx_length);
           break;
         case 12: /*last_queued_trx_original_commit_timestamp*/
           set_field_timestamp(f,
@@ -483,8 +484,7 @@ int table_replication_connection_status::read_row_values(TABLE *table,
           set_field_timestamp(f, m_row.last_queued_trx_end_queue_timestamp);
           break;
         case 16: /*queueing_trx*/
-          set_field_char_utf8mb4(f, m_row.queueing_trx,
-                                 m_row.queueing_trx_length);
+          set_field_char_utf8(f, m_row.queueing_trx, m_row.queueing_trx_length);
           break;
         case 17: /*queueing_trx_original_commit_timestamp*/
           set_field_timestamp(f, m_row.queueing_trx_original_commit_timestamp);

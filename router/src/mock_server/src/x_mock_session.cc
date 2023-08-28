@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -104,14 +104,10 @@ MySQLXProtocol::decode_single_message(const std::vector<uint8_t> &payload) {
 
   auto buf = net::buffer(payload) + 1;
 
-  try {
-    return {std::in_place, msg_id,
-            protocol_decoder_.decode_message(
-                header_msg_id, static_cast<const uint8_t *>(buf.data()),
-                buf.size())};
-  } catch (...) {
-    return stdx::make_unexpected(make_error_code(std::errc::bad_message));
-  }
+  return {
+      std::in_place, msg_id,
+      protocol_decoder_.decode_message(
+          header_msg_id, static_cast<const uint8_t *>(buf.data()), buf.size())};
 }
 
 void MySQLXProtocol::encode_message(
@@ -185,31 +181,24 @@ stdx::expected<std::unique_ptr<xcl::XProtocol::Message>, std::string>
 MySQLXProtocol::gr_state_changed_from_json(const std::string &json_string) {
   rapidjson::Document json_doc;
   auto result{std::make_unique<Mysqlx::Notice::GroupReplicationStateChanged>()};
-  json_doc.Parse(json_string.data(), json_string.size());
-
-  {
-    const auto it = json_doc.FindMember("type");
-    if (it != json_doc.MemberEnd()) {
-      if (it->value.IsUint()) {
-        result->set_type(it->value.GetUint());
-      } else {
-        return stdx::make_unexpected(
-            "Invalid json type for field 'type', expected 'uint' got " +
-            std::to_string(it->value.GetType()));
-      }
+  json_doc.Parse(json_string.c_str());
+  if (json_doc.HasMember("type")) {
+    if (json_doc["type"].IsUint()) {
+      result->set_type(json_doc["type"].GetUint());
+    } else {
+      return stdx::make_unexpected(
+          "Invalid json type for field 'type', expected 'uint' got " +
+          std::to_string(json_doc["type"].GetType()));
     }
   }
 
-  {
-    const auto it = json_doc.FindMember("view-id");
-    if (it != json_doc.MemberEnd()) {
-      if (it->value.IsString()) {
-        result->set_view_id(it->value.GetString());
-      } else {
-        return stdx::make_unexpected(
-            "Invalid json type for field 'view_id', expected 'string' got " +
-            std::to_string(it->value.GetType()));
-      }
+  if (json_doc.HasMember("view_id")) {
+    if (json_doc["view_id"].IsString()) {
+      result->set_view_id(json_doc["view_id"].GetString());
+    } else {
+      return stdx::make_unexpected(
+          "Invalid json type for field 'view_id', expected 'string' got " +
+          std::to_string(json_doc["view_id"].GetType()));
     }
   }
 
@@ -347,12 +336,10 @@ void MySQLServerMockSessionX::handshake() {
           dynamic_cast<Mysqlx::Connection::CapabilitiesSet *>(msg.get());
       harness_assert(capab_msg != nullptr);
       bool tls_request = false;
-      bool compression_request = false;
       const auto capabilities = capab_msg->capabilities();
       for (int i = 0; i < capabilities.capabilities_size(); ++i) {
         const auto capability = capabilities.capabilities(i);
         if (capability.name() == "tls") tls_request = true;
-        if (capability.name() == "compression") compression_request = true;
       }
 
       if (tls_request) {
@@ -398,15 +385,6 @@ void MySQLServerMockSessionX::handshake() {
 
           return;
         }
-      } else if (compression_request) {
-        protocol_.encode_error(
-            {ER_X_CAPABILITY_COMPRESSION_INVALID_ALGORITHM,
-             "Invalid or unsupported value for 'compression.algorithm'",
-             "HY000"});
-
-        send_response_then_handshake();
-
-        return;
       } else {
         Mysqlx::Ok ok_msg;
         protocol_.encode_message(Mysqlx::ServerMessages::OK, ok_msg);

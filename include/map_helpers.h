@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "m_ctype.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/malloc_allocator.h"
 #include "sql/mem_root_allocator.h"
 #include "template_utils.h"
@@ -263,10 +263,9 @@ class mem_root_unordered_set
     In theory, we should be allowed to send in the allocator only, but GCC 4.8
     is missing several unordered_set constructors, so let's give in everything.
   */
-  explicit mem_root_unordered_set(MEM_ROOT *mem_root, Hash hash = Hash(),
-                                  KeyEqual key_equal_arg = KeyEqual())
+  mem_root_unordered_set(MEM_ROOT *mem_root)
       : std::unordered_set<Key, Hash, KeyEqual, Mem_root_allocator<Key>>(
-            /*bucket_count=*/10, hash, key_equal_arg,
+            /*bucket_count=*/10, Hash(), KeyEqual(),
             Mem_root_allocator<Key>(mem_root)) {}
 };
 
@@ -283,24 +282,6 @@ class mem_root_unordered_map
   explicit mem_root_unordered_map(MEM_ROOT *mem_root, Hash hash = Hash())
       : std::unordered_map<Key, Value, Hash, KeyEqual,
                            Mem_root_allocator<std::pair<const Key, Value>>>(
-            /*bucket_count=*/10, hash, KeyEqual(),
-            Mem_root_allocator<std::pair<const Key, Value>>(mem_root)) {}
-};
-
-/**
-  std::unordered_multimap, but allocated on a MEM_ROOT.
- */
-template <class Key, class Value, class Hash = std::hash<Key>,
-          class KeyEqual = std::equal_to<Key>>
-class mem_root_unordered_multimap
-    : public std::unordered_multimap<
-          Key, Value, Hash, KeyEqual,
-          Mem_root_allocator<std::pair<const Key, Value>>> {
- public:
-  explicit mem_root_unordered_multimap(MEM_ROOT *mem_root, Hash hash = Hash())
-      : std::unordered_multimap<
-            Key, Value, Hash, KeyEqual,
-            Mem_root_allocator<std::pair<const Key, Value>>>(
             /*bucket_count=*/10, hash, KeyEqual(),
             Mem_root_allocator<std::pair<const Key, Value>>(mem_root)) {}
 };

@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,13 +39,13 @@
 #include <string>
 
 #include "keycache.h"
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysys/mysys_priv.h"
 #include "template_utils.h"
 
@@ -289,7 +289,7 @@ KEY_CACHE *multi_key_cache_search(uchar *key, uint length) {
 }
 
 /*
-  Associate a key cache with a key
+  Assosiate a key cache with a key
 
 
   SYONOPSIS

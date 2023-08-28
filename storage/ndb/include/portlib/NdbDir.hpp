@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,9 +24,9 @@
 #define NdbDir_HPP
 
 #ifdef _WIN32
-typedef int mode_t; // Only dummy usage on Windows
-#else
-#include <sys/types.h>  // mode_t
+#ifndef mode_t /* MySQL 5.5+ defines mode_t */
+typedef int mode_t;
+#endif
 #endif
 
 class NdbDir {

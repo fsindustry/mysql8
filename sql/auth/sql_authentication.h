@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,10 +28,10 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_thread_local.h"    // my_thread_id
 #include "mysql/plugin_auth.h"  // MYSQL_SERVER_AUTH_INFO
 #include "mysql/plugin_auth_common.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/sql_plugin_ref.h"  // plugin_ref
 
 class ACL_USER;
@@ -102,26 +102,15 @@ int show_rsa_public_key(THD *thd, SHOW_VAR *var, char *buff);
 typedef struct rsa_st RSA;
 class Rsa_authentication_keys {
  private:
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  EVP_PKEY *m_public_key;
-  EVP_PKEY *m_private_key;
-#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *m_public_key;
   RSA *m_private_key;
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   int m_cipher_len;
   char *m_pem_public_key;
   char **m_private_key_path;
   char **m_public_key_path;
 
   void get_key_file_path(char *key, String *key_file_path);
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  bool read_key_file(EVP_PKEY **key_ptr, bool is_priv_key,
-                     char **key_text_buffer);
-#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   bool read_key_file(RSA **key_ptr, bool is_priv_key, char **key_text_buffer);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
  public:
   Rsa_authentication_keys(char **private_key_path, char **public_key_path)
@@ -135,14 +124,9 @@ class Rsa_authentication_keys {
 
   void free_memory();
   void *allocate_pem_buffer(size_t buffer_len);
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  EVP_PKEY *get_private_key() { return m_private_key; }
-  EVP_PKEY *get_public_key() { return m_public_key; }
-#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *get_private_key() { return m_private_key; }
+
   RSA *get_public_key() { return m_public_key; }
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   int get_cipher_length();
   bool read_rsa_keys();

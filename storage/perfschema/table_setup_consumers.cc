@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -38,9 +38,8 @@
 #include "storage/perfschema/pfs_events_transactions.h"
 #include "storage/perfschema/pfs_events_waits.h"
 #include "storage/perfschema/pfs_instr.h"
-#include "string_with_len.h"
 
-#define COUNT_SETUP_CONSUMERS 16
+#define COUNT_SETUP_CONSUMERS 15
 
 static row_setup_consumers all_setup_consumers_data[COUNT_SETUP_CONSUMERS] = {
     {{STRING_WITH_LEN("events_stages_current")},
@@ -55,10 +54,6 @@ static row_setup_consumers all_setup_consumers_data[COUNT_SETUP_CONSUMERS] = {
      &flag_events_stages_history_long,
      false,
      true},
-    {{STRING_WITH_LEN("events_statements_cpu")},
-     &flag_events_statements_cpu,
-     false,
-     false},
     {{STRING_WITH_LEN("events_statements_current")},
      &flag_events_statements_current,
      false,
@@ -153,7 +148,9 @@ PFS_engine_table *table_setup_consumers::create(PFS_engine_table_share *) {
   return new table_setup_consumers();
 }
 
-ha_rows table_setup_consumers::get_row_count() { return COUNT_SETUP_CONSUMERS; }
+ha_rows table_setup_consumers::get_row_count(void) {
+  return COUNT_SETUP_CONSUMERS;
+}
 
 table_setup_consumers::table_setup_consumers()
     : PFS_engine_table(&m_share, &m_pos),
@@ -161,12 +158,12 @@ table_setup_consumers::table_setup_consumers()
       m_pos(0),
       m_next_pos(0) {}
 
-void table_setup_consumers::reset_position() {
+void table_setup_consumers::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
-int table_setup_consumers::rnd_next() {
+int table_setup_consumers::rnd_next(void) {
   int result;
 
   m_pos.set_at(&m_next_pos);
@@ -199,7 +196,7 @@ int table_setup_consumers::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_setup_consumers::index_next() {
+int table_setup_consumers::index_next(void) {
   for (m_pos.set_at(&m_next_pos); m_pos.m_index < COUNT_SETUP_CONSUMERS;
        m_pos.next()) {
     m_row = &all_setup_consumers_data[m_pos.m_index];
@@ -227,7 +224,7 @@ int table_setup_consumers::read_row_values(TABLE *table, unsigned char *,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* NAME */
-          set_field_varchar_utf8mb4(f, m_row->m_name.str, m_row->m_name.length);
+          set_field_varchar_utf8(f, m_row->m_name.str, m_row->m_name.length);
           break;
         case 1: /* ENABLED */
           set_field_enum(f, (*m_row->m_enabled_ptr) ? ENUM_YES : ENUM_NO);
@@ -252,14 +249,16 @@ int table_setup_consumers::update_row_values(TABLE *table,
   for (; (f = *fields); fields++) {
     if (bitmap_is_set(table->write_set, f->field_index())) {
       switch (f->field_index()) {
+        case 0: /* NAME */
+          return HA_ERR_WRONG_COMMAND;
         case 1: /* ENABLED */
         {
           value = (enum_yes_no)get_field_enum(f);
-          *m_row->m_enabled_ptr = (value == ENUM_YES);
+          *m_row->m_enabled_ptr = (value == ENUM_YES) ? true : false;
           break;
         }
         default:
-          return HA_ERR_WRONG_COMMAND;
+          assert(false);
       }
     }
   }

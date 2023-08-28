@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,15 +25,15 @@
 #include <stddef.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_transaction.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_common.h"
@@ -799,7 +799,7 @@ bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name) {
       log accompanied with ROLLBACK TO SAVEPOINT statement. Since the real
       write happens at the end of transaction releasing MDL on tables
       mentioned in these events (i.e. acquired after savepoint and before
-      rollback of it) can break replication, as concurrent DROP TABLES
+      rollback ot it) can break replication, as concurrent DROP TABLES
       statements will be able to drop these tables before events will get
       into binary log,
   */

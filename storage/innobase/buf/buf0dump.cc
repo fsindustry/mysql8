@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -55,39 +55,32 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 enum status_severity { STATUS_VERBOSE, STATUS_INFO, STATUS_ERR };
 
-static inline bool SHUTTING_DOWN() {
-  return srv_shutdown_state.load() >= SRV_SHUTDOWN_CLEANUP;
-}
+#define SHUTTING_DOWN() (srv_shutdown_state.load() >= SRV_SHUTDOWN_CLEANUP)
 
 /* Flags that tell the buffer pool dump/load thread which action should it
 take after being waked up. */
-static bool buf_dump_should_start = false;
-static bool buf_load_should_start = false;
+static ibool buf_dump_should_start = FALSE;
+static ibool buf_load_should_start = FALSE;
 
-static bool buf_load_abort_flag = false;
+static ibool buf_load_abort_flag = FALSE;
 
 /* Used to temporary store dump info in order to avoid IO while holding
 buffer pool LRU list mutex during dump and also to sort the contents of the
 dump before reading the pages from disk during load.
 We store the space id in the high 32 bits and page no in low 32 bits. */
-typedef uint64_t buf_dump_t;
+typedef ib_uint64_t buf_dump_t;
 
 /* Aux macros to create buf_dump_t and to extract space and page from it */
-inline uint64_t BUF_DUMP_CREATE(space_id_t space, page_no_t page) {
-  return ut_ull_create(space, page);
-}
-constexpr space_id_t BUF_DUMP_SPACE(uint64_t a) {
-  return static_cast<space_id_t>((a) >> 32);
-}
-constexpr page_no_t BUF_DUMP_PAGE(uint64_t a) {
-  return static_cast<page_no_t>((a)&0xFFFFFFFFUL);
-}
+#define BUF_DUMP_CREATE(space, page) ut_ull_create(space, page)
+#define BUF_DUMP_SPACE(a) static_cast<space_id_t>((a) >> 32)
+#define BUF_DUMP_PAGE(a) static_cast<page_no_t>((a)&0xFFFFFFFFUL)
+
 /** Wakes up the buffer pool dump/load thread and instructs it to start
  a dump. This function is called by MySQL code via buffer_pool_dump_now()
  and it should return immediately because the whole MySQL is frozen during
  its execution. */
 void buf_dump_start() {
-  buf_dump_should_start = true;
+  buf_dump_should_start = TRUE;
   os_event_set(srv_buf_dump_event);
 }
 
@@ -96,7 +89,7 @@ void buf_dump_start() {
  and it should return immediately because the whole MySQL is frozen during
  its execution. */
 void buf_load_start() {
-  buf_load_should_start = true;
+  buf_load_should_start = TRUE;
   os_event_set(srv_buf_dump_event);
 }
 
@@ -190,8 +183,8 @@ static const char *get_buf_dump_dir() {
 }
 
 /** Generate the path to the buffer pool dump/load file.
-@param[out]     path            generated path
-@param[in]      path_size       size of 'path', used as in snprintf(3). */
+@param[out]	path		generated path
+@param[in]	path_size	size of 'path', used as in snprintf(3). */
 void buf_dump_generate_path(char *path, size_t path_size) {
   char buf[FN_REFLEN];
 
@@ -228,8 +221,8 @@ innodb_buffer_pool_filename. If any errors occur then the value of
 innodb_buffer_pool_dump_status will be set accordingly, see buf_dump_status().
 The dump filename can be specified by (relative to srv_data_home):
 SET GLOBAL innodb_buffer_pool_filename='filename';
-@param[in]      obey_shutdown   quit if we are in a shutting down state */
-static void buf_dump(bool obey_shutdown) {
+@param[in]	obey_shutdown	quit if we are in a shutting down state */
+static void buf_dump(ibool obey_shutdown) {
 #define SHOULD_QUIT() (SHUTTING_DOWN() && obey_shutdown)
 
   char full_filename[OS_FILE_MAX_PATH];
@@ -320,10 +313,10 @@ static void buf_dump(bool obey_shutdown) {
       }
 
       if (j % 128 == 0) {
-        buf_dump_status(
-            STATUS_VERBOSE,
-            "Dumping buffer pool " ULINTPF "/" ULINTPF ", page %zu/%zu", i + 1,
-            static_cast<ulint>(srv_buf_pool_instances), j + 1, n_pages);
+        buf_dump_status(STATUS_VERBOSE,
+                        "Dumping buffer pool " ULINTPF "/" ULINTPF
+                        ", page %zu/%zu",
+                        i + 1, srv_buf_pool_instances, j + 1, n_pages);
       }
     }
 
@@ -366,23 +359,22 @@ static void buf_dump(bool obey_shutdown) {
 /** Artificially delay the buffer pool loading if necessary. The idea of this
 function is to prevent hogging the server with IO and slowing down too much
 normal client queries.
-@param[in,out]  last_check_time         milliseconds since epoch of the last
+@param[in,out]	last_check_time		milliseconds since epoch of the last
                                         time we did check if throttling is
                                         needed, we do the check every
                                         srv_io_capacity IO ops.
-@param[in]      last_activity_count     activity count
-@param[in]      n_io                    number of IO ops done since buffer
+@param[in]	last_activity_count	activity count
+@param[in]	n_io			number of IO ops done since buffer
                                         pool load has started */
 static inline void buf_load_throttle_if_needed(
-    std::chrono::steady_clock::time_point *last_check_time,
-    ulint *last_activity_count, ulint n_io) {
+    ib_time_monotonic_ms_t *last_check_time, ulint *last_activity_count,
+    ulint n_io) {
   if (n_io % srv_io_capacity < srv_io_capacity - 1) {
     return;
   }
 
-  if (*last_check_time == std::chrono::steady_clock::time_point{} ||
-      *last_activity_count == 0) {
-    *last_check_time = std::chrono::steady_clock::now();
+  if (*last_check_time == 0 || *last_activity_count == 0) {
+    *last_check_time = ut_time_monotonic_ms();
     *last_activity_count = srv_get_activity_count();
     return;
   }
@@ -397,7 +389,8 @@ static inline void buf_load_throttle_if_needed(
 
   /* There has been other activity, throttle. */
 
-  const auto elapsed_time = std::chrono::steady_clock::now() - *last_check_time;
+  const auto now = ut_time_monotonic_ms();
+  const auto elapsed_time = now - *last_check_time;
 
   /* Notice that elapsed_time is not the time for the last
   srv_io_capacity IO operations performed by BP load. It is the
@@ -418,11 +411,11 @@ static inline void buf_load_throttle_if_needed(
   "cur_activity_count == *last_activity_count" check and calling
   ut_time_monotonic_ms() that often may turn out to be too expensive. */
 
-  if (elapsed_time < std::chrono::seconds{1}) {
-    std::this_thread::sleep_for(std::chrono::seconds{1} - elapsed_time);
+  if (elapsed_time < 1000 /* 1 sec (1000 milli secs) */) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000 - elapsed_time));
   }
 
-  *last_check_time = std::chrono::steady_clock::now();
+  *last_check_time = ut_time_monotonic_ms();
   *last_activity_count = srv_get_activity_count();
 }
 
@@ -444,7 +437,7 @@ static void buf_load() {
   int fscanf_ret;
 
   /* Ignore any leftovers from before */
-  buf_load_abort_flag = false;
+  buf_load_abort_flag = FALSE;
 
   buf_dump_generate_path(full_filename, sizeof(full_filename));
 
@@ -531,7 +524,7 @@ static void buf_load() {
       return;
     }
 
-    if (space_id > UINT32_MASK || page_no > UINT32_MASK) {
+    if (space_id > ULINT32_MASK || page_no > ULINT32_MASK) {
       ut::free(dump);
       fclose(f);
       buf_load_status(STATUS_ERR,
@@ -567,7 +560,7 @@ static void buf_load() {
     std::sort(dump, dump + dump_n);
   }
 
-  std::chrono::steady_clock::time_point last_check_time;
+  ib_time_monotonic_ms_t last_check_time = 0;
   ulint last_activity_cnt = 0;
 
   /* Avoid calling the expensive fil_space_acquire_silent() for each
@@ -630,7 +623,7 @@ static void buf_load() {
       if (space != nullptr) {
         fil_space_release(space);
       }
-      buf_load_abort_flag = false;
+      buf_load_abort_flag = FALSE;
       ut::free(dump);
       buf_load_status(STATUS_INFO, "Buffer pool(s) load aborted on request");
       /* Premature end, set estimated = completed = i and
@@ -667,7 +660,7 @@ static void buf_load() {
 /** Aborts a currently running buffer pool load. This function is called by
  MySQL code via buffer_pool_load_abort() and it should return immediately
  because the whole MySQL is frozen during its execution. */
-void buf_load_abort() { buf_load_abort_flag = true; }
+void buf_load_abort() { buf_load_abort_flag = TRUE; }
 
 /** This is the main thread for buffer pool dump/load. It waits for an
 event and when waked up either performs a dump or load and sleeps
@@ -686,12 +679,12 @@ void buf_dump_thread() {
     os_event_wait(srv_buf_dump_event);
 
     if (buf_dump_should_start) {
-      buf_dump_should_start = false;
-      buf_dump(true /* quit on shutdown */);
+      buf_dump_should_start = FALSE;
+      buf_dump(TRUE /* quit on shutdown */);
     }
 
     if (buf_load_should_start) {
-      buf_load_should_start = false;
+      buf_load_should_start = FALSE;
       buf_load();
     }
 
@@ -699,7 +692,7 @@ void buf_dump_thread() {
   }
 
   if (srv_buffer_pool_dump_at_shutdown && srv_fast_shutdown != 2) {
-    buf_dump(false /* ignore shutdown down flag,
-                keep going even if we are in a shutdown state */);
+    buf_dump(FALSE /* ignore shutdown down flag,
+		keep going even if we are in a shutdown state */);
   }
 }

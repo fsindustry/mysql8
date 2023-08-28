@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -33,8 +33,6 @@
 #include "storage/perfschema/cursor_by_thread_connect_attr.h"
 #include "storage/perfschema/pfs_column_types.h"
 #include "storage/perfschema/table_helper.h"
-
-struct CHARSET_INFO;
 
 #define MAX_ATTR_NAME_CHARS 32
 #define MAX_ATTR_VALUE_CHARS 1024
@@ -87,7 +85,7 @@ class PFS_index_session_connect : public PFS_engine_index {
 /** Abstract table PERFORMANCE_SCHEMA.SESSION_CONNECT_ATTRS. */
 class table_session_connect : public cursor_by_thread_connect_attr {
  protected:
-  explicit table_session_connect(const PFS_engine_table_share *share);
+  table_session_connect(const PFS_engine_table_share *share);
 
  public:
   ~table_session_connect() override;

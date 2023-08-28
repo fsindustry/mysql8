@@ -1,4 +1,4 @@
-# Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -118,8 +118,6 @@ usr/lib/mysql/plugin/debug/component_test_host_application_signal.so
 usr/lib/mysql/plugin/debug/component_test_mysql_current_thread_reader.so
 usr/lib/mysql/plugin/debug/component_test_mysql_runtime_error.so
 usr/lib/mysql/plugin/debug/component_test_component_deinit.so
-usr/lib/mysql/plugin/debug/component_test_mysql_command_services.so
-usr/lib/mysql/plugin/debug/test_services_command_services.so
 usr/lib/mysql/plugin/debug/component_udf_reg_3_func.so
 usr/lib/mysql/plugin/debug/component_udf_reg_avg_func.so
 usr/lib/mysql/plugin/debug/component_udf_reg_int_func.so
@@ -129,7 +127,6 @@ usr/lib/mysql/plugin/debug/component_udf_reg_real_func.so
 usr/lib/mysql/plugin/debug/component_udf_unreg_3_func.so
 usr/lib/mysql/plugin/debug/component_udf_unreg_int_func.so
 usr/lib/mysql/plugin/debug/component_udf_unreg_real_func.so
-usr/lib/mysql/plugin/debug/conflicting_variables.so
 usr/lib/mysql/plugin/debug/daemon_example.ini
 usr/lib/mysql/plugin/debug/ha_example.so
 usr/lib/mysql/plugin/debug/ha_mock.so
@@ -188,16 +185,6 @@ usr/lib/mysql/plugin/debug/component_test_audit_api_message.so
 usr/lib/mysql/plugin/debug/component_test_udf_services.so
 usr/lib/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 usr/lib/mysql/plugin/debug/component_test_table_access.so
-usr/lib/mysql/plugin/debug/component_test_sensitive_system_variables.so
-usr/lib/mysql/plugin/debug/component_test_status_var_reader.so
-usr/lib/mysql/plugin/debug/component_test_server_telemetry_traces.so
-usr/lib/mysql/plugin/debug/component_test_mysql_thd_store_service.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer_c.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer_b.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer_a.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_producer_a.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer.so
-usr/lib/mysql/plugin/debug/component_test_event_tracking_producer_b.so
 ")
 
 IF (DEB_PRODUCT STREQUAL "commercial")
@@ -209,7 +196,6 @@ usr/lib/mysql/plugin/debug/authentication_pam.so
 usr/lib/mysql/plugin/debug/authentication_ldap_sasl.so
 usr/lib/mysql/plugin/debug/authentication_kerberos.so
 usr/lib/mysql/plugin/debug/authentication_ldap_simple.so
-usr/lib/mysql/plugin/debug/telemetry_client.so
 usr/lib/mysql/plugin/debug/data_masking.so
 usr/lib/mysql/plugin/debug/keyring_okv.so
 usr/lib/mysql/plugin/debug/keyring_encrypted_file.so
@@ -218,14 +204,9 @@ usr/lib/mysql/plugin/debug/keyring_oci.so
 usr/lib/mysql/plugin/debug/openssl_udf.so
 usr/lib/mysql/plugin/debug/thread_pool.so
 usr/lib/mysql/plugin/debug/firewall.so
+usr/lib/mysql/plugin/debug/component_test_page_track_component.so
 usr/lib/mysql/plugin/debug/authentication_fido.so
 usr/lib/mysql/plugin/debug/component_keyring_encrypted_file.so
-usr/lib/mysql/plugin/debug/component_keyring_oci.so
-usr/lib/mysql/plugin/debug/component_enterprise_encryption.so
-usr/lib/mysql/plugin/debug/component_masking.so
-usr/lib/mysql/plugin/debug/component_masking_functions.so
-usr/lib/mysql/plugin/debug/component_scheduler.so
-usr/lib/mysql/plugin/debug/component_telemetry.so
 ")
   ENDIF()
   IF (DEB_AWS_SDK)
@@ -233,18 +214,13 @@ usr/lib/mysql/plugin/debug/component_telemetry.so
 usr/lib/mysql/plugin/debug/keyring_aws.so
 ")
   ENDIF()
-  SET (DEB_INSTALL_DEBUG_TEST_PLUGINS "${DEB_INSTALL_DEBUG_TEST_PLUGINS}
-usr/lib/mysql/plugin/debug/component_test_global_priv_registration.so
-usr/lib/mysql/plugin/debug/component_test_page_track_component.so
-")
-
 ENDIF()
 SET (DEB_CONTROL_DEBUG
 "
 Package: mysql-${DEB_PRODUCTNAME}-server-debug
 Architecture: any
 Section: debug
-Depends: \${misc:Depends}, mysql-${DEB_PRODUCTNAME}-server (= \${binary:Version})
+Depends: \${misc:Depends}
 Description: Debug binaries for MySQL Server
 
 Package: mysql-${DEB_PRODUCTNAME}-test-debug

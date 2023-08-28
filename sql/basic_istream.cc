@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 #include <my_sys.h>
 #include <mysql/psi/mysql_file.h>
 #include "my_dbug.h"
-#include "my_inttypes.h"
 
 IO_CACHE_istream::IO_CACHE_istream() = default;
 
@@ -88,7 +87,7 @@ bool Stdin_istream::open(std::string *errmsg) {
 /* read from stdin */
 /*
         Windows opens stdin in text mode by default. Certain characters
-        such as CTRL-Z are interpreted as events and the read() method
+        such as CTRL-Z are interpeted as events and the read() method
         will stop. CTRL-Z is the EOF marker in Windows. to get past this
         you have to open stdin in binary mode. Setmode() is used to set
         stdin in binary mode. Errors on setting this mode result in

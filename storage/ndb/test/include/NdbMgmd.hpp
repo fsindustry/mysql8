@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 #ifndef NDB_MGMD_HPP
 #define NDB_MGMD_HPP
 
-#include "util/require.h"
-#include "portlib/ndb_compiler.h"
 #include <mgmapi.h>
 #include "mgmcommon/NdbMgm.hpp"
 #include "../../src/mgmapi/mgmapi_internal.h"
@@ -37,7 +35,7 @@
 #include <OutputStream.hpp>
 #include <SocketInputStream2.hpp>
 
-#include "mgmcommon/Config.hpp"
+#include "../../src/mgmsrv/Config.hpp"
 
 #include <InputStream.hpp>
 
@@ -50,7 +48,7 @@ class NdbMgmd {
   bool m_verbose;
   unsigned int m_timeout;
   unsigned int m_version;
-  ndb_socket_t m_event_socket;
+  NDB_SOCKET_TYPE m_event_socket;
   
   void error(const char* msg, ...) ATTRIBUTE_FORMAT(printf, 2, 3)
   {
@@ -104,7 +102,7 @@ public:
     return m_handle;
   }
 
-  ndb_socket_t socket(void) const {
+  NDB_SOCKET_TYPE socket(void) const {
     return _ndb_mgm_get_socket(m_handle);
   }
 
@@ -295,7 +293,7 @@ public:
       }
     }
 
-    // Empty line terminates argument list
+    // Emtpy line terminates argument list
     if (out.print("\n")){
       error("call: print('\n') failed at line %d", __LINE__);
       return false;

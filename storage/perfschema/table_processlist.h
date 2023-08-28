@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -36,7 +36,6 @@
 #include "my_inttypes.h"
 #include "storage/perfschema/cursor_by_thread.h"
 #include "storage/perfschema/pfs_column_types.h"
-#include "storage/perfschema/pfs_name.h"
 
 struct PFS_thread;
 
@@ -52,13 +51,19 @@ struct row_processlist {
   /** Column ID. */
   ulonglong m_processlist_id;
   /** Column USER. */
-  PFS_user_name m_user_name;
-  /** Column HOST (and PORT). */
+  char m_username[USERNAME_LENGTH];
+  /** Length in bytes of @c m_username. */
+  uint m_username_length;
+  /** Column HOST. */
   char m_hostname[HOST_AND_PORT_LENGTH];
   /** Length in bytes of @c m_hostname. */
   uint m_hostname_length;
+  /** Port. */
+  uint m_port;
   /** Column DB. */
-  PFS_schema_name m_db_name;
+  char m_dbname[NAME_LEN];
+  /** Length in bytes of @c m_dbname. */
+  uint m_dbname_length;
   /** Column COMMAND. */
   int m_command;
   /** Column TIME. */
@@ -71,8 +76,6 @@ struct row_processlist {
   const char *m_processlist_info_ptr;
   /** Length in bytes of @c m_processlist_info_ptr. */
   uint m_processlist_info_length;
-  /** Column EXECUTION_ENGINE. */
-  bool m_secondary;
 };
 
 class PFS_index_processlist_by_processlist_id : public PFS_index_threads {
@@ -82,7 +85,7 @@ class PFS_index_processlist_by_processlist_id : public PFS_index_threads {
 
   ~PFS_index_processlist_by_processlist_id() override = default;
 
-  bool match(PFS_thread *pfs) override;
+  virtual bool match(PFS_thread *pfs) override;
 
  private:
   PFS_key_processlist_id m_key;
@@ -91,9 +94,9 @@ class PFS_index_processlist_by_processlist_id : public PFS_index_threads {
 enum enum_priv_processlist {
   /** User is not allowed to see any data. */
   PROCESSLIST_DENIED,
-  /** User does not have the PROCESS_ACL privilege. */
+  /** User does not have the PROCESS_ACL priviledge. */
   PROCESSLIST_USER_ONLY,
-  /** User has the PROCESS_ACL privilege. */
+  /** User has the PROCESS_ACL priviledge. */
   PROCESSLIST_ALL
 };
 
@@ -119,13 +122,13 @@ class table_processlist : public cursor_by_thread {
   int index_init(uint idx, bool sorted) override;
   int read_row_values(TABLE *table, unsigned char *buf, Field **fields,
                       bool read_all) override;
-  int set_access();
+  int set_access(void);
 
  public:
   ~table_processlist() override = default;
 
  private:
-  int make_row(PFS_thread *pfs) override;
+  virtual int make_row(PFS_thread *pfs) override;
   /** Table share lock. */
   static THR_LOCK m_table_lock;
   /** Table definition. */

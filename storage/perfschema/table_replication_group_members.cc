@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,8 @@
 */
 static void set_channel_name(void *const context, const char &value,
                              size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = CHANNEL_NAME_LENGTH;
   length = std::min(length, max);
 
@@ -59,7 +60,8 @@ static void set_channel_name(void *const context, const char &value,
 
 static void set_member_id(void *const context, const char &value,
                           size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = UUID_LENGTH;
   length = std::min(length, max);
 
@@ -69,7 +71,8 @@ static void set_member_id(void *const context, const char &value,
 
 static void set_member_host(void *const context, const char &value,
                             size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = HOSTNAME_LENGTH;
   length = std::min(length, max);
 
@@ -78,13 +81,15 @@ static void set_member_host(void *const context, const char &value,
 }
 
 static void set_member_port(void *const context, unsigned int value) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   row->member_port = value;
 }
 
 static void set_member_state(void *const context, const char &value,
                              size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = NAME_LEN;
   length = std::min(length, max);
 
@@ -94,7 +99,8 @@ static void set_member_state(void *const context, const char &value,
 
 static void set_member_version(void *const context, const char &value,
                                size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = NAME_LEN;
   length = std::min(length, max);
 
@@ -104,7 +110,8 @@ static void set_member_version(void *const context, const char &value,
 
 static void set_member_role(void *const context, const char &value,
                             size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = NAME_LEN;
   length = std::min(length, max);
 
@@ -114,7 +121,8 @@ static void set_member_role(void *const context, const char &value,
 
 static void set_member_communication_stack(void *const context,
                                            const char &value, size_t length) {
-  auto *row = static_cast<struct st_row_group_members *>(context);
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
   const size_t max = NAME_LEN;
   length = std::min(length, max);
 
@@ -169,7 +177,7 @@ table_replication_group_members::table_replication_group_members()
 
 table_replication_group_members::~table_replication_group_members() = default;
 
-void table_replication_group_members::reset_position() {
+void table_replication_group_members::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -178,7 +186,7 @@ ha_rows table_replication_group_members::get_row_count() {
   return get_group_replication_members_number_info();
 }
 
-int table_replication_group_members::rnd_next() {
+int table_replication_group_members::rnd_next(void) {
   if (!is_group_replication_plugin_loaded()) {
     return HA_ERR_END_OF_FILE;
   }
@@ -243,15 +251,13 @@ int table_replication_group_members::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /** channel_name */
-          set_field_char_utf8mb4(f, m_row.channel_name,
-                                 m_row.channel_name_length);
+          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
           break;
         case 1: /** member_id */
-          set_field_char_utf8mb4(f, m_row.member_id, m_row.member_id_length);
+          set_field_char_utf8(f, m_row.member_id, m_row.member_id_length);
           break;
         case 2: /** member_host */
-          set_field_char_utf8mb4(f, m_row.member_host,
-                                 m_row.member_host_length);
+          set_field_char_utf8(f, m_row.member_host, m_row.member_host_length);
           break;
         case 3: /** member_port */
           if (m_row.member_port > 0) {
@@ -261,20 +267,18 @@ int table_replication_group_members::read_row_values(TABLE *table,
           }
           break;
         case 4: /** member_state */
-          set_field_char_utf8mb4(f, m_row.member_state,
-                                 m_row.member_state_length);
+          set_field_char_utf8(f, m_row.member_state, m_row.member_state_length);
           break;
         case 5: /** member_role */
-          set_field_char_utf8mb4(f, m_row.member_role,
-                                 m_row.member_role_length);
+          set_field_char_utf8(f, m_row.member_role, m_row.member_role_length);
           break;
         case 6: /** member_version */
-          set_field_char_utf8mb4(f, m_row.member_version,
-                                 m_row.member_version_length);
+          set_field_char_utf8(f, m_row.member_version,
+                              m_row.member_version_length);
           break;
         case 7: /** member_incoming_protocol */
-          set_field_char_utf8mb4(f, m_row.member_communication_stack,
-                                 m_row.member_communication_stack_length);
+          set_field_char_utf8(f, m_row.member_communication_stack,
+                              m_row.member_communication_stack_length);
           break;
         default:
           assert(false);

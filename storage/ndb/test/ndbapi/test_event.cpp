@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+ Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <NDBT_Test.hpp>
 #include <NDBT_ReturnCodes.h>
 #include <HugoTransactions.hpp>
@@ -1087,7 +1086,7 @@ int runEventApplier(NDBT_Context* ctx, NDBT_Step* step)
 
 	  }
 	  trans->close();
-	  NdbSleep_MilliSleep(100); // sleep before retrying
+	  NdbSleep_MilliSleep(100); // sleep before retying
 	} while(1);
       }
       Uint32 stop_gci_hi = ctx->getProperty("LastGCI_hi", ~(Uint32)0);
@@ -1294,7 +1293,7 @@ int runEventListenerCheckProgressUntilStopped(NDBT_Context* ctx, NDBT_Step* step
   CHK(pOp != NULL, "Event operation creation failed");
   CHK(pOp->execute() == 0, "execute operation execution failed");
 
-  // Synchronise event listening and error injection
+  // Syncronise event listening and error injection
   ctx->setProperty("Inject_error", (Uint32)0);
   ctx->setProperty("Found_inconsistency", (Uint32)0);
 
@@ -1671,7 +1670,7 @@ static int copy_events(Ndb *ndb)
     {
       if (r == 0)
       {
-        // Empty epoch preceding regular epochs. Continue consuming.
+        // Empty epoch preceeding regular epochs. Continue consuming.
         continue;
       }
       // Empty epoch after regular epochs. We are done.
@@ -1887,7 +1886,7 @@ static int createEventOperations(Ndb * ndb, NDBT_Context* ctx)
   DBUG_ENTER("createEventOperations");
   int i;
 
-  // create all event ops
+  // creat all event ops
   for (i= 0; pTabs[i]; i++)
   {
     char buf[1024];
@@ -4041,7 +4040,7 @@ int runTryGetEvent(NDBT_Context* ctx, NDBT_Step* step)
   {
     g_err << "Attempting to get the event, expect "
           << ((odd?"success":"failure")) << endl;
-    NdbDictionary::Event_ptr ev(myDict->getEvent(eventName));
+    const NdbDictionary::Event* ev = myDict->getEvent(eventName);
     
     if (odd)
     {
@@ -4085,7 +4084,7 @@ int runTryGetEvent(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
-// Waits until the event buffer is filled up to fill_percent
+// Waits until the event buffer is filled upto fill_percent
 // or #retries exhaust.
 bool wait_to_fill_buffer(Ndb* ndb, Uint32 fill_percent)
 {
@@ -4358,7 +4357,7 @@ int runPollBCInconsistency(NDBT_Context* ctx, NDBT_Step* step)
 
   Uint64 current_gci = 0, poll_gci = 0;
 
-  // Synchronise event listening and error injection
+  // Syncronise event listening and error injection
   ctx->setProperty("Inject_error", (Uint32)0);
   ctx->setProperty("Found_inconsistency", (Uint32)0);
 
@@ -4893,8 +4892,8 @@ runInsertDeleteAfterClusterFailure(NDBT_Context* ctx, NDBT_Step* step)
 
 /**
  * Test the production and consumption of gap epochs
- * (having event type TE_OUT_OF_MEMORY) wth of a slow
- * listener causing event buffer to overflow (runTardyEventListener())
+ * (having evnt type TE_OUT_OF_MEMORY) wth of a slow
+ * listenenr causing event buffer to overflow (runTardyEventListener())
  */
 
 // Collect statistics
@@ -4913,7 +4912,7 @@ public:
 
   Uint64 gap_epoch[totalGaps]; // Store the gap epochs consumed
 
-  /** consumed_epochs[0] : #epochs the event buffer can accommodate
+  /** consumed_epochs[0] : #epochs the event buffer can accomodate
    * before the first overflow.
    * consumed_epochs[1-5] : Consumed epochs between each gaps.
    */
@@ -4933,14 +4932,14 @@ ConsumptionStatistics::ConsumptionStatistics() : consumedGaps(0), emptyEpochs(0)
 
 void ConsumptionStatistics::print()
 {
-  /* Buffer capacity : #epochs event buffer can accommodate.
+  /* Buffer capacity : #epochs event buffer can accomodate.
    * The test fills the event buffer twice.
    * The buffer capacity of the first and the second rounds
    * should be comparable, with a small difference due to
    * timimg of transactions and epochs. However,
    * considering the different machine/platforms the test will
    * be run on, the difference is not intended to be used as
-   * a test success/failure criteria.
+   * a test succees/failure criteria.
    * Instead both values are written out for manual inspection.
    */
   if (consumedGaps == 0)
@@ -5076,7 +5075,7 @@ bool consume_buffer(NDBT_Context* ctx, Ndb* ndb,
 /**
  * Test: Emulate a tardy consumer as follows :
  * Fill the event buffer to 100% initially, in order to accelerate
- * the gap occurrence.
+ * the gap occurence.
  * Then let the consumer to consume and free the buffer a little
  *   more than free_percent (60), such that buffering resumes again.
  *   Fill 100%. Repeat this consume/fill until 'n' gaps are
@@ -5538,7 +5537,7 @@ int runGetLogEventPretty(NDBT_Context* ctx, NDBT_Step* step)
     return NDBT_FAILED;
 
   int filter[] = {15, NDB_MGM_EVENT_CATEGORY_INFO, 0};
-  socket_t fd= ndb_mgm_listen_event(mgmd.handle(), filter);
+  ndb_native_socket_t fd= ndb_mgm_listen_event(mgmd.handle(), filter);
   ndb_socket_t my_fd = ndb_socket_create_from_native(fd);
 
   if(!ndb_socket_valid(my_fd))
@@ -5729,102 +5728,6 @@ int clearErrorInsertEBUsage(NDBT_Context* ctx, NDBT_Step* step)
 {
   DBUG_SET_INITIAL("-d,ndb_eventbuffer_high_usage");
   return NDBT_OK;
-}
-
-static
-int
-runCreateDropConsume(NDBT_Context* ctx, NDBT_Step* step)
-{
-  constexpr Uint32 NumOperations = 10;
-  NdbEventOperation* ops[NumOperations];
-  Ndb* ndb = GETNDB(step);
-
-  g_err << "Creating " << NumOperations << " eventOperations." << endl;
-  for (Uint32 i=0; i< NumOperations; i++)
-  {
-    g_err << "Creating EventOperation " << i << endl;
-
-    if ((ops[i] = createEventOperation(ndb, *ctx->getTab())) == nullptr)
-    {
-      g_err << "runCreateDropConsume failed to create eventOperation " << endl;
-      return NDBT_FAILED;
-    }
-    ops[i]->setCustomData((void*) Uint64(i));
-  }
-
-  g_err << "Dropping all but one (" << NumOperations - 1 << ") "
-    "eventOperations with a delay." << endl;
-
-  for (Uint32 i=1; i< NumOperations; i++)
-  {
-    g_err << "Dropping EventOperation " << i << endl;
-    int res = ndb->dropEventOperation(ops[i]);
-    if (res != 0)
-    {
-      g_err << "Drop failed " << ndb->getNdbError() << endl;
-      return NDBT_FAILED;
-    }
-
-    /* Give time for some epochs to complete between each drop */
-    NdbSleep_MilliSleep(1000);
-  }
-
-  g_err << "Now consuming events..." << endl;
-
-  Uint64 latest_epoch = 0;
-  Uint32 observedEpochs = 0;
-  int res = NDBT_OK;
-  while (ndb->pollEvents(1000) > 0)
-  {
-    NdbEventOperation* op;
-    while ((op = ndb->nextEvent()) != nullptr)
-    {
-      Uint64 epoch = op->getEpoch();
-      if (op != ops[0])
-      {
-        fprintf(stderr,
-                "Error : epoch data contains dropped EventOperation"
-                "%p %llu\n", op, (Uint64) op->getCustomData());
-        res = NDBT_FAILED;
-      }
-      if (epoch != latest_epoch)
-      {
-        observedEpochs++;
-        latest_epoch = epoch;
-        fprintf(stderr, "Epoch boundary : %llu\n", latest_epoch);
-        /* Iterate over gci ops */
-        const NdbEventOperation* gciOp=NULL;
-        Uint32 iter = 0;
-        Uint32 et = 0;
-        while((gciOp = ndb->getGCIEventOperations(&iter, &et)) 
-               != nullptr)
-        {
-          fprintf(stderr,
-                  "Epoch %llu EventOperations contains op %p (%p)\n",
-                  latest_epoch,
-                  gciOp,
-                  gciOp->getCustomData());
-          if (gciOp != ops[0])
-          {
-            fprintf(stderr,
-                    "Error : epoch EventOperations contains dropped"
-                    "EventOperation %p %llu\n",
-                    gciOp,
-                    (Uint64) gciOp->getCustomData());
-            res = NDBT_FAILED;
-          }
-        }
-        /* Stop accumulating changes after a while */
-        if (observedEpochs == 40)
-        {
-          ndb->dropEventOperation(ops[0]);
-        }
-      }
-    }
-  }
-
-  ctx->stopTest();
-  return res;
 }
 
 NDBT_TESTSUITE(test_event);
@@ -6265,15 +6168,6 @@ TESTCASE("ExhaustedSafeCounterPool",
   FINALIZER(runDropShadowTable);
 }
 
-TESTCASE("DelayedEventDrop",
-        "Create and Drop events with load, having multiple events droppable"
-         "at once")
-{
-  INITIALIZER(runCreateEvent);
-  STEP(runCreateDropConsume);
-  STEP(runInsertDeleteUntilStopped);
-  FINALIZER(runDropEvent);
-}
 #if 0
 TESTCASE("BackwardCompatiblePollCOverflowEB",
          "Check whether backward compatibility of pollEvents  manually"

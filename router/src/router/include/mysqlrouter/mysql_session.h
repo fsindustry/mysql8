@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 #ifndef _ROUTER_MYSQL_SESSION_H_
 #define _ROUTER_MYSQL_SESSION_H_
 
-#include "mysqlrouter/router_export.h"
-
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -37,12 +35,14 @@
 
 #include "mysql/harness/stdx/expected.h"
 #include "mysqlrouter/log_filter.h"
+#ifdef FRIEND_TEST
+class MockMySQLSession;
+#endif
 
 namespace mysqlrouter {
 
 class MysqlError {
  public:
-  MysqlError() = default;
   MysqlError(unsigned int code, std::string message, std::string sql_state)
       : code_{code},
         message_{std::move(message)},
@@ -55,7 +55,7 @@ class MysqlError {
   unsigned int value() const { return code_; }
 
  private:
-  unsigned int code_{0};
+  unsigned int code_;
   std::string message_;
   std::string sql_state_;
 };
@@ -149,10 +149,10 @@ class Option<Opt, std::nullptr_t> {
 
 // mysql_options() may be used with MYSQL * == nullptr to get global values.
 
-class ROUTER_LIB_EXPORT MySQLSession {
+class MySQLSession {
  public:
-  static constexpr int kDefaultConnectTimeout = 5;
-  static constexpr int kDefaultReadTimeout = 30;
+  static const int kDefaultConnectTimeout = 15;
+  static const int kDefaultReadTimeout = 30;
   typedef std::vector<const char *> Row;
   typedef std::function<bool(const Row &)> RowProcessor;
   typedef std::function<void(unsigned, MYSQL_FIELD *)> FieldValidator;
@@ -163,6 +163,36 @@ class ROUTER_LIB_EXPORT MySQLSession {
   static const char kSslModeRequired[];
   static const char kSslModeVerifyCa[];
   static const char kSslModeVerifyIdentity[];
+
+  // this struct contains all parameters which would be needed if you wanted to
+  // create a new connection with same parameters (server address, options,
+  // etc)
+  struct ConnectionParameters {
+    struct SslOptions {
+      mysql_ssl_mode ssl_mode;
+      std::string tls_version;
+      std::string ssl_cipher;
+      std::string ca;
+      std::string capath;
+      std::string crl;
+      std::string crlpath;
+    } ssl_opts;
+    struct SslCert {
+      std::string cert;
+      std::string key;
+    } ssl_cert;
+    struct ConnOptions {
+      std::string host;
+      unsigned int port;
+      std::string username;
+      std::string password;
+      std::string unix_socket;
+      std::string default_schema;
+      int connect_timeout;
+      int read_timeout;
+    } conn_opts;
+  };
+
   //
   // mysql_option's
   //
@@ -295,25 +325,16 @@ class ROUTER_LIB_EXPORT MySQLSession {
     Row row_;
   };
 
-  struct ROUTER_LIB_EXPORT LoggingStrategy {
-    LoggingStrategy() = default;
-
-    LoggingStrategy(const LoggingStrategy &) = default;
-    LoggingStrategy(LoggingStrategy &&) = default;
-
-    LoggingStrategy &operator=(const LoggingStrategy &) = default;
-    LoggingStrategy &operator=(LoggingStrategy &&) = default;
-
-    virtual ~LoggingStrategy() = default;
-
+  struct LoggingStrategy {
     virtual void log(const std::string &msg) = 0;
+    virtual ~LoggingStrategy() = default;
   };
 
-  struct ROUTER_LIB_EXPORT LoggingStrategyNone : public LoggingStrategy {
+  struct LoggingStrategyNone : public LoggingStrategy {
     virtual void log(const std::string & /*msg*/) override {}
   };
 
-  struct ROUTER_LIB_EXPORT LoggingStrategyDebugLogger : public LoggingStrategy {
+  struct LoggingStrategyDebugLogger : public LoggingStrategy {
     virtual void log(const std::string &msg) override;
   };
 
@@ -332,20 +353,6 @@ class ROUTER_LIB_EXPORT MySQLSession {
                                const std::string &ca, const std::string &capath,
                                const std::string &crl,
                                const std::string &crlpath);
-
-  mysql_ssl_mode ssl_mode() const;
-  std::string tls_version() const;
-  std::string ssl_cipher() const;
-  std::string ssl_ca() const;
-  std::string ssl_capath() const;
-  std::string ssl_crl() const;
-  std::string ssl_crlpath() const;
-
-  std::string ssl_cert() const;
-  std::string ssl_key() const;
-
-  int connect_timeout() const;
-  int read_timeout() const;
 
   // throws Error
   virtual void set_ssl_cert(const std::string &cert, const std::string &key);
@@ -390,12 +397,12 @@ class ROUTER_LIB_EXPORT MySQLSession {
    * @retval false if option is not known.
    */
   template <class GettableMysqlOption>
-  bool get_option(GettableMysqlOption &opt) const {
+  stdx::expected<void, void> get_option(GettableMysqlOption &opt) {
     if (0 != mysql_get_option(connection_, opt.option(), opt.data())) {
-      return false;
+      return stdx::make_unexpected();
     }
 
-    return true;
+    return {};
   }
 
   virtual void connect(const std::string &host, unsigned int port,
@@ -407,28 +414,38 @@ class ROUTER_LIB_EXPORT MySQLSession {
   virtual void disconnect();
 
   /**
-   * Connect using the same settings and parameters that were used for the last
-   * other.connect() using provided credentials.
+   * This is an alternative way to initialise a new connection.  It calls
+   * connect() and several other methods under the hood.  Along with its
+   * counterpart `get_connection_parameters()`, it's useful for spawning
+   * new connections using an existing connection as a template.
+   *
+   * @param conn_params Connection parameters
+   *
+   * @see get_connection_parameters()
    */
-  virtual void connect(const MySQLSession &other, const std::string &username,
-                       const std::string &password);
+  virtual void connect_and_set_opts(const ConnectionParameters &conn_params);
+
+  /**
+   * Returns connection parameters which could be used as a template for
+   * spawning new connections.
+   *
+   * @see connect_and_set_opts()
+   *
+   * @returns parameters used to create current connection
+   */
+  virtual ConnectionParameters get_connection_parameters() {
+    return conn_params_;
+  }
 
   virtual void execute(
       const std::string &query);  // throws Error, std::logic_error
   virtual void query(
       const std::string &query, const RowProcessor &processor,
-      const FieldValidator &validator);  // throws Error, std::logic_error
+      const FieldValidator &validator =
+          null_field_validator);  // throws Error, std::logic_error
   virtual std::unique_ptr<MySQLSession::ResultRow> query_one(
       const std::string &query,
-      const FieldValidator &validator);  // throws Error
-                                         //
-  void query(const std::string &stmt, const RowProcessor &processor) {
-    return query(stmt, processor, [](unsigned, MYSQL_FIELD *) {});
-  }
-
-  std::unique_ptr<MySQLSession::ResultRow> query_one(const std::string &stmt) {
-    return query_one(stmt, [](unsigned, MYSQL_FIELD *) {});
-  }
+      const FieldValidator &validator = null_field_validator);  // throws Error
 
   virtual uint64_t last_insert_id() noexcept;
 
@@ -444,25 +461,24 @@ class ROUTER_LIB_EXPORT MySQLSession {
 
   virtual const char *ssl_cipher();
 
-  virtual bool is_ssl_session_reused();
-
  protected:
+  static const std::function<void(unsigned, MYSQL_FIELD *)>
+      null_field_validator;
   std::unique_ptr<LoggingStrategy> logging_strategy_;
 
  private:
-  // stores selected parameters that were passed to the last successful call to
-  // connect()
-  struct {
-    std::string host;
-    unsigned int port{};
-    std::string unix_socket;
-    std::string default_schema;
-  } connect_params_;
+  ConnectionParameters conn_params_;
 
   MYSQL *connection_;
   bool connected_;
   std::string connection_address_;
   SQLLogFilter log_filter_;
+
+  virtual MYSQL *raw_mysql() noexcept { return connection_; }
+
+#ifdef FRIEND_TEST
+  friend class ::MockMySQLSession;
+#endif
 
   class MYSQL_RES_Deleter {
    public:
@@ -482,7 +498,7 @@ class ROUTER_LIB_EXPORT MySQLSession {
    *
    * @param q stmt to execute
    *
-   * @returns resultset on success, MysqlError on error
+   * @returns resultset on sucess, MysqlError on error
    */
   stdx::expected<mysql_result_type, MysqlError> real_query(
       const std::string &q);

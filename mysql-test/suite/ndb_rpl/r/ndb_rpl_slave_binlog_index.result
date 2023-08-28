@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 STOP SLAVE;
 Warnings:
@@ -24,13 +24,13 @@ Warning	1287	'START SLAVE' is deprecated and will be removed in a future release
 Wait for replication to catch up
 Check that we got some warnings...
 Show that the test resulted in some extended error output...
-select count(1) > 0 as InjectCount from error_log where line like '%Binlog%Injecting random write failure%';
+select count(1) > 0 as InjectCount from error_log where line like '%NDB Binlog%Injecting random write failure%';
 InjectCount
 1
-select count(1) > 0 as BasicError from error_log where line like '%Binlog% failed writing to ndb_binlog_index%';
+select count(1) > 0 as BasicError from error_log where line like '%NDB Binlog% failed writing to ndb_binlog_index%';
 BasicError
 1
-select count(1) > 0 as DetailError from error_log where line like '%Binlog%Writing row%to ndb_binlog_index%';
+select count(1) > 0 as DetailError from error_log where line like '%NDB Binlog%Writing row%to ndb_binlog_index%';
 DetailError
 1
 drop table error_log;

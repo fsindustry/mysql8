@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,7 @@
 #include <memory>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_base.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -37,7 +38,6 @@
 #include "my_thread_local.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"            // check_access
@@ -77,7 +77,7 @@ bool Sql_cmd_alter_table_exchange_partition::execute(THD *thd) {
   /* first Query_block (have special meaning for many of non-SELECTcommands) */
   Query_block *query_block = lex->query_block;
   /* first table of first Query_block */
-  Table_ref *first_table = query_block->get_table_list();
+  TABLE_LIST *first_table = query_block->table_list.first;
   /*
     Code in mysql_alter_table() may modify its HA_CREATE_INFO argument,
     so we have to use a copy of this structure to make execution
@@ -85,9 +85,9 @@ bool Sql_cmd_alter_table_exchange_partition::execute(THD *thd) {
     referenced from this structure will be modified.
     @todo move these into constructor...
   */
-  const HA_CREATE_INFO create_info(*lex->create_info);
+  HA_CREATE_INFO create_info(*lex->create_info);
   Alter_info alter_info(*m_alter_info, thd->mem_root);
-  const ulong priv_needed = ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
+  ulong priv_needed = ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
 
   DBUG_TRACE;
 
@@ -188,7 +188,7 @@ static bool compare_table_with_partition(THD *thd, TABLE *table,
   Alter_table_ctx part_alter_ctx;  // Not used
   DBUG_TRACE;
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   const dd::Table *part_table_def = nullptr;
   if (!part_table->s->tmp_table) {
     if (thd->dd_client()->acquire(part_table->s->db.str,
@@ -307,9 +307,9 @@ static bool compare_table_with_partition(THD *thd, TABLE *table,
   @note This is a DDL operation so triggers will not be used.
 */
 bool Sql_cmd_alter_table_exchange_partition::exchange_partition(
-    THD *thd, Table_ref *table_list, Alter_info *alter_info) {
+    THD *thd, TABLE_LIST *table_list, Alter_info *alter_info) {
   TABLE *part_table, *swap_table;
-  Table_ref *swap_table_list;
+  TABLE_LIST *swap_table_list;
   partition_element *part_elem;
   String *partition_name;
   uint swap_part_id;
@@ -391,7 +391,7 @@ bool Sql_cmd_alter_table_exchange_partition::exchange_partition(
   /* OK to exchange */
 
   /*
-    Get exclusive mdl lock on both tables, always the non partitioned table
+    Get exclusive mdl lock on both tables, alway the non partitioned table
     first. Remember the tickets for downgrading locks later.
   */
   auto downgrade_mdl_lambda = [thd](MDL_ticket *ticket) {
@@ -424,7 +424,7 @@ bool Sql_cmd_alter_table_exchange_partition::exchange_partition(
     return true;
   }
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   dd::Table *part_table_def = nullptr;
   dd::Table *swap_table_def = nullptr;
 
@@ -452,8 +452,8 @@ bool Sql_cmd_alter_table_exchange_partition::exchange_partition(
       dd::sdi::drop_all_for_table(thd, part_table_def)) {
     return true;
   }
-  const int ha_error = part_handler->exchange_partition(
-      swap_part_id, part_table_def, swap_table_def);
+  int ha_error = part_handler->exchange_partition(swap_part_id, part_table_def,
+                                                  swap_table_def);
 
   if (ha_error) {
     handlerton *hton = part_table->file->ht;
@@ -584,7 +584,7 @@ bool Sql_cmd_alter_table_repair_partition::execute(THD *thd) {
 bool Sql_cmd_alter_table_truncate_partition::execute(THD *thd) {
   int error;
   ulong timeout = thd->variables.lock_wait_timeout;
-  Table_ref *first_table = thd->lex->query_block->get_table_list();
+  TABLE_LIST *first_table = thd->lex->query_block->table_list.first;
   uint table_counter;
   Partition_handler *part_handler = nullptr;
   handlerton *hton;
@@ -646,7 +646,7 @@ bool Sql_cmd_alter_table_truncate_partition::execute(THD *thd) {
     downgrade_mdl_guard.reset(ticket);
   }
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   dd::Table *table_def = nullptr;
 
   if (thd->dd_client()->acquire_for_modification<dd::Table>(
@@ -656,20 +656,12 @@ bool Sql_cmd_alter_table_truncate_partition::execute(THD *thd) {
   /* Table was successfully opened above. */
   assert(table_def != nullptr);
 
-  Table_ddl_hton_notification_guard notification_guard{
-      thd, &first_table->mdl_request.key, ha_ddl_type::HA_TRUNCATE_DDL};
-
-  if (notification_guard.notify()) return true;
-
   if (table_def->options().exists("secondary_engine")) {
-    LEX_CSTRING secondary_engine;
-    table_def->options().get("secondary_engine", &secondary_engine,
-                             thd->mem_root);
-
-    if (!ha_secondary_engine_supports_ddl(thd, secondary_engine)) {
-      my_error(ER_SECONDARY_ENGINE_DDL, MYF(0));
-      return true;
-    }
+    /* Truncate operation is not allowed for tables with secondary engine
+     * since it's not currently supported by change propagation
+     */
+    my_error(ER_SECONDARY_ENGINE_DDL, MYF(0));
+    return true;
   }
 
   if (hton->partition_flags() & HA_TRUNCATE_PARTITION_PRECLOSE) {

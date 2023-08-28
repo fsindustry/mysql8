@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,6 @@
 #include <mysql/plugin.h>
 
 #include "storage/perfschema/pfs_server.h"
-#include "template_utils.h"
 
 extern int pfs_set_thread_resource_group_vc(const char *group_name,
                                             int group_name_len,
@@ -91,8 +90,8 @@ int register_pfs_resource_group_service() {
     return 1;
   }
 
-  const my_service<SERVICE_TYPE(registry_registration)> reg(
-      "registry_registration", r);
+  my_service<SERVICE_TYPE(registry_registration)> reg("registry_registration",
+                                                      r);
 
   if (reg->register_service(
           "pfs_resource_group_v3.mysql_server",
@@ -120,8 +119,8 @@ int unregister_pfs_resource_group_service() {
     return 1;
   }
 
-  const my_service<SERVICE_TYPE(registry_registration)> reg(
-      "registry_registration", r);
+  my_service<SERVICE_TYPE(registry_registration)> reg("registry_registration",
+                                                      r);
 
   if (reg->unregister("pfs_resource_group_v3.mysql_server")) {
     result = 1;

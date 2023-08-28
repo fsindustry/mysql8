@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,16 +28,13 @@
 //      TransporterRegistry
 //
 //  DESCRIPTION
-//      TransporterRegistry (singleton) is the interface to the 
+//      TransporterRegistry (singelton) is the interface to the 
 //      transporter layer. It handles transporter states and 
 //      holds the transporter arrays.
 //
 //***************************************************************************/
 #ifndef TransporterRegistry_H
 #define TransporterRegistry_H
-
-#include <assert.h>
-#include "ndb_config.h"
 
 #if defined(HAVE_EPOLL_CREATE)
 #include <sys/epoll.h>
@@ -46,14 +43,12 @@
 #include <SocketServer.hpp>
 #include <SocketClient.hpp>
 
+#include <NdbTCP.h>
+
 #include <mgmapi/mgmapi.h>
 
 #include <NodeBitmask.hpp>
 #include <NdbMutex.h>
-
-#include "portlib/NdbTick.h"
-#include "portlib/ndb_sockaddr.h"
-#include "util/NdbSocket.h"
 
 #ifndef _WIN32
 /*
@@ -101,16 +96,16 @@ class TransporterService : public SocketServer::Service {
   SocketAuthenticator * m_auth;
   TransporterRegistry * m_transporter_registry;
 public:
-  TransporterService(SocketAuthenticator *auth= nullptr)
+  TransporterService(SocketAuthenticator *auth= 0)
   {
     m_auth= auth;
-    m_transporter_registry= nullptr;
+    m_transporter_registry= 0;
   }
   void setTransporterRegistry(TransporterRegistry *t)
   {
     m_transporter_registry= t;
   }
-  SocketServer::Session * newSession(ndb_socket_t socket) override;
+  SocketServer::Session * newSession(NDB_SOCKET_TYPE socket) override;
 };
 
 /**
@@ -195,9 +190,7 @@ struct TransporterReceiveData
   ndb_socket_poller m_socket_poller;
 };
 
-class TransporterCallback;
-class TransporterReceiveHandle;
-class TransporterSendBufferHandle;
+#include "TransporterCallback.hpp"
 
 /**
  * @class TransporterRegistry
@@ -229,7 +222,7 @@ public:
 
   /**
    * Iff using non-default TransporterReceiveHandle's
-   *   they need to get initialized
+   *   they need to get initalized
    */
   bool init(TransporterReceiveHandle&);
 
@@ -250,31 +243,25 @@ public:
 
      @returns false on failure and true on success
   */
-  bool connect_server(NdbSocket & sockfd,
+  bool connect_server(NDB_SOCKET_TYPE sockfd,
                       BaseString& msg,
                       bool& close_with_reset,
                       bool& log_failure);
 
-  bool connect_server(ndb_socket_t sockfd, BaseString & msg,
-                      bool & close_with_reset, bool & log_failure) {
-    NdbSocket sock(sockfd, NdbSocket::From::Existing);
-    return connect_server(sock, msg, close_with_reset, log_failure);
-  }
-
   bool connect_client(NdbMgmHandle *h);
 
   /**
-   * Given a hostname and port, creates a NdbMgmHandle, turns it into
-   * a transporter, and returns the socket.
+   * Given a SocketClient, creates a NdbMgmHandle, turns it into a transporter
+   * and returns the socket.
    */
-  ndb_socket_t connect_ndb_mgmd(const char* server_name,
-                                unsigned short server_port);
+  NDB_SOCKET_TYPE connect_ndb_mgmd(const char* server_name,
+                                   unsigned short server_port);
 
   /**
    * Given a connected NdbMgmHandle, turns it into a transporter
    * and returns the socket.
    */
-  ndb_socket_t connect_ndb_mgmd(NdbMgmHandle *h);
+  NDB_SOCKET_TYPE connect_ndb_mgmd(NdbMgmHandle *h);
 
   /**
    * Manage allTransporters and theNodeIdTransporters when using
@@ -375,7 +362,7 @@ private:
   void report_connect(TransporterReceiveHandle&, NodeId node_id);
   void report_disconnect(TransporterReceiveHandle&, NodeId node_id, int errnum);
   void report_error(NodeId nodeId, TransporterError errorCode,
-                    const char *errorInfo = nullptr);
+                    const char *errorInfo = 0);
   void dump_and_report_bad_message(const char file[], unsigned line,
                     TransporterReceiveHandle & recvHandle,
                     Uint32 * readPtr,
@@ -543,7 +530,7 @@ public:
   Transporter* get_transporter(TrpId id) const;
   Transporter* get_node_transporter(NodeId nodeId) const;
   bool is_shm_transporter(NodeId nodeId);
-  ndb_sockaddr get_connect_address(NodeId node_id) const;
+  struct in6_addr get_connect_address(NodeId node_id) const;
 
   Uint64 get_bytes_sent(NodeId nodeId) const;
   Uint64 get_bytes_received(NodeId nodeId) const;
@@ -678,12 +665,12 @@ public:
   void wakeup();
 
   inline bool setup_wakeup_socket() {
-    assert(receiveHandle != nullptr);
+    assert(receiveHandle != 0);
     return setup_wakeup_socket(* receiveHandle);
   }
 private:
   bool m_has_extra_wakeup_socket;
-  ndb_socket_t m_extra_wakeup_sockets[2];
+  NDB_SOCKET_TYPE m_extra_wakeup_sockets[2];
   void consume_extra_sockets();
 
   Uint32 *getWritePtr(TransporterSendBufferHandle *handle,
@@ -726,22 +713,29 @@ public:
                           Uint32 max_spintime = UINT32_MAX);
 
   inline Uint32 pollReceive(Uint32 timeOutMillis) {
-    assert(receiveHandle != nullptr);
+    assert(receiveHandle != 0);
     return pollReceive(timeOutMillis, * receiveHandle);
   }
 
   inline Uint32 performReceive() {
-    assert(receiveHandle != nullptr);
+    assert(receiveHandle != 0);
     return performReceive(* receiveHandle, 0);
   }
 
   inline void update_connections() {
-    assert(receiveHandle != nullptr);
+    assert(receiveHandle != 0);
     update_connections(* receiveHandle);
   }
-
-  Uint32 get_total_spintime() const;
-  void reset_total_spintime() const;
+  inline Uint32 get_total_spintime()
+  {
+    assert(receiveHandle != 0);
+    return receiveHandle->m_total_spintime;
+  }
+  inline void reset_total_spintime()
+  {
+    assert(receiveHandle != 0);
+    receiveHandle->m_total_spintime = 0;
+  }
 
   TrpId getTransporterIndex(Transporter* t);
   void set_recv_thread_idx(Transporter* t, Uint32 recv_thread_idx);

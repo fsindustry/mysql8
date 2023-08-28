@@ -1,5 +1,5 @@
 /****************************************************************************
- Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+ Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify it under
  the terms of the GNU General Public License, version 2.0, as published by the
@@ -55,16 +55,15 @@
 #warning "Testing enabled!"
 #endif
 
-inline static ib_rbt_node_t *ROOT(const ib_rbt_t *t) { return t->root->left; }
-inline static size_t SIZEOF_NODE(const ib_rbt_t *t) {
-  return sizeof(ib_rbt_node_t) + t->sizeof_value - 1;
-}
+#define ROOT(t) (t->root->left)
+#define SIZEOF_NODE(t) ((sizeof(ib_rbt_node_t) + t->sizeof_value) - 1)
 
 #if defined UNIV_DEBUG || defined IB_RBT_TESTING
 /** Verify that the keys are in order.
- @param[in] tree tree to verify
  @return true of OK. false if not ordered */
-static bool rbt_check_ordering(const ib_rbt_t *tree) {
+static ibool rbt_check_ordering(
+    const ib_rbt_t *tree) /*!< in: tree to verfify */
+{
   const ib_rbt_node_t *node;
   const ib_rbt_node_t *prev = nullptr;
 
@@ -81,20 +80,20 @@ static bool rbt_check_ordering(const ib_rbt_t *tree) {
       }
 
       if (result >= 0) {
-        return false;
+        return (FALSE);
       }
     }
 
     prev = node;
   }
 
-  return true;
+  return (TRUE);
 }
 
 /** Check that every path from the root to the leaves has the same count.
  Count is expressed in the number of black nodes.
  @return 0 on failure else black height of the subtree */
-static ulint rbt_count_black_nodes(
+static ibool rbt_count_black_nodes(
     const ib_rbt_t *tree,      /*!< in: tree to verify */
     const ib_rbt_node_t *node) /*!< in: start of sub-tree */
 {
@@ -366,7 +365,7 @@ static ib_rbt_node_t *rbt_find_successor(
 }
 
 /** Find the given node's precedecessor.
- @return predecessor node or NULL if no predecessor */
+ @return predecessor node or NULL if no predecesor */
 static ib_rbt_node_t *rbt_find_predecessor(
     const ib_rbt_t *tree,         /*!< in: rb tree */
     const ib_rbt_node_t *current) /*!< in: this is declared const
@@ -411,7 +410,7 @@ static void rbt_eject_node(ib_rbt_node_t *eject, /*!< in: node to eject */
   } else if (eject->parent->right == eject) {
     eject->parent->right = node;
   } else {
-    ut_error;
+    ut_a(0);
   }
   /* eject is now an orphan but otherwise its pointers
   and color are left intact. */
@@ -793,22 +792,22 @@ static const ib_rbt_node_t *rbt_lookup(
   return (current != tree->nil ? current : nullptr);
 }
 
-/** Delete a node identified by key.
+/** Delete a node indentified by key.
  @return true if success false if not found */
-bool rbt_delete(ib_rbt_t *tree,  /*!< in: rb tree */
-                const void *key) /*!< in: key to delete */
+ibool rbt_delete(ib_rbt_t *tree,  /*!< in: rb tree */
+                 const void *key) /*!< in: key to delete */
 {
-  bool deleted = false;
+  ibool deleted = FALSE;
   ib_rbt_node_t *node = (ib_rbt_node_t *)rbt_lookup(tree, key);
 
   if (node) {
     rbt_remove_node_and_rebalance(tree, node);
 
     ut::free(node);
-    deleted = true;
+    deleted = TRUE;
   }
 
-  return deleted;
+  return (deleted);
 }
 
 /** Remove a node from the rb tree, the node is not free'd, that is the
@@ -979,12 +978,12 @@ ulint rbt_merge_uniq(ib_rbt_t *dst,       /*!< in: dst rb tree */
 /** Check that every path from the root to the leaves has the same count and
  the tree nodes are in order.
  @return true if OK false otherwise */
-bool rbt_validate(const ib_rbt_t *tree) /*!< in: RB tree to validate */
+ibool rbt_validate(const ib_rbt_t *tree) /*!< in: RB tree to validate */
 {
   if (rbt_count_black_nodes(tree, ROOT(tree)) > 0) {
     return (rbt_check_ordering(tree));
   }
 
-  return false;
+  return (FALSE);
 }
 #endif /* UNIV_DEBUG || IB_RBT_TESTING */

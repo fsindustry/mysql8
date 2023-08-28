@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,21 +31,21 @@
 #include <string>
 #include <thread>
 
+#include "common.h"
 #include "dim.h"
 #include "keyring/keyring_manager.h"
 #include "metadata_cache.h"
-#include "my_thread.h"  // my_thread_self_setname
 #include "mysql/harness/config_parser.h"
 #include "mysql/harness/loader_config.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/utility/string.h"
 #include "mysqlrouter/mysql_client_thread_token.h"
 #include "mysqlrouter/mysql_session.h"  // kSslModePreferred
-#include "mysqlrouter/supported_metadata_cache_options.h"
 #include "mysqlrouter/uri.h"
 #include "mysqlrouter/utils.h"
 #include "plugin_config.h"
 
+using metadata_cache::LookupResult;
 IMPORT_LOG_FUNCTIONS()
 
 static const mysql_harness::AppInfo *g_app_info;
@@ -110,23 +110,18 @@ static std::string get_option(const mysql_harness::ConfigSection *section,
   return def_value;
 }
 
-#define GET_OPTION_CHECKED(option, section, name, def_value) \
-  static_assert(mysql_harness::str_in_collection(            \
-      metadata_cache_supported_options, name));              \
-  option = get_option(section, name, def_value);
-
 static mysqlrouter::SSLOptions make_ssl_options(
     const mysql_harness::ConfigSection *section) {
   mysqlrouter::SSLOptions options;
 
-  GET_OPTION_CHECKED(options.mode, section, "ssl_mode",
-                     mysqlrouter::MySQLSession::kSslModePreferred);
-  GET_OPTION_CHECKED(options.cipher, section, "ssl_cipher", "");
-  GET_OPTION_CHECKED(options.tls_version, section, "tls_version", "");
-  GET_OPTION_CHECKED(options.ca, section, "ssl_ca", "");
-  GET_OPTION_CHECKED(options.capath, section, "ssl_capath", "");
-  GET_OPTION_CHECKED(options.crl, section, "ssl_crl", "");
-  GET_OPTION_CHECKED(options.crlpath, section, "ssl_crlpath", "");
+  options.mode = get_option(section, "ssl_mode",
+                            mysqlrouter::MySQLSession::kSslModePreferred);
+  options.cipher = get_option(section, "ssl_cipher", "");
+  options.tls_version = get_option(section, "tls_version", "");
+  options.ca = get_option(section, "ssl_ca", "");
+  options.capath = get_option(section, "ssl_capath", "");
+  options.crl = get_option(section, "ssl_crl", "");
+  options.crlpath = get_option(section, "ssl_crlpath", "");
 
   return options;
 }
@@ -142,11 +137,12 @@ class MetadataServersStateListener
   }
 
   void notify_instances_changed(
-      const metadata_cache::ClusterTopology &cluster_topology,
+      const LookupResult & /*instances*/,
+      const metadata_cache::metadata_servers_list_t &metadata_servers,
       const bool md_servers_reachable, const uint64_t view_id) override {
     if (!md_servers_reachable) return;
 
-    if (cluster_topology.metadata_servers.empty()) {
+    if (metadata_servers.empty()) {
       // This happens for example when the router could connect to one of the
       // metadata servers but failed to fetch metadata because the connection
       // went down while querying metadata
@@ -158,7 +154,7 @@ class MetadataServersStateListener
 
     // need to convert from ManagedInstance to uri string
     std::vector<std::string> metadata_servers_str;
-    for (auto &md_server : cluster_topology.metadata_servers) {
+    for (auto &md_server : metadata_servers) {
       mysqlrouter::URI uri;
       uri.scheme = "mysql";
       uri.host = md_server.address();
@@ -182,7 +178,7 @@ class MetadataServersStateListener
  * @param env plugin's environment
  */
 static void start(mysql_harness::PluginFuncEnv *env) {
-  my_thread_self_setname("MDC Main");
+  mysql_harness::rename_thread("MDC Main");
 
   mysqlrouter::MySQLClientThreadToken api_token;
 
@@ -200,7 +196,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
         (!config.metadata_cache_dynamic_state ||
          config.metadata_cache_dynamic_state->get_metadata_servers().empty())) {
       throw std::runtime_error(
-          "list of metadata-servers is empty: 'bootstrap_server_addresses' in the configuration file is empty or not set and "s +
+          "list of metadata-servers is empty: 'bootstrap_server_addresses' is the configuration file is empty or not set and "s +
           (!config.metadata_cache_dynamic_state
                ? "no known 'dynamic_config'-file"
                : "list of 'cluster-metadata-servers' in 'dynamic_config'-file "
@@ -244,22 +240,15 @@ static void start(mysql_harness::PluginFuncEnv *env) {
     // need for locking here
     g_router_attributes.metadata_user_name = config.user;
 
-    using TargetType = mysqlrouter::TargetCluster::TargetType;
-
-    // very old state.json files will not have UUID, in that case we fallback to
-    // using cluster name from static configuration
-    const bool identify_cluster_by_name = cluster_type_specific_id.empty();
-    mysqlrouter::TargetCluster target_cluster{
-        identify_cluster_by_name ? TargetType::ByName : TargetType::ByUUID,
-        identify_cluster_by_name ? config.cluster_name
-                                 : cluster_type_specific_id};
-
-    md_cache->cache_init(config.cluster_type, config.router_id, clusterset_id,
-                         config.metadata_servers_addresses, ttl_config,
-                         make_ssl_options(section), target_cluster,
-                         session_config, g_router_attributes,
-                         config.thread_stack_size, config.use_gr_notifications,
-                         config.get_view_id());
+    md_cache->cache_init(
+        config.cluster_type, config.router_id, cluster_type_specific_id,
+        clusterset_id, config.metadata_servers_addresses, ttl_config,
+        make_ssl_options(section),
+        mysqlrouter::TargetCluster{
+            mysqlrouter::TargetCluster::TargetType::ByName,
+            config.cluster_name},
+        session_config, g_router_attributes, config.thread_stack_size,
+        config.use_gr_notifications, config.get_view_id());
 
     // register callback
     md_cache_dynamic_state = std::move(config.metadata_cache_dynamic_state);
@@ -295,24 +284,18 @@ static const std::array<const char *, 2> required = {{
 
 extern "C" {
 
-mysql_harness::Plugin METADATA_CACHE_PLUGIN_EXPORT
-    harness_plugin_metadata_cache = {
-        mysql_harness::PLUGIN_ABI_VERSION,
-        mysql_harness::ARCHITECTURE_DESCRIPTOR,
-        "Metadata Cache, managing information fetched from the Metadata Server",
-        VERSION_NUMBER(0, 0, 1),
-        // requires
-        required.size(),
-        required.data(),
-        // conflicts
-        0,
-        nullptr,
-        init,     // init
-        nullptr,  // deinit
-        start,    // start
-        nullptr,  // stop
-        true,     // declares_readiness
-        metadata_cache_supported_options.size(),
-        metadata_cache_supported_options.data(),
+mysql_harness::Plugin METADATA_API harness_plugin_metadata_cache = {
+    mysql_harness::PLUGIN_ABI_VERSION, mysql_harness::ARCHITECTURE_DESCRIPTOR,
+    "Metadata Cache, managing information fetched from the Metadata Server",
+    VERSION_NUMBER(0, 0, 1),
+    // requires
+    required.size(), required.data(),
+    // conflicts
+    0, nullptr,
+    init,     // init
+    nullptr,  // deinit
+    start,    // start
+    nullptr,  // stop
+    true      // declares_readiness
 };
 }

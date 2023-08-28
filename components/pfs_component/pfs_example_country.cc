@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -35,11 +35,11 @@ unsigned int country_rows_in_table = 0;
 unsigned int country_next_available_index = 0;
 
 Country_record country_records_array[COUNTRY_MAX_ROWS] = {
-    {"", 0, "", 0, "", 0, {0, true}, {0, true}, {0, true}, false}};
+    {"", 0, "", 0, {0, true}, {0, true}, {0, true}, false}};
 
 /**
   Check for duplicate value of Primary/Unique Key column(s).
-  A sequential search is being used here, but it is up to the plugin writer to
+  A sequential search is being used here, but its upto plugin writer to
   implement his/her own search to make sure duplicate values are not
   inserted/updated for Primary/Unique Key Column(s).
 
@@ -71,7 +71,6 @@ PSI_table_handle *country_open_table(PSI_pos **pos) {
   Country_Table_Handle *temp = new Country_Table_Handle();
   temp->current_row.name_length = 0;
   temp->current_row.continent_name_length = 0;
-  temp->current_row.country_code_length = 0;
   temp->current_row.year.is_null = true;
   temp->current_row.population.is_null = true;
   temp->current_row.growth_factor.is_null = true;
@@ -100,8 +99,6 @@ static void copy_record(Country_record *dest, Country_record *source) {
   dest->population = source->population;
   dest->growth_factor = source->growth_factor;
   dest->m_exist = source->m_exist;
-  dest->country_code_length = source->country_code_length;
-  strncpy(dest->country_code, source->country_code, dest->country_code_length);
 }
 
 /* Define implementation of PFS_engine_table_proxy. */
@@ -177,13 +174,11 @@ int country_index_read(PSI_index_handle *index, PSI_key_reader *reader,
     case 0: {
       Country_index_by_name *i = (Country_index_by_name *)index;
       /* Read all keys on index one by one */
-      pc_string_srv->read_key_string(reader, &i->m_country_name, find_flag);
-      pc_string_srv->read_key_string(reader, &i->m_continent_name, find_flag);
-
-      /* Remember the number of key parts found. */
-      i->m_fields = pt_srv->get_parts_found(reader);
-      break;
-    }
+      mysql_service_pfs_plugin_table->read_key_string(
+          reader, &i->m_country_name, find_flag);
+      mysql_service_pfs_plugin_table->read_key_string(
+          reader, &i->m_continent_name, find_flag);
+    } break;
     default:
       assert(0);
       break;
@@ -236,25 +231,25 @@ int country_read_column_value(PSI_table_handle *handle, PSI_field *field,
 
   switch (index) {
     case 0: /* COUNTRY_NAME */
-      pc_string_srv->set_char_utf8mb4(field, h->current_row.name,
-                                      h->current_row.name_length);
+      mysql_service_pfs_plugin_table->set_field_char_utf8(
+          field, h->current_row.name, h->current_row.name_length);
       break;
     case 1: /* CONTINENT_NAME */
-      pc_string_srv->set_char_utf8mb4(field, h->current_row.continent_name,
-                                      h->current_row.continent_name_length);
+      mysql_service_pfs_plugin_table->set_field_char_utf8(
+          field, h->current_row.continent_name,
+          h->current_row.continent_name_length);
       break;
     case 2: /* YEAR */
-      pc_year_srv->set(field, h->current_row.year);
+      mysql_service_pfs_plugin_table->set_field_year(field,
+                                                     h->current_row.year);
       break;
     case 3: /* POPULATION */
-      pc_bigint_srv->set(field, h->current_row.population);
+      mysql_service_pfs_plugin_table->set_field_bigint(
+          field, h->current_row.population);
       break;
     case 4: /* GROWTH_FACTOR */
-      pc_double_srv->set(field, h->current_row.growth_factor);
-      break;
-    case 5: /* COUNTRY_CODE */
-      pc_text_srv->set(field, h->current_row.country_code,
-                       h->current_row.country_code_length);
+      mysql_service_pfs_plugin_table->set_field_double(
+          field, h->current_row.growth_factor);
       break;
     default: /* We should never reach here */
       assert(0);
@@ -315,28 +310,27 @@ int country_write_column_value(PSI_table_handle *handle, PSI_field *field,
   unsigned int *name_length = &h->current_row.name_length;
   char *continent_name = (char *)h->current_row.continent_name;
   unsigned int *continent_name_length = &h->current_row.continent_name_length;
-  char *country_code = (char *)h->current_row.country_code;
-  unsigned int *country_code_length = &h->current_row.country_code_length;
 
   switch (index) {
     case 0: /* COUNTRY_NAME */
-      pc_string_srv->get_char_utf8mb4(field, name, name_length);
+      mysql_service_pfs_plugin_table->get_field_char_utf8(field, name,
+                                                          name_length);
       break;
     case 1: /* CONTINENT_NAME */
-      pc_string_srv->get_char_utf8mb4(field, continent_name,
-                                      continent_name_length);
+      mysql_service_pfs_plugin_table->get_field_char_utf8(
+          field, continent_name, continent_name_length);
       break;
     case 2: /* YEAR */
-      pc_year_srv->get(field, &h->current_row.year);
+      mysql_service_pfs_plugin_table->get_field_year(field,
+                                                     &h->current_row.year);
       break;
     case 3: /* POPULATION */
-      pc_bigint_srv->get(field, &h->current_row.population);
+      mysql_service_pfs_plugin_table->get_field_bigint(
+          field, &h->current_row.population);
       break;
     case 4: /* GROWTH_FACTOR */
-      pc_double_srv->get(field, &h->current_row.growth_factor);
-      break;
-    case 5: /* COUNTRY_CODE */
-      pc_text_srv->get(field, country_code, country_code_length);
+      mysql_service_pfs_plugin_table->get_field_double(
+          field, &h->current_row.growth_factor);
       break;
     default: /* We should never reach here */
       assert(0);
@@ -373,28 +367,27 @@ int country_update_column_value(PSI_table_handle *handle, PSI_field *field,
   unsigned int *name_length = &h->current_row.name_length;
   char *continent_name = (char *)h->current_row.continent_name;
   unsigned int *continent_name_length = &h->current_row.continent_name_length;
-  char *country_code = (char *)h->current_row.country_code;
-  unsigned int *country_code_length = &h->current_row.country_code_length;
 
   switch (index) {
     case 0: /* COUNTRY_NAME */
-      pc_string_srv->get_char_utf8mb4(field, name, name_length);
+      mysql_service_pfs_plugin_table->get_field_char_utf8(field, name,
+                                                          name_length);
       break;
     case 1: /* CONTINENT_NAME */
-      pc_string_srv->get_char_utf8mb4(field, continent_name,
-                                      continent_name_length);
+      mysql_service_pfs_plugin_table->get_field_char_utf8(
+          field, continent_name, continent_name_length);
       break;
     case 2: /* YEAR */
-      pc_year_srv->get(field, &h->current_row.year);
+      mysql_service_pfs_plugin_table->get_field_year(field,
+                                                     &h->current_row.year);
       break;
     case 3: /* POPULATION */
-      pc_bigint_srv->get(field, &h->current_row.population);
+      mysql_service_pfs_plugin_table->get_field_bigint(
+          field, &h->current_row.population);
       break;
     case 4: /* GROWTH_FACTOR */
-      pc_double_srv->get(field, &h->current_row.growth_factor);
-      break;
-    case 5: /* COUNTRY_CODE */
-      pc_text_srv->get(field, country_code, country_code_length);
+      mysql_service_pfs_plugin_table->get_field_double(
+          field, &h->current_row.growth_factor);
       break;
     default: /* We should never reach here */
       assert(0);
@@ -438,7 +431,6 @@ void init_country_share(PFS_engine_table_share_proxy *share) {
   share->m_table_definition =
       "NAME char(20) not null, CONTINENT char(20),"
       " YEAR year, POPULATION bigint, GROWTH_FACTOR double(10,2),"
-      " COUNTRY_CODE text,"
       " UNIQUE KEY(NAME, CONTINENT)";
   share->m_ref_length = sizeof(Country_POS);
   share->m_acl = EDITABLE;

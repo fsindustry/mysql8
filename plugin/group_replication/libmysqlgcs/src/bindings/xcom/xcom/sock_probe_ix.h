@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -77,7 +77,7 @@ static char *get_if_name(sock_probe *s, int count);
 static int init_sock_probe(sock_probe *s) {
   struct ifaddrs *ifa_tmp;
 
-  if (s == nullptr) {
+  if (s == NULL) {
     goto err;
   }
 
@@ -109,7 +109,7 @@ static void close_sock_probe(sock_probe *s) {
 
 /* Return the number of IP interfaces on this machine.*/
 static int number_of_interfaces(sock_probe *s) {
-  if (s == nullptr) {
+  if (s == NULL) {
     return 0;
   }
 
@@ -117,16 +117,16 @@ static int number_of_interfaces(sock_probe *s) {
 }
 
 static struct ifaddrs *get_interface(sock_probe *s, int count) {
-  struct ifaddrs *net_if = nullptr;
+  struct ifaddrs *net_if = NULL;
   int i = 0;
 
-  if (s == nullptr) {
-    return nullptr;
+  if (s == NULL) {
+    return NULL;
   }
 
   net_if = s->interfaces;
-  idx_check_ret(count, number_of_interfaces(s), nullptr) {
-    while (net_if != nullptr) {
+  idx_check_ret(count, number_of_interfaces(s), 0) {
+    while (net_if != NULL) {
       if ((net_if->ifa_addr) && ((net_if->ifa_addr->sa_family == AF_INET) ||
                                  (net_if->ifa_addr->sa_family == AF_INET6))) {
         if (i >= count)
@@ -139,18 +139,18 @@ static struct ifaddrs *get_interface(sock_probe *s, int count) {
     }
   }
 
-  return nullptr;
+  return NULL;
 }
 
 static bool_t is_if_running(sock_probe *s, int count) {
-  struct ifaddrs *net_if = nullptr;
+  struct ifaddrs *net_if = NULL;
 
-  if (s == nullptr) {
+  if (s == NULL) {
     return 0;
   }
 
   net_if = get_interface(s, count);
-  return net_if != nullptr && (net_if->ifa_flags & IFF_UP) &&
+  return net_if != NULL && (net_if->ifa_flags & IFF_UP) &&
          (net_if->ifa_flags & IFF_RUNNING);
 }
 
@@ -169,8 +169,8 @@ static void get_sockaddr(sock_probe *s, int count, struct sockaddr **out,
                          SockaddrOp addr_operation) {
   struct ifaddrs *net_if = get_interface(s, count);
 
-  if (net_if == nullptr) {
-    *out = nullptr;
+  if (net_if == NULL) {
+    *out = NULL;
     return;
   }
 
@@ -189,5 +189,5 @@ static void get_sockaddr(sock_probe *s, int count, struct sockaddr **out,
 static char *get_if_name(sock_probe *s, int count) {
   struct ifaddrs *net_if = get_interface(s, count);
 
-  return net_if != nullptr ? net_if->ifa_name : nullptr;
+  return net_if != NULL ? net_if->ifa_name : NULL;
 }

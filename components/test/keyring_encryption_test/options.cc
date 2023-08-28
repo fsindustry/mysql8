@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #include <iostream>
 #include <string>
 
+#include <m_ctype.h>                  /* Character set */
 #include <my_alloc.h>                 /* MEM_ROOT */
 #include <my_default.h>               /* print_defaults */
 #include <my_getopt.h>                /* Options handling */
@@ -37,7 +38,6 @@
 #include <print_version.h>            /* print_version */
 #include <typelib.h>                  /* find_type_or_exit */
 #include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
-#include "mysql/strings/m_ctype.h"    /* Character set */
 
 #include "options.h"
 

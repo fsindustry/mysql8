@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,15 +22,11 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include <sys/types.h>
-
-#include <cstddef>
-#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <utility>
 
+#include <m_ctype.h>                  /* Character set */
 #include <my_alloc.h>                 /* MEM_ROOT */
 #include <my_default.h>               /* print_defaults */
 #include <my_getopt.h>                /* Options handling */
@@ -42,16 +38,9 @@
 #include <print_version.h>            /* print_version */
 #include <typelib.h>                  /* find_type_or_exit */
 #include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
-#include "m_string.h"
-#include "mysql/strings/m_ctype.h" /* Character set */
-#include "nulls.h"
-#include "template_utils.h"
 
 #include "options.h"
 #include "utilities.h"
-
-/* TLS variables */
-#include "sslopt-vars.h"
 
 namespace options {
 
@@ -77,9 +66,6 @@ enum migration_options {
   OPT_SSL_FIPS_MODE,
   OPT_TLS_CIPHERSUITES,
   OPT_SERVER_PUBLIC_KEY,
-  OPT_SSL_SESSION_DATA,
-  OPT_SSL_SESSION_DATA_CONTINUE_ON_FAILED_REUSE,
-  OPT_TLS_SNI_SERVERNAME,
   /* Add new value above this */
   OPT_LAST
 };
@@ -99,6 +85,8 @@ char *Options::s_password = nullptr;
 char *Options::s_socket = nullptr;
 bool Options::s_tty_password = false;
 
+/* TLS variables */
+#include "sslopt-vars.h"
 /* Caching sha2 password variables */
 #include "caching_sha2_passwordopt-vars.h"
 
@@ -275,9 +263,9 @@ bool process_options(int *argc, char ***argv, int &exit_code) {
   }
   my_getopt_use_args_separator = false;
 
-  const bool save_skip_unknown = my_getopt_skip_unknown;
+  bool save_skip_unknown = my_getopt_skip_unknown;
   my_getopt_skip_unknown = true;
-  const bool ret = get_options(*argc, *argv, exit_code);
+  bool ret = get_options(*argc, *argv, exit_code);
   my_getopt_skip_unknown = save_skip_unknown;
   return ret;
 }
@@ -345,10 +333,6 @@ Mysql_connection::Mysql_connection(bool connect) : ok_(false), mysql(nullptr) {
               << mysql_error(mysql) << std::endl;
     return;
   }
-  if (ssl_client_check_post_connect_ssl_setup(
-          mysql, [](const char *err) { log_error << err << std::endl; }))
-    return;
-
   log_info << "Successfully connected to MySQL server" << std::endl;
 
   ok_ = true;

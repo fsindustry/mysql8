@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,7 @@
 #include <utility>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_alloc.h"
 #include "my_bitmap.h"
@@ -46,15 +47,12 @@
 #include "my_pointer_arithmetic.h"
 #include "my_systime.h"
 #include "my_user.h"  // parse_user
-#include "mysql/components/my_service.h"
-#include "mysql/components/services/bits/psi_error_bits.h"
+#include "mysql/components/services/psi_error_bits.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_error.h"
 #include "mysql/psi/mysql_sp.h"
 #include "mysql/psi/mysql_statement.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
-#include "nulls.h"
 #include "prealloced_array.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // *_ACL
@@ -95,8 +93,6 @@
 #include "sql/transaction.h"  // trans_commit_stmt
 #include "sql/trigger_def.h"
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strxmov.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
 
@@ -1101,7 +1097,7 @@ methods like Item::fix_fields(), which modify the internal state of items,
 
   @subsection sp_exc_rcont Runtime Context
 
-  An interpreter needs to be able to represent the state
+  An interpretor needs to be able to represent the state
   of the SQL program being executed:
   this is the role of the C++ class #sp_rcontext, or runtime context.
 
@@ -1618,7 +1614,7 @@ static void reset_start_time_for_sp(THD *thd) {
     This procedure won't create new Sroutine_hash_entry objects,
     instead it will simply add elements from source to destination
     hash. Thus time of life of elements in destination hash becomes
-    dependent on time of life of elements from source hash. It also
+    dependant on time of life of elements from source hash. It also
     won't touch lists linking elements in source and destination
     hashes.
 */
@@ -1720,8 +1716,7 @@ sp_head::sp_head(MEM_ROOT &&mem_root, enum_sp_type type)
       m_sptabs(system_charset_info, key_memory_sp_head_main_root),
       m_sp_cache_version(0),
       m_creation_ctx(nullptr),
-      unsafe_flags(0),
-      m_language_stored_program(nullptr) {
+      unsafe_flags(0) {
   m_first_instance = this;
   m_first_free_instance = this;
   m_last_cached_sp = this;
@@ -1742,6 +1737,7 @@ sp_head::sp_head(MEM_ROOT &&mem_root, enum_sp_type type)
 
   m_params = NULL_STR;
 
+  m_defstr = NULL_STR;
   m_body = NULL_CSTR;
   m_body_utf8 = NULL_CSTR;
 
@@ -1780,8 +1776,7 @@ void sp_head::set_body_start(THD *thd, const char *begin_ptr) {
 
 void sp_head::set_body_end(THD *thd) {
   Lex_input_stream *lip = &thd->m_parser_state->m_lip; /* shortcut */
-
-  const char *end_ptr = is_sql() ? lip->get_cpp_ptr() : code.str + code.length;
+  const char *end_ptr = lip->get_cpp_ptr();            /* shortcut */
 
   /* Make the string of parameters. */
 
@@ -1802,29 +1797,29 @@ void sp_head::set_body_end(THD *thd) {
   /* Make the string of body (in the original character set). */
 
   LEX_STRING body;
-  if (is_sql()) {
-    body.length = end_ptr - m_parser_data.get_body_start_ptr();
-    body.str = thd->strmake(m_parser_data.get_body_start_ptr(), body.length);
-    trim_whitespace(thd->charset(), &body);
-  } else {
-    // For external languages, we only support utf8mb4
-    thd->convert_string(&body, &my_charset_utf8mb4_general_ci, code.str,
-                        code.length, thd->charset());
-  }
+  body.length = end_ptr - m_parser_data.get_body_start_ptr();
+  body.str = thd->strmake(m_parser_data.get_body_start_ptr(), body.length);
+  trim_whitespace(thd->charset(), &body);
   m_body = to_lex_cstring(body);
 
   /* Make the string of UTF-body. */
+
+  lip->body_utf8_append(end_ptr);
+
   LEX_STRING body_utf8;
-  if (is_sql()) {
-    lip->body_utf8_append(end_ptr);
-    body_utf8.length = lip->get_body_utf8_length();
-    body_utf8.str = thd->strmake(lip->get_body_utf8_str(), body_utf8.length);
-    trim_whitespace(thd->charset(), &body_utf8);
-  } else {
-    thd->convert_string(&body_utf8, &my_charset_utf8mb3_general_ci, body.str,
-                        body.length, &my_charset_utf8mb4_general_ci);
-  }
+  body_utf8.length = lip->get_body_utf8_length();
+  body_utf8.str = thd->strmake(lip->get_body_utf8_str(), body_utf8.length);
+  trim_whitespace(thd->charset(), &body_utf8);
   m_body_utf8 = to_lex_cstring(body_utf8);
+
+  /*
+    Make the string of whole stored-program-definition query (in the
+    original character set).
+  */
+
+  m_defstr.length = end_ptr - lip->get_cpp_buf();
+  m_defstr.str = thd->strmake(lip->get_cpp_buf(), m_defstr.length);
+  trim_whitespace(thd->charset(), &m_defstr);
 }
 
 bool sp_head::setup_trigger_fields(THD *thd, Table_trigger_field_support *tfs,
@@ -1840,7 +1835,7 @@ bool sp_head::setup_trigger_fields(THD *thd, Table_trigger_field_support *tfs,
 
       if (!need_fix_fields || f->fixed) continue;
 
-      const Prepared_stmt_arena_holder ps_arena_holder(thd);
+      Prepared_stmt_arena_holder ps_arena_holder(thd);
 
       if (f->fix_fields(thd, nullptr)) return true;
     }
@@ -1924,13 +1919,6 @@ sp_head::~sp_head() {
   }
 
   sp_head::destroy(m_next_cached_sp);
-
-  my_service<SERVICE_TYPE(external_program_execution)> service(
-      "external_program_execution", srv_registry);
-  if (service.is_valid())
-    service->deinit(nullptr, this->m_language_stored_program,
-                    reinterpret_cast<stored_program_handle>(this));
-  this->m_language_stored_program = nullptr;
 }
 
 Field *sp_head::create_result_field(THD *thd, size_t field_max_length,
@@ -1981,10 +1969,10 @@ void sp_head::returns_type(THD *thd, String *result) const {
 
   if (field->has_charset()) {
     result->append(STRING_WITH_LEN(" CHARSET "));
-    result->append(m_return_field_def.charset->csname);
+    result->append(replace_utf8_utf8mb3(m_return_field_def.charset->csname));
     if (!(m_return_field_def.charset->state & MY_CS_PRIMARY)) {
       result->append(STRING_WITH_LEN(" COLLATE "));
-      result->append(m_return_field_def.charset->m_coll_name);
+      result->append(m_return_field_def.charset->name);
     }
   }
 
@@ -2001,8 +1989,7 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
   sql_mode_t save_sql_mode;
   Query_arena *old_arena;
   /* per-instruction arena */
-  MEM_ROOT execute_mem_root(key_memory_sp_head_execute_root,
-                            MEM_ROOT_BLOCK_SIZE);
+  MEM_ROOT execute_mem_root;
   Query_arena execute_arena(&execute_mem_root,
                             Query_arena::STMT_INITIALIZED_FOR_SP),
       backup_arena;
@@ -2052,6 +2039,10 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
 
   opt_trace_disable_if_no_security_context_access(thd);
 
+  /* init per-instruction memroot */
+  init_sql_alloc(key_memory_sp_head_execute_root, &execute_mem_root,
+                 MEM_ROOT_BLOCK_SIZE, 0);
+
   assert(!(m_flags & IS_INVOKED));
   m_flags |= IS_INVOKED;
   m_first_instance->m_first_free_instance = m_next_cached_sp;
@@ -2090,7 +2081,7 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
 
   /*
     Switch query context. This has to be done early as this is sometimes
-    allocated through sql_alloc
+    allocated trough sql_alloc
   */
   saved_creation_ctx = m_creation_ctx->set_n_backup(thd);
 
@@ -2210,8 +2201,6 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
     sql_digest_state *parent_digest = thd->m_digest;
     thd->m_digest = &digest_state;
 
-    mysql_thread_set_secondary_engine(false);
-
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
     PSI_statement_locker_state psi_state;
     PSI_statement_info *psi_info = i->get_psi_info();
@@ -2254,7 +2243,7 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
     thd->cleanup_after_query();
 
     // Release memory allocated during execution of the instruction
-    execute_mem_root.ClearForReuse();
+    execute_mem_root.Clear();
 
     /*
       Find and process SQL handlers unless it is a fatal error (fatal
@@ -2410,74 +2399,12 @@ done:
   return err_status;
 }
 
-bool sp_head::execute_external_routine(THD *thd) {
-  bool err_status = false;
-
-  char saved_cur_db_name_buf[NAME_LEN + 1];
-  LEX_STRING saved_cur_db_name = {saved_cur_db_name_buf,
-                                  sizeof(saved_cur_db_name_buf)};
-  bool cur_db_changed = false;
-  if (m_db.length && (err_status = mysql_opt_change_db(
-                          thd, to_lex_cstring(m_db), &saved_cur_db_name, false,
-                          &cur_db_changed))) {
-    return err_status;
-  }
-
-  /*
-    Use context used at routine creation time. Context sets client charset,
-    connection charset, database charset and collation.
-  */
-  Object_creation_ctx *saved_creation_ctx = m_creation_ctx->set_n_backup(thd);
-
-  // For each SQL statements, new unique query id is used. So save query id to
-  // restore query id of a routine.
-  query_id_t old_query_id = thd->query_id;
-
-  // Use sql_mode used at routine creation time.
-  sql_mode_t saved_sql_mode = thd->variables.sql_mode;
-  thd->variables.sql_mode = m_sql_mode;
-
-  my_service<SERVICE_TYPE(external_program_execution)> service(
-      "external_program_execution", srv_registry);
-  if (!(err_status = init_external_routine(service))) {
-    err_status = service->execute(m_language_stored_program, nullptr);
-    if (!err_status && thd->killed) err_status = true;
-  }
-
-  // Restore sql_mode.
-  thd->variables.sql_mode = saved_sql_mode;
-
-  // Restore query id.
-  thd->set_query_id(old_query_id);
-
-  // Restore context.
-  m_creation_ctx->restore_env(thd, saved_creation_ctx);
-
-  if (cur_db_changed && thd->killed != THD::KILL_CONNECTION) {
-    err_status |= mysql_change_db(thd, to_lex_cstring(saved_cur_db_name), true);
-  }
-
-  return err_status;
-}
-
 bool sp_head::execute_trigger(THD *thd, const LEX_CSTRING &db_name,
                               const LEX_CSTRING &table_name,
                               GRANT_INFO *grant_info) {
   sp_rcontext *parent_sp_runtime_ctx = thd->sp_runtime_ctx;
   bool err_status = false;
-  /*
-    Prepare arena and memroot for objects which lifetime is whole
-    duration of trigger call (sp_rcontext, it's tables and items,
-    sp_cursor and Item_cache holders for case expressions).  We can't
-    use caller's arena/memroot for those objects because in this case
-    some fixed amount of memory will be consumed for each trigger
-    invocation and so statements which involve lot of them will hog
-    memory.
-
-    TODO: we should create sp_rcontext once per command and reuse it
-    on subsequent executions of a trigger.
-  */
-  MEM_ROOT call_mem_root(key_memory_sp_head_call_root, MEM_ROOT_BLOCK_SIZE);
+  MEM_ROOT call_mem_root;
   Query_arena call_arena(&call_mem_root, Query_arena::STMT_INITIALIZED_FOR_SP);
   Query_arena backup_arena;
 
@@ -2485,8 +2412,8 @@ bool sp_head::execute_trigger(THD *thd, const LEX_CSTRING &db_name,
   DBUG_PRINT("info", ("trigger %s", m_name.str));
 
   Security_context *save_ctx = nullptr;
-  const LEX_CSTRING definer_user = {m_definer_user.str, m_definer_user.length};
-  const LEX_CSTRING definer_host = {m_definer_host.str, m_definer_host.length};
+  LEX_CSTRING definer_user = {m_definer_user.str, m_definer_user.length};
+  LEX_CSTRING definer_host = {m_definer_host.str, m_definer_host.length};
 
   /*
     While parsing CREATE TRIGGER statement or loading trigger metadata from
@@ -2528,6 +2455,20 @@ bool sp_head::execute_trigger(THD *thd, const LEX_CSTRING &db_name,
     security context we will disable tracing.
   */
 
+  /*
+    Prepare arena and memroot for objects which lifetime is whole
+    duration of trigger call (sp_rcontext, it's tables and items,
+    sp_cursor and Item_cache holders for case expressions).  We can't
+    use caller's arena/memroot for those objects because in this case
+    some fixed amount of memory will be consumed for each trigger
+    invocation and so statements which involve lot of them will hog
+    memory.
+
+    TODO: we should create sp_rcontext once per command and reuse it
+    on subsequent executions of a trigger.
+  */
+  init_sql_alloc(key_memory_sp_head_call_root, &call_mem_root,
+                 MEM_ROOT_BLOCK_SIZE, 0);
   thd->swap_query_arena(call_arena, &backup_arena);
 
   sp_rcontext *trigger_runtime_ctx =
@@ -2559,33 +2500,12 @@ err_with_cleanup:
 
   ::destroy(trigger_runtime_ctx);
   call_arena.free_items();
+  call_mem_root.Clear();
   thd->sp_runtime_ctx = parent_sp_runtime_ctx;
 
   if (thd->killed) thd->send_kill_message();
 
   return err_status;
-}
-
-bool sp_head::init_external_routine(
-    my_service<SERVICE_TYPE(external_program_execution)> &service) {
-  assert(!is_sql());
-
-  if (!service.is_valid()) {
-    my_error(ER_LANGUAGE_COMPONENT_NOT_AVAILABLE, MYF(0));
-    return true;
-  }
-
-  if (m_language_stored_program == nullptr) {
-    if (service->init(reinterpret_cast<stored_program_handle>(this), nullptr,
-                      &m_language_stored_program)) {
-      my_error(ER_LANGUAGE_COMPONENT_UNSUPPORTED_LANGUAGE, MYF(0),
-               m_chistics->language.str);
-      m_language_stored_program = nullptr;
-      return true;
-    }
-    if (service->parse(m_language_stored_program, nullptr)) return true;
-  }
-  return false;
 }
 
 bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
@@ -2597,18 +2517,7 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
   char buf[STRING_BUFFER_USUAL_SIZE];
   String binlog_buf(buf, sizeof(buf), &my_charset_bin);
   bool err_status = false;
-  /*
-    Prepare arena and memroot for objects which lifetime is whole
-    duration of function call (sp_rcontext, it's tables and items,
-    sp_cursor and Item_cache holders for case expressions).
-    We can't use caller's arena/memroot for those objects because
-    in this case some fixed amount of memory will be consumed for
-    each function/trigger invocation and so statements which involve
-    lot of them will hog memory.
-    TODO: we should create sp_rcontext once per command and reuse
-    it on subsequent executions of a function/trigger.
-  */
-  MEM_ROOT call_mem_root(key_memory_sp_head_call_root, MEM_ROOT_BLOCK_SIZE);
+  MEM_ROOT call_mem_root;
   Query_arena call_arena(&call_mem_root, Query_arena::STMT_INITIALIZED_FOR_SP);
   Query_arena backup_arena;
 
@@ -2621,6 +2530,19 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
   // Number of arguments has been checked during resolving
   assert(argcount == m_root_parsing_ctx->context_var_count());
 
+  /*
+    Prepare arena and memroot for objects which lifetime is whole
+    duration of function call (sp_rcontext, it's tables and items,
+    sp_cursor and Item_cache holders for case expressions).
+    We can't use caller's arena/memroot for those objects because
+    in this case some fixed amount of memory will be consumed for
+    each function/trigger invocation and so statements which involve
+    lot of them will hog memory.
+    TODO: we should create sp_rcontext once per command and reuse
+    it on subsequent executions of a function/trigger.
+  */
+  init_sql_alloc(key_memory_sp_head_call_root, &call_mem_root,
+                 MEM_ROOT_BLOCK_SIZE, 0);
   thd->swap_query_arena(call_arena, &backup_arena);
 
   sp_rcontext *func_runtime_ctx =
@@ -2744,9 +2666,7 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   locker = MYSQL_START_SP(&psi_state, m_sp_share);
 #endif
-  if (!err_status) {
-    err_status = is_sql() ? execute(thd, true) : execute_external_routine(thd);
-  }
+  err_status = execute(thd, true);
 #ifdef HAVE_PSI_SP_INTERFACE
   MYSQL_END_SP(locker);
 #endif
@@ -2807,8 +2727,7 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
   bool err_status = false;
   uint params = m_root_parsing_ctx->context_var_count();
   /* Query start time may be reset in a multi-stmt SP; keep this for later. */
-  ulonglong lock_usec_before_sp_exec;
-  thd->push_lock_usec(lock_usec_before_sp_exec);
+  ulonglong utime_before_sp_exec = thd->utime_after_lock;
   sp_rcontext *parent_sp_runtime_ctx = thd->sp_runtime_ctx;
   sp_rcontext *sp_runtime_ctx_saved = thd->sp_runtime_ctx;
   bool save_enable_slow_log = false;
@@ -2897,7 +2816,7 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
       arguments evaluation. If arguments evaluation required prelocking mode,
       we'll leave it here.
     */
-    thd->lex->cleanup(true);
+    thd->lex->cleanup(thd, true);
 
     if (!thd->in_sub_stmt) {
       thd->get_stmt_da()->set_overwrite_status(true);
@@ -2949,9 +2868,7 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
 
   locker = MYSQL_START_SP(&psi_state, m_sp_share);
 #endif
-  if (!err_status) {
-    err_status = is_sql() ? execute(thd, true) : execute_external_routine(thd);
-  }
+  if (!err_status) err_status = execute(thd, true);
 #ifdef HAVE_PSI_SP_INTERFACE
   MYSQL_END_SP(locker);
 #endif
@@ -3012,15 +2929,15 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
 
   ::destroy(proc_runtime_ctx);
   thd->sp_runtime_ctx = sp_runtime_ctx_saved;
-  thd->pop_lock_usec(lock_usec_before_sp_exec);
+  thd->utime_after_lock = utime_before_sp_exec;
 
   /*
-    If not inside a procedure and a function printing warning
+    If not insided a procedure and a function printing warning
     messages.
   */
-  const bool need_binlog_call = mysql_bin_log.is_open() &&
-                                (thd->variables.option_bits & OPTION_BIN_LOG) &&
-                                !thd->is_current_stmt_binlog_format_row();
+  bool need_binlog_call = mysql_bin_log.is_open() &&
+                          (thd->variables.option_bits & OPTION_BIN_LOG) &&
+                          !thd->is_current_stmt_binlog_format_row();
   if (need_binlog_call && thd->sp_runtime_ctx == nullptr &&
       !thd->binlog_evt_union.do_union)
     thd->issue_unsafe_warnings();
@@ -3108,19 +3025,11 @@ void sp_head::set_info(longlong created, longlong modified,
   m_modified = modified;
   m_chistics = (st_sp_chistics *)memdup_root(&main_mem_root, (char *)chistics,
                                              sizeof(*chistics));
-
-  if (m_chistics->language.length == 0)
-    m_chistics->language.str = nullptr;
-  else
-    m_chistics->language.str = strmake_root(
-        &main_mem_root, m_chistics->language.str, m_chistics->language.length);
-
   if (m_chistics->comment.length == 0)
     m_chistics->comment.str = nullptr;
   else
     m_chistics->comment.str = strmake_root(
         &main_mem_root, m_chistics->comment.str, m_chistics->comment.length);
-
   m_sql_mode = sql_mode;
 }
 
@@ -3264,12 +3173,6 @@ bool sp_head::show_routine_code(THD *thd) {
 
   if (check_show_access(thd, &full_access) || !full_access) return true;
 
-  if (!is_sql()) {
-    my_error(ER_LANGUAGE_COMPONENT_UNSUPPORTED_LANGUAGE, MYF(0),
-             m_chistics->language.str);
-    return true;
-  }
-
   mem_root_deque<Item *> field_list(thd->mem_root);
   field_list.push_back(new Item_uint(NAME_STRING("Pos"), 0, 9));
   // 1024 is for not to confuse old clients
@@ -3309,7 +3212,7 @@ bool sp_head::show_routine_code(THD *thd) {
 }
 #endif  // ifndef NDEBUG
 
-bool sp_head::merge_table_list(THD *thd, Table_ref *table,
+bool sp_head::merge_table_list(THD *thd, TABLE_LIST *table,
                                LEX *lex_for_tmp_check) {
   if (lex_for_tmp_check->sql_command == SQLCOM_DROP_TABLE &&
       lex_for_tmp_check->drop_temporary)
@@ -3400,9 +3303,9 @@ bool sp_head::merge_table_list(THD *thd, Table_ref *table,
 }
 
 void sp_head::add_used_tables_to_table_list(THD *thd,
-                                            Table_ref ***query_tables_last_ptr,
+                                            TABLE_LIST ***query_tables_last_ptr,
                                             enum_sql_command sql_command,
-                                            Table_ref *belong_to_view) {
+                                            TABLE_LIST *belong_to_view) {
   /*
     Use persistent arena for table list allocation to be PS/SP friendly.
     Note that we also have to copy database/table names and alias to PS/SP
@@ -3411,13 +3314,13 @@ void sp_head::add_used_tables_to_table_list(THD *thd,
     This will be fixed by introducing of proper invalidation mechanism
     once new TDC is ready.
   */
-  const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
 
   for (SP_TABLE *stab : m_sptabs_sorted) {
     if (stab->temp || stab->lock_type == TL_IGNORE) continue;
 
     char *tab_buff = static_cast<char *>(
-        thd->alloc(ALIGN_SIZE(sizeof(Table_ref)) * stab->lock_count));
+        thd->alloc(ALIGN_SIZE(sizeof(TABLE_LIST)) * stab->lock_count));
     char *key_buff =
         static_cast<char *>(thd->memdup(stab->qname.str, stab->qname.length));
     if (!tab_buff || !key_buff) return;
@@ -3448,7 +3351,7 @@ void sp_head::add_used_tables_to_table_list(THD *thd,
         mdl_lock_type = mdl_type_for_dml(stab->lock_type);
       }
 
-      Table_ref *table = new (tab_buff) Table_ref(
+      TABLE_LIST *table = new (tab_buff) TABLE_LIST(
           key_buff, stab->db_length, key_buff + stab->db_length + 1,
           stab->table_name_length,
           key_buff + stab->db_length + 1 + stab->table_name_length + 1,
@@ -3461,13 +3364,13 @@ void sp_head::add_used_tables_to_table_list(THD *thd,
       table->belong_to_view = belong_to_view;
       table->trg_event_map = stab->trg_event_map;
 
-      /* Everything else should be zeroed */
+      /* Everyting else should be zeroed */
 
       **query_tables_last_ptr = table;
       table->prev_global = *query_tables_last_ptr;
       *query_tables_last_ptr = &table->next_global;
 
-      tab_buff += ALIGN_SIZE(sizeof(Table_ref));
+      tab_buff += ALIGN_SIZE(sizeof(TABLE_LIST));
     }
   }
 }
@@ -3488,8 +3391,8 @@ bool sp_head::check_show_access(THD *thd, bool *full_access) {
 
 bool sp_head::set_security_ctx(THD *thd, Security_context **save_ctx) {
   *save_ctx = nullptr;
-  const LEX_CSTRING definer_user = {m_definer_user.str, m_definer_user.length};
-  const LEX_CSTRING definer_host = {m_definer_host.str, m_definer_host.length};
+  LEX_CSTRING definer_user = {m_definer_user.str, m_definer_user.length};
+  LEX_CSTRING definer_host = {m_definer_host.str, m_definer_host.length};
 
   if (m_chistics->suid != SP_IS_NOT_SUID &&
       m_security_ctx.change_security_context(thd, definer_user, definer_host,

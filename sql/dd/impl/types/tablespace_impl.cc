@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -66,11 +66,11 @@
 #include "sql/handler.h"    // handlerton
 #include "sql/sql_class.h"  // THD
 #include "sql/strfunc.h"    // casedn
-#include "string_with_len.h"
+
+#include "m_string.h"
 
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"  // ER_*
 
 using dd::tables::Index_partitions;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,10 +26,10 @@
 #include <sys/types.h>
 
 #include <vector>
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_inttypes.h"
 #include "my_sharedlib.h"
-#include "mysql/strings/m_ctype.h"
 #include "plugin/keyring/common/i_keyring_io.h"
 #include "plugin/keyring/common/i_keys_container.h"
 #include "plugin/keyring/common/keyring_key.h"

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,7 @@
 #define MT_LOCK_HPP
 
 #include <ndb_global.h>
-#include "portlib/ndb_compiler.h"
-#include "portlib/mt-asm.h"
+#include "mt-asm.h"
 #include <NdbMutex.h>
 
 #define JAM_FILE_ID 323

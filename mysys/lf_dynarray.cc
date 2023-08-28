@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -151,7 +151,7 @@ void *lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx) {
     data = alloc + sizeof(void *);
     {
       /* alignment */
-      const intptr mod = ((intptr)data) % array->size_of_element;
+      intptr mod = ((intptr)data) % array->size_of_element;
       if (mod) {
         data += array->size_of_element - mod;
       }

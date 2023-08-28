@@ -2,12 +2,12 @@
 .\"     Title: ndb_desc
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/21/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "NDB_DESC" "1" "06/21/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "NDB_DESC" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -87,7 +87,7 @@ Output from
 .RS 4
 .\}
 .nf
-$> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
+shell> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
 \-\- fish \-\-
 Version: 2
 Fragment type: HashMapPartition
@@ -145,7 +145,7 @@ You can obtain additional information about a specific index using the
 .RS 4
 .\}
 .nf
-$> \fB\&./ndb_desc uk \-d test \-t fish\fR
+shell> \fB\&./ndb_desc uk \-d test \-t fish\fR
 \-\- uk \-\-
 Version: 2
 Base table: fish
@@ -284,7 +284,7 @@ column shows the binary properties just enabled\&. You can see this in the outpu
 .RS 4
 .\}
 .nf
-$> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
+shell> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
 \-\- fish \-\-
 Version: 4
 Fragment type: HashMapPartition
@@ -327,7 +327,7 @@ NDBT_ProgramExit: 0 \- OK
 .\}
 .PP
 For more information about these table properties, see
-Section\ \&13.1.20.12, \(lqSetting NDB Comment Options\(rq\&.
+Section\ \&13.1.20.11, \(lqSetting NDB_TABLE Options\(rq\&.
 .PP
 The
 Extent_space
@@ -368,7 +368,7 @@ ALTER TABLESPACE ts_1
 .\}
 .PP
 (For more information on the statements just shown and the objects created by them, see
-Section\ \&23.6.11.1, \(lqNDB Cluster Disk Data Objects\(rq, as well as
+Section\ \&23.6.10.1, \(lqNDB Cluster Disk Data Objects\(rq, as well as
 Section\ \&13.1.16, \(lqCREATE LOGFILE GROUP Statement\(rq, and
 Section\ \&13.1.21, \(lqCREATE TABLESPACE Statement\(rq\&.)
 .PP
@@ -407,7 +407,7 @@ displays the following output:
 .RS 4
 .\}
 .nf
-$> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
+shell> \fB\&./ndb_desc \-c localhost fish \-d test \-p\fR
 \-\- fish \-\-
 Version: 1
 Fragment type: HashMapPartition
@@ -457,14 +457,14 @@ This means that 1048576 bytes are allocated from the tablespace for this table o
 Free extent_space
 is available for storing on\-disk column data from the
 fish
-table only; for this reason, it is not visible when selecting from the Information Schema
-FILES
+table only; for this reason, it is not visible when selecting from the
+INFORMATION_SCHEMA\&.FILES
 table\&.
 .PP
 Tablespace id
 and
 Tablespace
-are also displayed for Disk Data tables\&.
+are displayed for Disk Data tables beginning with NDB 8\&.0\&.21\&.
 .PP
 For fully replicated tables,
 \fBndb_desc\fR
@@ -487,7 +487,7 @@ are shown in the following table\&. Additional descriptions follow the table\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&23.30.\ \&Command\-line options used with the program ndb_desc
+.B Table\ \&23.31.\ \&Command\-line options used with the program ndb_desc
 .TS
 allbox tab(:);
 lB lB lB.
@@ -522,6 +522,9 @@ lB l l
 lB l l
 lB l l
 lB l l
+lB l l
+lB l l
+lB l l
 lB l l.
 T{
 .PP
@@ -532,7 +535,7 @@ T}:T{
 Show next value for AUTO_INCREMENT oolumn if table has one
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.21
 T}
 T{
 .PP
@@ -544,7 +547,16 @@ Include partition information for BLOB tables in output. Requires that
               the -p option also be used
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
+T}
+T{
+.PP
+\fB \fR\fB--character-sets-dir=path\fR\fB \fR
+T}:T{
+Directory containing character sets
+T}:T{
+.PP
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -553,7 +565,7 @@ T}:T{
 Number of times to retry connection before giving up
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -562,18 +574,18 @@ T}:T{
 Number of seconds to wait between attempts to contact management server
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--connect-string=connection_string\fR,
+\fB--connect-string=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Same as --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -581,22 +593,31 @@ T{
 .PP
 \fB \fR\fB-x\fR\fB \fR
 T}:T{
-Show extra information for table such as database, schema, name, and
+Show extra information for table such as database, schema, name,
               internal ID
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.21
 T}
 T{
 .PP
-\fB--database=name\fR,
+\fB \fR\fB--core-file\fR\fB \fR
+T}:T{
+Write core file on error; used in debugging
+T}:T{
 .PP
-\fB \fR\fB-d name\fR\fB \fR
+(Supported in all NDB releases based on MySQL 8.0)
+T}
+T{
+.PP
+\fB--database=dbname\fR,
+.PP
+\fB \fR\fB-d\fR\fB \fR
 T}:T{
 Name of database containing table
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -605,7 +626,7 @@ T}:T{
 Read given file after global files are read
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -614,7 +635,7 @@ T}:T{
 Read default options from given file only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -623,7 +644,7 @@ T}:T{
 Also read groups with concat(group, suffix)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -631,11 +652,11 @@ T{
 .PP
 \fB \fR\fB-n\fR\fB \fR
 T}:T{
-Include partition-to-data-node mappings in output; requires
-              --extra-partition-info
+Include partition-to-data-node mappings in output. Requires that the -p
+              option also be used
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -646,7 +667,7 @@ T}:T{
 Display information about partitions
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -657,7 +678,7 @@ T}:T{
 Display help text and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -666,31 +687,31 @@ T}:T{
 Read given path from login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--ndb-connectstring=connection_string\fR,
+\fB--ndb-connectstring=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Set connect string for connecting to ndb_mgmd. Syntax:
               "[nodeid=id;][host=]hostname[:port]". Overrides entries in
               NDB_CONNECTSTRING and my.cnf
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--ndb-mgmd-host=connection_string\fR,
+\fB--ndb-mgmd-host=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Same as --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -699,7 +720,18 @@ T}:T{
 Set node ID for this node, overriding any ID set by --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
+T}
+T{
+.PP
+\fB \fR\fB--ndb-optimized-node-selection\fR\fB \fR
+T}:T{
+Enable optimizations for selection of nodes for transactions. Enabled by
+              default; use --skip-ndb-optimized-node-selection to
+              disable
+T}:T{
+.PP
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -708,7 +740,7 @@ T}:T{
 Do not read default options from any option file other than login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -717,30 +749,30 @@ T}:T{
 Print program argument list and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
 \fB--retries=#\fR,
 .PP
-\fB \fR\fB-r #\fR\fB \fR
+\fB \fR\fB-r\fR\fB \fR
 T}:T{
 Number of times to retry the connection (once per second)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--table=name\fR,
+\fB--table=tbl_name\fR,
 .PP
-\fB \fR\fB-t name\fR\fB \fR
+\fB \fR\fB-t\fR\fB \fR
 T}:T{
 Specify the table in which to find an index. When this option is used,
               -p and -n have no effect and are ignored
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -751,7 +783,7 @@ T}:T{
 Use unqualified table names
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -762,7 +794,7 @@ T}:T{
 Display help text and exit; same as --help
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -773,7 +805,7 @@ T}:T{
 Display version information and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 .TE
 .sp 1
@@ -945,7 +977,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---connect-string=connection_string
+--connect-string=connection-string
 T}
 T{
 Type
@@ -1216,7 +1248,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---ndb-connectstring=connection_string
+--ndb-connectstring=connection-string
 T}
 T{
 Type
@@ -1250,7 +1282,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---ndb-mgmd-host=connection_string
+--ndb-mgmd-host=connection-string
 T}
 T{
 Type
@@ -1459,7 +1491,7 @@ Table indexes listed in the output are ordered by ID\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

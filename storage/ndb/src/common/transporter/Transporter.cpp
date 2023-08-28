@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,8 +23,6 @@
 */
 
 
-#include "ndb_config.h"
-#include "util/require.h"
 #include <TransporterRegistry.hpp>
 #include <TransporterCallback.hpp>
 #include "Transporter.hpp"
@@ -33,9 +31,6 @@
 #include <SocketAuthenticator.hpp>
 #include <InputStream.hpp>
 #include <OutputStream.hpp>
-#include "util/cstrbuf.h"
-#include "portlib/ndb_sockaddr.h"
-#include "portlib/NdbTCP.h"
 
 #include <EventLogger.hpp>
 
@@ -57,13 +52,13 @@ Transporter::Transporter(TransporterRegistry &t_reg,
                          TrpId transporter_index,
 			 TransporterType _type,
 			 const char *lHostName,
-			 const char *rHostName,
+			 const char *rHostName, 
 			 int s_port,
 			 bool _isMgmConnection,
 			 NodeId lNodeId,
 			 NodeId rNodeId,
 			 NodeId serverNodeId,
-			 int _byteorder,
+			 int _byteorder, 
 			 bool _compression,
 			 bool _checksum,
 			 bool _signalId,
@@ -81,6 +76,7 @@ Transporter::Transporter(TransporterRegistry &t_reg,
     m_bytes_sent(0), m_bytes_received(0),
     m_connect_count(0),
     m_overload_count(0), m_slowdown_count(0),
+    m_connect_address(IN6ADDR_ANY_INIT),
     isMgmConnection(_isMgmConnection),
     m_connected(false),
     m_type(_type),
@@ -94,20 +90,14 @@ Transporter::Transporter(TransporterRegistry &t_reg,
   DBUG_ENTER("Transporter::Transporter");
 
   // Initialize member variables
+  ndb_socket_invalidate(&theSocket);
   m_multi_transporter_instance = 0;
   m_recv_thread_idx = 0;
   m_is_active = true;
 
   assert(rHostName);
-  if (rHostName && strlen(rHostName) > 0)
-  {
-    if (cstrbuf_copy(remoteHostName, rHostName) == 1)
-    {
-      ndbout << "Unable to setup transporter. Node " << rNodeId
-             << " had a too long hostname '" << rHostName
-             << "'. Update configuration." << endl;
-      exit(-1);
-    }
+  if (rHostName && strlen(rHostName) > 0){
+    strncpy(remoteHostName, rHostName, sizeof(remoteHostName));
   }
   else
   {
@@ -120,13 +110,7 @@ Transporter::Transporter(TransporterRegistry &t_reg,
     }
     remoteHostName[0]= 0;
   }
-  if (cstrbuf_copy(localHostName, lHostName) == 1)
-  {
-    ndbout << "Unable to setup transporter. Node " << lNodeId
-           << " had a too long hostname '" << lHostName
-           << "'. Update configuration." << endl;
-    exit(-1);
-  }
+  strncpy(localHostName, lHostName, sizeof(localHostName));
 
   DBUG_PRINT("info",("rId=%d lId=%d isServer=%d rHost=%s lHost=%s s_port=%d",
 		     remoteNodeId, localNodeId, isServer,
@@ -142,7 +126,7 @@ Transporter::Transporter(TransporterRegistry &t_reg,
   m_timeOutMillis = 3000;
 
   if (isServer)
-    m_socket_client= nullptr;
+    m_socket_client= 0;
   else
   {
     m_socket_client= new SocketClient(new SocketAuthSimple("ndbd",
@@ -180,12 +164,12 @@ bool Transporter::do_disconnect(int err, bool send_source)
   }
   else
   {
-    if (theSocket.is_valid())
+    if (ndb_socket_valid(theSocket))
     {
       DEB_MULTI_TRP(("Close trp_id %u in inactive mode, socket valid",
                      getTransporterIndex()));
-      theSocket.close();
-      theSocket.invalidate();
+      ndb_socket_close(theSocket);
+      ndb_socket_invalidate(&theSocket);
     }
     else
     {
@@ -223,7 +207,7 @@ Transporter::update_connect_state(bool connected)
 }
 
 bool
-Transporter::connect_server(NdbSocket & sockfd,
+Transporter::connect_server(NDB_SOCKET_TYPE sockfd,
                             BaseString& msg) {
   // all initial negotiation is done in TransporterRegistry::connect_server
   DBUG_ENTER("Transporter::connect_server");
@@ -236,7 +220,7 @@ Transporter::connect_server(NdbSocket & sockfd,
   }
 
   // Cache the connect address
-  ndb_socket_connect_address(sockfd.ndb_socket(), &m_connect_address);
+  ndb_socket_connect_address(sockfd, &m_connect_address);
 
   if (!connect_server_impl(sockfd))
   {
@@ -264,8 +248,7 @@ Transporter::connect_server(NdbSocket & sockfd,
 bool
 Transporter::connect_client()
 {
-  NdbSocket secureSocket;
-  ndb_socket_t sockfd;
+  NDB_SOCKET_TYPE sockfd;
   DBUG_ENTER("Transporter::connect_client");
 
   require(!isMultiTransporter());
@@ -287,31 +270,12 @@ Transporter::connect_client()
   if(isMgmConnection)
   {
     require(!isPartOfMultiTransporter());
-    sockfd= m_transporter_registry.connect_ndb_mgmd(remoteHostName, port);
-    secureSocket.init_from_new(sockfd);
+    sockfd= m_transporter_registry.connect_ndb_mgmd(remoteHostName,
+                                                    port);
   }
   else
   {
-    ndb_sockaddr local;
-    if (strlen(localHostName) > 0)
-    {
-      if (Ndb_getAddr(&local, localHostName))
-      {
-        DEBUG_FPRINTF((stderr, "connect_client lookup '%s' failed, node: %u\n",
-                       localHostName, getRemoteNodeId()));
-        DBUG_RETURN(false);
-      }
-    }
-
-    ndb_sockaddr remote_addr;
-    if (Ndb_getAddr(&remote_addr, remoteHostName))
-    {
-      DEBUG_FPRINTF((stderr, "connect_client lookup remote '%s' failed, node: %u\n",
-                     remoteHostName, getRemoteNodeId()));
-      DBUG_RETURN(false);
-    }
-    remote_addr.set_port(port);
-    if (!m_socket_client->init(remote_addr.get_address_family()))
+    if (!m_socket_client->init())
     {
       DEBUG_FPRINTF((stderr, "m_socket_client->init failed, node: %u\n",
                              getRemoteNodeId()));
@@ -327,21 +291,23 @@ Transporter::connect_client()
 
     if (strlen(localHostName) > 0)
     {
-      if (m_socket_client->bind(local) != 0)
+      if (m_socket_client->bind(localHostName, 0) != 0)
       {
         DEBUG_FPRINTF((stderr, "m_socket_client->bind failed, node: %u\n",
                                getRemoteNodeId()));
         DBUG_RETURN(false);
       }
     }
-    m_socket_client->connect(secureSocket, remote_addr);
+
+    sockfd= m_socket_client->connect(remoteHostName,
+                                     port);
   }
 
-  DBUG_RETURN(connect_client(secureSocket));
+  DBUG_RETURN(connect_client(sockfd));
 }
 
 bool
-Transporter::connect_client(NdbSocket & socket)
+Transporter::connect_client(NDB_SOCKET_TYPE sockfd)
 {
   DBUG_ENTER("Transporter::connect_client(sockfd)");
 
@@ -352,10 +318,10 @@ Transporter::connect_client(NdbSocket & socket)
     DBUG_RETURN(true);
   }
 
-  if (! socket.is_valid())
+  if (!ndb_socket_valid(sockfd))
   {
-    DBUG_PRINT("error", ("Socket %s is not valid",
-                         socket.to_string().c_str()));
+    DBUG_PRINT("error", ("Socket " MY_SOCKET_FORMAT " is not valid",
+                         MY_SOCKET_FORMAT_VALUE(sockfd)));
     DEBUG_FPRINTF((stderr, "Socket not valid\n"));
     DBUG_RETURN(false);
   }
@@ -412,22 +378,22 @@ Transporter::connect_client(NdbSocket & socket)
   DBUG_PRINT("info", ("Sending hello : %s", helloBuf));
   DEBUG_FPRINTF((stderr, "Sending hello : %s\n"));
 
-  SecureSocketOutputStream s_output(socket);
+  SocketOutputStream s_output(sockfd);
   if (s_output.println("%s", helloBuf) < 0)
   {
     DBUG_PRINT("error", ("Send of 'hello' failed"));
-    socket.close();
+    ndb_socket_close(sockfd);
     DBUG_RETURN(false);
   }
 
   // Read reply
   DBUG_PRINT("info", ("Reading reply"));
   char buf[256];
-  SecureSocketInputStream s_input(socket);
-  if (s_input.gets(buf, 256) == nullptr)
+  SocketInputStream s_input(sockfd);
+  if (s_input.gets(buf, 256) == 0)
   {
     DBUG_PRINT("error", ("Failed to read reply"));
-    socket.close();
+    ndb_socket_close(sockfd);
     DBUG_RETURN(false);
   }
 
@@ -439,7 +405,7 @@ Transporter::connect_client(NdbSocket & socket)
     break;
   default:
     DBUG_PRINT("error", ("Failed to parse reply"));
-    socket.close();
+    ndb_socket_close(sockfd);
     DBUG_RETURN(false);
   }
 
@@ -451,7 +417,7 @@ Transporter::connect_client(NdbSocket & socket)
   {
     g_eventLogger->error("Connected to wrong nodeid: %d, expected: %d",
                          nodeId, remoteNodeId);
-    socket.close();
+    ndb_socket_close(sockfd);
     DBUG_RETURN(false);
   }
 
@@ -462,14 +428,14 @@ Transporter::connect_client(NdbSocket & socket)
     g_eventLogger->error("Connection to node: %d uses different transporter "
                          "type: %d, expected type: %d",
                          nodeId, remote_transporter_type, m_type);
-    socket.close();
+    ndb_socket_close(sockfd);
     DBUG_RETURN(false);
   }
 
   // Cache the connect address
-  ndb_socket_connect_address(socket.ndb_socket(), &m_connect_address);
+  ndb_socket_connect_address(sockfd, &m_connect_address);
 
-  if (! connect_client_impl(socket))
+  if (!connect_client_impl(sockfd))
   {
     DBUG_RETURN(false);
   }
@@ -574,17 +540,19 @@ Transporter::checksum_state::dumpBadChecksumInfo(Uint32 inputSum,
 }
 
 void
-Transporter::set_get(ndb_socket_t fd,
+Transporter::set_get(NDB_SOCKET_TYPE fd,
                      int level,
                      int optval,
-                     const char */*optname*/,
+                     const char *optname, 
                      int val)
 {
   int actual = 0, defval = 0;
+  socket_len_t len = sizeof(actual);
 
-  ndb_getsockopt(fd, level, optval, &defval);
+  ndb_getsockopt(fd, level, optval, (char*)&defval, &len);
 
-  if (ndb_setsockopt(fd, level, optval, &val) < 0)
+  if (ndb_setsockopt(fd, level, optval,
+                    (char*)&val, sizeof(val)) < 0)
   {
 #ifdef DEBUG_TRANSPORTER
     g_eventLogger->error("setsockopt(%s, %d) errno: %d %s",
@@ -592,7 +560,10 @@ Transporter::set_get(ndb_socket_t fd,
 #endif
   }
   
-  if ((ndb_getsockopt(fd, level, optval, &actual) == 0) && actual != val)
+  len = sizeof(actual);
+  if ((ndb_getsockopt(fd, level, optval,
+                     (char*)&actual, &len) == 0) &&
+      actual != val)
   {
 #ifdef DEBUG_TRANSPORTER
     g_eventLogger->error("setsockopt(%s, %d) - actual %d default: %d",

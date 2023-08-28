@@ -44,10 +44,6 @@
 SET GLOBAL group_replication_member_expel_timeout = 3600;
 --let $server1_local_address= `SELECT @@GLOBAL.group_replication_local_address`
 
-set session sql_log_bin=0;
-call mtr.add_suppression("Old incarnation found while trying to add node*.*");
-set session sql_log_bin=1;
-
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
 SET GLOBAL group_replication_member_expel_timeout = 3600;
@@ -63,7 +59,7 @@ call mtr.add_suppression("Error connecting to all peers. Member join failed. Loc
 call mtr.add_suppression("Unable to start MySQL Network Provider*.*");
 call mtr.add_suppression("Timeout while waiting for the group communication engine to be ready*.*");
 call mtr.add_suppression("The group communication engine is not ready for the member to join*.*");
-call mtr.add_suppression(".*Failed to accept a MySQL connection for Group Replication. Group Replication plugin has an ongoing exclusive operation, like START, STOP or FORCE MEMBERS.*");
+
 set session sql_log_bin=1;
 
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 
 #include <string.h>
 
-#include "m_string.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -45,8 +44,6 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/trigger.h"  // Trigger
-
-struct CHARSET_INFO;
 
 namespace dd {
 
@@ -326,13 +323,12 @@ bool load_triggers(THD *thd, MEM_ROOT *mem_root, const char *schema_name,
     if (schema_cs == nullptr) schema_cs = thd->variables.collation_database;
 
     LEX_CSTRING client_cs_name, connection_cl_name, db_cl_name, trigger_name;
-    const char *csname = client_cs->csname;
+    const char *csname = replace_utf8_utf8mb3(client_cs->csname);
     if (lex_string_strmake(mem_root, &client_cs_name, csname, strlen(csname)) ||
-        lex_string_strmake(mem_root, &connection_cl_name,
-                           connection_cs->m_coll_name,
-                           strlen(connection_cs->m_coll_name)) ||
-        lex_string_strmake(mem_root, &db_cl_name, schema_cs->m_coll_name,
-                           strlen(schema_cs->m_coll_name)) ||
+        lex_string_strmake(mem_root, &connection_cl_name, connection_cs->name,
+                           strlen(connection_cs->name)) ||
+        lex_string_strmake(mem_root, &db_cl_name, schema_cs->name,
+                           strlen(schema_cs->name)) ||
         lex_string_strmake(mem_root, &trigger_name, trigger->name().c_str(),
                            trigger->name().length()))
       return true;

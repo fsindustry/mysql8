@@ -1,7 +1,7 @@
 #ifndef SQL_REGEXP_REGEXP_ENGINE_H_
 #define SQL_REGEXP_REGEXP_ENGINE_H_
 
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,8 +30,8 @@
 #include <string>
 #include <utility>
 
-#include "my_config.h"              // WORDS_BIGENDIAN
-#include "mysql/strings/m_ctype.h"  // CHARSET_INFO.
+#include "m_ctype.h"    // CHARSET_INFO.
+#include "my_config.h"  // WORDS_BIGENDIAN
 #include "sql/current_thd.h"
 #include "sql/regexp/errors.h"
 #include "sql/sql_class.h"  // THD

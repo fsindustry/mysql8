@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -29,9 +29,9 @@
 #include <vector>
 
 #include "decimal.h"      // NOLINT(build/include_subdir)
+#include "m_ctype.h"      // NOLINT(build/include_subdir)
 #include "my_compiler.h"  // NOLINT(build/include_subdir)
 #include "mysql/service_command.h"
-#include "mysql/strings/m_ctype.h"  // NOLINT(build/include_subdir)
 
 #include "plugin/x/src/ngs/error_code.h"
 

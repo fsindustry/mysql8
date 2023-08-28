@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -52,31 +52,28 @@
 #include <time.h>
 
 #include <atomic>  // error_handler_hook
-#include <cstring>
 
+#include "m_string.h" /* IWYU pragma: keep */
 #include "my_compiler.h"
 #include "my_compress.h"
 #include "my_inttypes.h"
-#include "mysql/my_loglevel.h"
+#include "my_loglevel.h"
 
 /* HAVE_PSI_*_INTERFACE */
 #include "my_psi_config.h" /* IWYU pragma: keep */
 
 #include "my_sharedlib.h"
-#include "mysql/components/services/bits/my_io_bits.h"
-#include "mysql/components/services/bits/mysql_cond_bits.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/bits/psi_file_bits.h"
-#include "mysql/components/services/bits/psi_memory_bits.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
+#include "mysql/components/services/my_io_bits.h"
+#include "mysql/components/services/mysql_cond_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/psi_file_bits.h"
+#include "mysql/components/services/psi_memory_bits.h"
+#include "mysql/components/services/psi_stage_bits.h"
 #include "sql/stream_cipher.h"
-#include "string_with_len.h"
-
-class MY_CHARSET_LOADER;
 
 struct CHARSET_INFO;
-struct MY_CHARSET_ERRMSG;
+struct MY_CHARSET_LOADER;
 
 struct PSI_cond_bootstrap;
 struct PSI_data_lock_bootstrap;
@@ -119,8 +116,8 @@ struct MEM_ROOT;
 
 /* General bitmaps for my_func's */
 // 1 used to be MY_FFNF which has been removed
-#define MY_FNABP 2         /* Fatal if not all bytes read/written */
-#define MY_NABP 4          /* Error if not all bytes read/written */
+#define MY_FNABP 2         /* Fatal if not all bytes read/writen */
+#define MY_NABP 4          /* Error if not all bytes read/writen */
 #define MY_FAE 8           /* Fatal if any error */
 #define MY_WME 16          /* Write message on error */
 #define MY_WAIT_IF_FULL 32 /* Wait and try again if disk full error */
@@ -129,7 +126,7 @@ struct MEM_ROOT;
 #define MY_FULL_IO 512 /* For my_read - loop intil I/O is complete */
 #define MY_DONT_CHECK_FILESIZE 128  /* Option to init_io_cache() */
 #define MY_LINK_WARNING 32          /* my_redel() gives warning if links */
-#define MY_COPYTIME 64              /* my_redel() copies time */
+#define MY_COPYTIME 64              /* my_redel() copys time */
 #define MY_DELETE_OLD 256           /* my_create_with_symlink() */
 #define MY_RESOLVE_LINK 128         /* my_realpath(); Only resolve links */
 #define MY_HOLD_ORIGINAL_MODES 128  /* my_copy() holds to file modes */
@@ -263,8 +260,8 @@ extern int (*is_killed_hook)(const void *opaque_thd);
 /* charsets */
 #define MY_ALL_CHARSETS_SIZE 2048
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *default_charset_info;
-extern MYSQL_PLUGIN_IMPORT const CHARSET_INFO
-    *all_charsets[MY_ALL_CHARSETS_SIZE];
+extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *all_charsets[MY_ALL_CHARSETS_SIZE];
+extern CHARSET_INFO compiled_charsets[];
 
 /* statistics */
 extern ulong my_tmp_file_created;
@@ -339,7 +336,7 @@ struct IO_CACHE_SHARE {
   int error;           /* Last error. */
 };
 
-struct IO_CACHE /* Used when caching files */
+struct IO_CACHE /* Used when cacheing files */
 {
   /* Offset in file corresponding to the first byte of uchar* buffer. */
   my_off_t pos_in_file{0};
@@ -409,7 +406,7 @@ struct IO_CACHE /* Used when caching files */
   int (*write_function)(IO_CACHE *, const uchar *, size_t){nullptr};
   /*
     Specifies the type of the cache. Depending on the type of the cache
-    certain operations might not be available and yield unpredictable
+    certain operations might not be available and yield unpredicatable
     results. Details to be documented later
   */
   cache_type type{TYPE_NOT_SET};
@@ -437,7 +434,7 @@ struct IO_CACHE /* Used when caching files */
 
   /*
     seek_not_done is set by my_b_seek() to inform the upcoming read/write
-    operation that a seek needs to be performed prior to the actual I/O
+    operation that a seek needs to be preformed prior to the actual I/O
     error is 0 if the cache operation was successful, -1 if there was a
     "hard" error, and the actual number of I/O-ed bytes if the read/write was
     partial.
@@ -479,9 +476,8 @@ struct ST_FILE_ID {
 };
 
 typedef void (*my_error_reporter)(enum loglevel level, uint ecode, ...);
-typedef void (*my_error_vreporter)(enum loglevel level, uint ecode, va_list);
 
-extern my_error_vreporter my_charset_error_reporter;
+extern my_error_reporter my_charset_error_reporter;
 
 /* defines for mf_iocache */
 extern PSI_file_key key_file_io_cache;
@@ -876,25 +872,29 @@ static inline int my_getpagesize() {
 int my_msync(int, void *, size_t, int);
 
 /* character sets */
+extern void my_charset_loader_init_mysys(MY_CHARSET_LOADER *loader);
 extern uint get_charset_number(const char *cs_name, uint cs_flags);
 extern uint get_collation_number(const char *name);
-extern const char *get_collation_name(uint charset_number);
+extern const char *get_charset_name(uint cs_number);
 
 extern CHARSET_INFO *get_charset(uint cs_number, myf flags);
 extern CHARSET_INFO *get_charset_by_name(const char *cs_name, myf flags);
-extern CHARSET_INFO *my_collation_get_by_name(const char *collation_name,
-                                              myf flags, MY_CHARSET_ERRMSG *);
+extern CHARSET_INFO *my_collation_get_by_name(MY_CHARSET_LOADER *loader,
+                                              const char *name, myf flags);
 extern CHARSET_INFO *get_charset_by_csname(const char *cs_name, uint cs_flags,
                                            myf my_flags);
-extern CHARSET_INFO *my_charset_get_by_name(const char *name, uint cs_flags,
-                                            myf my_flags, MY_CHARSET_ERRMSG *);
+extern CHARSET_INFO *my_charset_get_by_name(MY_CHARSET_LOADER *loader,
+                                            const char *name, uint cs_flags,
+                                            myf my_flags);
 extern bool resolve_charset(const char *cs_name, const CHARSET_INFO *default_cs,
                             const CHARSET_INFO **cs);
 extern bool resolve_collation(const char *cl_name,
                               const CHARSET_INFO *default_cl,
                               const CHARSET_INFO **cl);
 extern char *get_charsets_dir(char *buf);
+extern bool my_charset_same(const CHARSET_INFO *cs1, const CHARSET_INFO *cs2);
 extern bool init_compiled_charsets(myf flags);
+extern void add_compiled_collation(CHARSET_INFO *cs);
 extern size_t escape_string_for_mysql(const CHARSET_INFO *charset_info,
                                       char *to, size_t to_length,
                                       const char *from, size_t length);

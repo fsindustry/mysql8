@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -99,9 +99,8 @@ OPTION(WITH_JSON_BINLOG_LIBRARY
 IF(WITH_JSON_BINLOG_LIBRARY)
   UNSET(INSTALL_JSON_BINLOG_LIBRARY)
   INSTALL(FILES
-    ../sql-common/json_binary.h
-    ../sql-common/json_error_handler.h
-    DESTINATION ${INSTALL_INCLUDEDIR}/sql-common
+    ../sql/json_binary.h
+    DESTINATION ${INSTALL_INCLUDEDIR}
     COMPONENT Development
     )
 ELSE()
@@ -127,34 +126,27 @@ ENDIF()
 # Always build it, but do not *use* it for mysqlbinlog unless
 # WITH_JSON_BINLOG_LIBRARY=ON
 ADD_SHARED_LIBRARY(json_binlog
-  ${CMAKE_SOURCE_DIR}/sql-common/json_binary.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_dom.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_path.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_syntax_check.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_binary.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_dom.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_syntax_check.cc
   ${CMAKE_SOURCE_DIR}/sql-common/sql_string.cc
 
   COMPILE_DEFINITIONS DISABLE_PSI_MUTEX EXPORT_JSON_FUNCTIONS
   DEPENDENCIES GenError
   ${INSTALL_JSON_BINLOG_LIBRARY}
-  LINK_LIBRARIES mysys extra::rapidjson ext::zlib
+  LINK_LIBRARIES mysys
   LINUX_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/json_binlog.ver"
   VERSION "${json_binlog_VERSION}"
   NO_UNDEFINED
   )
 
 ADD_CONVENIENCE_LIBRARY(json_client_library
-  ${CMAKE_SOURCE_DIR}/sql-common/json_binary.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_dom.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_path.cc
-  ${CMAKE_SOURCE_DIR}/sql-common/json_syntax_check.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_binary.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_dom.cc
+  ${CMAKE_SOURCE_DIR}/sql/json_syntax_check.cc
   ${CMAKE_SOURCE_DIR}/sql-common/sql_string.cc
 
-  LINK_LIBRARIES ext::zlib
-  COMPILE_DEFINITIONS
-    DISABLE_PSI_MUTEX
-    $<TARGET_PROPERTY:extra::rapidjson,INTERFACE_COMPILE_DEFINITIONS>
-  SYSTEM_INCLUDE_DIRECTORIES
-    $<TARGET_PROPERTY:extra::rapidjson,INTERFACE_INCLUDE_DIRECTORIES>
+  COMPILE_DEFINITIONS DISABLE_PSI_MUTEX
   DEPENDENCIES GenError
   )
 
@@ -171,15 +163,6 @@ MERGE_CONVENIENCE_LIBRARIES(json_binlog_static
   ${INSTALL_JSON_BINLOG_LIBRARY}
   )
 
-# This is a test executable which verifies that Json_wrapper::seek,
-# Json_dom::seek and Json_dom::parse functions are visible and can be called.
-MYSQL_ADD_EXECUTABLE(json_client_library_main
-  json_client_library_main.cc
-  INCLUDE_DIRECTORIES ../sql
-  LINK_LIBRARIES json_client_library  strings mysys
-  SKIP_INSTALL
-  )
-
 # A test executable which does nothing, except verify that symbols are visible.
 # To test standalone build:
 #   cmake -DINSTALL_MYSQLTESTDIR=0
@@ -189,7 +172,7 @@ MYSQL_ADD_EXECUTABLE(json_client_library_main
 #       -ljson_binlog
 MYSQL_ADD_EXECUTABLE(json_binlog_main
   json_binlog_main.cc
-  INCLUDE_DIRECTORIES ../sql ../sql-common
+  INCLUDE_DIRECTORIES ../sql
   LINK_LIBRARIES json_binlog
   SKIP_INSTALL
   )
@@ -201,7 +184,7 @@ MYSQL_ADD_EXECUTABLE(json_binlog_main
 #       -ljson_binlog_static -lpthread
 MYSQL_ADD_EXECUTABLE(json_binlog_main_static
   json_binlog_main.cc
-  INCLUDE_DIRECTORIES ../sql ../sql-common
+  INCLUDE_DIRECTORIES ../sql
   LINK_LIBRARIES json_binlog_static
   SKIP_INSTALL
   )
@@ -251,14 +234,6 @@ MYSQL_ADD_EXECUTABLE(mysqlbinlog
   DEPENDENCIES GenError
   LINK_LIBRARIES ${MYSQLBINLOG_LIBRARIES}
   )
-
-# __builtin_strncpy specified bound depends on the length of the source argument
-# mysqlbinlog.cc:2169:22: note: length computed here
-IF((WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO) AND
-    MY_COMPILER_IS_GNU AND
-    CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11)
-  MY_TARGET_LINK_OPTIONS(mysqlbinlog "-Wno-stringop-truncation")
-ENDIF()
 
 IF(WITH_JSON_BINLOG_LIBRARY)
   IF(APPLE)

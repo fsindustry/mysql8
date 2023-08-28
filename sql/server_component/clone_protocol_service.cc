@@ -1,4 +1,4 @@
-/*  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/*  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -40,8 +40,6 @@
 
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/dictionary.h"
-
-struct CHARSET_INFO;
 
 /** The minimum idle timeout in seconds. It is kept at 8 hours which is also
 the Server default. Currently recipient sends ACK during state transition.
@@ -112,9 +110,6 @@ DEFINE_METHOD(void, mysql_clone_start_statement,
     }
   }
 #endif
-
-  mysql_thread_set_secondary_engine(false);
-
   /* Create and set PFS statement key */
   if (statement_key != PSI_NOT_INSTRUMENTED) {
     if (thd->m_statement_psi == nullptr) {
@@ -144,7 +139,7 @@ using Releaser = dd::cache::Dictionary_client::Auto_releaser;
 DEFINE_METHOD(int, mysql_clone_get_charsets,
               (THD * thd, Mysql_Clone_Values &char_sets)) {
   auto dc = dd::get_dd_client(thd);
-  const Releaser releaser(dc);
+  Releaser releaser(dc);
 
   /* Character set with collation */
   DD_Objs<dd::Collation> dd_charsets;
@@ -193,35 +188,36 @@ DEFINE_METHOD(int, mysql_clone_validate_charsets,
 */
 static int get_utf8_config(THD *thd, std::string config_name,
                            String &utf8_val) {
-  auto f = [thd, &utf8_val](const System_variable_tracker &, sys_var *var) {
-    char val_buf[1024];
-    SHOW_VAR show;
-    show.type = SHOW_SYS;
-    show.value = pointer_cast<char *>(var);
-    show.name = var->name.str;
+  char val_buf[1024];
+  SHOW_VAR show;
+  show.type = SHOW_SYS;
 
-    mysql_mutex_lock(&LOCK_global_system_variables);
-    size_t val_length;
-    const CHARSET_INFO *fromcs;
+  /* Get system configuration parameter. */
+  mysql_rwlock_rdlock(&LOCK_system_variables_hash);
+  auto var = intern_find_sys_var(config_name.c_str(), config_name.length());
+  mysql_rwlock_unlock(&LOCK_system_variables_hash);
 
-    const char *value =
-        get_one_variable(thd, &show, OPT_GLOBAL, SHOW_SYS, nullptr, &fromcs,
-                         val_buf, &val_length);
-
-    uint dummy_err;
-    const CHARSET_INFO *tocs = &my_charset_utf8mb4_bin;
-    utf8_val.copy(value, val_length, fromcs, tocs, &dummy_err);
-    mysql_mutex_unlock(&LOCK_global_system_variables);
-  };
-
-  const System_variable_tracker sv =
-      System_variable_tracker::make_tracker(config_name);
-  if (sv.access_system_variable(thd, f, Suppress_not_found_error::YES)) {
+  if (var == nullptr) {
     my_error(ER_INTERNAL_ERROR, MYF(0),
              "Clone failed to get system configuration parameter.");
     return (ER_INTERNAL_ERROR);
   }
 
+  show.value = reinterpret_cast<char *>(var);
+  show.name = var->name.str;
+
+  mysql_mutex_lock(&LOCK_global_system_variables);
+  size_t val_length;
+  const CHARSET_INFO *fromcs;
+
+  auto value = get_one_variable(thd, &show, OPT_GLOBAL, SHOW_SYS, nullptr,
+                                &fromcs, val_buf, &val_length);
+
+  uint dummy_err;
+  const CHARSET_INFO *tocs = &my_charset_utf8mb4_bin;
+  utf8_val.copy(value, val_length, fromcs, tocs, &dummy_err);
+
+  mysql_mutex_unlock(&LOCK_global_system_variables);
   return (0);
 }
 
@@ -378,7 +374,7 @@ DEFINE_METHOD(MYSQL *, mysql_clone_connect,
 
     server_main_callback.read_parameters(nullptr, &capath, &version, nullptr,
                                          &cipher, &ciphersuites, nullptr, &crl,
-                                         &crlpath, nullptr, nullptr);
+                                         &crlpath);
 
     mysql_ssl_set(mysql, ssl_ctx->m_ssl_key, ssl_ctx->m_ssl_cert,
                   ssl_ctx->m_ssl_ca, capath.c_str(), cipher.c_str());
@@ -529,7 +525,6 @@ DEFINE_METHOD(int, mysql_clone_get_response,
 
   /* Use server extension callback to capture network byte information. */
   NET_SERVER server_extn;
-  net_server_ext_init(&server_extn);
   server_extn.m_user_data = static_cast<void *>(net_length);
   server_extn.m_before_header = func_before;
   server_extn.m_after_header = func_after;
@@ -716,7 +711,7 @@ DEFINE_METHOD(int, mysql_clone_send_response,
     return 0;
   }
 
-  const int err = static_cast<int>(net->last_errno);
+  int err = static_cast<int>(net->last_errno);
 
   assert(err != 0);
   return err;

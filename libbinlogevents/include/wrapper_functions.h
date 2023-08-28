@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -64,45 +64,23 @@ extern PSI_memory_key key_memory_log_event;
 #define BAPI_RETURN(x) DBUG_RETURN(x)
 #define BAPI_TRACE DBUG_TRACE
 #define BAPI_VOID_RETURN DBUG_VOID_RETURN
-#define BAPI_LOG(x, y) DBUG_LOG(x, y)
-#define BAPI_VAR(v) DBUG_VAR(v)
 #else
 #define BAPI_ASSERT(x) assert(x)
-#define BAPI_PRINT(name, params) \
-  do {                           \
-  } while (0)
-#define BAPI_ENTER(x) \
-  do {                \
-  } while (0)
+#define BAPI_PRINT(name, params)
+#define BAPI_ENTER(x)
 #define BAPI_RETURN(x) return (x)
-#define BAPI_TRACE \
-  do {             \
-  } while (0)
+#define BAPI_TRACE
 #define BAPI_VOID_RETURN return
-#define BAPI_LOG(x, y) \
-  do {                 \
-  } while (0)
-#define BAPI_VAR(v) ""
 #endif
 #else
 #define BAPI_ASSERT(x) \
   do {                 \
   } while (0)
-#define BAPI_PRINT(name, params) \
-  do {                           \
-  } while (0)
-#define BAPI_ENTER(x) \
-  do {                \
-  } while (0)
+#define BAPI_PRINT(name, params)
+#define BAPI_ENTER(x)
 #define BAPI_RETURN(x) return (x)
-#define BAPI_TRACE \
-  do {             \
-  } while (0)
+#define BAPI_TRACE
 #define BAPI_VOID_RETURN return
-#define BAPI_LOG(x, y) \
-  do {                 \
-  } while (0)
-#define BAPI_VAR(v) ""
 #endif
 
 #ifndef HAVE_STRNDUP
@@ -156,10 +134,10 @@ inline const char *bapi_strndup(const char *destination, size_t n) {
 
 /**
   This is a wrapper function, and returns a pointer to a new memory with the
-  contents copied from the input memory pointer, up to a given length
+  contents copied from the input memory pointer, upto a given length
 
   @param source Pointer to the buffer from which data is to be copied
-  @param len Length up to which the source should be copied
+  @param len Length upto which the source should be copied
 
   @return dest pointer to a new memory if allocation was successful
           NULL otherwise

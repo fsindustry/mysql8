@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -95,13 +95,13 @@ sp_rcontext *sp_rcontext::create(THD *thd, const sp_pcontext *root_parsing_ctx,
 
 bool sp_rcontext::alloc_arrays(THD *thd) {
   {
-    const size_t n = m_root_parsing_ctx->max_cursor_index();
+    size_t n = m_root_parsing_ctx->max_cursor_index();
     m_cstack.reset(
         static_cast<sp_cursor **>(thd->alloc(n * sizeof(sp_cursor *))), n);
   }
 
   {
-    const size_t n = m_root_parsing_ctx->get_num_case_exprs();
+    size_t n = m_root_parsing_ctx->get_num_case_exprs();
     m_case_expr_holders.reset(
         static_cast<Item_cache **>(thd->mem_calloc(n * sizeof(Item_cache *))),
         n);
@@ -129,7 +129,7 @@ bool sp_rcontext::init_var_table(THD *thd) {
 }
 
 bool sp_rcontext::init_var_items(THD *thd) {
-  const uint num_vars = m_root_parsing_ctx->max_var_index();
+  uint num_vars = m_root_parsing_ctx->max_var_index();
 
   m_var_items.reset(static_cast<Item **>(thd->alloc(num_vars * sizeof(Item *))),
                     num_vars);
@@ -306,7 +306,7 @@ bool sp_rcontext::handle_sql_condition(THD *thd, uint *ip,
       declared within the one we're calling. At that point, the
       catcher for our throw would become very hard to predict!)
       One benefit of not simply clearing the DA as we enter a handler
-      (instead of resetting the condition count further down in this
+      (instead of resetting the condition cound further down in this
       exact function as we do now) and forcing the user to utilize
       GET STACKED DIAGNOSTICS is that this way, we can make
       SHOW WARNINGS|ERRORS work.
@@ -363,9 +363,9 @@ bool sp_rcontext::handle_sql_condition(THD *thd, uint *ip,
   */
   if (!handler_entry) return false;
 
-  const uint continue_ip = handler_entry->handler->type == sp_handler::CONTINUE
-                               ? cur_spi->get_cont_dest()
-                               : 0;
+  uint continue_ip = handler_entry->handler->type == sp_handler::CONTINUE
+                         ? cur_spi->get_cont_dest()
+                         : 0;
 
   /* Add a frame to handler-call-stack. */
   Handler_call_frame *frame = new (std::nothrow)
@@ -458,7 +458,7 @@ bool sp_cursor::open(THD *thd) {
     return true;
   }
 
-  const bool rc = mysql_open_cursor(thd, &m_result, &m_server_side_cursor);
+  bool rc = mysql_open_cursor(thd, &m_result, &m_server_side_cursor);
 
   // If execution failed, ensure that the cursor is closed.
   if (rc && m_server_side_cursor != nullptr) {

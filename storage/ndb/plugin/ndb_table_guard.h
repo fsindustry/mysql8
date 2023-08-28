@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,6 @@
 #include "storage/ndb/include/ndbapi/Ndb.hpp"
 #include "storage/ndb/include/ndbapi/NdbDictionary.hpp"
 #include "storage/ndb/plugin/ndb_dbname_guard.h"
-#include "storage/ndb/plugin/ndb_sleep.h"
 
 /*
    @brief This class maintains the reference to a NDB table definition retrieved
@@ -82,45 +81,9 @@ class Ndb_table_guard {
     return;
   }
 
-  /**
-     @brief Initialize the NDB Dictionary table by loading it from NDB while
-            handling temporary errors by retrying a few times
-
-     @param dbname   The database name of table to load
-     @param tabname  The table name of table to load
-   */
   void init(const char *dbname, const char *tabname) {
     DBUG_TRACE;
     /* Don't allow init() if already initialized */
-    assert(m_ndbtab == nullptr);
-
-    int attempt = 1;
-    constexpr int retries = 10;
-    do {
-      open_table_from_NDB(dbname, tabname);
-      if (m_ndbtab) {
-        // Successfully loaded table
-        return;
-      }
-      // Expect error to be set
-      assert(m_ndberror.code != 0);
-
-      if (m_ndberror.status != NdbError::TemporaryError) {
-        // Not an error that should be retried
-        return;
-      }
-
-      attempt++;
-      ndb_retry_sleep(50);
-
-    } while (attempt < retries);
-
-    // Failed to load table
-    assert(m_ndbtab == nullptr && m_ndberror.code != 0);
-  }
-
-  void open_table_from_NDB(const char *dbname, const char *tabname) {
-    DBUG_TRACE;
     assert(m_ndbtab == nullptr);
 
     // Change to the database where the table should be found
@@ -138,8 +101,8 @@ class Ndb_table_guard {
     NdbDictionary::Dictionary *dict = m_ndb->getDictionary();
     m_ndbtab = dict->getTableGlobal(tabname);
     if (!m_ndbtab) {
-      // Failed to retrieve table definition, error will be indicated by
-      // uninitialized table pointer. Save NDB error to allow caller to handle
+      // Failed to retrive table definition, error will be indicated by
+      // unintialized table pointer. Save NDB error to allow caller to handle
       // different errors.
       m_ndberror = dict->getNdbError();
       DBUG_PRINT("error", ("getTableGlobal, code: %d, message: %s",
@@ -164,12 +127,12 @@ class Ndb_table_guard {
 
   /**
      @brief Return pointer to table definition. Nullptr will be returned
-     both when table does not exist and when an error has occurred. If there is
+     both when table does not exists and when an error has occured. If there is
      a need to distinguish between the two cases the user need to examine the
      NDB error.
 
-     @return pointer to the NdbApi table definition or nullptr when table
-     doesn't exist or error occurs
+     @return pointer to the NdbApi table defintion or nullptr when table doesn't
+     exist or error occurs
    */
   const NdbDictionary::Table *get_table() const { return m_ndbtab; }
 
@@ -181,7 +144,7 @@ class Ndb_table_guard {
     DBUG_TRACE;
     const NdbDictionary::Table *tmp = m_ndbtab;
     DBUG_PRINT("info", ("m_ndbtab: %p", m_ndbtab));
-    m_ndbtab = nullptr;
+    m_ndbtab = 0;
     return tmp;
   }
 

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,6 @@
 #ifndef MYSQLROUTER_CLUSTER_METADATA_INCLUDED
 #define MYSQLROUTER_CLUSTER_METADATA_INCLUDED
 
-#include "mysqlrouter/router_export.h"
-
-#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -75,7 +72,7 @@ struct MetadataSchemaVersion {
   }
 };
 
-std::string ROUTER_LIB_EXPORT to_string(const MetadataSchemaVersion &version);
+std::string to_string(const MetadataSchemaVersion &version);
 
 // Semantic version numbers that this Router version supports for bootstrap mode
 constexpr MetadataSchemaVersion kRequiredBootstrapSchemaVersion[]{{1, 0, 0},
@@ -94,18 +91,11 @@ constexpr MetadataSchemaVersion kClusterSetsMetadataVersion{2, 1, 0};
 // Version that will be is set while the metadata is being updated
 constexpr MetadataSchemaVersion kUpgradeInProgressMetadataVersion{0, 0, 0};
 
-MetadataSchemaVersion ROUTER_LIB_EXPORT
-get_metadata_schema_version(MySQLSession *mysql);
+MetadataSchemaVersion get_metadata_schema_version(MySQLSession *mysql);
 
-bool ROUTER_LIB_EXPORT metadata_schema_version_is_compatible(
+bool metadata_schema_version_is_compatible(
     const mysqlrouter::MetadataSchemaVersion &required,
     const mysqlrouter::MetadataSchemaVersion &available);
-
-// throws std::logic_error, MySQLSession::Error
-bool ROUTER_LIB_EXPORT check_group_replication_online(MySQLSession *mysql);
-
-// throws MySQLSession::Error, std::logic_error, std::out_of_range
-bool ROUTER_LIB_EXPORT check_group_has_quorum(MySQLSession *mysql);
 
 template <size_t N>
 bool metadata_schema_version_is_compatible(
@@ -139,18 +129,14 @@ enum class ClusterType {
   RS_V2  /* ReplicaSet (metadata 2.x) */
 };
 
-ClusterType ROUTER_LIB_EXPORT
-get_cluster_type(const MetadataSchemaVersion &schema_version,
-                 MySQLSession *mysql, unsigned int router_id = 0);
+ClusterType get_cluster_type(const MetadataSchemaVersion &schema_version,
+                             MySQLSession *mysql, unsigned int router_id = 0);
 
-std::string ROUTER_LIB_EXPORT to_string(const ClusterType cluster_type);
+std::string to_string(const ClusterType cluster_type);
 
 class MetadataUpgradeInProgressException : public std::exception {};
 
-stdx::expected<void, std::string> ROUTER_LIB_EXPORT
-setup_metadata_session(MySQLSession &session);
-
-bool ROUTER_LIB_EXPORT is_part_of_cluster_set(MySQLSession *mysql);
+stdx::expected<void, std::string> setup_metadata_session(MySQLSession &session);
 
 class TargetCluster {
  public:
@@ -167,15 +153,24 @@ class TargetCluster {
   const char *c_str() const { return target_value_.c_str(); }
 
   TargetType target_type() const { return target_type_; }
+  bool is_primary() const { return is_primary_; }
+  bool is_invalidated() const { return is_invalidated_; }
   InvalidatedClusterRoutingPolicy invalidated_cluster_routing_policy() const {
     return invalidated_cluster_routing_policy_;
   }
 
   void target_type(const TargetType value) { target_type_ = value; }
   void target_value(const std::string &value) { target_value_ = value; }
+  void is_primary(const bool value) { is_primary_ = value; }
+  void is_invalidated(const bool value) { is_invalidated_ = value; }
   void invalidated_cluster_routing_policy(
       const InvalidatedClusterRoutingPolicy value) {
     invalidated_cluster_routing_policy_ = value;
+  }
+
+  std::string options_string() const { return options_string_; }
+  void options_string(const std::string &options_string) {
+    options_string_ = options_string;
   }
 
  private:
@@ -183,21 +178,13 @@ class TargetCluster {
   std::string target_value_;
   InvalidatedClusterRoutingPolicy invalidated_cluster_routing_policy_{
       InvalidatedClusterRoutingPolicy::DropAll};
+  // in case of ClusterSet is this Cluster a Primary
+  bool is_primary_{true};
+  // is the Cluster marked as invalid in the metadata
+  bool is_invalidated_{false};
+
+  std::string options_string_{"{}"};
 };
-
-constexpr const std::string_view kNodeTagHidden{"_hidden"};
-constexpr const std::string_view kNodeTagDisconnectWhenHidden{
-    "_disconnect_existing_sessions_when_hidden"};
-
-constexpr const bool kNodeTagHiddenDefault{false};
-constexpr const bool kNodeTagDisconnectWhenHiddenDefault{true};
-
-enum class InstanceType { GroupMember, AsyncMember, ReadReplica, Unsupported };
-
-std::optional<InstanceType> ROUTER_LIB_EXPORT
-str_to_instance_type(const std::string &);
-
-std::string ROUTER_LIB_EXPORT to_string(const InstanceType);
 
 }  // namespace mysqlrouter
 #endif

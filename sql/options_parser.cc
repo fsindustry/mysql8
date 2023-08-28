@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -212,10 +212,10 @@ result parse_options_string(String *str, char delimiter,
 
     key_value_separator_pos =
         str_copy.find(key_value_separator, substring_startpos);
-    const size_t key_startpos = substring_startpos;
+    size_t key_startpos = substring_startpos;
     size_t key_endpos = key_value_separator_pos - 1;
     size_t value_startpos = key_value_separator_pos + 1;
-    const size_t value_endpos = substring_endpos;
+    size_t value_endpos = substring_endpos;
 
     for (size_t j = key_value_separator_pos - 1; j >= substring_startpos; j--) {
       if (std::isspace(str_copy.at(j))) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,15 +25,12 @@
 #include <stddef.h>
 
 #include "libbinlogevents/include/compression/factory.h"
-#include "libbinlogevents/include/control_events.h"  // Transaction_payload_event
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_sqlcommand.h"
-#include "sql/binlog/group_commit/bgc_ticket_manager.h"  // Bgc_ticket_manager
 #include "sql/binlog_ostream.h"
-#include "sql/psi_memory_resource.h"  // memory_resource
-#include "sql/rpl_gtid.h"             // Gtid_set
-#include "sql/sql_class.h"            // THD
+#include "sql/rpl_gtid.h"   // Gtid_set
+#include "sql/sql_class.h"  // THD
 #include "sql/sql_lex.h"
 #include "sql/system_variables.h"
 
@@ -204,92 +201,59 @@ void Last_used_gtid_tracker_ctx::get_last_used_gtid(Gtid &gtid) {
   gtid.gno = (*m_last_used_gtid).gno;
 }
 
-Transaction_compression_ctx::Transaction_compression_ctx(PSI_memory_key key)
-    : m_managed_buffer_sequence(Grow_calculator_t(), psi_memory_resource(key)) {
+const size_t Transaction_compression_ctx::DEFAULT_COMPRESSION_BUFFER_SIZE =
+    1024;
+
+Transaction_compression_ctx::Transaction_compression_ctx()
+    : m_compressor(nullptr) {}
+
+Transaction_compression_ctx::~Transaction_compression_ctx() {
+  if (m_compressor) {
+    unsigned char *buffer = nullptr;
+    std::tie(buffer, std::ignore, std::ignore) = m_compressor->get_buffer();
+    delete m_compressor;
+    if (buffer) free(buffer);
+  }
 }
 
-Transaction_compression_ctx::Compressor_ptr_t
+binary_log::transaction::compression::Compressor *
 Transaction_compression_ctx::get_compressor(THD *thd) {
   auto ctype = (binary_log::transaction::compression::type)
                    thd->variables.binlog_trx_compression_type;
 
-  if (m_compressor == nullptr || (m_compressor->get_type_code() != ctype)) {
-    m_compressor = Compressor_ptr_t(Factory_t::build_compressor(ctype));
+  if (m_compressor == nullptr ||
+      (m_compressor->compression_type_code() != ctype)) {
+    unsigned char *buffer = nullptr;
+    std::size_t capacity = 0;
+
+    // delete the existing one, reuse the buffer
+    if (m_compressor) {
+      std::tie(buffer, std::ignore, capacity) = m_compressor->get_buffer();
+      delete m_compressor;
+      m_compressor = nullptr;
+    }
+
+    // TODO: consider moving m_decompressor to a shared_ptr
+    auto comp =
+        binary_log::transaction::compression::Factory::build_compressor(ctype);
+
+    if (comp != nullptr) {
+      m_compressor = comp.release();
+
+      // inject an output buffer if possible, if not, then delete the compressor
+      if (buffer == nullptr)
+        buffer = (unsigned char *)malloc(DEFAULT_COMPRESSION_BUFFER_SIZE);
+
+      if (buffer != nullptr)
+        m_compressor->set_buffer(buffer, DEFAULT_COMPRESSION_BUFFER_SIZE);
+      else {
+        /* purecov: begin inspected */
+        // OOM
+        delete m_compressor;
+        m_compressor = nullptr;
+        /* purecov: end */
+      }
+    }
   }
   return m_compressor;
-}
-
-Transaction_compression_ctx::Managed_buffer_sequence_t &
-Transaction_compression_ctx::managed_buffer_sequence() {
-  return m_managed_buffer_sequence;
-}
-
-binlog::BgcTicket Binlog_group_commit_ctx::get_session_ticket() {
-  return this->m_session_ticket;
-}
-
-void Binlog_group_commit_ctx::set_session_ticket(binlog::BgcTicket ticket) {
-  if (Binlog_group_commit_ctx::manual_ticket_setting()->load()) {
-    assert(this->m_session_ticket.is_set() == false);
-    this->m_session_ticket = ticket;
-  }
-}
-
-void Binlog_group_commit_ctx::assign_ticket() {
-  if (this->m_session_ticket.is_set()) {
-    return;
-  }
-  auto ticket_opaque =
-      binlog::Bgc_ticket_manager::instance().assign_session_to_ticket();
-  this->m_session_ticket = ticket_opaque;
-}
-
-bool Binlog_group_commit_ctx::has_waited() { return this->m_has_waited; }
-
-void Binlog_group_commit_ctx::mark_as_already_waited() {
-  this->m_has_waited = true;
-}
-
-void Binlog_group_commit_ctx::reset() {
-  this->m_session_ticket = binlog::BgcTicket(binlog::BgcTicket::kTicketUnset);
-  this->m_has_waited = false;
-}
-
-std::string Binlog_group_commit_ctx::to_string() const {
-  std::ostringstream oss;
-  this->format(oss);
-  return oss.str();
-}
-
-void Binlog_group_commit_ctx::format(std::ostream &out) const {
-  out << "Binlog_group_commit_ctx (" << std::hex << this << std::dec
-      << "):" << std::endl
-      << " · m_session_ticket: " << this->m_session_ticket << std::endl
-      << " · m_has_waited: " << this->m_has_waited << std::endl
-      << " · manual_ticket_setting(): " << manual_ticket_setting()->load()
-      << std::flush;
-}
-
-memory::Aligned_atomic<bool> &Binlog_group_commit_ctx::manual_ticket_setting() {
-  static memory::Aligned_atomic<bool> flag{false};
-  return flag;
-}
-
-void Rpl_thd_context::init() {
-  m_dependency_tracker_ctx.set_last_session_sequence_number(0);
-  m_tx_rpl_delegate_stage_status = TX_RPL_STAGE_INIT;
-}
-
-void Rpl_thd_context::set_tx_rpl_delegate_stage_status(
-    enum_transaction_rpl_delegate_status status) {
-  m_tx_rpl_delegate_stage_status = status;
-}
-
-Rpl_thd_context::enum_transaction_rpl_delegate_status
-Rpl_thd_context::get_tx_rpl_delegate_stage_status() {
-  return m_tx_rpl_delegate_stage_status;
-}
-
-Binlog_group_commit_ctx &Rpl_thd_context::binlog_group_commit_ctx() {
-  return this->m_binlog_group_commit_ctx;
 }

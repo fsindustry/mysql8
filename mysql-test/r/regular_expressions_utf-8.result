@@ -860,10 +860,8 @@ ERROR HY000: Invalid match mode flag in regular expression.
 # Bug#27743722 REGEXP::EVALEXPRTOCHARSET:
 #              REFERENCE BINDING TO MISALIGNED ADDRESS
 #
-select regexp_instr(char('313:50:35.199734'using utf16le),
-cast(uuid() as char character set utf16le));
-regexp_instr(char('313:50:35.199734'using utf16le),
-cast(uuid() as char character set utf16le))
+select regexp_instr(char('313:50:35.199734'using utf16le),uuid());
+regexp_instr(char('313:50:35.199734'using utf16le),uuid())
 0
 Warnings:
 Warning	1292	Truncated incorrect INTEGER value: '313:50:35.199734'
@@ -915,7 +913,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` bigint NOT NULL DEFAULT '0',
-  `b` int NOT NULL DEFAULT '0',
+  `b` int unsigned NOT NULL DEFAULT '0',
   `c` longtext CHARACTER SET latin1 NOT NULL,
   `d` varchar(1) CHARACTER SET latin1 DEFAULT NULL,
   `e` varchar(512) CHARACTER SET latin1 DEFAULT NULL,
@@ -1179,89 +1177,10 @@ SET SQL_MODE=DEFAULT;
 # Bug #33290245 Item_func_st_distance_sphere::val_real():
 #               Assertion `is_nullable()' failed.
 select ( _utf32', ,*') regexp 13946;
-ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16
+ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16le
 select regexp_instr( ( _utf32', ,*'), 13946);
-ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16
+ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16le
 select regexp_replace( ( _utf32', ,*'), 13946, 42);
-ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16
+ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16le
 select regexp_substr( ( _utf32', ,*'), 13946);
-ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16
-#
-# Bug #33326003 regexp::check_icu_status,
-#               handle Unicode Character Names without debug assert
-#
-SELECT 'a' regexp '\\N{latin small letter a}';
-'a' regexp '\\N{latin small letter a}'
-1
-select 'ǅ' regexp '\\N{Latin Capital Letter D with Small Letter Z with Caron}';
-'ǅ' regexp '\\N{Latin Capital Letter D with Small Letter Z with Caron}'
-1
-SELECT 'a' regexp '\\p{alphabetic}';
-'a' regexp '\\p{alphabetic}'
-1
-SELECT 'a' regexp '\\P{alphabetic}';
-'a' regexp '\\P{alphabetic}'
-0
-SELECT '👌🏾' regexp '\\p{Emoji}\\p{Emoji_modifier}';
-'??' regexp '\\p{Emoji}\\p{Emoji_modifier}'
-1
-SELECT 'a' regexp '\\p{Lowercase_letter}';
-'a' regexp '\\p{Lowercase_letter}'
-1
-SELECT 'a' regexp '\\p{Uppercase_letter}';
-'a' regexp '\\p{Uppercase_letter}'
-1
-SELECT 'A' regexp '\\p{Lowercase_letter}';
-'A' regexp '\\p{Lowercase_letter}'
-1
-SELECT 'A' regexp '\\p{Uppercase_letter}';
-'A' regexp '\\p{Uppercase_letter}'
-1
-SELECT 'a' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}';
-'a' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'
-1
-SELECT 'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}';
-'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'
-0
-SELECT 'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}';
-'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'
-0
-SELECT 'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}';
-'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'
-1
-#
-# Bug#35367340 Assertion `!thd->is_error()' failed|sql/sql_base.cc
-#
-CREATE TABLE t1 (
-col_datetime DATETIME DEFAULT NULL,
-col_date DATE DEFAULT NULL
-);
-INSERT INTO t1 VALUES ('1981-09-28 23:58:32','2016-04-27');
-CREATE TABLE t2 (
-col_varchar_key VARCHAR(1) DEFAULT NULL,
-col_int INT DEFAULT NULL,
-col_varchar VARCHAR(1) DEFAULT NULL
-);
-INSERT INTO t2 VALUES (NULL,42,'a');
-UPDATE t1 SET col_datetime = 8
-WHERE (col_date) IN
-( SELECT
-REGEXP_INSTR( col_varchar_key, '[a-z]+' , 385025119 , 1, 'm' )
-FROM t2
-);
-ERROR 22007: Truncated incorrect INTEGER value: 'm'
-UPDATE t1 SET col_datetime = 8
-WHERE (col_date) IN
-( SELECT
-REGEXP_INSTR( col_varchar_key, '[a-z]+' , 385025119 , 1, col_int )
-FROM t2
-);
-ERROR HY000: Incorrect arguments to regexp_instr: return_option must be 1 or 0.
-UPDATE t1 SET col_datetime = 8
-WHERE (col_date) IN
-( SELECT
-REGEXP_INSTR( col_varchar_key, '[a-z]+' , 385025119 , 1, col_varchar )
-FROM t2
-);
-ERROR 22007: Truncated incorrect INTEGER value: 'a'
-DROP TABLE t1, t2;
+ERROR HY000: Cannot convert string '\x2C\x20\x2C\x2A' from utf32 to utf16le

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,12 +34,11 @@
 #include "sql/sql_class.h"
 
 struct Slave {
-  enum class EnumStatus { up, leaving, down };
   uint32_t thread_id;
   Vio *vio;
   uint server_id;
   mysql_compress_context compress_ctx;
-  EnumStatus m_status = EnumStatus::up;
+  bool is_leaving;
 
   my_socket sock_fd() const { return vio->mysql_socket.fd; }
 };

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -554,8 +554,8 @@ Dbtup::scanReply(Signal* signal, ScanOpPtr scanPtr)
                           (Uint32*)tablePtr.p,
                           pos.m_realpid_mm,
                           key_mm.m_page_idx,
-                          pkData,
-                          /*hash=*/true);
+			  pkData,
+                          true);
       ndbrequire(ret > 0);
       pkSize = ret;
       dbg((DBTUP, "PK size=%d data=%08x", pkSize, pkData[0]));
@@ -570,7 +570,7 @@ Dbtup::scanReply(Signal* signal, ScanOpPtr scanPtr)
       lockReq->tableId = scan.m_tableId;
       lockReq->fragId = frag.fragmentId;
       lockReq->fragPtrI = RNIL; // no cached frag ptr yet
-      lockReq->hashValue = md5_hash(pkData, pkSize);
+      lockReq->hashValue = md5_hash((Uint64*)pkData, pkSize);
       lockReq->page_id = key_mm.m_page_no;
       lockReq->page_idx = key_mm.m_page_idx;
       lockReq->transId1 = scan.m_transId1;
@@ -2113,7 +2113,7 @@ Dbtup::scanNext(Signal* signal, ScanOpPtr scanPtr)
         {
           jam();
         }
-        ndbrequire(c_page_pool.getPtr(pagePtr, pos.m_realpid_mm));
+	c_page_pool.getPtr(pagePtr, pos.m_realpid_mm);
         /**
          * We are in the process of performing a Full table scan, this can be
          * either due to a user requesting a full table scan, it can also be
@@ -2212,7 +2212,7 @@ Dbtup::scanNext(Signal* signal, ScanOpPtr scanPtr)
         Disk_alloc_info& alloc = frag.m_disk_alloc_info;
         Local_fragment_extent_list list(c_extent_pool, alloc.m_extent_list);
         Ptr<Extent_info> ext_ptr;
-        ndbrequire(c_extent_pool.getPtr(ext_ptr, pos.m_extent_info_ptr_i));
+        c_extent_pool.getPtr(ext_ptr, pos.m_extent_info_ptr_i);
         Extent_info* ext = ext_ptr.p;
         key.m_page_no++;
         if (key.m_page_no >= ext->m_first_page_no + alloc.m_extent_size) {
@@ -3410,7 +3410,7 @@ Dbtup::disk_page_tup_scan_callback(Signal* signal, Uint32 scanPtrI, Uint32 page_
   ScanPos& pos = scan.m_scanPos;
   // get cache page
   Ptr<GlobalPage> gptr;
-  ndbrequire(m_global_page_pool.getPtr(gptr, page_i));
+  m_global_page_pool.getPtr(gptr, page_i);
   pos.m_page = (Page*)gptr.p;
   // continue
   ndbrequire((scan.m_bits & ScanOp::SCAN_LOCK) == 0);

@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -36,7 +36,6 @@ CMAKE_POLICY(SET CMP0048 NEW)
 # only interpret if() arguments as variables or keywords when unquoted
 CMAKE_POLICY(SET CMP0054 NEW)
 PROJECT("MySQLRouter" VERSION ${PROJECT_VERSION_TEXT} LANGUAGES C CXX)
-MSVC_CPPCHECK_DISABLE()
 
 # In CMake 3.12 and above, the
 #
@@ -66,13 +65,13 @@ ENDIF()
 # version definition index 0 for symbol __gcov_var is out of bounds
 IF(ENABLE_GCOV)
   STRING(REPLACE "-fuse-ld=lld" ""
-    CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS}")
+    CMAKE_C_LINK_FLAGS ${CMAKE_C_LINK_FLAGS})
   STRING(REPLACE "-fuse-ld=lld" ""
-    CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
+    CMAKE_CXX_LINK_FLAGS ${CMAKE_CXX_LINK_FLAGS})
   STRING(REPLACE "-Wl,--gdb-index" ""
-    CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS}")
+    CMAKE_C_LINK_FLAGS ${CMAKE_C_LINK_FLAGS})
   STRING(REPLACE "-Wl,--gdb-index" ""
-    CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
+    CMAKE_CXX_LINK_FLAGS ${CMAKE_CXX_LINK_FLAGS})
 ENDIF()
 
 DISABLE_MISSING_PROFILE_WARNING()

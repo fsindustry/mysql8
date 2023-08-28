@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 #ifndef NDB_SHARE_H
 #define NDB_SHARE_H
 
-#include <atomic>
-#include <mutex>
 #include <string>
 #ifndef NDEBUG
 #include <unordered_set>
@@ -39,8 +37,6 @@
 
 class ha_ndbcluster;
 class NdbEventOperation;
-
-struct CHARSET_INFO;
 
 enum Ndb_binlog_type {
   NBT_DEFAULT = 0,
@@ -79,7 +75,7 @@ struct NDB_SHARE {
  public:
   // RAII style class for accessing tuple_id_range
   class Tuple_id_range_guard {
-    NDB_SHARE const *m_share;
+    NDB_SHARE *m_share;
 
    public:
     Ndb::TupleIdRange &range;
@@ -97,61 +93,15 @@ struct NDB_SHARE {
     g.range.reset();
   }
 
-  // Cached statistics for the table.
-  class Cached_stats {
-    mutable std::mutex m_stats_mutex;
+  // Shared statistics for the table.
+  // This is cached values and used in queries when that is "good enough",
+  // in other cases the values are updated from NDB before use.
+  // NOTE! Protected by NDB_SHARE::mutex
+  Ndb_table_stats cached_table_stats;
+  // Update cached row count with number of changed rows
+  void update_cached_row_count(int changed_rows);
 
-    // This is cached values and used in queries when that is "good enough",
-    // in other cases the values are updated from NDB before use.
-    Ndb_table_stats m_table_stats;
-
-    // Counter for rows changed since m_table_stats was saved. It's kept
-    // separate and is atomic to allow concurrent updates from threads while
-    // they are committing without locking the mutex. The counter value is
-    // appended to the row count when the cached table stats are retrieved.
-    // NOTE! The counter is updated with changes from this MySQL Server but
-    // changes to the table in NDB are not reflected.
-    std::atomic<int64_t> atomic_row_count_changed{0};
-
-   public:
-    // Add changed rows to counter
-    void add_changed_rows(int changed_rows) {
-      if (changed_rows == 0) {
-        // Nothing to do
-        return;
-      }
-      atomic_row_count_changed += changed_rows;
-    }
-
-    // Save fresh table stats
-    void save_table_stats(Ndb_table_stats table_stats) {
-      {
-        std::lock_guard<std::mutex> lock_stats(m_stats_mutex);
-        m_table_stats = table_stats;
-      }
-      // Fresh table stats assigned, reset changed counter
-      atomic_row_count_changed = 0;
-    }
-
-    Ndb_table_stats get_table_stats() const {
-      Ndb_table_stats table_stats;
-      {
-        std::lock_guard<std::mutex> lock_stats(m_stats_mutex);
-        table_stats = m_table_stats;
-      }
-
-      // Update row_count with number of changed rows since it was saved
-      const int64_t changed_rows = atomic_row_count_changed;
-      table_stats.row_count =
-          // Check for underflow
-          ((int64_t)table_stats.row_count + changed_rows > 0)
-              ? table_stats.row_count + changed_rows
-              : 0;  // All rows gone
-      return table_stats;
-    }
-  } cached_stats;
-
-  struct Ndb_index_stat *index_stat_list{nullptr};
+  struct Ndb_index_stat *index_stat_list;
 
  private:
   enum Ndb_share_flags : uint {
@@ -159,7 +109,7 @@ struct NDB_SHARE {
     // - table should not be binlogged
     FLAG_NO_BINLOG = 1UL << 2,
 
-    // Flags describing how changes should be written to the binlog
+    // Flags describing the binlog mode
     // - table should be binlogged with full rows
     FLAG_BINLOG_MODE_FULL = 1UL << 3,
     // - table update should be binlogged using update log event
@@ -169,7 +119,7 @@ struct NDB_SHARE {
     FLAG_BINLOG_MODE_MINIMAL_UPDATE = 1UL << 5,
 
     // Flag describing if table have event
-    // NOTE! The decision whether or not a table have event is decided
+    // NOTE! The decision wheter or not a table have event is decided
     // only once by Ndb_binlog_client::table_should_have_event()
     FLAG_TABLE_HAVE_EVENT = 1UL << 6,
 
@@ -177,14 +127,10 @@ struct NDB_SHARE {
     // primarily used in performance sensitive code as a quick way to check if
     // special case should be activated, for example to write ndb_apply_status
     // rows while applying rows from the binlog.
-    FLAG_TABLE_IS_APPLY_STATUS = 1UL << 7,
-
-    // Flag describing if constrained columns are required for calculating
-    // transaction dependencies when binlogging
-    FLAG_BINLOG_SUBSCRIBE_CONSTRAINED = 1UL << 8
+    FLAG_TABLE_IS_APPLY_STATUS = 1UL << 7
   };
 
-  uint flags{0};
+  uint flags;
 
  public:
   bool get_binlog_nologging() const {
@@ -199,17 +145,8 @@ struct NDB_SHARE {
   bool get_binlog_update_minimal() const {
     return flags & NDB_SHARE::FLAG_BINLOG_MODE_MINIMAL_UPDATE;
   }
-  void set_binlog_flags(Ndb_binlog_type ndb_binlog_type);
 
-  bool get_subscribe_constrained() const {
-    return flags & FLAG_BINLOG_SUBSCRIBE_CONSTRAINED;
-  }
-  void set_subscribe_constrained(bool v) {
-    if (v)
-      flags |= FLAG_BINLOG_SUBSCRIBE_CONSTRAINED;
-    else
-      flags &= ~FLAG_BINLOG_SUBSCRIBE_CONSTRAINED;
-  }
+  void set_binlog_flags(Ndb_binlog_type ndb_binlog_type);
 
   void set_have_event() { flags |= NDB_SHARE::FLAG_TABLE_HAVE_EVENT; }
   bool get_have_event() const {
@@ -220,11 +157,11 @@ struct NDB_SHARE {
     return flags & FLAG_TABLE_IS_APPLY_STATUS;
   }
 
-  struct NDB_CONFLICT_FN_SHARE *m_cfn_share{nullptr};
+  struct NDB_CONFLICT_FN_SHARE *m_cfn_share;
 
   // The event operation used for listening to changes in NDB for this
   // table, (mostly) protected by mutex
-  NdbEventOperation *op{nullptr};
+  NdbEventOperation *op;
 
   // Check if an event operation has been setup for this share
   bool have_event_operation() const {
@@ -240,16 +177,8 @@ struct NDB_SHARE {
   // Raw pointer for passing table definition from schema dist client to
   // participant in the same node to avoid that participant have to access
   // the DD to open the table definition.
-  const void *inplace_alter_new_table_def{nullptr};
+  const void *inplace_alter_new_table_def;
 
- private:
-  explicit NDB_SHARE(const char *key_arg);
-  NDB_SHARE(const NDB_SHARE &) = delete;
-  NDB_SHARE &operator=(const NDB_SHARE &) = delete;
-
-  ~NDB_SHARE();
-
- public:
   static NDB_SHARE *create(const char *key);
   static void destroy(NDB_SHARE *share);
 
@@ -338,12 +267,12 @@ struct NDB_SHARE {
   static void debug_print_shares(std::string &out);
 
  private:
-  uint m_use_count{0};
+  uint m_use_count;
   uint increment_use_count() { return ++m_use_count; }
   uint decrement_use_count();
   uint use_count() const { return m_use_count; }
 
-  enum { NSS_INITIAL = 0, NSS_DROPPED } state{NSS_INITIAL};
+  enum { NSS_INITIAL = 0, NSS_DROPPED } state;
 
   const char *share_state_string() const;
 

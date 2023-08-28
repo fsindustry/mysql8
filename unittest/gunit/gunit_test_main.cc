@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,11 +41,8 @@
 #include "mysql/psi/mysql_mutex.h"
 
 class Cost_constant_cache;
-class THD;
-
-struct CHARSET_INFO;
-
 CHARSET_INFO *system_charset_info = nullptr;
+class THD;
 
 #ifdef _WIN32
 #define SIGNAL_FMT "exception 0x%x"

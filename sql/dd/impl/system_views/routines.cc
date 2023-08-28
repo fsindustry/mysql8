@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -104,9 +104,7 @@ Routines::Routines() {
   m_target_def.add_field(
       FIELD_DTD_IDENTIFIER, "DTD_IDENTIFIER",
       "IF(rtn.type = 'PROCEDURE', NULL, rtn.result_data_type_utf8)");
-  m_target_def.add_field(
-      FIELD_ROUTINE_BODY, "ROUTINE_BODY",
-      "IF(rtn.external_language = 'SQL', 'SQL', 'EXTERNAL')");
+  m_target_def.add_field(FIELD_ROUTINE_BODY, "ROUTINE_BODY", "'SQL'");
   m_target_def.add_field(
       FIELD_ROUTINE_DEFINITION, "ROUTINE_DEFINITION",
       "IF (CAN_ACCESS_ROUTINE(sch.name, rtn.name, rtn.type, rtn.definer, TRUE),"

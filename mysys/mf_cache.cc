@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -86,7 +86,7 @@ bool real_open_cached_file(IO_CACHE *cache) {
 void close_cached_file(IO_CACHE *cache) {
   DBUG_TRACE;
   if (my_b_inited(cache)) {
-    const File file = cache->file;
+    File file = cache->file;
     cache->file = -1; /* Don't flush data */
     (void)end_io_cache(cache);
     if (file >= 0) {

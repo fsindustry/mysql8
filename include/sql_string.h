@@ -1,7 +1,7 @@
 #ifndef SQL_STRING_INCLUDED
 #define SQL_STRING_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,20 +35,19 @@
 #include <sys/types.h>
 #include <new>
 #include <string>
-#include <string_view>
 
 #include "lex_string.h"
+#include "m_ctype.h"   // my_convert
+#include "m_string.h"  // LEX_CSTRING
 #include "memory_debugging.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
-#include "my_sys.h"
 
 #include "my_inttypes.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/mysql_lex_string.h"  // LEX_STRING
 #include "mysql/psi/psi_memory.h"
 #include "mysql/service_mysql_alloc.h"  // my_free
-#include "mysql/strings/m_ctype.h"      // my_convert
 
 struct MEM_ROOT;
 
@@ -68,7 +67,7 @@ extern PSI_memory_key key_memory_String_value;
   pass it and its descendants (such as Name_string) into functions
   using call-by-value evaluation.
 
-  Don't add new members or virtual methods to this class!
+  Don't add new members or virual methods into this class!
 */
 class Simple_cstring {
  private:
@@ -470,12 +469,10 @@ class String {
     s.m_is_alloced = false;
   }
 
-  bool copy();                 // Alloc string if not allocated
+  bool copy();                 // Alloc string if not alloced
   bool copy(const String &s);  // Allocate new string
+  // Allocate new string
   bool copy(const char *s, size_t arg_length, const CHARSET_INFO *cs);
-  bool copy(const char *s, size_t arg_length, const CHARSET_INFO *from_cs,
-            const CHARSET_INFO *to_cs, uint *errors);
-
   static bool needs_conversion(size_t arg_length, const CHARSET_INFO *cs_from,
                                const CHARSET_INFO *cs_to, size_t *offset);
   bool needs_conversion(const CHARSET_INFO *cs_to) const {
@@ -495,8 +492,10 @@ class String {
                     const CHARSET_INFO *cs);
   bool set_or_copy_aligned(const char *s, size_t arg_length,
                            const CHARSET_INFO *cs);
+  bool copy(const char *s, size_t arg_length, const CHARSET_INFO *csfrom,
+            const CHARSET_INFO *csto, uint *errors);
   bool append(const String &s);
-  bool append(std::string_view s) { return append(s.data(), s.size()); }
+  bool append(const char *s);
   bool append(LEX_STRING *ls) { return append(ls->str, ls->length); }
   bool append(Simple_cstring str) { return append(str.ptr(), str.length()); }
   bool append(const char *s, size_t arg_length);
@@ -527,7 +526,7 @@ class String {
   */
   int strrstr(const String &search, size_t offset = 0) const;
   /**
-   * Returns substring of given characters length, starting at given character
+   * Returns substring of given characters lenght, starting at given character
    * offset. Note that parameter indexes are character indexes and not byte
    * indexes.
    */
@@ -563,17 +562,17 @@ class String {
   /* Inline (general) functions used by the protocol functions */
 
   char *prep_append(size_t arg_length, size_t step_alloc) {
-    const size_t new_length = arg_length + m_length;
+    size_t new_length = arg_length + m_length;
     if (new_length > m_alloced_length) {
       if (mem_realloc(new_length + step_alloc)) return nullptr;
     }
-    const size_t old_length = m_length;
+    size_t old_length = m_length;
     m_length += arg_length;
     return m_ptr + old_length; /* Area to use */
   }
 
   bool append(const char *s, size_t arg_length, size_t step_alloc) {
-    const size_t new_length = arg_length + m_length;
+    size_t new_length = arg_length + m_length;
     if (new_length > m_alloced_length &&
         mem_realloc_exp(new_length + step_alloc))
       return true;
@@ -607,35 +606,6 @@ class String {
   */
   char *dup(MEM_ROOT *root) const;
 };
-
-/**
-  Checks that the source string can be just copied to the destination string
-  without conversion.
-
-  @param arg_length     Length of string to copy.
-  @param from_cs        Character set to copy from
-  @param to_cs          Character set to copy to
-  @param *offset	Returns number of unaligned characters.
-
-  @returns true if conversion is required, false otherwise.
-
-  @note
-  to_cs may be nullptr for "no conversion" if the system variable
-  character_set_results is NULL.
-*/
-
-inline bool String::needs_conversion(size_t arg_length,
-                                     const CHARSET_INFO *from_cs,
-                                     const CHARSET_INFO *to_cs,
-                                     size_t *offset) {
-  *offset = 0;
-  if (to_cs == nullptr || (to_cs == &my_charset_bin) || from_cs == to_cs ||
-      my_charset_same(from_cs, to_cs) ||
-      ((from_cs == &my_charset_bin) &&
-       (0 == (*offset = (arg_length % to_cs->mbminlen)))))
-    return false;
-  return true;
-}
 
 static inline void swap(String &a, String &b) noexcept { a.swap(b); }
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1301,7 +1301,7 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
     {
       DBUG_RETURN(true);
     }
-    // for mysql client compatibility remove trailing ';'
+    // for mysql client compatability remove trailing ';'
     {
       unsigned last= (unsigned)(strlen(line)-1);
       if (line[last] == ';')
@@ -1367,7 +1367,7 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
 	  allAfterFirstToken != NULL &&
 	  native_strncasecmp(allAfterFirstToken, "BACKUP", sizeof("BACKUP") - 1) == 0){
     // password length should be less than sizeof(line_buffer)
-    static_assert(MAX_BACKUP_ENCRYPTION_PASSWORD_LENGTH < 512);
+    STATIC_ASSERT(MAX_BACKUP_ENCRYPTION_PASSWORD_LENGTH < 512)
     m_error= executeStartBackup(allAfterFirstToken, interactive);
     DBUG_RETURN(true);
   }
@@ -1561,7 +1561,7 @@ CommandInterpreter::executeCommand(Vector<BaseString> &command_list,
  * to 0 (zero) on the first call.
  *
  * @param cl cluster state
- * @param node_id last node_id retrieved, 0 at first call
+ * @param node_id last node_id retreived, 0 at first call
  * @param type type of node to look for
  * @return 1 if a node was found, 0 if no more node exist
  */
@@ -1752,7 +1752,8 @@ CommandInterpreter::executeHelp(char* parameters)
  * SHUTDOWN
  *****************************************************************************/
 
-int CommandInterpreter::executeShutdown(char* /*parameters*/)
+int
+CommandInterpreter::executeShutdown(char* parameters) 
 { 
   ndb_mgm_cluster_state *state = ndb_mgm_get_status(m_mgmsrv);
   if(state == NULL) {
@@ -2323,7 +2324,8 @@ CommandInterpreter::executeEnterSingleUser(char* parameters)
   return 0;
 }
 
-int CommandInterpreter::executeExitSingleUser(char* /*parameters*/)
+int
+CommandInterpreter::executeExitSingleUser(char* parameters) 
 {
   int result = ndb_mgm_exit_single_user(m_mgmsrv, 0);
   if (result != 0) {
@@ -2337,8 +2339,9 @@ int CommandInterpreter::executeExitSingleUser(char* /*parameters*/)
   }
 }
 
-int CommandInterpreter::executeStart(int processId, const char* /*parameters*/,
-                                     bool all)
+int
+CommandInterpreter::executeStart(int processId, const char* parameters,
+				 bool all) 
 {
   int result;
   int retval = 0;
@@ -2362,9 +2365,10 @@ int CommandInterpreter::executeStart(int processId, const char* /*parameters*/,
   return retval;
 }
 
-int CommandInterpreter::executeStart(Vector<BaseString>& /*command_list*/,
-                                     unsigned /*command_pos*/, int* node_ids,
-                                     int no_of_nodes)
+int
+CommandInterpreter::executeStart(Vector<BaseString> &command_list,
+                                 unsigned command_pos,
+                                 int *node_ids, int no_of_nodes)
 {
   int result;
   result= ndb_mgm_start(m_mgmsrv, no_of_nodes, node_ids);
@@ -2609,8 +2613,9 @@ CommandInterpreter::executeStatus(int processId,
   return 0;
 } //
 
-int CommandInterpreter::executeDumpState(int processId, const char* parameters,
-                                         bool /*all*/)
+int
+CommandInterpreter::executeDumpState(int processId, const char* parameters,
+				     bool all) 
 {
   if(emptyString(parameters))
   {
@@ -2876,9 +2881,11 @@ helpTextReportTypeOptionFn()
 //*****************************************************************************
 //*****************************************************************************
 
-int CommandInterpreter::executeLogLevel(int processId, const char* parameters,
-                                        bool /*all*/)
+int
+CommandInterpreter::executeLogLevel(int processId, const char* parameters, 
+				    bool all) 
 {
+  (void) all;
   if (emptyString(parameters)) {
     ndbout << "Expected argument" << endl;
     return -1;
@@ -2960,8 +2967,9 @@ int CommandInterpreter::executeError(int processId,
 //*****************************************************************************
 //*****************************************************************************
 
-int CommandInterpreter::executeLog(int processId, const char* parameters,
-                                   bool /*all*/)
+int
+CommandInterpreter::executeLog(int processId,
+			       const char* parameters, bool all) 
 {
   struct ndb_mgm_reply reply;
   Vector<BaseString> blocks;
@@ -3031,8 +3039,10 @@ CommandInterpreter::executeTestOff(int processId,
 //*****************************************************************************
 //*****************************************************************************
 
-int CommandInterpreter::executeNodeLog(int processId, const char* parameters,
-                                       bool /*all*/)
+int
+CommandInterpreter::executeNodeLog(int processId,
+                                   const char* parameters, 
+                                   bool all)
 {
   Vector<BaseString> command_list;
   if (parameters)
@@ -3083,9 +3093,10 @@ int CommandInterpreter::executeNodeLog(int processId, const char* parameters,
 //*****************************************************************************
 //*****************************************************************************
 
-int CommandInterpreter::executeEventReporting(int processId,
-                                              const char* parameters,
-                                              bool /*all*/)
+int
+CommandInterpreter::executeEventReporting(int processId,
+					  const char* parameters, 
+					  bool all) 
 {
   int retval = 0;
   if (emptyString(parameters)) {
@@ -3422,7 +3433,7 @@ CommandInterpreter::executeStartBackup(char* parameters, bool interactive)
   }
 
   /**
-   * If interactive, event listener thread is already running
+   * If interactive, event listner thread is already running
    */
   if (log_handle && !interactive)
   {

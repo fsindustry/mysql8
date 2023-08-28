@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,7 @@
 #include <sys/types.h>
 
 #include "field_types.h"
+#include "m_ctype.h"
 #include "memory_debugging.h"
 #include "mf_wcomp.h"
 #include "my_alloc.h"
@@ -34,11 +35,9 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_table_map.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
-#include "sql-common/json_dom.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"
 #include "sql/field.h"
@@ -48,6 +47,7 @@
 #include "sql/item_func.h"
 #include "sql/item_json_func.h"
 #include "sql/item_row.h"
+#include "sql/json_dom.h"
 #include "sql/key.h"
 #include "sql/mem_root_array.h"
 #include "sql/opt_trace.h"
@@ -85,8 +85,7 @@ static SEL_TREE *get_mm_parts(THD *thd, RANGE_OPT_PARAM *param,
                               Item_func::Functype type, Item *value);
 static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
                              Field *field, KEY_PART *key_part,
-                             Item_func::Functype type, Item *value,
-                             bool *inexact);
+                             Item_func::Functype type, Item *value);
 static SEL_TREE *get_full_func_mm_tree(THD *thd, RANGE_OPT_PARAM *param,
                                        table_map prev_tables,
                                        table_map read_tables,
@@ -173,16 +172,15 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
   if (param->has_errors()) return nullptr;
 
   // Populate array as we need to examine its values here
-  if (op->m_const_array != nullptr && !op->m_populated) {
-    op->populate_bisection(thd);
-  }
+  if (op->array && !op->populated) op->populate_bisection(thd);
+
   if (is_negated) {
     // We don't support row constructors (multiple columns on lhs) here.
     if (predicand->type() != Item::FIELD_ITEM) return nullptr;
 
     Field *field = down_cast<Item_field *>(predicand)->field;
 
-    if (op->m_const_array != nullptr && !op->m_const_array->is_row_result()) {
+    if (op->array && !op->array->is_row_result()) {
       /*
         We get here for conditions on the form "t.key NOT IN (c1, c2, ...)",
         where c{i} are constants. Our goal is to produce a SEL_TREE that
@@ -216,8 +214,8 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
 
       const uint NOT_IN_IGNORE_THRESHOLD = 1000;
       // If we have t.key NOT IN (null, null, ...) or the list is too long
-      if (op->m_const_array->m_used_size == 0 ||
-          op->m_const_array->m_used_size > NOT_IN_IGNORE_THRESHOLD)
+      if (op->array->used_count == 0 ||
+          op->array->used_count > NOT_IN_IGNORE_THRESHOLD)
         return nullptr;
 
       /*
@@ -227,40 +225,39 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
         We create the Item on thd->mem_root which points to
         per-statement mem_root.
       */
-      Item_basic_constant *value_item =
-          op->m_const_array->create_item(thd->mem_root);
-      if (value_item == nullptr) return nullptr;
+      Item_basic_constant *value_item = op->array->create_item(thd->mem_root);
+
+      if (!value_item) return nullptr;
 
       /* Get a SEL_TREE for "(-inf|NULL) < X < c_0" interval.  */
       uint i = 0;
       SEL_TREE *tree = nullptr;
       do {
-        op->m_const_array->value_to_item(i, value_item);
+        op->array->value_to_item(i, value_item);
         tree = get_mm_parts(thd, param, prev_tables, read_tables, op, field,
                             Item_func::LT_FUNC, value_item);
         if (!tree) break;
         i++;
-      } while (i < op->m_const_array->m_used_size &&
-               tree->type == SEL_TREE::IMPOSSIBLE);
+      } while (i < op->array->used_count && tree->type == SEL_TREE::IMPOSSIBLE);
 
       if (!tree || tree->type == SEL_TREE::IMPOSSIBLE)
         /* We get here in cases like "t.unsigned NOT IN (-1,-2,-3) */
         return nullptr;
       SEL_TREE *tree2 = nullptr;
       Item_basic_constant *previous_range_value =
-          op->m_const_array->create_item(thd->mem_root);
-      for (; i < op->m_const_array->m_used_size; i++) {
+          op->array->create_item(thd->mem_root);
+      for (; i < op->array->used_count; i++) {
         // Check if the value stored in the field for the previous range
         // is greater, lesser or equal to the actual value specified in the
         // query. Used further down to set the flags for the current range
         // correctly (as the max value for the previous range will become
         // the min value for the current range).
-        op->m_const_array->value_to_item(i - 1, previous_range_value);
+        op->array->value_to_item(i - 1, previous_range_value);
         int cmp_value =
             stored_field_cmp_to_item(thd, field, previous_range_value);
-        if (op->m_const_array->compare_elems(i, i - 1)) {
+        if (op->array->compare_elems(i, i - 1)) {
           /* Get a SEL_TREE for "-inf < X < c_i" interval */
-          op->m_const_array->value_to_item(i, value_item);
+          op->array->value_to_item(i, value_item);
           tree2 = get_mm_parts(thd, param, prev_tables, read_tables, op, field,
                                Item_func::LT_FUNC, value_item);
           if (!tree2) {
@@ -334,7 +331,7 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
       if (tree && tree->type != SEL_TREE::IMPOSSIBLE) {
         /*
           Get the SEL_TREE for the last "c_last < X < +inf" interval
-          (value_item contains c_last already)
+          (value_item cotains c_last already)
         */
         tree2 = get_mm_parts(thd, param, prev_tables, read_tables, op, field,
                              Item_func::GT_FUNC, value_item);
@@ -424,7 +421,7 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
         */
         if (and_tree == nullptr) return nullptr;
       }
-      or_tree = tree_or(param, remove_jump_scans, or_tree, and_tree);
+      or_tree = tree_or(param, remove_jump_scans, and_tree, or_tree);
     }
     return or_tree;
   }
@@ -706,10 +703,10 @@ static SEL_TREE *get_func_mm_tree(THD *thd, RANGE_OPT_PARAM *param,
     a SEL_TREE for t1.a > 10 will be built for quick select from t1.
 
     A BETWEEN predicate of the form (fi [NOT] BETWEEN c1 AND c2) is treated
-    in a similar way: we build a conjunction of trees for the results
+    in a similar way: we build a conjuction of trees for the results
     of all substitutions of fi for equal fj.
     Yet a predicate of the form (c BETWEEN f1i AND f2i) is processed
-    differently. It is considered as a conjunction of two SARGable
+    differently. It is considered as a conjuction of two SARGable
     predicates (f1i <= c) and (f2i <=c) and the function get_full_func_mm_tree
     is called for each of them separately producing trees for
        AND j (f1j <=c ) and AND j (f2j <= c)
@@ -825,53 +822,53 @@ static SEL_TREE *get_full_func_mm_tree(THD *thd, RANGE_OPT_PARAM *param,
   after row retrieval.
 
   @see SEL_TREE::keys and SEL_TREE::merges for details of how single
-  and multi-index range access alternatives are stored.
+  and multi-index range access alternatives are stored.j
 
   remove_jump_scans: Aggressively remove "scans" that do not have
   conditions on first keyparts. Such scans are usable when doing partition
   pruning but not regular range optimization.
-
-
-  A return value of nullptr from get_mm_tree() means that this condition
-  could not be represented by a range. Normally, this means that the best
-  thing to do is to keep that condition entirely out of the range optimization,
-  since ANDing it with other conditions (in tree_and()) would make the entire
-  tree inexact and no predicates subsumable (see SEL_TREE::inexact). However,
-  the old join optimizer does not care, and always just gives in the entire
-  condition (with different parts ANDed together) in one go, since it never
-  subsumes anything anyway.
- */
+*/
 SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
                       table_map read_tables, table_map current_table,
                       bool remove_jump_scans, Item *cond) {
+  SEL_TREE *tree = nullptr;
   SEL_TREE *ftree = nullptr;
   bool inv = false;
+  Item *value = nullptr;
   DBUG_TRACE;
 
   if (param->has_errors()) return nullptr;
 
   if (cond->type() == Item::COND_ITEM) {
-    Item_func::Functype functype = down_cast<Item_cond *>(cond)->functype();
+    List_iterator<Item> li(*((Item_cond *)cond)->argument_list());
 
-    SEL_TREE *tree = nullptr;
-    bool first = true;
-    for (Item &item : *down_cast<Item_cond *>(cond)->argument_list()) {
-      SEL_TREE *new_tree = get_mm_tree(thd, param, prev_tables, read_tables,
-                                       current_table, remove_jump_scans, &item);
-      if (param->has_errors()) return nullptr;
-      if (first) {
-        tree = new_tree;
-        first = false;
-        continue;
-      }
-      if (functype == Item_func::COND_AND_FUNC) {
+    if (((Item_cond *)cond)->functype() == Item_func::COND_AND_FUNC) {
+      tree = nullptr;
+      Item *item;
+      while ((item = li++)) {
+        SEL_TREE *new_tree =
+            get_mm_tree(thd, param, prev_tables, read_tables, current_table,
+                        remove_jump_scans, item);
+        if (param->has_errors()) return nullptr;
         tree = tree_and(param, tree, new_tree);
         dbug_print_tree("after_and", tree, param);
         if (tree && tree->type == SEL_TREE::IMPOSSIBLE) break;
-      } else {  // OR.
-        tree = tree_or(param, remove_jump_scans, tree, new_tree);
-        dbug_print_tree("after_or", tree, param);
-        if (tree == nullptr || tree->type == SEL_TREE::ALWAYS) break;
+      }
+    } else {  // Item OR
+      tree = get_mm_tree(thd, param, prev_tables, read_tables, current_table,
+                         remove_jump_scans, li++);
+      if (param->has_errors()) return nullptr;
+      if (tree) {
+        Item *item;
+        while ((item = li++)) {
+          SEL_TREE *new_tree =
+              get_mm_tree(thd, param, prev_tables, read_tables, current_table,
+                          remove_jump_scans, item);
+          if (new_tree == nullptr || param->has_errors()) return nullptr;
+          tree = tree_or(param, remove_jump_scans, tree, new_tree);
+          dbug_print_tree("after_or", tree, param);
+          if (tree == nullptr || tree->type == SEL_TREE::ALWAYS) break;
+        }
       }
     }
     dbug_print_tree("tree_returned", tree, param);
@@ -880,7 +877,7 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
   if (cond->const_item() && !cond->is_expensive()) {
     const SEL_TREE::Type type =
         cond->val_int() ? SEL_TREE::ALWAYS : SEL_TREE::IMPOSSIBLE;
-    SEL_TREE *tree = new (param->temp_mem_root)
+    tree = new (param->temp_mem_root)
         SEL_TREE(type, param->temp_mem_root, param->keys);
 
     if (param->has_errors()) return nullptr;
@@ -888,11 +885,15 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
     return tree;
   }
 
-  // This used to be a guard against predicates like “WHERE x;”. But these are
-  // now always rewritten to “x <> 0”, so it does not trigger there.
-  // However, it is still relevant for subselects.
-  if (cond->type() != Item::FUNC_ITEM) {
-    return nullptr;
+  table_map ref_tables = 0;
+  table_map param_comp = ~(prev_tables | read_tables | current_table);
+  if (cond->type() != Item::FUNC_ITEM) {  // Should be a field
+    ref_tables = cond->used_tables();
+    if ((ref_tables & current_table) ||
+        (ref_tables & ~(prev_tables | read_tables)))
+      return nullptr;
+    return new (param->temp_mem_root)
+        SEL_TREE(SEL_TREE::MAYBE, param->temp_mem_root, param->keys);
   }
 
   Item_func *cond_func = (Item_func *)cond;
@@ -925,7 +926,6 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
         Concerning the code below see the NOTES section in
         the comments for the function get_full_func_mm_tree()
       */
-      SEL_TREE *tree = nullptr;
       for (uint i = 1; i < cond_func->arg_count; i++) {
         Item *const arg = cond_func->arguments()[i];
 
@@ -968,17 +968,14 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
     }  // end case Item_func::IN_FUNC
 
     case Item_func::MULT_EQUAL_FUNC: {
-      Item_equal *item_equal = down_cast<Item_equal *>(cond);
-      Item *value = item_equal->const_arg();
-      if (value == nullptr) return nullptr;
-      table_map ref_tables = value->used_tables();
+      Item_equal *item_equal = (Item_equal *)cond;
+      if (!(value = item_equal->get_const())) return nullptr;
+      ref_tables = value->used_tables();
       for (Item_field &field_item : item_equal->get_fields()) {
         Field *field = field_item.field;
-        table_map param_comp = ~(prev_tables | read_tables | current_table);
         if (!((ref_tables | field_item.table_ref->map()) & param_comp)) {
-          SEL_TREE *tree =
-              get_mm_parts(thd, param, prev_tables, read_tables, item_equal,
-                           field, Item_func::EQ_FUNC, value);
+          tree = get_mm_parts(thd, param, prev_tables, read_tables, item_equal,
+                              field, Item_func::EQ_FUNC, value);
           ftree = !ftree ? tree : tree_and(param, ftree, tree);
         }
       }
@@ -994,8 +991,7 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
       if (!arg_left->is_outer_reference() &&
           arg_left->real_item()->type() == Item::FIELD_ITEM) {
         Item_field *field_item = down_cast<Item_field *>(arg_left->real_item());
-        Item *value =
-            cond_func->arg_count > 1 ? cond_func->arguments()[1] : nullptr;
+        value = cond_func->arg_count > 1 ? cond_func->arguments()[1] : nullptr;
         ftree = get_full_func_mm_tree(thd, param, prev_tables, read_tables,
                                       current_table, remove_jump_scans,
                                       field_item, cond_func, value, inv);
@@ -1023,7 +1019,7 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
           arg_right->real_item()->type() == Item::FIELD_ITEM) {
         Item_field *field_item =
             down_cast<Item_field *>(arg_right->real_item());
-        Item *value = arg_left;
+        value = arg_left;
         ftree = get_full_func_mm_tree(thd, param, prev_tables, read_tables,
                                       current_table, remove_jump_scans,
                                       field_item, cond_func, value, inv);
@@ -1101,7 +1097,7 @@ static SEL_TREE *get_mm_parts(THD *thd, RANGE_OPT_PARAM *param,
         return nullptr;  // OOM
       if (!value || !(value->used_tables() & ~read_tables)) {
         sel_root = get_mm_leaf(thd, param, cond_func, key_part->field, key_part,
-                               type, value, &tree->inexact);
+                               type, value);
         if (!sel_root) continue;
         if (sel_root->type == SEL_ROOT::Type::IMPOSSIBLE) {
           tree->type = SEL_TREE::IMPOSSIBLE;
@@ -1149,8 +1145,7 @@ static SEL_TREE *get_mm_parts(THD *thd, RANGE_OPT_PARAM *param,
   @param [out] impossible_cond_cause Set to a descriptive string if an
                                     impossible condition is found.
   @param memroot                    Memroot for creation of new SEL_ARG.
-  @param query_block                Query block the field is part of
-  @param inexact                    Set to true on lossy conversion
+  @param query_block                 Query block the field is part of
 
   @retval false  if saving went fine and it makes sense to continue
                  optimizing for this predicate.
@@ -1159,10 +1154,12 @@ static SEL_TREE *get_mm_parts(THD *thd, RANGE_OPT_PARAM *param,
                  pointer if always true, SEL_ARG with type IMPOSSIBLE
                  if always false.
 */
-static bool save_value_and_handle_conversion(
-    SEL_ROOT **tree, Item *value, const Item_func::Functype comp_op,
-    Field *field, const char **impossible_cond_cause, MEM_ROOT *memroot,
-    Query_block *query_block, bool *inexact) {
+static bool save_value_and_handle_conversion(SEL_ROOT **tree, Item *value,
+                                             const Item_func::Functype comp_op,
+                                             Field *field,
+                                             const char **impossible_cond_cause,
+                                             MEM_ROOT *memroot,
+                                             Query_block *query_block) {
   // A SEL_ARG should not have been created for this predicate yet.
   assert(*tree == nullptr);
 
@@ -1212,11 +1209,9 @@ static bool save_value_and_handle_conversion(
   thd->variables.sql_mode = orig_sql_mode;
 
   switch (err) {
+    case TYPE_OK:
     case TYPE_NOTE_TRUNCATED:
     case TYPE_WARN_TRUNCATED:
-      *inexact = true;
-      [[fallthrough]];
-    case TYPE_OK:
       return false;
     case TYPE_WARN_INVALID_STRING:
       /*
@@ -1232,7 +1227,6 @@ static bool save_value_and_handle_conversion(
         predicate is always true and let evaluate_join_record() decide
         the outcome.
       */
-      *inexact = true;
       return true;
     case TYPE_ERR_BAD_VALUE:
       /*
@@ -1245,7 +1239,6 @@ static bool save_value_and_handle_conversion(
         range predicate is always true instead of always false and let
         evaluate_join_record() decide the outcome.
       */
-      *inexact = true;
       return true;
     case TYPE_ERR_NULL_CONSTRAINT_VIOLATION:
       // Checking NULL value on a field that cannot contain NULL.
@@ -1368,8 +1361,7 @@ impossible_cond:
 
 static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
                              Field *field, KEY_PART *key_part,
-                             Item_func::Functype type, Item *value,
-                             bool *inexact) {
+                             Item_func::Functype type, Item *value) {
   const size_t null_bytes = field->is_nullable() ? 1 : 0;
   bool optimize_range;
   SEL_ROOT *tree = nullptr;
@@ -1513,12 +1505,6 @@ static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
     if (like_error)  // Can't optimize with LIKE
       goto end;
 
-    // LIKE is tricky to get 100% exact, especially with Unicode collations
-    // (which can have contractions etc.), and will frequently be a bit too
-    // broad. To be safe, we currently always set that LIKE range scans are
-    // inexact and must be rechecked by means of a filter afterwards.
-    *inexact = true;
-
     if (offset != null_bytes)  // BLOB or VARCHAR
     {
       int2store(min_str + null_bytes, static_cast<uint16>(min_length));
@@ -1549,14 +1535,11 @@ static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
                                                : Field::GEOM_GEOMETRY;
     if (field->type() == MYSQL_TYPE_GEOMETRY) {
       down_cast<Field_geom *>(field)->geom_type = Field::GEOM_GEOMETRY;
-
-      // R-tree queries are based on bounds, and must be rechecked.
-      *inexact = true;
     }
 
     bool always_true_or_false = save_value_and_handle_conversion(
         &tree, value, type, field, &impossible_cond_cause, alloc,
-        param->query_block, inexact);
+        param->query_block);
 
     if (field->type() == MYSQL_TYPE_GEOMETRY &&
         save_geom_type != Field::GEOM_GEOMETRY) {
@@ -1593,7 +1576,7 @@ static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
     (b) (unsigned_int [> | >=] negative_constant) == true
     In case (a) the condition is false for all values, and in case (b) it
     is true for all values, so we can avoid unnecessary retrieval and condition
-    testing, and we also get correct comparison of unsigned integers with
+    testing, and we also get correct comparison of unsinged integers with
     negative integers (which otherwise fails because at query execution time
     negative integers are cast to unsigned if compared with unsigned).
   */

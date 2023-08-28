@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -440,7 +440,7 @@ static int test_builtins() {
   li = log_bi->line_item_iter_first(it);
   assert(li != nullptr);
 
-  // break item, then detect that it is broken
+  // break item, then detect brokeness
   li->item_class = LOG_FLOAT;
   assert(log_bi->item_inconsistent(li) < 0);
 
@@ -668,9 +668,9 @@ static void banner() {
   // built-in API test: test "well-known" lookups
 #if !defined(NDEBUG)
   {
-    const int wellknown = log_bi->wellknown_by_type(LOG_ITEM_LOG_LABEL);
+    int wellknown = log_bi->wellknown_by_type(LOG_ITEM_LOG_LABEL);
     const char *label_key = log_bi->wellknown_get_name(wellknown);
-    const int wellagain =
+    int wellagain =
         log_bi->wellknown_by_name(label_key, log_bs->length(label_key));
 
     assert(wellknown == wellagain);
@@ -1091,7 +1091,7 @@ DEFINE_METHOD(log_service_error, log_service_imp::flush,
 /**
   Open a new instance.
 
-  @retval  LOG_SERVICE_SUCCESS        success, returned handle is valid
+  @retval  LOG_SERVICE_SUCCESS        success, returned hande is valid
   @retval  otherwise                  a new instance could not be created
 */
 DEFINE_METHOD(log_service_error, log_service_imp::open,

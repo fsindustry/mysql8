@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include "m_string.h"
+#include "m_ctype.h"
 #include "my_bit.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
@@ -44,9 +44,6 @@
 #include "my_io.h"
 #include "my_macros.h"
 #include "my_systime.h"  // get_date
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
 #include "print_version.h"
 #include "storage/myisam/fulltext.h"
 #include "storage/myisam/myisam_sys.h"
@@ -230,8 +227,8 @@ static struct my_option my_long_options[] = {
      "Correct checksum information for table.", nullptr, nullptr, nullptr,
      GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit.", nullptr,
-     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"debug", '#', "This is a non-debug version. Catch this and exit.", 0, 0, 0,
+     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
     {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.", nullptr,
      nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
@@ -289,6 +286,9 @@ static struct my_option my_long_options[] = {
     {"recover", 'r',
      "Can fix almost anything except unique keys that aren't unique.", nullptr,
      nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"parallel-recover", 'p',
+     "Same as '-r' but creates all the keys in parallel.", nullptr, nullptr,
+     nullptr, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"safe-recover", 'o',
      "Uses old recovery method; Slower than '-r' but can handle a couple of "
      "cases where '-r' reports that it can't fix the data file.",
@@ -437,7 +437,7 @@ static void usage(void) {
   puts(
       "Check options (check is the default action for myisamchk):\n\
   -c, --check	      Check table for errors.\n\
-  -e, --extend-check  Check the table VERY thoroughly. Only use this in\n\
+  -e, --extend-check  Check the table VERY throughly.  Only use this in\n\
                       extreme cases as myisamchk should normally be able to\n\
                       find out if the table is ok even without this switch.\n\
   -F, --fast	      Check only tables that haven't been closed properly.\n\
@@ -471,6 +471,9 @@ static void usage(void) {
                       unique.\n\
   -n, --sort-recover  Forces recovering with sorting even if the temporary\n\
 		      file would be very big.\n\
+  -p, --parallel-recover\n\
+                      Uses the same technique as '-r' and '-n', but creates\n\
+                      all the keys in parallel, in different threads.\n\
   -o, --safe-recover  Uses old recovery method; Slower than '-r' but can\n\
 		      handle a couple of cases where '-r' reports that it\n\
 		      can't fix the data file.\n\
@@ -481,7 +484,7 @@ static void usage(void) {
   -q, --quick         Faster repair by not modifying the data file.\n\
                       One can give a second '-q' to force myisamchk to\n\
 		      modify the original datafile in case of duplicate keys.\n\
-		      NOTE: Tables where the data file is corrupted can't be\n\
+		      NOTE: Tables where the data file is currupted can't be\n\
 		      fixed with this option.\n\
   -u, --unpack        Unpack file packed with myisampack.\n\
 ");
@@ -623,6 +626,11 @@ static bool get_one_option(int optid,
     case 'r': /* Repair table */
       check_param.testflag &= ~T_REP_ANY;
       if (argument != disabled_my_option) check_param.testflag |= T_REP_BY_SORT;
+      break;
+    case 'p':
+      check_param.testflag &= ~T_REP_ANY;
+      if (argument != disabled_my_option)
+        check_param.testflag |= T_REP_PARALLEL;
       break;
     case 'o':
       check_param.testflag &= ~T_REP_ANY;
@@ -871,7 +879,7 @@ static int myisamchk(MI_CHECK *param, char *filename) {
     return 1;
   }
   share = info->s;
-  share->options &= ~HA_OPTION_READ_ONLY_DATA; /* We are modifying it */
+  share->options &= ~HA_OPTION_READ_ONLY_DATA; /* We are modifing it */
   share->tot_locks -= share->r_locks;
   share->r_locks = 0;
 
@@ -995,7 +1003,7 @@ static int myisamchk(MI_CHECK *param, char *filename) {
         }
       }
       if (!error) {
-        if ((param->testflag & T_REP_BY_SORT) &&
+        if ((param->testflag & (T_REP_BY_SORT | T_REP_PARALLEL)) &&
             (mi_is_any_key_active(share->state.key_map) ||
              (rep_quick && !param->keys_in_use && !recreate)) &&
             mi_test_if_sort_rep(info, info->state->records,
@@ -1004,7 +1012,10 @@ static int myisamchk(MI_CHECK *param, char *filename) {
             The new file might not be created with the right stats depending
             on how myisamchk is run, so we must copy file stats from old to new.
           */
-          error = mi_repair_by_sort(param, info, filename, rep_quick, false);
+          if (param->testflag & T_REP_BY_SORT)
+            error = mi_repair_by_sort(param, info, filename, rep_quick, false);
+          else
+            error = mi_repair_parallel(param, info, filename, rep_quick, false);
           state_updated = true;
         } else if (param->testflag & T_REP_ANY)
           error = mi_repair(param, info, filename, rep_quick, false);
@@ -1188,8 +1199,8 @@ static void descript(MI_CHECK *param, MI_INFO *info, char *name) {
     puts("Packed");
   else
     puts("Fixed length");
-  printf("Collation:           %s (%d)\n",
-         get_collation_name(share->state.header.language),
+  printf("Character set:       %s (%d)\n",
+         get_charset_name(share->state.header.language),
          share->state.header.language);
 
   if (param->testflag & T_VERBOSE) {
@@ -1467,7 +1478,7 @@ static int mi_sort_records(MI_CHECK *param, MI_INFO *info, char *name,
     if (filecopy(param, new_file, info->dfile, 0L, share->pack.header_length,
                  "datafile-header"))
       goto err;
-  info->rec_cache.file = new_file; /* Use this file for caching */
+  info->rec_cache.file = new_file; /* Use this file for cacheing*/
 
   for (key = 0; key < share->base.keys; key++)
     share->keyinfo[key].flag |= HA_SORT_ALLOWS_SAME;

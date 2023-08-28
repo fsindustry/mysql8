@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,7 @@
 #include <stddef.h>
 #include <algorithm>
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "mysql_com.h"
 #include "sql/current_thd.h"
 #include "sql/field.h"
@@ -106,7 +106,7 @@ bool Protocol_callback::store_long(longlong from, uint32) {
 
 bool Protocol_callback::store_longlong(longlong from, bool is_unsigned,
                                        uint32) {
-  if (callbacks.get_longlong)
+  if (callbacks.get_integer)
     return callbacks.get_longlong(callbacks_ctx, from, is_unsigned);
   return false;
 }
@@ -151,7 +151,7 @@ bool Protocol_callback::store_datetime(const MYSQL_TIME &time, uint precision) {
 }
 
 bool Protocol_callback::store_date(const MYSQL_TIME &time) {
-  if (callbacks.get_date) return callbacks.get_date(callbacks_ctx, &time);
+  if (callbacks.get_datetime) return callbacks.get_date(callbacks_ctx, &time);
   return false;
 }
 
@@ -372,8 +372,8 @@ bool Protocol_callback::end_result_metadata() {
 
   if (callbacks.end_result_metadata) {
     THD *t = current_thd;
-    const uint status = t->server_status;
-    const uint warn_count = t->get_stmt_da()->current_statement_cond_count();
+    uint status = t->server_status;
+    uint warn_count = t->get_stmt_da()->current_statement_cond_count();
 
     return callbacks.end_result_metadata(callbacks_ctx, status, warn_count);
   }

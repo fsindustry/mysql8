@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <string.h>
 
+#include "m_string.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -34,7 +35,6 @@
 #include "my_io.h"
 #include "my_sys.h"
 #include "mysql/psi/mysql_file.h"
-#include "mysql/strings/my_strtoll10.h"
 #include "mysqld_error.h"  // ER_*
 #include "sql/mysqld.h"    // key_file_fileparser
 #include "sql/sql_list.h"  // List_iterator_fast
@@ -176,7 +176,7 @@ static bool read_escaped_string(const char *ptr, const char *eol,
   char *write_pos = str->str;
 
   for (; ptr < eol; ptr++, write_pos++) {
-    const char c = *ptr;
+    char c = *ptr;
     if (c == '\\') {
       ptr++;
       if (ptr >= eol) return true;
@@ -278,7 +278,7 @@ static const char *parse_quoted_escaped_string(const char *ptr, const char *end,
 
   @param[in,out] ptr          pointer to parameter
   @param[in] end              end of the configuration
-  @param[in] line             pointer to the line beginning
+  @param[in] line             pointer to the line begining
   @param[in] base             base address for parameter writing (structure
     like TABLE)
   @param[in] parameter        description
@@ -304,7 +304,7 @@ bool get_file_options_ulllist(const char *&ptr, const char *end,
       case '\n':
         goto end_of_nlist;
       case ' ':
-        // we can't go over buffer bounds, because we have \0 at the end
+        // we cant go over buffer bounds, because we have \0 at the end
         ptr++;
         break;
       default:
@@ -448,7 +448,7 @@ bool File_parser::parse(uchar *base, MEM_ROOT *mem_root,
                 case '\n':
                   goto end_of_list;
                 case ' ':
-                  // we can't go over buffer bounds, because we have \0 at the
+                  // we cant go over buffer bounds, because we have \0 at the
                   // end
                   ptr++;
                   break;

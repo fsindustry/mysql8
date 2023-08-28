@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,16 +25,14 @@
 #include <stdio.h>
 #include <iostream>
 #include <memory>
-#include <string_view>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "sql/dd/cache/multi_map_base.h"
@@ -592,8 +590,6 @@ class MDL_checker {
   }
 };
 
-constexpr const auto innodb_engine_name =
-    std::string_view(STRING_WITH_LEN("InnoDB"));
 using SPI_missing_status = std::bitset<2>;
 enum class SPI_missing_type { TABLES, PARTITIONS };
 using SPI_order = std::vector<dd::Object_id>;
@@ -1558,21 +1554,14 @@ bool Dictionary_client::acquire_for_modification(
 
 // Retrieve a table object by its se private id.
 bool Dictionary_client::acquire_uncached_table_by_se_private_id(
-    const String_type &engine, Object_id se_private_id, Table **table,
-    bool skip_spi_cache) {
-  skip_spi_cache = (skip_spi_cache || (engine != innodb_engine_name));
+    const String_type &engine, Object_id se_private_id, Table **table) {
   assert(table);
   *table = nullptr;
-  bool no_table = false;
+  bool no_table =
+      is_cached(m_no_table_spids, se_private_id, SPI_missing_type::TABLES);
 
-  if (!skip_spi_cache) {
-    assert(engine == innodb_engine_name);
-    no_table =
-        is_cached(m_no_table_spids, se_private_id, SPI_missing_type::TABLES);
-
-    if (no_table) {
-      return false;
-    }
+  if (no_table) {
+    return false;
   }
 
   // Create se private key.
@@ -1590,10 +1579,7 @@ bool Dictionary_client::acquire_uncached_table_by_se_private_id(
 
   // If object was not found.
   if (stored_object == nullptr) {
-    if (!skip_spi_cache) {
-      assert(engine == innodb_engine_name);
-      m_no_table_spids->insert(se_private_id, SPI_missing_type::TABLES);
-    }
+    m_no_table_spids->insert(se_private_id, SPI_missing_type::TABLES);
     return false;
   }
   assert(no_table == false);

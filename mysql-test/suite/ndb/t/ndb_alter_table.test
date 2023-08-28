@@ -440,12 +440,16 @@ create table tbasic(
   name varchar(20), age int
 ) engine=ndb charset=latin1;
 
-SELECT read_backup, fully_replicated from ndbinfo.dictionary_tables
-  WHERE table_name = 'tbasic';
+# In the output of ndb_desc we should see:
+# Table options:
+let $ndb_desc_opts= -b -i -d test tbasic;
+source suite/ndb/include/ndb_desc_print.inc;
 
 alter table tbasic algorithm=copy, comment="NDB_TABLE=FULLY_REPLICATEd=1";
 
-SELECT read_backup, fully_replicated from ndbinfo.dictionary_tables
-  WHERE table_name = 'tbasic';
+# In the output of ndb_desc we should see:
+# Table options: readbackup, fullyreplicated
+let $ndb_desc_opts= -b -i -d test tbasic;
+source suite/ndb/include/ndb_desc_print.inc;
 
 drop table tbasic;

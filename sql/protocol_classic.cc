@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -288,14 +288,14 @@
    flag set to start the processing of the next resultset.
 
    The client has to announce that it wants multi-resultsets by either setting
-   the ::CLIENT_MULTI_RESULTS or ::CLIENT_PS_MULTI_RESULTS capability flags.
+   the ::CLIENT_MULTI_RESULTS or ::CLIENT_PS_MULTI_RESULTS capabilitiy flags.
 
    @subsection sect_protocol_command_phase_sp_multi_resultset_out_params OUT Parameter Set
 
    Starting with MySQL 5.5.3, prepared statements can bind OUT parameters of
    stored procedures. They are returned as an extra resultset in the
    multi-resultset response. The client announces it can handle OUT parameters
-   by setting the ::CLIENT_PS_MULTI_RESULTS capability.
+   by settting the ::CLIENT_PS_MULTI_RESULTS capability.
 
    To distinguish a normal resultset from an OUT parameter set, the
    @ref page_protocol_basic_eof_packet or (if ::CLIENT_DEPRECATE_EOF capability
@@ -405,7 +405,7 @@
   Number |  Hex  | Character Set Name
   -------|-------|-------------------
        8 |  0x08 | @ref my_charset_latin1 "latin1_swedish_ci"
-      33 |  0x21 | @ref my_charset_utf8mb3_general_ci "utf8mb3_general_ci"
+      33 |  0x21 | @ref my_charset_utf8_general_ci "utf8_general_ci"
       63 |  0x3f | @ref my_charset_bin "binary"
 
 
@@ -435,18 +435,17 @@
 
 #include "decimal.h"
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_byteorder.h"
+#include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "my_time.h"
 #include "mysql/com_data.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_socket.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"
 #include "sql/field.h"
@@ -462,8 +461,6 @@
 #include "sql/sql_prepare.h"  // Prepared_statement
 #include "sql/system_variables.h"
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strmake.h"
 #include "template_utils.h"
 
 using std::max;
@@ -486,7 +483,7 @@ static ulong get_ps_param_len(enum enum_field_types, uchar *, ulong, ulong *,
   @return true if memory could not be allocated, false on success
 */
 static bool ensure_packet_capacity(size_t length, String *packet) {
-  const size_t packet_length = packet->length();
+  size_t packet_length = packet->length();
   /*
      The +9 comes from that strings of length longer than 16M require
      9 bytes to be stored (see net_store_length).
@@ -506,7 +503,7 @@ static bool ensure_packet_capacity(size_t length, String *packet) {
 static inline bool net_store_data(const uchar *from, size_t length,
                                   String *packet) {
   if (ensure_packet_capacity(length, packet)) return true;
-  const size_t packet_length = packet->length();
+  size_t packet_length = packet->length();
   uchar *to = net_store_length((uchar *)packet->ptr() + packet_length, length);
   if (length > 0) memcpy(to, from, length);
   packet->length((uint)(to + length - (uchar *)packet->ptr()));
@@ -553,8 +550,8 @@ bool Protocol_classic::net_store_data_with_conversion(
     const uchar *from, size_t length, const CHARSET_INFO *from_cs,
     const CHARSET_INFO *to_cs) {
   uint dummy_errors;
-  /* Calculate maximum possible result length */
-  const size_t conv_length = to_cs->mbmaxlen * length / from_cs->mbminlen;
+  /* Calculate maxumum possible result length */
+  size_t conv_length = to_cs->mbmaxlen * length / from_cs->mbminlen;
   if (conv_length > 250) {
     /*
       For strings with conv_length greater than 250 bytes
@@ -573,8 +570,8 @@ bool Protocol_classic::net_store_data_with_conversion(
                            convert.length(), packet));
   }
 
-  const size_t packet_length = packet->length();
-  const size_t new_length = packet_length + conv_length + 1;
+  size_t packet_length = packet->length();
+  size_t new_length = packet_length + conv_length + 1;
 
   if (new_length > packet->alloced_length() && packet->mem_realloc(new_length))
     return true;
@@ -658,7 +655,7 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
 
   DBUG_PRINT("enter", ("sql_errno: %d  err: %s", sql_errno, err));
 
-  const bool error = net_send_error_packet(
+  bool error = net_send_error_packet(
       net, sql_errno, err, mysql_errno_to_sqlstate(sql_errno), false, 0,
       global_system_variables.character_set_results);
 
@@ -763,6 +760,9 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
 
   <table>
   <tr><th>Type</th><th>Name</th><th>Description</th></tr>
+  <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
+      <td>mandatory flag</td>
+      <td>Defines if this tracker should be mandatory or not</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>name</td>
       <td>name of the changed system variable</td></tr>
@@ -789,6 +789,9 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
 
   <table>
   <tr><th>Type</th><th>Name</th><th>Description</th></tr>
+    <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
+      <td>mandatory flag</td>
+      <td>Defines if this tracker should be mandatory or not</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>name</td>
       <td>name of the changed schema</td></tr>
@@ -816,6 +819,9 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
 
   <table>
   <tr><th>Type</th><th>Name</th><th>Description</th></tr>
+    <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
+      <td>mandatory flag</td>
+      <td>Defines if this tracker should be mandatory or not</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
   <td>is_tracked</td>
   <td>`0x31` ("1") if state tracking got enabled.</td></tr>
@@ -917,7 +923,7 @@ static bool net_send_ok(THD *thd, uint server_status, uint statement_warn_count,
     pos += 2;
 
     /* warning count: we can only return up to 65535 warnings in two bytes. */
-    const uint tmp = min(statement_warn_count, 65535U);
+    uint tmp = min(statement_warn_count, 65535U);
     int2store(pos, tmp);
     pos += 2;
   } else if (net->return_status)  // For 4.0 protocol
@@ -1093,7 +1099,7 @@ static bool write_eof_packet(THD *thd, NET *net, uint server_status,
       Don't send warn count during SP execution, as the warn_list
       is cleared between substatements, and mysqltest gets confused
     */
-    const uint tmp = min(statement_warn_count, 65535U);
+    uint tmp = min(statement_warn_count, 65535U);
     buff[0] = 254;
     int2store(buff + 1, tmp);
     /*
@@ -1242,7 +1248,7 @@ static bool net_send_error_packet(NET *net, uint sql_errno, const char *err,
   We keep a separate version for that range because it's widely used in
   libmysql.
 
-  uint is used as argument type because of MySQL type conventions:
+  uint is used as agrument type because of MySQL type conventions:
     - uint for 0..65536
     - ulong for 0..4294967296
     - ulonglong for bigger numbers.
@@ -1350,12 +1356,8 @@ bool Protocol_classic::send_error(uint sql_errno, const char *err_msg,
   return retval;
 }
 
-void Protocol_classic::set_read_timeout(ulong read_timeout,
-                                        bool on_full_packet) {
+void Protocol_classic::set_read_timeout(ulong read_timeout) {
   my_net_set_read_timeout(&m_thd->net, read_timeout);
-  NET_SERVER *ext = static_cast<NET_SERVER *>(m_thd->net.extension);
-  assert(ext);
-  ext->timeout_on_full_packet = on_full_packet;
 }
 
 void Protocol_classic::set_write_timeout(ulong write_timeout) {
@@ -2155,8 +2157,8 @@ int Protocol_classic::read_packet() {
     - the type as in @ref enum_field_types
     - a flag byte which has the highest bit set if the type is unsigned [80]
 
-  The `num_params` used for this packet refers to `num_params` of the
-  @ref sect_protocol_com_stmt_prepare_response_ok of the corresponding prepared
+  The `num_params` used for this packet reffers to `num_params` of the
+  @ref sect_protocol_com_stmt_prepare_response_ok of the corresponsing prepared
   statement.
 
   The server will use the first num_params (from prepare) parameter values to
@@ -2719,7 +2721,7 @@ static bool parse_query_bind_params(
 
     /* Then comes the types byte. If set, new types are provided */
     if (!packet_left) return true;
-    const bool has_new_types = static_cast<bool>(*read_pos++);
+    bool has_new_types = static_cast<bool>(*read_pos++);
     if (!has_new_types && !stmt_data) return true;
 
     --packet_left;
@@ -2729,7 +2731,7 @@ static bool parse_query_bind_params(
       for (uint i = 0; i < param_count; ++i) {
         if (packet_left < 2) return true;
 
-        const ushort type_code = sint2korr(read_pos);
+        ushort type_code = sint2korr(read_pos);
         read_pos += 2;
         packet_left -= 2;
 
@@ -2778,16 +2780,15 @@ static bool parse_query_bind_params(
       assert(has_new_types || stmt_data);
 
       /* check if the packet contains more parameters than expected */
-      if (!has_new_types && i >= stmt_data->m_param_count) return true;
+      if (!has_new_types && i >= stmt_data->param_count) return true;
 
-      const enum enum_field_types type =
+      enum enum_field_types type =
           has_new_types ? params[i].type
-                        : stmt_data->m_param_array[i]->data_type_source();
+                        : stmt_data->param_array[i]->data_type_actual();
       if (type == MYSQL_TYPE_BOOL)
         return true;  // unsupported in this version of the Server
-      if (stmt_data && i < stmt_data->m_param_count &&
-          stmt_data->m_param_array != nullptr &&
-          stmt_data->m_param_array[i]->param_state() ==
+      if (stmt_data && i < stmt_data->param_count && stmt_data->param_array &&
+          stmt_data->param_array[i]->param_state() ==
               Item_param::LONG_DATA_VALUE) {
         DBUG_PRINT("info", ("long data"));
         if (!((type >= MYSQL_TYPE_TINY_BLOB) && (type <= MYSQL_TYPE_STRING)))
@@ -2886,12 +2887,12 @@ bool Protocol_classic::parse_packet(union COM_DATA *data,
         query attributes or is not going to send param count for 0 params/QAs
       */
       if (!stmt ||
-          (stmt->m_param_count == 0 &&
+          (stmt->param_count < 1 &&
            (!this->has_client_capability(CLIENT_QUERY_ATTRIBUTES) ||
             !(data->com_stmt_execute.open_cursor & PARAMETER_COUNT_AVAILABLE))))
         break;
       if (parse_query_bind_params(
-              m_thd, stmt->m_param_count, &data->com_stmt_execute.parameters,
+              m_thd, stmt->param_count, &data->com_stmt_execute.parameters,
               &data->com_stmt_execute.has_new_types,
               &data->com_stmt_execute.parameter_count, stmt, &read_pos,
               &packet_left,
@@ -2956,8 +2957,7 @@ bool Protocol_classic::parse_packet(union COM_DATA *data,
       /*
         We have name + wildcard in packet, separated by endzero
       */
-      const ulong len =
-          strend((char *)input_raw_packet) - (char *)input_raw_packet;
+      ulong len = strend((char *)input_raw_packet) - (char *)input_raw_packet;
 
       if (len >= input_packet_length || len > NAME_LEN) goto malformed;
 
@@ -2992,7 +2992,7 @@ bool Protocol_classic::create_command(COM_DATA *com_data,
 int Protocol_classic::get_command(COM_DATA *com_data,
                                   enum_server_command *cmd) {
   // read packet from the network
-  if (const int rc = read_packet()) return rc;
+  if (int rc = read_packet()) return rc;
 
   /*
     'input_packet_length' contains length of data, as it was stored in packet
@@ -3215,7 +3215,7 @@ bool Protocol_classic::end_result_metadata() {
       <td>name</td>
       <td>Column name</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_int_le "int&lt;lenenc&gt;"</td>
-      <td>length of type field</td>
+      <td>lenth of type field</td>
       <td>[01]</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>type</td>
@@ -3412,12 +3412,6 @@ bool Protocol_text::store_null() {
 }
 
 int Protocol_classic::shutdown(bool) {
-#ifdef USE_PPOLL_IN_VIO
-  // Test code calls this directly, so we need to set it here as well
-  if (m_thd->net.vio && !m_thd->net.vio->thread_id.has_value()) {
-    m_thd->net.vio->thread_id = m_thd->real_id;
-  }
-#endif /* USE_PPOLL_IN_VIO */
   return m_thd->net.vio ? vio_shutdown(m_thd->net.vio) : 0;
 }
 
@@ -3527,7 +3521,7 @@ bool Protocol_text::store_decimal(const my_decimal *d, uint prec, uint dec) {
   if (pos == nullptr) return true;
 
   int string_length = DECIMAL_MAX_STR_LENGTH + 1;
-  const int error [[maybe_unused]] =
+  int error [[maybe_unused]] =
       decimal2string(d, pos + 1, &string_length, prec, dec);
 
   // decimal2string() can only fail with E_DEC_TRUNCATED or E_DEC_OVERFLOW.
@@ -3658,7 +3652,7 @@ bool Protocol_text::store_time(const MYSQL_TIME &tm, uint decimals) {
 
   @param parameters       List of PS/SP parameters (both input and output).
   @param is_sql_prepare  If it's an sql prepare then
-                         text protocol will be used.
+                         text protocol wil be used.
 
   @return Error status.
     @retval false Success.
@@ -3793,8 +3787,7 @@ void Protocol_binary::start_row() {
 
 bool Protocol_binary::store_null() {
   if (send_metadata) return Protocol_text::store_null();
-  const uint offset = (field_pos + 2) / 8 + 1,
-             bit = (1 << ((field_pos + 2) & 7));
+  uint offset = (field_pos + 2) / 8 + 1, bit = (1 << ((field_pos + 2) & 7));
   /* Room for this as it's allocated in prepare_for_send */
   char *to = packet->ptr() + offset;
   *to = (char)((uchar)*to | (uchar)bit);
@@ -4060,7 +4053,7 @@ static ulong get_param_length(uchar *packet, ulong packet_left_len,
    @param[in]  type            parameter data type
    @param[in]  packet          network buffer
    @param[in]  packet_left_len number of bytes left in packet
-   @param[out] header_len      the size of the header(bytes to be skipped)
+   @param[out] header_len      the size of the header(bytes to be skiped)
    @param[out] err             boolean to store if an error occurred
 */
 static ulong get_ps_param_len(enum enum_field_types type, uchar *packet,
@@ -4091,7 +4084,7 @@ static ulong get_ps_param_len(enum enum_field_types type, uchar *packet,
     case MYSQL_TYPE_TIME:
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP: {
-      const ulong param_length =
+      ulong param_length =
           get_param_length(packet, packet_left_len, header_len);
       /* in case of error ret is 0 and header size is 0 */
       *err = ((param_length == 0 && *header_len == 0) ||

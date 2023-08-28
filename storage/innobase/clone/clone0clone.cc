@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -306,8 +306,9 @@ Clone_Handle *Clone_Sys::get_clone_by_index(const byte *loc, uint loc_len) {
 }
 
 int Clone_Sys::attach_snapshot(Clone_Handle_Type hdl_type,
-                               Ha_clone_type clone_type, uint64_t snapshot_id,
-                               bool is_pfs_monitor, Clone_Snapshot *&snapshot) {
+                               Ha_clone_type clone_type,
+                               ib_uint64_t snapshot_id, bool is_pfs_monitor,
+                               Clone_Snapshot *&snapshot) {
   uint idx;
   uint free_idx = SNAPSHOT_ARR_SIZE;
 
@@ -484,9 +485,9 @@ bool Clone_Sys::mark_abort(bool force) {
         &m_clone_sys_mutex, is_timeout);
 
     if (is_timeout) {
+      ut_ad(false);
       ib::warn(ER_IB_CLONE_TIMEOUT) << "DDL wait for CLONE abort timed out"
                                        ", Continuing DDL.";
-      ut_d(ut_error);
     }
   }
   return (true);
@@ -572,10 +573,10 @@ int Clone_Sys::wait_for_free(THD *thd) {
   }
 
   if (is_timeout) {
+    ut_ad(false);
     my_error(ER_INTERNAL_ERROR, MYF(0),
              "Clone BEGIN timeout waiting for DDL in critical section");
-    ut_d(ut_error);
-    ut_o(return (ER_INTERNAL_ERROR));
+    return (ER_INTERNAL_ERROR);
   }
 
   return (0);
@@ -626,8 +627,8 @@ void Clone_Sys::end_ddl_state(Clone_notify::Type type, space_id_t space,
 
   if (blocked_state != snapshot->get_state()) {
     /* purecov: begin deadcode */
+    ut_ad(false);
     ib::error(ER_IB_CLONE_INTERNAL);
-    ut_d(ut_error);
     /* purecov: end */
   }
 
@@ -637,7 +638,7 @@ void Clone_Sys::end_ddl_state(Clone_notify::Type type, space_id_t space,
   mutex_enter(get_mutex());
 }
 
-uint64_t Clone_Sys::get_next_id() {
+ib_uint64_t Clone_Sys::get_next_id() {
   ut_ad(mutex_own(&m_clone_sys_mutex));
 
   return (++m_clone_id_generator);
@@ -689,7 +690,7 @@ void Clone_Handle::close_master_file() {
 }
 
 void Clone_Sys::close_donor_master_file() {
-  IB_mutex_guard sys_mutex(get_mutex(), UT_LOCATION_HERE);
+  IB_mutex_guard sys_mutex(get_mutex());
 
   Clone_Handle *clone_donor = nullptr;
   std::tie(std::ignore, clone_donor) = clone_sys->check_active_clone();
@@ -1070,8 +1071,7 @@ int Clone_Task_Manager::add_task(THD *thd, const byte *ref_loc, uint loc_len,
       return (err);
 
     } else if (is_timeout) {
-      ut_d(ut_error);
-#ifndef UNIV_DEBUG
+      ut_ad(false);
       mutex_exit(&m_state_mutex);
 
       ib::info(ER_IB_CLONE_TIMEOUT) << "Clone Add task timed out";
@@ -1080,7 +1080,6 @@ int Clone_Task_Manager::add_task(THD *thd, const byte *ref_loc, uint loc_len,
                "Clone Add task failed: "
                "Wait too long for state transition");
       return (ER_INTERNAL_ERROR);
-#endif
     }
   }
 
@@ -1163,11 +1162,11 @@ bool Clone_Task_Manager::drop_task(THD *thd, uint task_id, bool &is_master) {
       return (false);
 
     } else if (is_timeout) {
+      ut_ad(false);
       ib::info(ER_IB_CLONE_TIMEOUT) << "Clone Master drop task timed out";
 
       mutex_exit(&m_state_mutex);
-      ut_d(ut_error);
-      ut_o(return (false));
+      return (false);
     }
   }
 
@@ -1222,7 +1221,7 @@ uint32_t Clone_Task_Manager::get_next_chunk() {
   return (ret_chunk);
 }
 
-uint32_t Clone_Task_Manager::get_next_incomplete_chunk(uint32_t &block_num) {
+uint32_t Clone_Task_Manager::get_next_incomplete_chunk(uint32 &block_num) {
   block_num = 0;
 
   auto &chunks = m_chunk_info.m_incomplete_chunks;
@@ -1342,7 +1341,7 @@ void Clone_Task_Manager::add_incomplete_chunk(Clone_Task *task) {
 }
 
 /** Print completed chunk information
-@param[in]      chunk_info      chunk information */
+@param[in]	chunk_info	chunk information */
 static void print_chunk_info(Chunk_Info *chunk_info) {
   for (auto &chunk : chunk_info->m_incomplete_chunks) {
     ib::info(ER_IB_CLONE_RESTART)
@@ -1433,8 +1432,10 @@ void Clone_Task_Manager::reinit_apply_state(const byte *ref_loc, uint ref_len,
       break;
 
     case CLONE_SNAPSHOT_NONE:
+      [[fallthrough]];
+
     default:
-      ut_d(ut_error);
+      ut_ad(false);
   }
 
   if (m_current_state == CLONE_SNAPSHOT_INIT ||
@@ -1528,14 +1529,16 @@ void Clone_Task_Manager::reinit_copy_state(const byte *loc, uint loc_len) {
       break;
 
     case CLONE_SNAPSHOT_NONE:
+      [[fallthrough]];
+
     default:
-      ut_d(ut_error);
+      ut_ad(false);
   }
 
   if (m_current_state == CLONE_SNAPSHOT_NONE) {
+    ut_ad(false);
     mutex_exit(&m_state_mutex);
-    ut_d(ut_error);
-    ut_o(return );
+    return;
   }
 
   /* Reset to beginning of current state */
@@ -1565,7 +1568,7 @@ void Clone_Task_Manager::reinit_copy_state(const byte *loc, uint loc_len) {
       ut_ad(m_current_state == CLONE_SNAPSHOT_DONE);
 
     } else {
-      ut_d(ut_error);
+      ut_ad(false);
     }
 #endif /* UNIV_DEBUG */
 
@@ -1664,6 +1667,7 @@ int Clone_Task_Manager::wait_ack(Clone_Handle *clone, Clone_Task *task,
 
     /* Wait too long */
     if (err == 0 && is_timeout) {
+      ut_ad(false);
       ib::info(ER_IB_CLONE_TIMEOUT) << "Clone Master wait for state change ACK"
                                        " timed out";
 
@@ -1671,7 +1675,6 @@ int Clone_Task_Manager::wait_ack(Clone_Handle *clone, Clone_Task *task,
                "Innodb clone state ack wait too long");
 
       err = ER_INTERNAL_ERROR;
-      ut_d(ut_error);
     }
   }
   mutex_exit(&m_state_mutex);
@@ -1749,13 +1752,13 @@ int Clone_Task_Manager::finish_state(Clone_Task *task) {
         &m_state_mutex, is_timeout);
 
     if (err == 0 && is_timeout) {
+      ut_ad(false);
       ib::info(ER_IB_CLONE_TIMEOUT) << "Clone Apply Master wait timed out";
 
       my_error(ER_INTERNAL_ERROR, MYF(0),
                "Clone Apply Master wait timed out before sending ACK");
 
       err = ER_INTERNAL_ERROR;
-      ut_d(ut_error);
     }
   }
 
@@ -1992,7 +1995,7 @@ int Clone_Handle::create_clone_directory() {
 
 int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
                        const char *data_dir) {
-  uint64_t snapshot_id;
+  ib_uint64_t snapshot_id;
   Clone_Snapshot *snapshot;
 
   m_clone_dir = data_dir;
@@ -2081,7 +2084,7 @@ byte *Clone_Handle::get_locator(uint &loc_len) {
 
 void Clone_Handle::build_descriptor(Clone_Desc_Locator *loc_desc) {
   Clone_Snapshot *snapshot;
-  uint64_t snapshot_id = CLONE_LOC_INVALID_ID;
+  ib_uint64_t snapshot_id = CLONE_LOC_INVALID_ID;
   Snapshot_State state = CLONE_SNAPSHOT_NONE;
 
   snapshot = m_clone_task_manager.get_snapshot();
@@ -2095,7 +2098,8 @@ void Clone_Handle::build_descriptor(Clone_Desc_Locator *loc_desc) {
                  m_clone_arr_index);
 }
 
-bool Clone_Handle::drop_task(THD *thd, uint task_id, bool &is_master) {
+bool Clone_Handle::drop_task(THD *thd, uint task_id, int in_err,
+                             bool &is_master) {
   /* No task is added in INIT state. The drop task is still called and
   should be ignored. */
   if (is_init()) {
@@ -2195,14 +2199,14 @@ int Clone_Handle::move_to_next_state(Clone_Task *task, Ha_clone_cbk *callback,
     }
 
     if (err == 0 && is_timeout) {
+      ut_ad(false);
       ib::info(ER_IB_CLONE_TIMEOUT) << "Clone: state change: "
                                        "wait for other tasks timed out";
 
       my_error(ER_INTERNAL_ERROR, MYF(0),
                "Clone: state change wait for other tasks timed out: "
                "Wait too long for state transition");
-      ut_d(ut_error);
-      ut_o(return (ER_INTERNAL_ERROR));
+      return (ER_INTERNAL_ERROR);
     }
   }
   return (err);
@@ -2338,7 +2342,7 @@ int Clone_Handle::file_callback(Ha_clone_cbk *cbk, Clone_Task *task, uint len,
                                 bool buf_cbk, uint64_t offset
 #ifdef UNIV_PFS_IO
                                 ,
-                                ut::Location location
+                                const char *name, uint line
 #endif /* UNIV_PFS_IO */
 ) {
   int err;
@@ -2363,7 +2367,7 @@ int Clone_Handle::file_callback(Ha_clone_cbk *cbk, Clone_Task *task, uint len,
   psi_op = is_copy_clone() ? PSI_FILE_READ : PSI_FILE_WRITE;
 
   register_pfs_file_io_begin(&state, locker, task->m_current_file_des, len,
-                             psi_op, location);
+                             psi_op, name, line);
 #endif /* UNIV_PFS_IO */
 
   /* Call appropriate callback to transfer data. */

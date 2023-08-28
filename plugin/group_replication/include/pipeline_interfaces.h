@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,10 +33,6 @@
 #include "plugin/group_replication/include/plugin_psi.h"
 #include "plugin/group_replication/include/plugin_server_include.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_member_identifier.h"
-
-typedef std::list<Gcs_member_identifier,
-                  Malloc_allocator<Gcs_member_identifier>>
-    Members_list;
 
 // Define the data packet type
 #define DATA_PACKET_TYPE 1
@@ -78,12 +74,11 @@ class Data_packet : public Packet {
 
     @param[in]  data             the packet data
     @param[in]  len              the packet length
-    @param[in]  key              the memory instrument key
     @param[in]  consistency_level  the transaction consistency level
     @param[in]  online_members     the ONLINE members when the transaction
                                    message was delivered
   */
-  Data_packet(const uchar *data, ulong len, PSI_memory_key key,
+  Data_packet(const uchar *data, ulong len,
               enum_group_replication_consistency_level consistency_level =
                   GROUP_REPLICATION_CONSISTENCY_EVENTUAL,
               std::list<Gcs_member_identifier> *online_members = nullptr)
@@ -92,7 +87,7 @@ class Data_packet : public Packet {
         len(len),
         m_consistency_level(consistency_level),
         m_online_members(online_members) {
-    payload = (uchar *)my_malloc(key, len, MYF(0));
+    payload = (uchar *)my_malloc(PSI_NOT_INSTRUMENTED, len, MYF(0));
     memcpy(payload, data, len);
   }
 
@@ -149,7 +144,7 @@ class Pipeline_event {
                  int modifier = UNDEFINED_EVENT_MODIFIER,
                  enum_group_replication_consistency_level consistency_level =
                      GROUP_REPLICATION_CONSISTENCY_EVENTUAL,
-                 Members_list *online_members = nullptr)
+                 std::list<Gcs_member_identifier> *online_members = nullptr)
       : packet(base_packet),
         log_event(nullptr),
         event_context(modifier),
@@ -174,7 +169,7 @@ class Pipeline_event {
                  int modifier = UNDEFINED_EVENT_MODIFIER,
                  enum_group_replication_consistency_level consistency_level =
                      GROUP_REPLICATION_CONSISTENCY_EVENTUAL,
-                 Members_list *online_members = nullptr)
+                 std::list<Gcs_member_identifier> *online_members = nullptr)
       : packet(nullptr),
         log_event(base_event),
         event_context(modifier),
@@ -334,7 +329,9 @@ class Pipeline_event {
     @note the memory allocated for the list ownership belongs to the
           caller
   */
-  Members_list *get_online_members() { return m_online_members; }
+  std::list<Gcs_member_identifier> *get_online_members() {
+    return m_online_members;
+  }
 
   /**
     Release memory ownership of m_online_members.
@@ -431,7 +428,7 @@ class Pipeline_event {
     }
 
     packet = new Data_packet(reinterpret_cast<const uchar *>(ostream.c_ptr()),
-                             ostream.length(), key_transaction_data);
+                             ostream.length());
 
     delete log_event;
     log_event = nullptr;
@@ -446,7 +443,7 @@ class Pipeline_event {
   /* Format description event used on conversions */
   Format_description_log_event *format_descriptor;
   enum_group_replication_consistency_level m_consistency_level;
-  Members_list *m_online_members;
+  std::list<Gcs_member_identifier> *m_online_members;
   bool m_online_members_memory_ownership;
   Processing_state m_packet_processing_state{Processing_state::DEFAULT};
 };

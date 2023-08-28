@@ -8,8 +8,7 @@ INSTALL COMPONENT "file://component_pfs_example";
 select component_urn from mysql.component;
 component_urn
 file://component_pfs_example
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "%/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 wait/synch/cond/pfs_example/X	YES	YES		0	NULL
@@ -35,8 +34,7 @@ wait/synch/mutex/pfs_example/Z
 UNINSTALL COMPONENT "file://component_pfs_example";
 select component_urn from mysql.component;
 component_urn
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "wait/synch/mutex/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
@@ -51,8 +49,7 @@ INSTALL COMPONENT "file://component_pfs_example";
 select component_urn from mysql.component;
 component_urn
 file://component_pfs_example
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "wait/synch/mutex/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
@@ -71,8 +68,7 @@ wait/synch/mutex/pfs_example/Z
 select component_urn from mysql.component;
 component_urn
 file://component_pfs_example
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "wait/synch/mutex/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
@@ -90,8 +86,7 @@ wait/synch/mutex/pfs_example/Z
 UNINSTALL COMPONENT "file://component_pfs_example";
 select component_urn from mysql.component;
 component_urn
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "wait/synch/mutex/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
@@ -105,8 +100,7 @@ NAME	OBJECT_INSTANCE_BEGIN	LOCKED_BY_THREAD_ID
 # restart
 select component_urn from mysql.component;
 component_urn
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
 where NAME like "wait/synch/mutex/pfs_example/%";
 NAME	ENABLED	TIMED	PROPERTIES	VOLATILITY	DOCUMENTATION
 select *

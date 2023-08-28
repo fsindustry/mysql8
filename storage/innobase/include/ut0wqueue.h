@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -66,16 +66,16 @@ uint64_t ib_wqueue_get_count(ib_wqueue_t *wq);
 
 /********************************************************************
 Check if queue is empty. */
-bool ib_wqueue_is_empty(
-    /* out: true if queue empty
-    else false */
+ibool ib_wqueue_is_empty(
+    /* out: TRUE if queue empty
+    else FALSE */
     const ib_wqueue_t *wq); /* in: work queue */
 
 /********************************************************************
 Wait for a work item to appear in the queue for specified time. */
 void *ib_wqueue_timedwait(
     /* out: work item or NULL on timeout*/
-    ib_wqueue_t *wq,                 /* in: work queue */
-    std::chrono::microseconds wait); /* in: wait time */
+    ib_wqueue_t *wq,          /* in: work queue */
+    ib_time_t wait_in_usecs); /* in: wait time in micro seconds */
 
 #endif /* IB_WORK_QUEUE_H */

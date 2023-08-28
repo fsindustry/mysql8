@@ -12,13 +12,9 @@ if (mysqld.global.update_last_check_in_count === undefined) {
   mysqld.global.update_last_check_in_count = 0;
 }
 
-if (mysqld.global.metadata_schema_version === undefined) {
-  mysqld.global.metadata_schema_version = [2, 2, 0];
-}
-
 var options = {
   cluster_type: "gr",
-  metadata_schema_version: mysqld.global.metadata_schema_version,
+  metadata_schema_version: [2, 1, 0],
   clusterset_present: 1,
   bootstrap_target_type: "clusterset",
   clusterset_target_cluster_id: mysqld.global.target_cluster_id,
@@ -41,9 +37,9 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_select_members_count",
       "router_select_replication_group_name",
       "router_show_cipher_status",
-      "router_select_cluster_instances_v2_gr",
-      "router_select_router_options_view",
+      "router_select_cluster_instances_v2",
       "router_commit",
+      "router_router_options",
       "router_rollback",
 
       "select_port",
@@ -53,11 +49,11 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_clusterset_all_nodes_by_clusterset_id",
       "router_clusterset_present",
       "router_bootstrap_target_type",
+      "router_clusterset_select_cluster_instances",
       "router_clusterset_select_cluster_info_by_primary_role",
       "router_clusterset_select_cluster_info_by_gr_uuid",
       "router_clusterset_select_gr_primary_member",
       "router_clusterset_select_gr_members_status",
-      "router_router_select_cs_options",
     ],
     options);
 
@@ -98,14 +94,6 @@ var router_update_last_check_in =
     } else if (stmt.match(router_update_attributes.stmt_regex)) {
       mysqld.global.update_attributes_count++;
       return router_update_attributes;
-    } else if (stmt === "set @@mysqlx_wait_timeout = 28800") {
-      return {
-        ok: {}
-      }
-    } else if (stmt === "enable_notices") {
-      return {
-        ok: {}
-      }
     } else {
       return common_stmts.unknown_statement_response(stmt);
     }

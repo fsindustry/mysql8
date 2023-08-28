@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2023, Oracle and/or its affiliates.
+Copyright (c) 1994, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -42,18 +42,39 @@ insert_debug.test was failing in ASAN build because of a stack overflow issue.
 It was found that rtr_info_t was taking up a lot of stack space in the function
 btr_insert_on_non_leaf_level_func which is part of the recursive stack
 trace. */
-/** Maximum B-tree page level (not really a hard limit). Used in debug
- assertions in btr_page_set_level and btr_page_get_level */
-constexpr uint32_t BTR_MAX_NODE_LEVEL = 45;
+#define BTR_MAX_NODE_LEVEL          \
+  45 /*!< Maximum B-tree page level \
+     (not really a hard limit).     \
+     Used in debug assertions       \
+     in btr_page_set_level and      \
+     btr_page_get_level_low */
 
 #ifndef UNIV_HOTBACKUP
-static inline buf_block_t *btr_block_get_func(
-    const page_id_t &page_id, const page_size_t &page_size, ulint mode,
-    ut::Location location, IF_DEBUG(const dict_index_t *index, ) mtr_t *mtr) {
+/** Gets a buffer page and declares its latching order level.
+@param[in]	page_id	Page id
+@param[in]	mode	Latch mode
+@param[in]	file	File name
+@param[in]	line	Line where called */
+#ifdef UNIV_DEBUG
+/**
+@param[in]	index	Index tree, may be NULL if it is not an insert buffer
+tree */
+#endif /* UNIV_DEBUG */
+/**
+@param[in,out]	mtr	Mini-transaction
+@return block */
+static inline buf_block_t *btr_block_get_func(const page_id_t &page_id,
+                                              const page_size_t &page_size,
+                                              ulint mode, const char *file,
+                                              ulint line,
+#ifdef UNIV_DEBUG
+                                              const dict_index_t *index,
+#endif /* UNIV_DEBUG */
+                                              mtr_t *mtr) {
   buf_block_t *block;
 
   block = buf_page_get_gen(page_id, page_size, mode, nullptr,
-                           Page_fetch::NORMAL, location, mtr);
+                           Page_fetch::NORMAL, file, line, mtr);
 
   if (mode != RW_NO_LATCH) {
     buf_block_dbg_add_level(block, index != nullptr && dict_index_is_ibuf(index)
@@ -91,9 +112,10 @@ static inline space_index_t btr_page_get_index_id(
 }
 
 /** Gets the node level field in an index page.
- @param[in] page index page
  @return level, leaf level == 0 */
-static inline ulint btr_page_get_level(const page_t *page) {
+static inline ulint btr_page_get_level_low(
+    const page_t *page) /*!< in: index page */
+{
   ulint level;
 
   ut_ad(page);
@@ -126,8 +148,13 @@ static inline void btr_page_set_level(
   }
 }
 
-static inline page_no_t btr_page_get_next(const page_t *page,
-                                          mtr_t *mtr [[maybe_unused]]) {
+/** Gets the next index page number.
+ @return next page number */
+static inline page_no_t btr_page_get_next(
+    const page_t *page, /*!< in: index page */
+    mtr_t *mtr [[maybe_unused]])
+/*!< in: mini-transaction handle */
+{
   ut_ad(page != nullptr);
   ut_ad(mtr != nullptr);
 
@@ -153,15 +180,16 @@ static inline void btr_page_set_next(
   }
 }
 
-static inline page_no_t btr_page_get_prev(const page_t *page) {
+/** Gets the previous index page number.
+ @return prev page number */
+static inline page_no_t btr_page_get_prev(
+    const page_t *page,          /*!< in: index page */
+    mtr_t *mtr [[maybe_unused]]) /*!< in: mini-transaction handle */
+{
   ut_ad(page != nullptr);
-  return (mach_read_from_4(page + FIL_PAGE_PREV));
-}
-
-static inline page_no_t btr_page_get_prev(const page_t *page,
-                                          mtr_t *mtr [[maybe_unused]]) {
   ut_ad(mtr != nullptr);
-  return btr_page_get_prev(page);
+
+  return (mach_read_from_4(page + FIL_PAGE_PREV));
 }
 
 /** Sets the previous index page field. */
@@ -183,8 +211,16 @@ static inline void btr_page_set_prev(
   }
 }
 
-static inline page_no_t btr_node_ptr_get_child_page_no(const rec_t *rec,
-                                                       const ulint *offsets) {
+/** Gets the child node file address in a node pointer.
+ NOTE: the offsets array must contain all offsets for the record since
+ we read the last field according to offsets and assume that it contains
+ the child page number. In other words offsets must have been retrieved
+ with rec_get_offsets(n_fields=ULINT_UNDEFINED).
+ @return child node address */
+static inline page_no_t btr_node_ptr_get_child_page_no(
+    const rec_t *rec,     /*!< in: node pointer record */
+    const ulint *offsets) /*!< in: array returned by rec_get_offsets() */
+{
   const byte *field;
   ulint len;
   page_no_t page_no;
@@ -192,8 +228,7 @@ static inline page_no_t btr_node_ptr_get_child_page_no(const rec_t *rec,
   ut_ad(!rec_offs_comp(offsets) || rec_get_node_ptr_flag(rec));
 
   /* The child address is in the last field */
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            rec_offs_n_fields(offsets) - 1, &len);
+  field = rec_get_nth_field(rec, offsets, rec_offs_n_fields(offsets) - 1, &len);
 
   ut_ad(len == 4);
 
@@ -201,13 +236,6 @@ static inline page_no_t btr_node_ptr_get_child_page_no(const rec_t *rec,
   ut_ad(page_no > 1);
 
   return (page_no);
-}
-
-/** Check if the given page is first page on level.
-@param[in]  page  Btree page
-@return true if it is first page */
-static inline bool btr_is_first_page_on_level(const page_t *page) {
-  return (btr_page_get_prev(page) == FIL_NULL);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -235,10 +263,9 @@ static inline void btr_leaf_page_release(
       mode = MTR_MEMO_BUF_FIX;
       break;
     default:
-      ut_error;
+      ut_a(0);
   }
 
   mtr->memo_release(block, mode);
 }
-
 #endif /* !UNIV_HOTBACKUP */

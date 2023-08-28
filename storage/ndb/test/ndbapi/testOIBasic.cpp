@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 
 #include <NdbOut.hpp>
@@ -34,7 +33,7 @@
 #include <NdbTick.h>
 #include <NdbHost.h>
 #include <NdbSleep.h>
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "my_sys.h"
 #include <NdbSqlUtil.hpp>
 #include <ndb_version.h>
@@ -571,7 +570,7 @@ static NdbOut&
 operator<<(NdbOut& out, const Chs& chs)
 {
   CHARSET_INFO* cs = chs.m_cs;
-  out << cs->m_coll_name << "[" << cs->mbminlen << "-" << cs->mbmaxlen << "]";
+  out << cs->name << "[" << cs->mbminlen << "-" << cs->mbmaxlen << "]";
   return out;
 }
 
@@ -614,7 +613,7 @@ getcs(const Par& par)
         // not work == endless loop in Chs::Chs
         // by default these are not compiled in 7.0...
         // but in 7.2 they are...so testOIbasic always fails in 7.2
-        if (strncmp(cs->m_coll_name, "utf32_", sizeof("utf32_") - 1) == 0)
+        if (strncmp(cs->name, "utf32_", sizeof("utf32_") - 1) == 0)
           continue;
 
         // prefer complex charsets
@@ -623,7 +622,7 @@ getcs(const Par& par)
       }
     }
   }
-  ndbout << "Use charset: " << cs->m_coll_name << endl;
+  ndbout << "Use charset: " << cs->name << endl;
   if (cslist[cs->number] == 0)
     cslist[cs->number] = new Chs(cs);
   return cslist[cs->number];
@@ -753,19 +752,19 @@ operator<<(NdbOut& out, const Col& col)
   case Col::Char:
     {
       CHARSET_INFO* cs = col.m_chs->m_cs;
-      out << " char(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->m_coll_name << ")";
+      out << " char(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->name << ")";
     }
     break;
   case Col::Varchar:
     {
       CHARSET_INFO* cs = col.m_chs->m_cs;
-      out << " varchar(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->m_coll_name << ")";
+      out << " varchar(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->name << ")";
     }
     break;
   case Col::Longvarchar:
     {
       CHARSET_INFO* cs = col.m_chs->m_cs;
-      out << " longvarchar(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->m_coll_name << ")";
+      out << " longvarchar(" << col.m_length << "*" << cs->mbmaxlen << ";" << cs->name << ")";
     }
     break;
   default:

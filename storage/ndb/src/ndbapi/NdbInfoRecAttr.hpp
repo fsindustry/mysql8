@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,9 +24,6 @@
 
 #ifndef NdbInfoRecAttr_H
 #define NdbInfoRecAttr_H
-
-#include <assert.h>
-#include <string.h>
 
 class NdbInfoRecAttr {
 public:
@@ -68,7 +65,7 @@ public:
 private:
   friend class NdbInfoRecAttrCollection;
   NdbInfoRecAttr() :
-    m_data(nullptr),
+    m_data(NULL),
     m_len(0),
     m_defined(false),
     m_requested(false)

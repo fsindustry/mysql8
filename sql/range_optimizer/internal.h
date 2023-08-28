@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,11 +49,6 @@ void append_range_all_keyparts(Opt_trace_array *range_trace,
                                SEL_ROOT *keypart,
                                const KEY_PART_INFO *key_parts,
                                const bool print_full);
-
-// Simplified version of the logic in append_range_all_keyparts(),
-// supporting only append to string and using QUICK_RANGE instead of SEL_ROOT.
-void append_range_to_string(const QUICK_RANGE *range,
-                            const KEY_PART_INFO *first_key_part, String *out);
 
 /**
   Shared sentinel node for all trees. Initialized by range_optimizer_init(),
@@ -125,12 +120,22 @@ int index_next_different(bool is_index_scan, handler *file,
 */
 
 class SEL_IMERGE {
- public:
-  Mem_root_array<SEL_TREE *> trees;
+  enum { PREALLOCED_TREES = 10 };
 
-  SEL_IMERGE(MEM_ROOT *mem_root) : trees(mem_root) {}
+ public:
+  SEL_TREE *trees_prealloced[PREALLOCED_TREES];
+  SEL_TREE **trees;      /* trees used to do index_merge   */
+  SEL_TREE **trees_next; /* last of these trees            */
+  SEL_TREE **trees_end;  /* end of allocated space         */
+
+  SEL_ARG ***best_keys; /* best keys to read in SEL_TREEs */
+
+  SEL_IMERGE()
+      : trees(&trees_prealloced[0]),
+        trees_next(trees),
+        trees_end(trees + PREALLOCED_TREES) {}
   SEL_IMERGE(SEL_IMERGE *arg, RANGE_OPT_PARAM *param);
-  bool or_sel_tree(SEL_TREE *tree);
+  int or_sel_tree(RANGE_OPT_PARAM *param, SEL_TREE *tree);
   int or_sel_tree_with_checks(RANGE_OPT_PARAM *param, bool remove_jump_scans,
                               SEL_TREE *new_tree);
   int or_sel_imerge_with_checks(RANGE_OPT_PARAM *param, bool remove_jump_scans,
@@ -142,8 +147,5 @@ class SEL_IMERGE {
   might consider using round() instead.
 */
 #define double2rows(x) ((ha_rows)(x))
-
-void print_key_value(String *out, const KEY_PART_INFO *key_part,
-                     const uchar *key);
 
 #endif  // SQL_RANGE_OPTIMIZER_INTERNAL_H_

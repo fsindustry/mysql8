@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -39,8 +39,6 @@
 
 #define MYSQL_UNIVERSAL_CLIENT_CHARSET "utf8mb4"
 #define MAX_NAME_LEN (64 * 3)
-
-struct CHARSET_INFO;
 
 namespace Mysql {
 namespace Tools {

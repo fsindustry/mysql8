@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,11 +29,9 @@
 #include "map_helpers.h"
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/hypergraph.h"
-#include "sql/join_optimizer/secondary_engine_costing_flags.h"
 #include "sql/mem_root_array.h"
 #include "sql/sql_const.h"
 
-class CompanionSet;
 class Field;
 class Item;
 class JOIN;
@@ -57,11 +55,6 @@ struct SargablePredicate {
   // greater-than.
   Field *field;
   Item *other_side;
-
-  /// True if it is safe to evaluate "other_side" during optimization. It must
-  /// be constant during execution. Also, it should not contain subqueries or
-  /// stored procedures, which we do not want to execute during optimization.
-  bool can_evaluate;
 };
 
 /**
@@ -76,21 +69,13 @@ struct SargablePredicate {
  */
 struct JoinHypergraph {
   JoinHypergraph(MEM_ROOT *mem_root, const Query_block *query_block)
-      : graph(mem_root),
-        nodes(mem_root),
+      : nodes(mem_root),
         edges(mem_root),
         predicates(mem_root),
         sargable_join_predicates(mem_root),
         m_query_block(query_block) {}
 
   hypergraph::Hypergraph graph;
-
-  /// Flags set when AccessPaths are proposed to secondary engines for costing.
-  /// The intention of these flags is to avoid traversing the AccessPath tree to
-  /// check for certain criteria.
-  /// TODO (tikoldit) Move to JOIN or Secondary_engine_execution_context, so
-  /// that JoinHypergraph can be immutable during planning
-  SecondaryEngineCostingFlags secondary_engine_costing_flags{};
 
   // Maps table->tableno() to an index in “nodes”, also suitable for
   // a bit index in a NodeMap. This is normally the identity mapping,
@@ -117,8 +102,6 @@ struct JoinHypergraph {
     // the first time, we will evaluate all of these and consider
     // creating access paths that exploit these predicates.
     Mem_root_array<SargablePredicate> sargable_predicates;
-
-    const CompanionSet *companion_set;
   };
   Mem_root_array<Node> nodes;
 
@@ -151,24 +134,6 @@ struct JoinHypergraph {
   /// Returns a pointer to the JOIN object of the query block being planned.
   const JOIN *join() const;
 
-  /// Whether, at any point, we could rewrite (t1 LEFT JOIN t2) LEFT JOIN t3
-  /// to t1 LEFT JOIN (t2 LEFT JOIN t3) or vice versa. We record this purely to
-  /// note that we have a known bug/inconsistency in row count estimation
-  /// in this case. Bug #33550360 has a test case, but to sum up:
-  /// Assume t1 and t3 has 25 rows, but t2 has zero rows, and selectivities
-  /// are 0.1. As long as we clamp the row count in FindOutputRowsForJoin(),
-  /// and do not modify these selectivities somehow, the former would give
-  /// 62.5 rows, and the second would give 25 rows. This should be fixed
-  /// eventually, but for now, at least we register it, so that we do not
-  /// assert-fail on inconsistent row counts if this (known) issue could be
-  /// the root cause.
-  bool has_reordered_left_joins = false;
-
-  /// The set of tables that are on the inner side of some outer join or
-  /// antijoin. If a table is not part of this set, and it is found to be empty,
-  /// we can assume that the result of the top-level join will also be empty.
-  table_map tables_inner_to_outer_or_anti = 0;
-
  private:
   /// A pointer to the query block being planned.
   const Query_block *m_query_block;
@@ -185,8 +150,7 @@ struct JoinHypergraph {
   The result is suitable for running DPhyp (subgraph_enumeration.h)
   to find optimal join planning.
  */
-bool MakeJoinHypergraph(THD *thd, std::string *trace, JoinHypergraph *graph,
-                        bool *where_is_always_false);
+bool MakeJoinHypergraph(THD *thd, std::string *trace, JoinHypergraph *graph);
 
 // Exposed for testing only.
 void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
@@ -196,13 +160,5 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
 hypergraph::NodeMap GetNodeMapFromTableMap(
     table_map table_map,
     const std::array<int, MAX_TABLES> &table_num_to_node_num);
-
-std::string PrintDottyHypergraph(const JoinHypergraph &graph);
-
-/// Estimates the size of the hash join keys generated from the equi-join
-/// predicates in "expr".
-size_t EstimateHashJoinKeyWidth(const RelationalExpression *expr);
-
-table_map GetVisibleTables(const RelationalExpression *expr);
 
 #endif  // SQL_JOIN_OPTIMIZER_MAKE_JOIN_HYPERGRAPH

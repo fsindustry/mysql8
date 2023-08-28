@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,6 @@
 */
 
 #define DBTUX_GEN_CPP
-#include "util/require.h"
 #include "Dbtux.hpp"
 
 #include <signaldata/NodeStateSignalData.hpp>
@@ -142,7 +141,7 @@ Dbtux::Dbtux(Block_context& ctx,
     &c_scanLockPool;
   c_transient_pools[DBTUX_SCAN_BOUND_TRANSIENT_POOL_INDEX] =
     &c_scanBoundPool;
-  static_assert(c_transient_pool_count == 3);
+  NDB_STATIC_ASSERT(c_transient_pool_count == 3);
   c_transient_pools_shrinking.clear();
 }
 
@@ -229,7 +228,7 @@ Dbtux::execCONTINUEB(Signal* signal)
   case TuxContinueB::DropIndex: // currently unused
     {
       IndexPtr indexPtr;
-      ndbrequire(c_indexPool.getPtr(indexPtr, data[1]));
+      c_indexPool.getPtr(indexPtr, data[1]);
       dropIndex(signal, indexPtr, data[2], data[3]);
     }
     break;
@@ -478,12 +477,12 @@ Dbtux::execREAD_CONFIG_REQ(Signal* signal)
    * Index id is physical array index.  We seize and initialize all
    * index records now.
    */
+  IndexPtr indexPtr;
   while (1) {
     jam();
     refresh_watch_dog();
-    IndexPtr indexPtr;
-    if (!c_indexPool.seize(indexPtr))
-    {
+    c_indexPool.seize(indexPtr);
+    if (indexPtr.i == RNIL) {
       jam();
       break;
     }
@@ -606,7 +605,8 @@ Dbtux::readKeyAttrs(TuxCtx& ctx,
                             tupVersion,
                             keyAttrs32,
                             count,
-                            outputBuffer);
+                            outputBuffer,
+                            false);
   thrjamDebug(ctx.jamBuffer);
   ndbrequire(ret > 0);
   keyData.reset();
@@ -654,13 +654,14 @@ Dbtux::readKeyAttrs(TuxCtx& ctx,
                                tupVersion,
                                keyAttrs32,
                                count,
-                               outputBuffer);
+                               outputBuffer,
+                               false);
   thrjamDebug(ctx.jamBuffer);
   ndbrequire(ret > 0);
 }
 
 void
-Dbtux::readTableHashKey(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
+Dbtux::readTablePk(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
 {
   const TupLoc tupLoc = ent.m_tupLoc;
   int ret = c_tup->tuxReadPk(c_ctx.tupRealFragPtr,
@@ -668,7 +669,7 @@ Dbtux::readTableHashKey(TreeEnt ent, Uint32* pkData, unsigned& pkSize)
                              tupLoc.getPageId(),
                              tupLoc.getPageOffset(),
                              pkData,
-                             /*hash=*/true);
+                             true);
   jamEntry();
   if (unlikely(ret <= 0))
   {

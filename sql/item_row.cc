@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -74,9 +74,9 @@ Item_row::Item_row(Item *head, const mem_root_deque<Item *> &tail)
   }
 }
 
-bool Item_row::do_itemize(Parse_context *pc, Item **res) {
+bool Item_row::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::do_itemize(pc, res)) return true;
+  if (super::itemize(pc, res)) return true;
   for (uint i = 0; i < arg_count; i++) {
     if (items[i]->itemize(pc, &items[i])) return true;
   }
@@ -115,7 +115,7 @@ bool Item_row::fix_fields(THD *thd, Item **) {
     // item->is_null() may have raised an error.
     if (thd->is_error()) return true;
 
-    set_nullable(is_nullable() || item->is_nullable());
+    set_nullable(is_nullable() | item->is_nullable());
     add_accum_properties(item);
   }
   if (types_assigned) set_data_type(MYSQL_TYPE_NULL);

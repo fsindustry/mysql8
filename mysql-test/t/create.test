@@ -84,9 +84,9 @@ drop table t1;
 # Test that we get warning for this
 drop database if exists mysqltest;
 create database mysqltest;
-create table mysqltest.`$test1` (a$1 int, `$b` int, c$ int);
-insert into mysqltest.`$test1` values (1,2,3);
-select a$1, `$b`, c$ from mysqltest.`$test1`;
+create table mysqltest.$test1 (a$1 int, $b int, c$ int);
+insert into mysqltest.$test1 values (1,2,3);
+select a$1, $b, c$ from mysqltest.$test1;
 create table mysqltest.test2$ (a int);
 drop table mysqltest.test2$;
 drop database mysqltest;
@@ -2369,30 +2369,3 @@ CREATE TABLE t1(a INT) min_rows=18446744073709551615;
 SHOW TABLE STATUS LIKE 't1';
 DROP TABLE t1;
 
---echo # Bug#34523475: Inconsequent type derivation when using @variable
-
-CREATE TABLE t1 AS SELECT @max_error_count UNION SELECT 'a';
-SHOW CREATE TABLE t1;
-
-# The testcase produces different results when binlogging is turned
-# off, cf. Bug#35328161 Inconsequent type derivation when using
-# @variable and binlog off.
-# Accept both results until the bug is fixed.
-CREATE TABLE t2 AS SELECT @max_error_count UNION SELECT 'a';
---replace_regex /\ text/ longtext/
-SHOW CREATE TABLE t2;
-DROP TABLE t1, t2;
-
---echo #
---echo # Bug#34861841: Assertion: `false' in CostingReceiver::ProposeAccessPath
---echo #
-
-CREATE TABLE t1 (x INT);
-INSERT INTO t1 VALUES (1), (2), (3);
-CREATE TABLE t2 (pk INT PRIMARY KEY);
-INSERT INTO t2 VALUES (1), (2), (3);
-CREATE TABLE t3 AS
-  SELECT 1 FROM t1 LEFT JOIN t2
-  ON t1.x IN (SELECT it1.pk FROM t2 AS it1, t2 AS it2);
-SELECT COUNT(*) FROM t3;
-DROP TABLE t1, t2, t3;

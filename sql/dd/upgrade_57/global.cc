@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "sql/handler.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -207,8 +207,7 @@ void Gcs_xcom_interface::cleanup() {
 }
 
 void Gcs_xcom_interface::cleanup_thread_ssl_resources() {
-  ::get_network_management_interface()
-      ->delayed_cleanup_secure_connections_context();
+  ::get_network_management_interface()->cleanup_secure_connections_context();
 }
 
 Gcs_xcom_interface::Gcs_xcom_interface()
@@ -391,15 +390,11 @@ enum_gcs_error Gcs_xcom_interface::initialize(
     Proceed with initialization
     ---------------------------------------------------------------
   */
-  // Initalize statistic storage
-  m_stats_mgr = new Gcs_xcom_statistics_manager_interface_impl();
-  m_xcom_stats_storage = new Gcs_xcom_statistics_storage_impl(m_stats_mgr);
 
   // initialize xcom's data structures to pass configuration
   // from the application
   m_gcs_xcom_app_cfg.init();
   m_gcs_xcom_app_cfg.set_network_namespace_manager(m_netns_manager);
-  m_gcs_xcom_app_cfg.set_statists_storage_implementation(m_xcom_stats_storage);
   this->clean_group_interfaces();
   m_socket_util = new My_xp_socket_util_impl();
 
@@ -688,12 +683,6 @@ enum_gcs_error Gcs_xcom_interface::finalize() {
   delete m_socket_util;
   m_socket_util = nullptr;
 
-  delete m_stats_mgr;
-  m_stats_mgr = nullptr;
-
-  delete m_xcom_stats_storage;
-  m_xcom_stats_storage = nullptr;
-
   ::get_network_management_interface()->remove_all_network_provider();
   Gcs_xcom_utils::deinit_net();
 
@@ -771,7 +760,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     group_interface = new gcs_xcom_group_interfaces();
     m_group_interfaces[group_identifier.get_group_id()] = group_interface;
 
-    Gcs_xcom_statistics *stats = new Gcs_xcom_statistics(m_stats_mgr);
+    Gcs_xcom_statistics *stats = new Gcs_xcom_statistics();
 
     group_interface->statistics_interface = stats;
 
@@ -782,7 +771,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
         net_manager_for_communication = ::get_network_management_interface();
 
     auto *xcom_communication = new Gcs_xcom_communication(
-        m_stats_mgr, s_xcom_proxy, vce, gcs_engine, group_identifier,
+        stats, s_xcom_proxy, vce, gcs_engine, group_identifier,
         std::move(net_manager_for_communication));
     group_interface->communication_interface = xcom_communication;
 
@@ -790,7 +779,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
         new Gcs_xcom_state_exchange(group_interface->communication_interface);
 
     Gcs_xcom_group_management *xcom_group_management =
-        new Gcs_xcom_group_management(s_xcom_proxy, group_identifier, vce);
+        new Gcs_xcom_group_management(s_xcom_proxy, group_identifier);
     group_interface->management_interface = xcom_group_management;
 
     std::unique_ptr<Network_provider_operations_interface>
@@ -798,7 +787,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     Gcs_xcom_control *xcom_control = new Gcs_xcom_control(
         m_node_address, m_xcom_peers, group_identifier, s_xcom_proxy,
         xcom_group_management, gcs_engine, se, vce, m_boot, m_socket_util,
-        std::move(net_manager_for_control), m_stats_mgr);
+        std::move(net_manager_for_control));
     group_interface->control_interface = xcom_control;
 
     xcom_control->set_join_behavior(
@@ -1451,7 +1440,7 @@ void do_cb_xcom_receive_data(synode_no message_id, synode_no origin,
     happen because global view messages are delivered periodically after
     communication channels have been established.
 
-    When a global view message is received and can be successfully processed,
+    When a global view message is received and can be successfuly processed,
     the node can start receiving data messages. Note though that it does not
     mean that the application has received a view change notification and
     and can start receiving data messages. Recall that the state exchange

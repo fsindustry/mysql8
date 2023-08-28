@@ -1,7 +1,7 @@
 include/group_replication.inc [rpl_server_count=3]
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 
 ############################################################
@@ -14,8 +14,6 @@ include/rpl_sync.inc
 ############################################################
 # 02. Lock table t1 on server2 to block a future update.
 [connection server_2]
-include/assert.inc ['There were 0 transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There was no wait time on transactions with group_replication_consistency=BEFORE']
 LOCK table t1 READ;
 
 ############################################################
@@ -80,23 +78,14 @@ include/assert.inc ['There is a 99 in table t2']
 include/rpl_sync.inc
 [connection server2]
 include/assert.inc ['There is a 2 in table t2']
-include/assert.inc ['There were 2 transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There was wait time on transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There was 1 data messages sent']
 [connection server1]
 include/assert.inc ['There is a 1 in table t1']
 include/assert.inc ['There is a 99 in table t2']
 include/assert.inc ['There is a 2 in table t2']
-include/assert.inc ['There were 0 transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There was no wait time on transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There were 4 data messages sent']
 [connection server3]
 include/assert.inc ['There is a 1 in table t1']
 include/assert.inc ['There is a 99 in table t2']
 include/assert.inc ['There is a 2 in table t2']
-include/assert.inc ['There were 0 transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There was no wait time on transactions with group_replication_consistency=BEFORE']
-include/assert.inc ['There were no data messages sent']
 include/diff_tables.inc [server1:t1, server2:t1, server3:t1]
 include/diff_tables.inc [server1:t2, server2:t2, server3:t2]
 

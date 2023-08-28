@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -78,13 +78,7 @@ class Sql_cmd_dml : public Sql_cmd {
    */
   bool execute(THD *thd) override;
 
-  enum enum_sql_cmd_type sql_cmd_type() const override {
-    /*
-      Somewhat unsurprisingly, anything sub-classed to Sql_cmd_dml
-      identifies as DML by default.
-    */
-    return SQL_CMD_DML;
-  }
+  bool is_dml() const override { return true; }
 
   virtual bool may_use_cursor() const { return false; }
 
@@ -128,10 +122,10 @@ class Sql_cmd_dml : public Sql_cmd {
     Check that user has some relevant privileges for all tables involved in
     the statement, e.g. SELECT privileges for tables selected from, INSERT
     privileges for tables inserted into, etc. This function will also populate
-    Table_ref::grant with all privileges the user has for each table,
-    which is later used during checking of column privileges. Note that at
-    preparation time, views are not expanded yet. Privilege checking is thus
-    rudimentary and must be complemented with later calls to
+    TABLE_LIST::grant with all privileges the user has for each table, which
+    is later used during checking of column privileges.
+    Note that at preparation time, views are not expanded yet. Privilege
+    checking is thus rudimentary and must be complemented with later calls to
     Query_block::check_view_privileges().
     The reason to call this function at such an early stage is to be able to
     quickly reject statements for which the user obviously has insufficient

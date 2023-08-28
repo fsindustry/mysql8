@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -112,12 +112,6 @@
 #define OVER_MAX_DBS_IN_EVENT_MTS 254
 
 /**
-  Maximum length of time zone name that we support (Time zone name is
-  char(64) in db). mysqlbinlog needs it.
-*/
-#define MAX_TIME_ZONE_NAME_LENGTH (NAME_LEN + 1)
-
-/**
   Max number of possible extra bytes in a replication event compared to a
   packet (i.e. a query) sent from client to master;
   First, an auxiliary log_event status vars estimation:
@@ -125,19 +119,17 @@
 #define MAX_SIZE_LOG_EVENT_STATUS                                             \
   (1U + 4 /* type, flags2 */ + 1U + 8 /* type, sql_mode */ + 1U + 1 +         \
    255 /* type, length, catalog */ + 1U + 4 /* type, auto_increment */ + 1U + \
-   6 /* type, charset */ + 1U + 1 +                                           \
-   MAX_TIME_ZONE_NAME_LENGTH /* type, length, time_zone */ + 1U +             \
+   6 /* type, charset */ + 1U + 1 + 255 /* type, length, time_zone */ + 1U +  \
    2 /* type, lc_time_names_number */ + 1U +                                  \
    2 /* type, charset_database_number */ + 1U +                               \
-   8 /* type, table_map_for_update */ + 1U + 1 +                              \
-   32 * 3 /* type, user_len, user */ + 1 + 255 /* host_len, host */           \
-   + 1U + 1 +                                                                 \
-   (MAX_DBS_IN_EVENT_MTS * (1 + NAME_LEN)) /* type, db_1, db_2, ... */        \
-   + 1U + 3 /* type, microseconds */ + 1U + 1 /* type, explicit_def..ts*/ +   \
-   1U + 8 /* type, xid of DDL */ + 1U +                                       \
-   2 /* type, default_collation_for_utf8mb4_number */ + 1U +                  \
-   1 /* sql_require_primary_key */ + 1U +                                     \
-   1 /* type, default_table_encryption */)
+   8 /* type, table_map_for_update */ + 1U +                                  \
+   4 /* type, master_data_written */ + /* type, db_1, db_2, ... */            \
+   1U + (MAX_DBS_IN_EVENT_MTS * (1 + NAME_LEN)) + 3U +                        \
+   /* type, microseconds */ +1U + 32 * 3 + /* type, user_len, user */         \
+   1 + 255 /* host_len, host */ + 1U + 1 /* type, explicit_def..ts*/ + 1U +   \
+   8 /* type, xid of DDL */ + 1U +                                            \
+   2 /* type, default_collation_for_utf8mb4_number */ +                       \
+   1 /* sql_require_primary_key */ + 1 /* type, default_table_encryption */)
 
 /**
    Uninitialized timestamp value (for either last committed or sequence number).
@@ -212,9 +204,9 @@ inline void do_server_version_split(const char *version,
 inline uint32_t do_server_version_int(const char *version) {
   unsigned char version_split[3];
   do_server_version_split(version, version_split);
-  const uint32_t ret = static_cast<uint32_t>(version_split[0]) * 10000 +
-                       static_cast<uint32_t>(version_split[1]) * 100 +
-                       static_cast<uint32_t>(version_split[2]);
+  uint32_t ret = static_cast<uint32_t>(version_split[0]) * 10000 +
+                 static_cast<uint32_t>(version_split[1]) * 100 +
+                 static_cast<uint32_t>(version_split[2]);
   return ret;
 }
 
@@ -356,21 +348,12 @@ enum Log_event_type {
 
   TRANSACTION_PAYLOAD_EVENT = 40,
 
-  HEARTBEAT_LOG_EVENT_V2 = 41,
   /**
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
   ENUM_END_EVENT /* end marker */
 };
-
-/**
- @brief Get the event type as string object
-
-  @param type the event type for which to get a textual representation.
-  @return std::string a text representing the event name.
-*/
-const std::string &get_event_type_as_string(Log_event_type type);
 
 /**
   Struct to pass basic information about a event: type, query, is it ignorable
@@ -412,11 +395,6 @@ struct Log_event_basic_info {
 #define ST_COMMON_HEADER_LEN_OFFSET (ST_CREATED_OFFSET + 4)
 
 #define LOG_EVENT_HEADER_LEN 19U /* the fixed header length */
-
-/// The maximum value for MAX_ALLOWED_PACKET.  This is also the
-/// maxmium size of binlog events, and dump threads always use this
-/// value for max_allowed_packet.
-constexpr size_t max_log_event_size = 1024 * 1024 * 1024;
 
 /**
    Fixed header length, where 4.x and 5.0 agree. That is, 5.0 may have a longer

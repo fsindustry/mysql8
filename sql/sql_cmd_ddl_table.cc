@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -129,7 +129,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
   LEX *const lex = thd->lex;
   Query_block *const query_block = lex->query_block;
   Query_expression *const query_expression = lex->unit;
-  Table_ref *const create_table = lex->query_tables;
+  TABLE_LIST *const create_table = lex->query_tables;
   partition_info *part_info = lex->part_info;
 
   /*
@@ -343,7 +343,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     lex->unlink_first_table(&link_to_local);
 
     /* Updating any other table is prohibited in CTS statement */
-    for (Table_ref *table = lex->query_tables; table;
+    for (TABLE_LIST *table = lex->query_tables; table;
          table = table->next_global) {
       if (table->lock_descriptor().type >= TL_WRITE_ALLOW_WRITE) {
         lex->link_first_table_back(create_table, link_to_local);
@@ -356,7 +356,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
 
     Query_result_create *result;
     if (!query_expression->is_prepared()) {
-      const Prepared_stmt_arena_holder ps_arena_holder(thd);
+      Prepared_stmt_arena_holder ps_arena_holder(thd);
       result = new (thd->mem_root)
           Query_result_create(create_table, &query_block->fields,
                               lex->duplicates, query_expression_tables);
@@ -364,11 +364,6 @@ bool Sql_cmd_create_table::execute(THD *thd) {
         lex->link_first_table_back(create_table, link_to_local);
         return true;
       }
-
-      // Use the hypergraph optimizer for the SELECT statement, if enabled.
-      lex->using_hypergraph_optimizer =
-          thd->optimizer_switch_flag(OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER);
-
       if (query_expression->prepare(thd, result, nullptr, SELECT_NO_UNLOCK,
                                     0)) {
         lex->link_first_table_back(create_table, link_to_local);
@@ -392,8 +387,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     result->set_two_fields(&create_info, &alter_info);
 
     // For objects acquired during table creation.
-    const dd::cache::Dictionary_client::Auto_releaser releaser(
-        thd->dd_client());
+    dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
     Ignore_error_handler ignore_handler;
     Strict_error_handler strict_handler;
@@ -409,14 +403,14 @@ bool Sql_cmd_create_table::execute(THD *thd) {
       ++thd->status_var.secondary_engine_execution_count;
 
     if (lex->is_ignore() || thd->is_strict_mode()) thd->pop_internal_handler();
-    lex->cleanup(false);
+    lex->cleanup(thd, false);
     thd->clear_current_query_costs();
     lex->clear_values_map();
 
     // Abort the result set if execution ended in error
     if (res) result->abort_result_set(thd);
 
-    result->cleanup();
+    result->cleanup(thd);
 
     lex->link_first_table_back(create_table, link_to_local);
     THD_STAGE_INFO(thd, stage_end);
@@ -443,7 +437,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
           thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)
               ->is_enabled())
         thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)
-            ->mark_as_changed(thd, {});
+            ->mark_as_changed(thd, nullptr);
       my_ok(thd);
     }
   }
@@ -469,7 +463,7 @@ Sql_cmd_create_table::eligible_secondary_storage_engine() const {
   // storage engine.
   const LEX_CSTRING *secondary_engine = nullptr;
 
-  for (const Table_ref *tl = query_expression_tables; tl != nullptr;
+  for (const TABLE_LIST *tl = query_expression_tables; tl != nullptr;
        tl = tl->next_global) {
     // Schema tables are not available in secondary engines.
     if (tl->schema_table != nullptr) return nullptr;
@@ -512,8 +506,8 @@ bool Sql_cmd_create_or_drop_index_base::execute(THD *thd) {
 
   LEX *const lex = thd->lex;
   Query_block *const query_block = lex->query_block;
-  Table_ref *const first_table = query_block->get_table_list();
-  Table_ref *const all_tables = first_table;
+  TABLE_LIST *const first_table = query_block->get_table_list();
+  TABLE_LIST *const all_tables = first_table;
 
   /* Prepare stack copies to be re-execution safe */
   HA_CREATE_INFO create_info;
@@ -547,7 +541,7 @@ bool Sql_cmd_create_or_drop_index_base::execute(THD *thd) {
 }
 
 bool Sql_cmd_cache_index::execute(THD *thd) {
-  Table_ref *const first_table = thd->lex->query_block->get_table_list();
+  TABLE_LIST *const first_table = thd->lex->query_block->get_table_list();
   if (check_table_access(thd, INDEX_ACL, first_table, true, UINT_MAX, false))
     return true;
 
@@ -555,7 +549,7 @@ bool Sql_cmd_cache_index::execute(THD *thd) {
 }
 
 bool Sql_cmd_load_index::execute(THD *thd) {
-  Table_ref *const first_table = thd->lex->query_block->get_table_list();
+  TABLE_LIST *const first_table = thd->lex->query_block->get_table_list();
   if (check_table_access(thd, INDEX_ACL, first_table, true, UINT_MAX, false))
     return true;
   return preload_keys(thd, first_table);

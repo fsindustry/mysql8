@@ -1,4 +1,4 @@
-/*  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/*  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +47,7 @@ bool query_rewritten(const std::string &query, std::string *rewritten_query) {
      - Path enclosed in single quotes.
      - Use of ungreedy patterns to get correct grouping.
   */
-  const std::regex directory_option(
+  std::regex directory_option(
       "\\s*,?\\s*(DATA|INDEX)\\s+DIRECTORY\\s*?=?\\s*?[\"'][^\"']+?[\"']\\s*,?"
       "\\s*",
       std::regex::icase | std::regex::nosubs);
@@ -56,7 +56,7 @@ bool query_rewritten(const std::string &query, std::string *rewritten_query) {
   /*
     Replace ENCRYPTION option.
   */
-  const std::regex encryption_option(
+  std::regex encryption_option(
       "\\s*,?\\s*ENCRYPTION\\s*?=?\\s*?[\"'][NY]?[\"']\\s*,?\\s*",
       std::regex::icase | std::regex::nosubs);
   *rewritten_query =

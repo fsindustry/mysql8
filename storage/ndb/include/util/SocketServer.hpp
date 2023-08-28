@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,11 +25,9 @@
 #ifndef SOCKET_SERVER_HPP
 #define SOCKET_SERVER_HPP
 
-#include "portlib/NdbMutex.h"
-#include "portlib/NdbThread.h"
-#include "portlib/ndb_socket_poller.h"
-#include "portlib/ndb_sockaddr.h"
-
+#include <NdbTCP.h>
+#include <NdbMutex.h>
+#include <NdbThread.h>
 #include <Vector.hpp>
 
 extern "C" void* sessionThread_C(void*);
@@ -51,21 +49,21 @@ public:
   protected:
     friend class SocketServer;
     friend void* sessionThread_C(void*);
-    Session(ndb_socket_t sock) :
+    Session(NDB_SOCKET_TYPE sock) :
       m_stop(false),
-      m_refCount(0),
       m_socket(sock),
+      m_refCount(0),
       m_thread_stopped(false)
       {
 	DBUG_ENTER("SocketServer::Session");
-	DBUG_PRINT("enter",("NDB_SOCKET: %s",
-                            ndb_socket_to_string(m_socket).c_str()));
+	DBUG_PRINT("enter",("NDB_SOCKET: " MY_SOCKET_FORMAT,
+                            MY_SOCKET_FORMAT_VALUE(m_socket)));
 	DBUG_VOID_RETURN;
       }
     bool m_stop;    // Has the session been ordered to stop?
+    NDB_SOCKET_TYPE m_socket;
     unsigned m_refCount;
   private:
-    ndb_socket_t m_socket;
     bool m_thread_stopped; // Has the session thread stopped?
   };
   
@@ -82,7 +80,7 @@ public:
      *
      * To manage threads self, just return NULL
      */
-    virtual Session * newSession(ndb_socket_t theSock) = 0;
+    virtual Session * newSession(NDB_SOCKET_TYPE theSock) = 0;
     virtual void stopSessions(){}
   };
   
@@ -93,19 +91,19 @@ public:
   ~SocketServer();
   
   /**
-   * Set up socket and bind it
+   * Setup socket and bind it
    *  then  close the socket
-   * Returns true if succeeding in binding
+   * Returns true if succeding in binding
    */
-  static bool tryBind(ndb_sockaddr serv_addr,
-                      char* error = nullptr, size_t error_size = 0);
+  static bool tryBind(unsigned short port, const char* intface = 0,
+                      char* error = NULL, size_t error_size = 0);
 
   /**
    * Setup socket
    *   bind & listen
    * Returns false if no success
    */
-  bool setup(Service *, ndb_sockaddr* addr);
+  bool setup(Service *, unsigned short *port, const char * pinterface = 0);
   
   /**
    * start/stop the server
@@ -139,7 +137,7 @@ private:
   };
   struct ServiceInstance {
     Service * m_service;
-    ndb_socket_t m_socket;
+    NDB_SOCKET_TYPE m_socket;
   };
   NdbLockable m_session_mutex;
   Vector<SessionInstance> m_sessions;

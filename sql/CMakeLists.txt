@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,6 +21,8 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+
+MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
 
 ADD_WSHADOW_WARNING()
 
@@ -89,7 +91,7 @@ ADD_CUSTOM_COMMAND(
 MYSQL_ADD_EXECUTABLE(gen_keyword_list
   gen_keyword_list.cc
   DEPENDENCIES GenServerSource
-  LINK_LIBRARIES ext::icu
+  LINK_LIBRARIES ${ICU_LIBRARIES} ${CMAKE_DL_LIBS}
   SKIP_INSTALL
   )
 
@@ -101,7 +103,11 @@ IF(HAS_MISSING_PROFILE)
   ADD_COMPILE_FLAGS(gen_keyword_list.cc COMPILE_FLAGS ${HAS_MISSING_PROFILE})
 ENDIF()
 
+# ICU headers for WIN32 need extra info about their libs state
 IF(WIN32)
+  MY_ADD_COMPILE_DEFINITIONS(gen_keyword_list.cc COMPILE_DEFINITIONS
+    U_STATIC_IMPLEMENTATION)
+
   # Activate necessary dllexport/dllimport declarations.
   ADD_DEFINITIONS(-DPROTOBUF_USE_DLLS)
 ENDIF()
@@ -339,6 +345,7 @@ SET(SQL_GIS_SOURCES
 )
 
 SET(SQL_SHARED_SOURCES
+  abstract_query_plan.cc
   auth/auth_acls.cc
   auth/auth_common.cc
   auth/dynamic_privileges_impl.cc
@@ -362,10 +369,12 @@ SET(SQL_SHARED_SOURCES
   auth/sha2_password_common.cc
   auth/sha2_password.cc
   ssl_wrapper_service.cc
+  bka_iterator.cc
   bootstrap.cc
   check_stack.cc
   conn_handler/connection_handler_manager.cc
   clone_handler.cc
+  composite_iterators.cc
   create_field.cc
   current_thd.cc
   dd_sql_view.cc
@@ -382,11 +391,13 @@ SET(SQL_SHARED_SOURCES
   aggregate_check.cc
   gstream.cc
   handler.cc
+  hash_join_buffer.cc
+  hash_join_chunk.cc
+  hash_join_iterator.cc
   histograms/equi_height.cc
   histograms/equi_height_bucket.cc
   histograms/histogram.cc
   histograms/singleton.cc
-  histograms/table_histograms.cc
   histograms/value_map.cc
   hostname_cache.cc
   init.cc
@@ -396,7 +407,6 @@ SET(SQL_SHARED_SOURCES
   item_cmpfunc.cc
   item_create.cc
   item_func.cc
-  item_gtid_func.cc
   item_pfs_func.cc
   item_json_func.cc
   item_regexp_func.cc
@@ -408,15 +418,6 @@ SET(SQL_SHARED_SOURCES
   item_timefunc.cc
   item_xmlfunc.cc
   item_inetfunc.cc
-  iterators/basic_row_iterators.cc
-  iterators/bka_iterator.cc
-  iterators/composite_iterators.cc
-  iterators/hash_join_buffer.cc
-  iterators/hash_join_chunk.cc
-  iterators/hash_join_iterator.cc
-  iterators/ref_row_iterators.cc
-  iterators/sorting_iterator.cc
-  iterators/window_iterators.cc
   join_optimizer/access_path.cc
   join_optimizer/build_interesting_orders.cc
   join_optimizer/common_subexpression_elimination.cc
@@ -424,18 +425,19 @@ SET(SQL_SHARED_SOURCES
   join_optimizer/estimate_selectivity.cc
   join_optimizer/explain_access_path.cc
   join_optimizer/finalize_plan.cc
-  join_optimizer/graph_simplification.cc
   join_optimizer/hypergraph.cc
   join_optimizer/interesting_orders.cc
   join_optimizer/join_optimizer.cc
   join_optimizer/make_join_hypergraph.cc
-  join_optimizer/online_cycle_finder.cc
   join_optimizer/overflow_bitset.cc
   join_optimizer/print_utils.cc
-  join_optimizer/relational_expression.cc
   join_optimizer/replace_item.cc
+  json_binary.cc
   json_diff.cc
+  json_dom.cc
+  json_path.cc
   json_schema.cc
+  json_syntax_check.cc
   key.cc
   key_spec.cc
   keycaches.cc
@@ -470,7 +472,6 @@ SET(SQL_SHARED_SOURCES
   parse_tree_items.cc
   parse_tree_node_base.cc
   parse_tree_nodes.cc
-  query_term.cc
   parse_tree_partitions.cc
   parse_tree_window.cc
   select_lex_visitor.cc
@@ -480,25 +481,24 @@ SET(SQL_SHARED_SOURCES
   persisted_variable.cc
   protocol_classic.cc
   psi_memory_key.cc
-  psi_memory_resource.cc
   query_result.cc
-  raii/targeted_stringstream.cc
-  range_optimizer/geometry_index_range_scan.cc
-  range_optimizer/group_index_skip_scan.cc
-  range_optimizer/group_index_skip_scan_plan.cc
+  range_optimizer/geometry.cc
+  range_optimizer/group_min_max.cc
+  range_optimizer/group_min_max_plan.cc
   range_optimizer/index_merge.cc
   range_optimizer/index_merge_plan.cc
-  range_optimizer/index_range_scan.cc
-  range_optimizer/index_range_scan_plan.cc
-  range_optimizer/index_skip_scan.cc
-  range_optimizer/index_skip_scan_plan.cc
   range_optimizer/partition_pruning.cc
   range_optimizer/range_analysis.cc
   range_optimizer/range_optimizer.cc
-  range_optimizer/reverse_index_range_scan.cc
+  range_optimizer/range_scan.cc
+  range_optimizer/range_scan_desc.cc
+  range_optimizer/range_scan_plan.cc
   range_optimizer/rowid_ordered_retrieval.cc
   range_optimizer/rowid_ordered_retrieval_plan.cc
+  range_optimizer/skip_scan.cc
+  range_optimizer/skip_scan_plan.cc
   range_optimizer/tree.cc
+  records.cc
   regexp/errors.cc
   regexp/regexp_engine.cc
   regexp/regexp_facade.cc
@@ -516,6 +516,7 @@ SET(SQL_SHARED_SOURCES
   sdi_utils.cc
   session_tracker.cc
   set_var.cc
+  sorting_iterator.cc
   sp.cc
   sp_cache.cc
   sp_head.cc
@@ -552,11 +553,11 @@ SET(SQL_SHARED_SOURCES
   sql_exception_handler.cc
   sql_executor.cc
   sql_get_diagnostics.cc
-  sql_gipk.cc
   sql_handler.cc
   sql_help.cc
   sql_import.cc
   sql_insert.cc
+  sql_join_buffer.cc
   sql_lex.cc
   sql_lex_hash.cc
   sql_lex_hints.cc
@@ -623,21 +624,9 @@ SET(SQL_SHARED_SOURCES
   trigger_chain.cc
   tztime.cc
   uniques.cc
+  window_iterators.cc
   xa.cc
-  xa/recovery.cc
-  xa/sql_xa_second_phase.cc
-  xa/sql_xa_commit.cc
-  xa/sql_xa_end.cc
-  xa/sql_xa_prepare.cc
-  xa/sql_xa_recover.cc
-  xa/sql_xa_rollback.cc
-  xa/sql_xa_start.cc
-  xa/transaction_cache.cc
-  xa/xid_extract.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
-  reference_caching_setup.cc
-  sql_event_tracking_to_audit_event_mapping.cc
-  command_mapping.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -669,14 +658,14 @@ IF(WITH_LOCK_ORDER)
   FIND_PACKAGE(FLEX REQUIRED)
 
   BISON_TARGET(debug_lo_parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/debug_lo_parser.yy
-    ${CMAKE_CURRENT_BINARY_DIR}/debug_lo_parser.cc
+    debug_lo_parser.yy
+    ${CMAKE_BINARY_DIR}/sql/debug_lo_parser.cc
     COMPILE_FLAGS "--name-prefix=LOCK_ORDER_ ${BISON_NO_LINE_OPT}"
     DEFINES_FILE ${CMAKE_BINARY_DIR}/sql/debug_lo_parser.h
     )
   FLEX_TARGET(debug_lo_scanner
-    ${CMAKE_CURRENT_SOURCE_DIR}/debug_lo_scanner.ll
-    ${CMAKE_CURRENT_BINARY_DIR}/debug_lo_scanner.cc
+    debug_lo_scanner.ll
+    ${CMAKE_BINARY_DIR}/sql/debug_lo_scanner.cc
     COMPILE_FLAGS "--prefix=LOCK_ORDER_"
     DEFINES_FILE ${CMAKE_BINARY_DIR}/sql/debug_lo_scanner.h
     )
@@ -696,12 +685,6 @@ IF(WITH_LOCK_ORDER)
     ${FLEX_debug_lo_scanner_OUTPUTS}
     debug_lock_order.cc
     )
-
-  # Bison output uses undefined symbols for clang >= v15
-  IF(MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
-    ADD_COMPILE_FLAGS(${CMAKE_BINARY_DIR}/sql/debug_lo_parser.cc
-                      COMPILE_FLAGS "-Wno-unused-but-set-variable")
-  ENDIF()
 
   IF(MY_COMPILER_IS_GNU_OR_CLANG)
     ADD_COMPILE_FLAGS(${FLEX_debug_lo_scanner_OUTPUTS}
@@ -777,13 +760,10 @@ SET(SQL_SOURCE
   ../sql-common/my_path_permissions.cc
   ../sql-common/net_ns.cc
   ../sql-common/net_serv.cc
+  ../sql-common/oci/signing_key.cc
+  ../sql-common/oci/ssl.cc
   ../sql-common/sql_string.cc
   ../sql-common/bind_params.cc
-  ../sql-common/json_binary.cc
-  ../sql-common/json_dom.cc
-  ../sql-common/json_error_handler.cc
-  ../sql-common/json_path.cc
-  ../sql-common/json_syntax_check.cc
   command_service.cc
   conn_handler/channel_info.cc
   conn_handler/connection_handler_per_thread.cc
@@ -828,33 +808,9 @@ MY_ADD_COMPILE_DEFINITIONS(
   COMPILE_DEFINITIONS XXH_NAMESPACE=MY_
   )
 
-# Workaround for Apple Clang bug on ARM.
-# When linking mysqld (and executables using server_unittest_library)
-# we get linker warnings about
-# ld: warning: direct access in function ....
-#     to global weak symbol 'typeinfo for .... '
-# It turns out we end up with conflicting visibilities for typeinfo symbols:
-# e.g. in in singleton.cc.o  vs  histogram.cc.o
-# (__DATA,__const) weak external __ZTIN10histograms9SingletonI6StringEE
-# (__DATA,__const) weak private external __ZTIN10histograms9SingletonI6StringEE
-#
-# Setting an explicit visibility here fixes the warnings.
-# Note that the LINK_PUBLIC for server_unittest_library
-# will make unit tests pick up histogram symbols from libsql_main.a.
-IF(APPLE_ARM)
-  ADD_COMPILE_FLAGS(
-    histograms/equi_height.cc
-    histograms/equi_height_bucket.cc
-    histograms/histogram.cc
-    histograms/singleton.cc
-    histograms/value_map.cc
-    COMPILE_FLAGS -fvisibility=hidden
-    )
-ENDIF()
-
 ADD_COMPILE_FLAGS(
   ${BUNDLED_LZ4_PATH}/xxhash.c
-  iterators/hash_join_iterator.cc
+  hash_join_iterator.cc
   rpl_write_set_handler.cc
   COMPILE_FLAGS -I${CMAKE_SOURCE_DIR}/extra/lz4 -I${BUNDLED_LZ4_PATH}
   )
@@ -898,12 +854,7 @@ ENDIF()
 IF(MY_COMPILER_IS_GNU_OR_CLANG)
   ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
                     ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
-                    COMPILE_FLAGS "-Wno-undef -Wno-unused-label")
-  IF(MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
-    ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
-                      ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
-                      COMPILE_FLAGS "-Wno-unused-but-set-variable")
-  ENDIF()
+                    COMPILE_FLAGS "-Wno-undef")
   # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
   IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)
     ADD_COMPILE_FLAGS(
@@ -911,15 +862,6 @@ IF(MY_COMPILER_IS_GNU_OR_CLANG)
       ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
       COMPILE_FLAGS "-Wno-free-nonheap-object")
   ENDIF()
-ENDIF()
-
-IF(WIN32)
-  # switch statement contains 'default' but no 'case'
-  ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
-    COMPILE_FLAGS "/wd4065")
-  # conversion from 'uint' to 'Item *' of greater size
-  ADD_COMPILE_FLAGS(range_optimizer/range_analysis.cc
-    COMPILE_FLAGS "/wd4312")
 ENDIF()
 
 MY_CHECK_CXX_COMPILER_FLAG("-fno-builtin-memcmp" HAVE_NO_BUILTIN_MEMCMP)
@@ -932,15 +874,14 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
 ENDIF()
 
 
-ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu)
+ADD_LIBRARY(sql_main STATIC ${SQL_SOURCE})
 ADD_DEPENDENCIES(sql_main GenServerSource)
 ADD_DEPENDENCIES(sql_main GenDigestServerSource)
 ADD_DEPENDENCIES(sql_main GenBootstrapPriv)
 ADD_DEPENDENCIES(sql_main GenSysSchema)
 TARGET_LINK_LIBRARIES(sql_main ${MYSQLD_STATIC_PLUGIN_LIBS}
   mysql_server_component_services mysys strings vio
-  binlogevents_static ${LIBWRAP} ${LIBDL} ${SSL_LIBRARIES}
-  extra::rapidjson)
+  binlogevents_static ${LIBWRAP} ${LIBDL} ${SSL_LIBRARIES})
 
 # sql/immutable_string.h uses
 # google::protobuf::io::CodedOutputStream::WriteVarint64ToArray
@@ -993,23 +934,12 @@ SET(BINLOG_SOURCE
   basic_istream.cc
   basic_ostream.cc
   binlog/global.cc
-  binlog/recovery.cc
-  binlog/group_commit/bgc_ticket_manager.cc
-  binlog/group_commit/bgc_ticket.cc
-  binlog/group_commit/atomic_bgc_ticket.cc
-  binlog/group_commit/atomic_bgc_ticket_guard.cc
   binlog/monitoring/context.cc
-  binlog/decompressing_event_object_istream.cc
-  binlog/services/iterator/file_storage.cc
+  binlog/tools/iterators.cc
   binlog.cc
   binlog_istream.cc
   binlog_ostream.cc
   binlog_reader.cc
-  changestreams/misc/replicated_columns_view.cc
-  changestreams/misc/replicated_columns_view_with_gipk_on_source.cc
-  changestreams/misc/column_filters/column_filter_inbound_func_indexes.cc
-  changestreams/misc/column_filters/column_filter_inbound_gipk.cc
-  changestreams/misc/column_filters/column_filter_outbound_func_indexes.cc
   log_event.cc
   rpl_commit_stage_manager.cc
   rpl_filter.cc
@@ -1041,14 +971,13 @@ ADD_DEPENDENCIES(binlog GenError)
 ADD_LIBRARY(rpl STATIC ${RPL_SOURCE})
 TARGET_LINK_LIBRARIES(rpl sql_main)
 
-# library for the replication source
-SET (RPL_SOURCE_SRCS rpl_source.cc rpl_binlog_sender.cc binlog_reader.cc)
+SET (MASTER_SOURCE rpl_source.cc rpl_binlog_sender.cc binlog_reader.cc)
 ADD_DEPENDENCIES(rpl GenError)
-ADD_LIBRARY(rpl_source STATIC ${RPL_SOURCE_SRCS})
-ADD_DEPENDENCIES(rpl_source GenError)
-TARGET_LINK_LIBRARIES(rpl_source binlog sql_main)
+ADD_LIBRARY(master STATIC ${MASTER_SOURCE})
+ADD_DEPENDENCIES(master GenError)
+TARGET_LINK_LIBRARIES(master binlog sql_main)
 
-SET (RPL_REPLICA_SRCS
+SET (SLAVE_SOURCE
   dynamic_ids.cc
   changestreams/apply/commit_order_queue.cc
   changestreams/apply/replication_thread_status.cc
@@ -1088,37 +1017,26 @@ SET (RPL_REPLICA_SRCS
   udf_service_impl.cc
   udf_service_util.cc
   )
-ADD_LIBRARY(rpl_replica STATIC ${RPL_REPLICA_SRCS})
-ADD_DEPENDENCIES(rpl_replica GenError)
-TARGET_LINK_LIBRARIES(rpl_replica
+ADD_LIBRARY(slave STATIC ${SLAVE_SOURCE})
+ADD_DEPENDENCIES(slave GenError)
+TARGET_LINK_LIBRARIES(slave
   binlog sql_main ${PROTOBUF_LITE_LIBRARY} ${RPL_PROTOBUF_LITE_LIB})
-
-IF(WIN32)
-  # Silence warnings about: needs to have dll-interface
-  TARGET_COMPILE_OPTIONS(rpl_replica PRIVATE "/wd4251")
-  ADD_COMPILE_FLAGS(mysqld.cc COMPILE_FLAGS "/wd4251")
-  IF(WIN32_CLANG)
-    ADD_COMPILE_FLAGS(mysqld.cc COMPILE_FLAGS " -Wno-microsoft-cast")
-  ENDIF()
-ENDIF()
 
 # Includes code generated by protobuf, and version 3.12 will generate extra ';'.
 MY_CHECK_CXX_COMPILER_WARNING("-Wextra-semi" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
-  TARGET_COMPILE_OPTIONS(rpl_replica PRIVATE "${HAS_WARN_FLAG}")
+  TARGET_COMPILE_OPTIONS(slave PRIVATE "${HAS_WARN_FLAG}")
   ADD_COMPILE_FLAGS(mysqld.cc COMPILE_FLAGS ${HAS_WARN_FLAG})
 ENDIF()
 
 # All these libraries depend on each other.
-TARGET_LINK_LIBRARIES(sql_main rpl rpl_source rpl_replica binlog)
+TARGET_LINK_LIBRARIES(sql_main rpl master slave binlog)
+IF(WITH_ICU STREQUAL "bundled")
+  TARGET_LINK_LIBRARIES(sql_main ${ICU_LIBRARIES})
+ENDIF()
 
 IF(WIN32)
-  SET(MYSQLD_SOURCE
-    main.cc
-    enable_win_jemalloc.cc
-    nt_servc.cc
-    nt_servc.h
-    message.rc)
+  SET(MYSQLD_SOURCE main.cc nt_servc.cc nt_servc.h message.rc)
 ELSE()
   SET(MYSQLD_SOURCE main.cc)
 ENDIF()
@@ -1156,10 +1074,11 @@ IF(APPLE)
   ENDIF()
 ENDIF()
 
+SET_TARGET_PROPERTIES(mysqld PROPERTIES ENABLE_EXPORTS TRUE)
+
 IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
-  # We may get errors in boost/geometry/srs/projections/proj/ob_tran.hpp
-  # and several other boost files.
-  MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
+  # We get ODR violations because of multiple bison parsers.
+  MY_CHECK_CXX_COMPILER_WARNING("error=odr" HAS_WARN_FLAG)
   IF(HAS_WARN_FLAG)
     MY_TARGET_LINK_OPTIONS(mysqld "${HAS_WARN_FLAG}")
   ENDIF()
@@ -1183,9 +1102,6 @@ IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR OR LINUX_INSTALL_RPATH_ORIGIN)
   # Insert absolute INSTALL_RPATH before $ORIGIN values.
   # This is done in order to support setuid executables, needed by:
   # https://dev.mysql.com/doc/refman/8.0/en/resource-groups.html
-
-  # Note: for Fedora RPM, this gives ERROR 0008: file '/usr/sbin/mysqld'
-  #       contains the $ORIGIN specifier at the wrong position.
   IF(INSTALL_LAYOUT STREQUAL "DEB" OR INSTALL_LAYOUT STREQUAL "RPM")
     GET_TARGET_PROPERTY(CURRENT_RPATH_mysqld mysqld INSTALL_RPATH)
     LIST(INSERT CURRENT_RPATH_mysqld 0
@@ -1222,15 +1138,15 @@ IF(MSVC)
     "$<TARGET_FILE:mysys>"
     "$<TARGET_FILE:mytime>"
     "$<TARGET_FILE:rpl>"
-    "$<TARGET_FILE:rpl_replica>"
+    "$<TARGET_FILE:slave>"
     "$<TARGET_FILE:sql_main>"
     "$<TARGET_FILE:strings>"
     "$<TARGET_FILE:vio>"
     > mysqld.def
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}"
-    DEPENDS create_def binlog binlogevents_static mysys mytime rpl rpl_replica sql_main strings vio
+    DEPENDS create_def binlog binlogevents_static mysys mytime rpl slave sql_main strings vio
   )
-  MY_ADD_CUSTOM_TARGET(GenMysqldDef ALL
+  ADD_CUSTOM_TARGET(GenMysqldDef ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/mysqld.def)
 
   ADD_DEPENDENCIES(sql_main GenError)
@@ -1239,8 +1155,8 @@ ENDIF()
 
 SET_TARGET_PROPERTIES(mysqld PROPERTIES ENABLE_EXPORTS TRUE)
 TARGET_LINK_LIBRARIES(mysqld
-  sql_main sql_gis binlog rpl rpl_source rpl_replica sql_dd mysys
-  minchassis binlogevents_static ext::icu)
+  sql_main sql_gis binlog rpl master slave sql_dd mysys
+  minchassis binlogevents_static ${ICU_LIBRARIES})
 
 # Add dependency on ldap library, to ensure it is not unloaded
 # when we shutdown the authentication plugin.
@@ -1250,7 +1166,7 @@ IF(WITH_VALGRIND)
   SET(LINK_MYSQLD_LDAP_LIBRARY 1)
 ENDIF()
 IF(WITH_SSL STREQUAL "system" AND
-    "${OPENSSL_VERSION_MAJOR}.${OPENSSL_VERSION_MINOR}" VERSION_LESS "1.1")
+    "${OPENSSL_MAJOR_VERSION}.${OPENSSL_MINOR_VERSION}" VERSION_LESS "1.1")
   SET(LINK_MYSQLD_LDAP_LIBRARY 1)
 ENDIF()
 IF(WITH_AUTHENTICATION_LDAP AND LINK_MYSQLD_LDAP_LIBRARY)
@@ -1264,10 +1180,6 @@ ENDIF()
 # Remove transitive link dependencies when linking plugins
 SET_TARGET_PROPERTIES(mysqld PROPERTIES INTERFACE_LINK_LIBRARIES "")
 
-IF(TARGET copy_jemalloc_dll)
-  ADD_DEPENDENCIES(mysqld copy_jemalloc_dll)
-ENDIF()
-
 # See DEBUG_EXTNAME above: mysqld may already have name mysqld-debug,
 # and the rename is a no-op. If it is called 'mysqld' we rename it.
 INSTALL_DEBUG_TARGET(mysqld
@@ -1275,7 +1187,9 @@ INSTALL_DEBUG_TARGET(mysqld
   RENAME mysqld-debug${CMAKE_EXECUTABLE_SUFFIX}
 )
 
-# We have already included cmake/bison.cmake, and done FIND_PACKAGE(BISON)
+# Check BISON_VERSION and set BISON_FLAGS_WARNINGS
+INCLUDE(${CMAKE_SOURCE_DIR}/cmake/bison.cmake)
+
 IF(BISON_FOUND)
   SET(USE_BISON_RESULTS_FROM_MAKE_DIST_DEFAULT OFF)
 ELSE()
@@ -1306,18 +1220,18 @@ IF(USE_BISON_RESULTS_FROM_MAKE_DIST)
   ENDFOREACH()
 ELSE()
   BISON_TARGET(mysql_parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/sql_yacc.yy
+    sql_yacc.yy
     ${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
     COMPILE_FLAGS
-    "--yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
+    "--name-prefix=MYSQL --yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
     DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.h
     )
 
   BISON_TARGET(hints_parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/sql_hints.yy
+    sql_hints.yy
     ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
     COMPILE_FLAGS
-    "--yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
+    "--name-prefix=HINT_PARSER_ --yacc ${BISON_FLAGS_WARNINGS} ${BISON_NO_LINE_OPT}"
     DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.h
     )
 
@@ -1344,9 +1258,7 @@ SET_SOURCE_FILES_PROPERTIES(
 MYSQL_ADD_EXECUTABLE(gen_lex_hash gen_lex_hash.cc SKIP_INSTALL)
 
 IF(HAS_MISSING_PROFILE)
-  ADD_COMPILE_FLAGS(
-    gen_lex_hash.cc
-    COMPILE_FLAGS ${HAS_MISSING_PROFILE})
+  ADD_COMPILE_FLAGS(gen_lex_hash.cc COMPILE_FLAGS ${HAS_MISSING_PROFILE})
 ENDIF()
 
 ADD_CUSTOM_COMMAND(
@@ -1359,47 +1271,45 @@ MYSQL_ADD_EXECUTABLE(mysql_tzinfo_to_sql
   time_zone_common.cc
   mysql_tzinfo_to_sql.cc
   DEPENDENCIES GenError
-  LINK_LIBRARIES mysys extra::rapidjson
+  LINK_LIBRARIES mysys
   )
 SET_TARGET_PROPERTIES(mysql_tzinfo_to_sql
   PROPERTIES COMPILE_FLAGS "-DDISABLE_PSI_FILE=1 -DABBR_ARE_USED")
 
-MY_ADD_CUSTOM_TARGET(
-  GenServerSource
-  DEPENDS ${GEN_SOURCES}
+ADD_CUSTOM_TARGET(
+        GenServerSource
+        DEPENDS ${GEN_SOURCES}
 )
 
-MY_ADD_CUSTOM_TARGET(
-  GenDigestServerSource
-  DEPENDS ${GEN_DIGEST_SOURCES}
+ADD_CUSTOM_TARGET(
+        GenDigestServerSource
+        DEPENDS ${GEN_DIGEST_SOURCES}
 )
 
-MY_ADD_CUSTOM_TARGET(
+ADD_CUSTOM_TARGET(
   GenKeywordList
   DEPENDS ${GEN_KEYWORD_LIST_SOURCES}
 )
 
-ADD_DEPENDENCIES(clang_tidy_prerequisites
-  GenBootstrapPriv
-  GenDigestServerSource
-  GenFixPrivs
-  GenKeywordList
-  GenServerSource
-  GenSysSchema
-  )
-
 MYSQL_ADD_PLUGIN(udf_example udf_example.cc
-  MODULE_ONLY
-  TEST_ONLY
-  MODULE_OUTPUT_NAME "udf_example"
-  WIN_DEF_FILE "${CMAKE_CURRENT_SOURCE_DIR}/udf_example.def"
+  MODULE_ONLY TEST_ONLY MODULE_OUTPUT_NAME "udf_example"
   )
+# MYSQL_ADD_PLUGIN may have decided not to build it.
+IF(WIN32 AND TARGET udf_example)
+  SET_TARGET_PROPERTIES(udf_example
+    PROPERTIES LINK_FLAGS
+    "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/udf_example.def")
+ENDIF()
 
 MYSQL_ADD_PLUGIN(locking_service locking_service_udf.cc
-  MODULE_ONLY
-  MODULE_OUTPUT_NAME "locking_service"
-  WIN_DEF_FILE "${CMAKE_CURRENT_SOURCE_DIR}/locking_service.def"
+  MODULE_ONLY MODULE_OUTPUT_NAME "locking_service"
   )
+# MYSQL_ADD_PLUGIN may have decided not to build it.
+IF(WIN32 AND TARGET locking_service)
+  SET_TARGET_PROPERTIES(locking_service
+    PROPERTIES LINK_FLAGS
+    "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/locking_service.def")
+ENDIF()
 
 FOREACH(tool gtar tar git)
   STRING(TOUPPER ${tool}  TOOL)

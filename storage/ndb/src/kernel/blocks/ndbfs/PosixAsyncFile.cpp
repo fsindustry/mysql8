@@ -1,5 +1,5 @@
 /* 
-   Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -59,7 +59,8 @@ PosixAsyncFile::PosixAsyncFile(Ndbfs& fs) :
 void PosixAsyncFile::removeReq(Request *request)
 {
   if (-1 == ::remove(theFileName.c_str())) {
-    NDBFS_SET_REQUEST_ERROR(request, errno);
+    request->error = errno;
+
   }
 }
 
@@ -70,7 +71,7 @@ PosixAsyncFile::rmrfReq(Request *request, const char * src, bool removePath)
   {
     // Remove file
     if(unlink(src) != 0 && errno != ENOENT)
-      NDBFS_SET_REQUEST_ERROR(request, errno);
+      request->error = errno;
     return;
   }
 
@@ -85,7 +86,7 @@ loop:
   if(dirp == 0)
   {
     if(errno != ENOENT)
-      NDBFS_SET_REQUEST_ERROR(request, errno);
+      request->error = errno;
     return;
   }
 
@@ -117,7 +118,7 @@ loop:
 
   if(removePath && rmdir(src) != 0)
   {
-    NDBFS_SET_REQUEST_ERROR(request, errno);
+    request->error = errno;
   }
 }
 

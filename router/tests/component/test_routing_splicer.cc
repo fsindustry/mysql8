@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -39,13 +39,14 @@
 #include "mysql/harness/filesystem.h"
 #include "mysql/harness/net_ts/impl/socket.h"
 #include "mysql/harness/string_utils.h"  // split_string
-#include "mysqlrouter/mysql_session.h"
-#include "mysqlxclient.h"
+#include "mysql_session.h"
 #include "mysqlxclient/xerror.h"
 #include "mysqlxclient/xsession.h"
 #include "plugin/x/client/mysqlxclient/xerror.h"
 #include "router/src/routing/src/ssl_mode.h"
 #include "router_component_test.h"  // ProcessManager
+
+#include "mysqlxclient.h"
 
 using namespace std::string_literals;
 using namespace std::chrono_literals;
@@ -77,7 +78,7 @@ TEST_F(SplicerTest, ssl_mode_default_passthrough) {
                mock_server_host_ + ":" + std::to_string(server_port)},
               {"routing_strategy", "round-robin"},
           })},
-      "");
+      "\n");
   SCOPED_TRACE("starting router with config:\n" + config);
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
@@ -103,7 +104,7 @@ TEST_F(SplicerTest, ssl_mode_default_preferred) {
               {"client_ssl_key", valid_ssl_key_},
               {"client_ssl_cert", valid_ssl_cert_},
           })},
-      "");
+      "\n");
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
   launch_router({"-c", conf_file});
@@ -157,10 +158,9 @@ TEST_F(SplicerTest, invalid_metadata) {
                   {"bootstrap_server_addresses",
                    "mysql://127.0.0.1:" + std::to_string(server_port)},
                   {"metadata_cluster", "test"},
-                  {"router_id", "1"},
               }),
       },
-      "");
+      "\n");
 
   auto default_section = get_DEFAULT_defaults();
   init_keyring(default_section, conf_dir_.name());
@@ -195,9 +195,10 @@ TEST_F(SplicerTest, invalid_metadata) {
     // ... then try until the starts to fail.
     try {
       for (size_t rounds{};; ++rounds) {
-        // guard against infinite loop
+        // guard against inifinite loop
         if (rounds == 100) FAIL() << "connect() should have failed by now.";
 
+        // the router's certs against the corresponding CA
         sess.connect("127.0.0.1", router_port,
                      "someuser",  // user
                      "somepass",  // pass
@@ -212,12 +213,7 @@ TEST_F(SplicerTest, invalid_metadata) {
       }
     } catch (const mysqlrouter::MySQLSession::Error &e) {
       // connect failed eventually.
-      // depending on the timing this cand also be "SSL connection aborted"
-      // openssl 1.1.1: 2013
-      // openssl 1.0.2: 2026
-      EXPECT_THAT(e.code(),
-                  ::testing::AnyOf(::testing::Eq(2003), ::testing::Eq(2013),
-                                   ::testing::Eq(2026)));
+      EXPECT_EQ(e.code(), 2003);
     }
   }
 
@@ -228,7 +224,7 @@ TEST_F(SplicerTest, invalid_metadata) {
 
   SCOPED_TRACE("// check for the expected error-msg");
   EXPECT_THAT(
-      router.get_logfile_content(),
+      router.get_full_logfile(),
       ::testing::HasSubstr("Error parsing host:port in metadata for instance"));
 }
 
@@ -266,7 +262,7 @@ TEST_P(SplicerFailParamTest, fails) {
   auto config = mysql_harness::join(
       std::vector<std::string>{
           mysql_harness::ConfigBuilder::build_section("routing", cmdline_opts)},
-      "");
+      "\n");
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
   auto &router =
@@ -275,7 +271,7 @@ TEST_P(SplicerFailParamTest, fails) {
   check_exit_code(router, EXIT_FAILURE);
 
   EXPECT_NO_FATAL_FAILURE(GetParam().checker(
-      mysql_harness::split_string(router.get_logfile_content(), '\n')));
+      mysql_harness::split_string(router.get_full_logfile(), '\n')));
 }
 
 const SplicerFailParam splicer_fail_params[] = {
@@ -284,9 +280,9 @@ const SplicerFailParam splicer_fail_params[] = {
          {"client_ssl_mode", "unknown"},
      },
      [](const std::vector<std::string> &output_lines) {
-       ASSERT_THAT(output_lines, ::testing::Contains(::testing::HasSubstr(
-                                     "invalid value 'unknown' for option "
-                                     "client_ssl_mode in [routing]")));
+       ASSERT_THAT(
+           output_lines,
+           ::testing::Contains(::testing::HasSubstr("for client_ssl_mode")));
      }},
     {"client_ssl_key_no_cert",
      {
@@ -590,13 +586,10 @@ const SplicerFailParam splicer_fail_params[] = {
          {"client_ssl_dh_params", SSL_TEST_DATA_DIR "/server-cert-sha512.pem"},
      },
      [](const std::vector<std::string> &output_lines) {
-       ASSERT_THAT(
-           output_lines,
-           ::testing::Contains(::testing::AllOf(
-               ::testing::HasSubstr("setting client_ssl_dh_param"),
-               ::testing::AnyOf(
-                   ::testing::EndsWith("no start line"),
-                   ::testing::EndsWith("DECODER routines::unsupported")))));
+       ASSERT_THAT(output_lines,
+                   ::testing::Contains(::testing::AllOf(
+                       ::testing::HasSubstr("setting client_ssl_dh_param"),
+                       ::testing::EndsWith("no start line"))));
      }},
     {"server_ssl_curves_unknown",  // RT2_CIPHERS_UNKNOWN_04
      {
@@ -769,13 +762,13 @@ TEST_P(SplicerConnectParamTest, check) {
   const auto config = mysql_harness::join(
       std::vector<std::string>{
           mysql_harness::ConfigBuilder::build_section("routing", cmdline_opts)},
-      "");
+      "\n");
 
   const auto conf_file = create_config_file(conf_dir_.name(), config);
 
   launch_router({"-c", conf_file}, EXIT_SUCCESS,
                 /* catch_stderr */ true, /* with_sudo */ false,
-                /* wait_for_notify_ready */ 30s);
+                /* wait_for_notify_ready */ 20s);
   EXPECT_TRUE(wait_for_port_ready(router_port));
 
   EXPECT_NO_FATAL_FAILURE(GetParam().checker(router_host_, router_port));
@@ -1858,7 +1851,7 @@ TEST_F(SplicerTest, classic_protocol_default_preferred_as_client) {
               {"client_ssl_key", valid_ssl_key_},
               {"client_ssl_cert", valid_ssl_cert_},
           })},
-      "");
+      "\n");
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
   launch_router({"-c", conf_file});
@@ -1941,7 +1934,7 @@ TEST_P(SplicerParamTest, classic_protocol) {
               {"server_ssl_mode",
                ssl_mode_to_string(GetParam().server_ssl_mode)},
           })},
-      "");
+      "\n");
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
   launch_router({"-c", conf_file});
@@ -1959,7 +1952,6 @@ TEST_P(SplicerParamTest, classic_protocol) {
   );
 
   try {
-    SCOPED_TRACE("// connection to router");
     sess.connect(router_host_, router_port,
                  mock_username,  // user
                  mock_password,  // pass
@@ -1972,10 +1964,8 @@ TEST_P(SplicerParamTest, classic_protocol) {
 
     const bool is_encrypted{sess.ssl_cipher() != nullptr};
 
-    SCOPED_TRACE("// checking connection is (not) encrypted");
     EXPECT_EQ(is_encrypted, GetParam().expect_client_encrypted);
 
-    SCOPED_TRACE("// checking server's ssl_cipher");
     try {
       const auto row = sess.query_one("show status like 'ssl_cipher'");
       ASSERT_TRUE(row) << "<show status like 'ssl_cipher'> returned no row";
@@ -1990,18 +1980,16 @@ TEST_P(SplicerParamTest, classic_protocol) {
       FAIL() << e.what();
     }
 
-    SCOPED_TRACE("// SELECT <- 15Mbyte");
     try {
       const auto row =
           sess.query_one("select repeat('a', 15 * 1024 * 1024) as a");
       ASSERT_EQ(row->size(), 1);
 
-      EXPECT_EQ((*row)[0], std::string(15L * 1024 * 1024, 'a'));
+      EXPECT_EQ((*row)[0], std::string(15 * 1024 * 1024, 'a'));
     } catch (const mysqlrouter::MySQLSession::Error &e) {
       FAIL() << e.what();
     }
 
-    SCOPED_TRACE("// SELECT -> 4k");
     try {
       const auto row = sess.query_one("select length(" +
                                       std::string(4097, 'a') + ") as length");
@@ -2084,7 +2072,7 @@ TEST_P(SplicerParamTest, xproto) {
                ssl_mode_to_string(GetParam().server_ssl_mode)},
               {"protocol", "x"},
           })},
-      "");
+      "\n");
   auto conf_file = create_config_file(conf_dir_.name(), config);
 
   launch_router({"-c", conf_file});
@@ -2189,119 +2177,6 @@ TEST_P(SplicerParamTest, xproto) {
 
       EXPECT_EQ(field, std::string(15 * 1024 * 1024, 'a'));
     }
-  }
-}
-
-/**
- * compression should fail, if not passthrough.
- */
-TEST_P(SplicerParamTest, xproto_compression) {
-  const auto server_port = port_pool_.get_next_available();
-  const auto router_port = port_pool_.get_next_available();
-  const auto server_port_x = port_pool_.get_next_available();
-
-  const std::string mock_file = get_data_dir().join("tls_endpoint.js").str();
-
-  auto mock_server_cmdline_args =
-      mysql_server_mock_cmdline_args(mock_file, server_port, 0,  // http_port
-                                     server_port_x);
-
-  // enable SSL support on the mock-server.
-  if (GetParam().mock_ssl_mode != mysql_ssl_mode::SSL_MODE_DISABLED) {
-    std::initializer_list<std::pair<const char *, const char *>> mock_opts = {
-        {"--ssl-cert", SSL_TEST_DATA_DIR "crl-server-cert.pem"},
-        {"--ssl-key", SSL_TEST_DATA_DIR "crl-server-key.pem"},
-        {"--ssl-mode", "PREFERRED"}};
-
-    for (const auto &arg : mock_opts) {
-      mock_server_cmdline_args.emplace_back(arg.first);
-      mock_server_cmdline_args.emplace_back(arg.second);
-    }
-  }
-
-  launch_mysql_server_mock(mock_server_cmdline_args, server_port);
-
-  const std::string destination(mock_server_host_ + ":" +
-                                std::to_string(server_port_x));
-  const std::string mock_username = "someuser";
-  const std::string mock_password = "somepass";
-
-  auto config = mysql_harness::join(
-      std::vector<std::string>{mysql_harness::ConfigBuilder::build_section(
-          "routing",
-          {
-              {"bind_port", std::to_string(router_port)},
-              {"destinations", destination},
-              {"routing_strategy", "round-robin"},
-              {"client_ssl_key", valid_ssl_key_},
-              {"client_ssl_cert", valid_ssl_cert_},
-              {"client_ssl_mode",
-               ssl_mode_to_string(GetParam().client_ssl_mode)},
-              {"server_ssl_mode",
-               ssl_mode_to_string(GetParam().server_ssl_mode)},
-              {"protocol", "x"},
-          })},
-      "");
-  auto conf_file = create_config_file(conf_dir_.name(), config);
-
-  launch_router({"-c", conf_file});
-  EXPECT_TRUE(wait_for_port_ready(router_port));
-
-  auto sess = xcl::create_session();
-  ASSERT_THAT(
-      sess->set_mysql_option(xcl::XSession::Mysqlx_option::Ssl_mode,
-                             mysqlrouter::MySQLSession::ssl_mode_to_string(
-                                 GetParam().my_ssl_mode)),
-      ::testing::Truly([](const xcl::XError &xerr) { return !xerr; }));
-
-  // use a auth-method that works over plaintext, server-side channels
-  if (GetParam().client_ssl_mode == SslMode::kPreferred &&
-      GetParam().server_ssl_mode == SslMode::kDisabled &&
-      GetParam().my_ssl_mode != SSL_MODE_DISABLED) {
-    // client is TLS and will default to PLAIN auth, but it will fail on the
-    // server side as the server's connection plaintext (and PLAIN is only
-    // allowed over secure channels).
-    sess->set_mysql_option(xcl::XSession::Mysqlx_option::Authentication_method,
-                           "MYSQL41");
-  }
-
-  SCOPED_TRACE("// check the compression capability is announced properly.");
-  {
-    auto &xproto = sess->get_protocol();
-    auto &xconn = xproto.get_connection();
-
-    const auto connect_err =
-        xconn.connect(router_host_, router_port, xcl::Internet_protocol::Any);
-
-    ASSERT_EQ(connect_err.error(), 0) << connect_err.what();
-
-    // try to set the compression capability.
-    {
-      Mysqlx::Connection::CapabilitiesSet caps;
-
-      auto *cap = caps.mutable_capabilities()->add_capabilities();
-      cap->mutable_name()->assign("compression");
-      auto *cap_value = cap->mutable_value();
-      cap_value->set_type(Mysqlx::Datatypes::Any_Type::Any_Type_OBJECT);
-      auto *cap_value_obj = cap_value->mutable_obj();
-      {
-        auto *cap_value_obj_fld = cap_value_obj->add_fld();
-        cap_value_obj_fld->mutable_key()->assign("algorithm");
-        auto *fld_value = cap_value_obj_fld->mutable_value();
-        fld_value->set_type(Mysqlx::Datatypes::Any_Type::Any_Type_SCALAR);
-        auto *fld_scalar = fld_value->mutable_scalar();
-        fld_scalar->set_type(
-            Mysqlx::Datatypes::Scalar_Type::Scalar_Type_V_STRING);
-        fld_scalar->mutable_v_string()->mutable_value()->assign(
-            "deflate_stream");
-      }
-
-      auto xerr = xproto.execute_set_capability(caps);
-      // Invalid or unsupported value for 'compression.algorithm'
-      EXPECT_EQ(xerr.error(), 5175) << xerr.what();
-    }
-
-    xconn.close();
   }
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,14 +29,12 @@
 
 #include "my_sys.h"
 #include "my_thread.h"
-#include "sql/binlog/group_commit/bgc_ticket_manager.h"
 #include "sql/binlog_ostream.h"
 #include "sql/binlog_reader.h"
 #include "sql/debug_sync.h"
 #include "sql/log_event.h"
 #include "sql/replication.h"
 #include "sql/rpl_channel_service_interface.h"
-#include "sql/rpl_commit_stage_manager.h"
 #include "sql/rpl_gtid.h"
 #include "sql/rpl_write_set_handler.h"
 
@@ -209,23 +207,6 @@ bool is_gtid_committed(const Gtid &gtid);
 unsigned long get_replica_max_allowed_packet();
 
 /**
-  Wait until the given Gtid_set is included in @@GLOBAL.GTID_EXECUTED.
-
-  @param[in] gtid_set_text Gtid_set to wait for.
-  @param[in] timeout       The maximum number of seconds that the
-                           function should wait, or 0 to wait indefinitely.
-  @param[in] update_thd_status
-                           when true updates the stage info with
-                           the new wait condition, when false keeps the
-                           current stage info.
-
-  @retval false the Gtid_set is included in @@GLOBAL.GTID_EXECUTED
-  @retval true  otherwise
-*/
-bool wait_for_gtid_set_committed(const char *gtid_set_text, double timeout,
-                                 bool update_thd_status);
-
-/**
   @returns the maximum value of replica_max_allowed_packet.
  */
 unsigned long get_max_replica_max_allowed_packet();
@@ -239,21 +220,5 @@ bool is_server_restarting_after_clone();
   @returns if the server already dropped its data when cloning
 */
 bool is_server_data_dropped();
-
-/**
-  Copy to datetime_str parameter the date in the format
-  'YYYY-MM-DD hh:mm:ss.ffffff' of the moment in time
-  represented by micro-seconds elapsed since the Epoch,
-  1970-01-01 00:00:00 +0000 (UTC).
-
-  @param[in]  microseconds_since_epoch  micro-seconds since Epoch.
-  @param[out] datetime_str              The string pointer to print at. This
-                                        function is guaranteed not to write
-                                        more than MAX_DATE_STRING_REP_LENGTH
-                                        characters.
-  @param[in]  decimal_precision         decimal precision, in the range 0..6
-*/
-void microseconds_to_datetime_str(uint64_t microseconds_since_epoch,
-                                  char *datetime_str, uint decimal_precision);
 
 #endif /* GROUP_REPLICATION_PRIV_INCLUDE */

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,8 @@
 #define TCP_TRANSPORTER_HPP
 
 #include "Transporter.hpp"
+
+#include <NdbTCP.h>
 
 struct ReceiveBuffer {
   Uint32 *startOfBuffer;    // Pointer to start of the receive buffer 
@@ -109,9 +111,9 @@ protected:
    * A client connects to the remote server
    * A server accepts any new connections
    */
-  bool connect_server_impl(NdbSocket & sockfd) override;
-  bool connect_client_impl(NdbSocket & sockfd) override;
-  bool connect_common(NdbSocket & sockfd);
+  bool connect_server_impl(NDB_SOCKET_TYPE sockfd) override;
+  bool connect_client_impl(NDB_SOCKET_TYPE sockfd) override;
+  bool connect_common(NDB_SOCKET_TYPE sockfd);
   
   /**
    * Disconnects a TCP/IP node, possibly blocking.
@@ -129,13 +131,13 @@ private:
   int sockOptNodelay;
   int sockOptTcpMaxSeg;
 
-  void setSocketOptions(ndb_socket_t socket);
+  void setSocketOptions(NDB_SOCKET_TYPE socket);
 
-  static bool setSocketNonBlocking(ndb_socket_t aSocket);
-  int pre_connect_options(ndb_socket_t aSocket) override;
+  static bool setSocketNonBlocking(NDB_SOCKET_TYPE aSocket);
+  int pre_connect_options(NDB_SOCKET_TYPE aSocket) override;
   
   bool send_is_possible(int timeout_millisec) const override;
-  bool send_is_possible(ndb_socket_t fd, int timeout_millisec) const;
+  bool send_is_possible(NDB_SOCKET_TYPE fd, int timeout_millisec) const;
 
   ReceiveBuffer receiveBuffer;
 
@@ -178,7 +180,7 @@ void
 ReceiveBuffer::destroy(){
   delete[] startOfBuffer;
   sizeOfBuffer  = 0;
-  startOfBuffer = nullptr;
+  startOfBuffer = 0;
   clear();
 }
 

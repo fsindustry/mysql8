@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include <stdio.h>
 
 #include <ndb_global.h>
 
@@ -30,11 +29,12 @@
 
 const char* NdbEnv_GetEnv(const char* name, char * buf, int buflen)
 {
-  char* p = nullptr;
+  char* p = NULL;
   p = getenv(name);
 
-  if (p != nullptr && buf != nullptr){
-    snprintf(buf, buflen, "%s", p);
+  if (p != NULL && buf != NULL){
+    strncpy(buf, p, buflen);
+    buf[buflen-1] = 0;
   }
   return p;
 

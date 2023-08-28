@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,6 @@
 #include "sql/dd/impl/types/object_table_impl.h"  // dd::Object_table_impl
 #include "sql/dd/object_id.h"                     // dd::Object_id
 #include "sql/dd/string_type.h"
-
-struct CHARSET_INFO;
 
 namespace dd {
 class Object_key;

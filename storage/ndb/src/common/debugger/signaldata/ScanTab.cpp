@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,23 +22,17 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+
+
 #include <BlockNumbers.h>
 #include <signaldata/ScanTab.hpp>
 #include <signaldata/ScanFrag.hpp>
 
-bool printSCANTABREQ(FILE *output,
-                     const Uint32 *theData,
-                     Uint32 len,
-                     Uint16 /*receiverBlockNo*/)
-{
-  if (len < ScanTabReq::StaticLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const ScanTabReq *const sig = (const ScanTabReq *)theData;
-
+bool
+printSCANTABREQ(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo){
+  
+  const ScanTabReq * const sig = (ScanTabReq *) theData;
+  
   const UintR requestInfo = sig->requestInfo;
 
   fprintf(output, " apiConnectPtr: H\'%.8x", 
@@ -74,19 +68,11 @@ bool printSCANTABREQ(FILE *output,
   return false;
 }
 
-bool printSCANTABCONF(FILE *output,
-                      const Uint32 *theData,
-                      Uint32 len,
-                      Uint16 /*receiverBlockNo*/)
-{
-  if (len < ScanTabConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const ScanTabConf *const sig = (const ScanTabConf *)theData;
-
+bool
+printSCANTABCONF(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo){
+  
+  const ScanTabConf * const sig = (ScanTabConf *) theData;
+  
   const UintR requestInfo = sig->requestInfo;
 
   fprintf(output, " apiConnectPtr: H\'%.8x\n", 
@@ -103,8 +89,8 @@ bool printSCANTABCONF(FILE *output,
     if (len == ScanTabConf::SignalLength + 4 * op_count)
     {
       fprintf(output, " Operation(s) [api tc rows len]:\n");
-      const ScanTabConf::OpData *op =
-          (const ScanTabConf::OpData *)(theData + ScanTabConf::SignalLength);
+      ScanTabConf::OpData * op = (ScanTabConf::OpData*)
+        (theData + ScanTabConf::SignalLength);
       for(size_t i = 0; i<op_count; i++)
       {
         fprintf(output, " [0x%x 0x%x %d %d]",
@@ -118,9 +104,8 @@ bool printSCANTABCONF(FILE *output,
       fprintf(output, " Operation(s) [api tc rows len]:\n");      
       for(size_t i = 0; i<op_count; i++)
       {
-        const ScanTabConf::OpData *op =
-            (const ScanTabConf::OpData *)(theData + ScanTabConf::SignalLength +
-                                          3 * i);
+        ScanTabConf::OpData * op = (ScanTabConf::OpData*)
+          (theData + ScanTabConf::SignalLength + 3 * i);
         fprintf(output, " [0x%x 0x%x %d %d]",
                 op->apiPtrI, op->tcPtrI,
                 ScanTabConf::getRows(op->rows),
@@ -138,19 +123,11 @@ bool printSCANTABCONF(FILE *output,
   return false;
 }
 
-bool printSCANTABREF(FILE *output,
-                     const Uint32 *theData,
-                     Uint32 len,
-                     Uint16 /*receiverBlockNo*/)
-{
-  if (len < ScanTabRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const ScanTabRef *const sig = (const ScanTabRef *)theData;
-
+bool
+printSCANTABREF(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo){
+  
+  const ScanTabRef * const sig = (ScanTabRef *) theData;
+  
   fprintf(output, " apiConnectPtr: H\'%.8x\n", 
 	  sig->apiConnectPtr);
 
@@ -163,19 +140,11 @@ bool printSCANTABREF(FILE *output,
   return false;
 }
 
-bool printSCANFRAGNEXTREQ(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
-{
-  if (len < ScanFragNextReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
 
-  const ScanFragNextReq *const sig = (const ScanFragNextReq *)theData;
-
+bool
+printSCANFRAGNEXTREQ(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo){
+  const ScanFragNextReq * const sig = (ScanFragNextReq *) theData;
+  
   fprintf(output, " senderData: H\'%.8x\n", 
 	  sig->senderData);
   
@@ -194,8 +163,8 @@ bool
 printSCANNEXTREQ(FILE * output, const Uint32 * theData, Uint32 len, Uint16 receiverBlockNo){
 
   if(receiverBlockNo == DBTC){
-    const ScanNextReq *const sig = (const ScanNextReq *)theData;
-
+    const ScanNextReq * const sig = (ScanNextReq *) theData;
+    
     fprintf(output, " apiConnectPtr: H\'%.8x\n", 
 	    sig->apiConnectPtr);
     

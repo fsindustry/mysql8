@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -109,7 +109,7 @@ public:
   ~NdbInterpretedCode();
 
   /**
-   * Describe how a comparison involving a NULL value should behave.
+   * Descibe how a comparison involving a NULL value should behave.
    * Old API behaviour was to cmp 'NULL == NULL -> true' and
    * 'NULL < <any non-null> -> true. (CmpHasNoUnknowns). However,
    * MySQL specify that a comparison involving a NULL-value is 'unknown',
@@ -210,45 +210,46 @@ public:
    */
   int def_label(int LabelNum);
 
-  /* Unconditional jump
+  /* Unconditional jump 
    * ------------------
    * Space required   Buffer    Request message
    *   branch_label   1 word    1 word
    *
-   * @param label : Program label to jump to
+   * @param Label : Program label to jump to
    * @return 0 if successful, -1 otherwise
    */
-  int branch_label(Uint32 label);
+  int branch_label(Uint32 Label);
 
-  /* Register based conditional branch ops
+  /* Register based conditional branch ops 
    * -------------------------------------
    * These instructions are used to branch based on numeric
    * register to register comparisons.
    *
    * if (RegLvalue <cond> RegRvalue)
-   *   goto label;
+   *   goto Label;
    *
    * Space required   Buffer    Request message
    *   branch_*       1 word    1 word
    *
    * @param RegLValue register to use as left hand side of condition
    * @param RegRValue register to use as right hand side of condition
-   * @param label Program label to jump to if condition is true
+   * @param Label Program label to jump to if condition is true
    * @return 0 if successful, -1 otherwise.
    */
-  int branch_ge(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_gt(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_le(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_lt(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_eq(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_ne(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 label);
-  int branch_ne_null(Uint32 RegLvalue, Uint32 label);
-  int branch_eq_null(Uint32 RegLvalue, Uint32 label);
+  int branch_ge(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_gt(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_le(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_lt(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_eq(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_ne(Uint32 RegLvalue, Uint32 RegRvalue, Uint32 Label);
+  int branch_ne_null(Uint32 RegLvalue, Uint32 Label);
+  int branch_eq_null(Uint32 RegLvalue, Uint32 Label);
+
 
   /* Table data based conditional branch ops
    * ---------------------------------------
    * These instructions are used to branch based on comparisons
-   * between columns and constants.
+   * between columns and constants.  
    *
    * These instructions require that the table being operated
    * upon was supplied when the NdbInterpretedCode object was
@@ -266,13 +267,13 @@ public:
    *
    * BEWARE, that the later is not according to the specified SQL
    * std spec, which is also implemented by MySql.
-   *
+   * 
    * if ( *val <cond> ValueOf(AttrId) )
-   *   goto label;
+   *   goto Label;
    *
    * Space required        Buffer          Request message
    *   branch_col_*_null   2 words         2 words
-   *   branch_col_*        2 words +       2 words +
+   *   branch_col_*        2 words +       2 words + 
    *                       type length     type length
    *                       rounded to      rounded to
    *                       nearest word    nearest word
@@ -283,33 +284,21 @@ public:
    * @param val       ptr to const value to compare against
    * @param unused    unnecessary
    * @param attrId    column to compare
-   * @param label     Program label to jump to if condition is true
+   * @param Label     Program label to jump to if condition is true
    * @return 0 if successful, -1 otherwise.
    */
-  int branch_col_eq(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
-  int branch_col_ne(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
-  int branch_col_lt(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
-  int branch_col_le(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
-  int branch_col_gt(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
-  int branch_col_ge(const void *val,
-                    Uint32 unused,
-                    Uint32 attrId,
-                    Uint32 label);
+  int branch_col_eq(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
+  int branch_col_ne(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
+  int branch_col_lt(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
+  int branch_col_le(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
+  int branch_col_gt(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
+  int branch_col_ge(const void * val, Uint32 unused, Uint32 attrId,
+                    Uint32 Label);
 
   /* Variants of above methods allowing us to compare two Attr
    * from the same table. Both Attr's has to be of the exact same
@@ -330,8 +319,8 @@ public:
   int branch_col_gt(Uint32 attrId1, Uint32 attrId2, Uint32 label);
   int branch_col_ge(Uint32 attrId1, Uint32 attrId2, Uint32 label);
 
-  int branch_col_eq_null(Uint32 attrId, Uint32 label);
-  int branch_col_ne_null(Uint32 attrId, Uint32 label);
+  int branch_col_eq_null(Uint32 attrId, Uint32 Label);
+  int branch_col_ne_null(Uint32 attrId, Uint32 Label);
 
   /*
    * Variants comparing an Attribute from this table with a parameter
@@ -355,7 +344,7 @@ public:
   /* Table based pattern match conditional operations
    * ------------------------------------------------
    * These instructions are used to branch based on comparisons
-   * between CHAR/BINARY/VARCHAR/VARBINARY columns and
+   * between CHAR/BINARY/VARCHAR/VARBINARY columns and 
    * reg-exp patterns.
    *
    * These instructions require that the table being operated
@@ -367,11 +356,11 @@ public:
    * (i.e. no leading length bytes)
    *
    * if (ValueOf(attrId) <LIKE/NOTLIKE> *val)
-   *   goto label;
+   *   goto Label;
    *
    * Space required        Buffer          Request message
    *   branch_col_like/
-   *   branch_col_notlike  2 words +       2 words +
+   *   branch_col_notlike  2 words +       2 words + 
    *                       len bytes       len bytes
    *                       rounded to      rounded to
    *                       nearest word    nearest word
@@ -379,20 +368,19 @@ public:
    * @param val       ptr to const pattern to match against
    * @param len       length in bytes of const pattern
    * @param attrId    column to compare
-   * @param label     Program label to jump to if condition is true
+   * @param Label     Program label to jump to if condition is true
    * @return 0 if successful, -1 otherwise.
    *
    */
-  int branch_col_like(const void *val, Uint32 len, Uint32 attrId, Uint32 label);
-  int branch_col_notlike(const void *val,
-                         Uint32 len,
-                         Uint32 attrId,
-                         Uint32 label);
+  int branch_col_like(const void * val, Uint32 len, Uint32 attrId,
+                      Uint32 Label);
+  int branch_col_notlike(const void * val, Uint32 len, Uint32 attrId,
+                         Uint32 Label);
 
   /* Table based bitwise logical conditional operations
    * --------------------------------------------------
-   * These instructions are used to branch based on the
-   * result of logical AND between Bit type column data
+   * These instructions are used to branch based on the 
+   * result of logical AND between Bit type column data 
    * and a bitmask pattern.
    *
    * These instructions require that the table being operated
@@ -404,21 +392,21 @@ public:
    * Bitfields are passed in/out of NdbApi as 32-bit words
    * with bits set from lsb to msb.
    * The platform's endianness controls which byte contains
-   * the ls bits.
+   * the ls bits.  
    *   x86= first(0th) byte.  Sparc/PPC= last(3rd byte)
    *
    * To set bit n of a bitmask to 1 from a Uint32* mask :
    *   mask[n >> 5] |= (1 << (n & 31))
    *
    * if (BitWiseAnd(ValueOf(attrId), *mask) <EQ/NE> <*mask/0>)
-   *   goto label;
+   *   goto Label;
    *
    * Space required        Buffer          Request message
    *   branch_col_and_mask_eq_mask/
    *   branch_col_and_mask_ne_mask/
    *   branch_col_and_mask_eq_zero/
    *   branch_col_and_mask_ne_zero
-   *                       2 words +       2 words +
+   *                       2 words +       2 words + 
    *                       column width    column width
    *                       rounded to      rounded to
    *                       nearest word    nearest word
@@ -426,26 +414,15 @@ public:
    * @param mask      ptr to const mask to use
    * @param unused    unnecessary
    * @param attrId    column to compare
-   * @param label     Program label to jump to if condition is true
+   * @param Label     Program label to jump to if condition is true
    * @return 0 if successful, -1 otherwise.
    *
    */
-  int branch_col_and_mask_eq_mask(const void *mask,
-                                  Uint32 unused,
-                                  Uint32 attrId,
-                                  Uint32 label);
-  int branch_col_and_mask_ne_mask(const void *mask,
-                                  Uint32 unused,
-                                  Uint32 attrId,
-                                  Uint32 label);
-  int branch_col_and_mask_eq_zero(const void *mask,
-                                  Uint32 unused,
-                                  Uint32 attrId,
-                                  Uint32 label);
-  int branch_col_and_mask_ne_zero(const void *mask,
-                                  Uint32 unused,
-                                  Uint32 attrId,
-                                  Uint32 label);
+  int branch_col_and_mask_eq_mask(const void * mask, Uint32 unused, Uint32 attrId, Uint32 Label);
+  int branch_col_and_mask_ne_mask(const void * mask, Uint32 unused, Uint32 attrId, Uint32 Label);
+  int branch_col_and_mask_eq_zero(const void * mask, Uint32 unused, Uint32 attrId, Uint32 Label);
+  int branch_col_and_mask_ne_zero(const void * mask, Uint32 unused, Uint32 attrId, Uint32 Label);
+
 
   /* Program results 
    * ---------------
@@ -484,7 +461,7 @@ public:
    * @param ErrorCode An error code which will be returned as part
    * of the operation.  If not supplied, defaults to 626. Applications should 
    * use error code 626 or any code in the [6000-6999] range. Error code 899
-   * is supported for backwards compatibility, but 626 is recommended instead.
+   * is supported for backwards compatibility, but 626 is recommmended instead.
    * For other codes, the behavior is undefined and may change at any time 
    * without prior notice.
    *
@@ -713,8 +690,7 @@ private:
   };
   Uint32 m_flags;
 
-  // Allow m_error to be updated even for read only methods
-  mutable NdbError m_error;
+  NdbError m_error;
 
   UnknownHandling m_unknown_action;
 
@@ -732,7 +708,7 @@ private:
    *   First subroutine (if any)
    *   First subroutine label defs (if any)
    *   Second subroutine (if any)
-   *   Second subroutine label defs ....
+   *   Second subroutine lable defs ....
    * 
    * The subroutines should be in order of subroutine number
    * as they must be defined in-order.  The labels can be in
@@ -770,10 +746,10 @@ private:
   int add1(Uint32 x1);
   int add2(Uint32 x1, Uint32 x2);
   int add3(Uint32 x1, Uint32 x2, Uint32 x3);
-  int addN(const Uint32 *data, Uint32 length);
+  int addN(Uint32 *data, Uint32 length);
   int addMeta(CodeMetaInfo& info);
 
-  int add_branch(Uint32 instruction, Uint32 label);
+  int add_branch(Uint32 instruction, Uint32 Label);
   int read_attr_impl(const NdbColumnImpl *c, Uint32 RegDest);
   int write_attr_impl(const NdbColumnImpl *c, Uint32 RegSource);
   int branch_col_val(Uint32 branch_type, Uint32 attrId, const void * val,

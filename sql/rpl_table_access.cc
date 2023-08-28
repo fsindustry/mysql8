@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,9 +27,9 @@
 #include "lex_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysqld_error.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"  // my_thread_set_THR_THD
@@ -38,7 +38,7 @@
 #include "sql/sql_base.h"   // close_thread_tables
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_lex.h"    // Query_tables_list
-#include "sql/table.h"      // Table_ref
+#include "sql/table.h"      // TABLE_LIST
 
 bool System_table_access::open_table(THD *thd, const LEX_CSTRING dbstr,
                                      const LEX_CSTRING tbstr,
@@ -72,10 +72,10 @@ bool System_table_access::open_table(THD *thd, std::string dbstr,
   thd->reset_n_backup_open_tables_state(backup,
                                         Open_tables_state::SYSTEM_TABLES);
 
-  Table_ref tables(dbstr.c_str(), dbstr.length(), tbstr.c_str(), tbstr.length(),
-                   tbstr.c_str(), lock_type);
+  TABLE_LIST tables(dbstr.c_str(), dbstr.length(), tbstr.c_str(),
+                    tbstr.length(), tbstr.c_str(), lock_type);
 
-  tables.open_strategy = Table_ref::OPEN_IF_EXISTS;
+  tables.open_strategy = TABLE_LIST::OPEN_IF_EXISTS;
 
   if (!open_n_lock_single_table(thd, &tables, tables.lock_descriptor().type,
                                 m_flags)) {

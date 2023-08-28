@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
 
@@ -323,7 +322,7 @@ int get_rand_op_ch(char *ch)
 }
 
 /*
-* get a random order form of "ijklmn" through exchanging letter
+* get a random order form of "ijklmn" trough exchanging letter
 */
 void change_col_order()
 {
@@ -394,7 +393,7 @@ int replace_a_to_str(char *source, int pos, char *newstr)
 }
 
 /*
-* check whether the inputted char is an operation 
+* check whether the inputed char is an operation 
 */
 bool check_op(char ch)
 {
@@ -405,7 +404,7 @@ bool check_op(char ch)
 }
 
 /*
-* check whether the inputted char is end flag 
+* check whether the inputed char is end flag 
 */
 bool check_end(char ch)
 {
@@ -413,7 +412,7 @@ bool check_end(char ch)
 }
 
 /*
-* check whether the inputted char is end flag 
+* check whether the inputed char is end flag 
 */
 bool check_col(char ch)
 {
@@ -977,7 +976,7 @@ int runScanFilterConstructorFail(NDBT_Context* ctx, NDBT_Step* step)
   
   if (trans == NULL)
   {
-    APIERROR(myNdb->getNdbError());
+    APIERROR(trans->getNdbError());
     return NDBT_FAILED;
   }
   
@@ -1046,7 +1045,7 @@ int runScanFilterConstructorFail(NDBT_Context* ctx, NDBT_Step* step)
   
   if (trans == NULL)
   {
-    APIERROR(myNdb->getNdbError());
+    APIERROR(trans->getNdbError());
     return NDBT_FAILED;
   }
   

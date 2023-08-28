@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -164,18 +164,20 @@ bool Ndb_binlog_client::event_exists_for_table(Ndb *ndb,
   DBUG_TRACE;
 
   // Generate event name
-  const bool use_full_event =
-      share->get_binlog_full() || share->get_subscribe_constrained();
   const std::string event_name =
-      event_name_for_table(m_dbname, m_tabname, use_full_event);
+      event_name_for_table(m_dbname, m_tabname, share->get_binlog_full());
 
   // Get event from NDB
-  NdbDictionary::Event_ptr existing_event(
-      ndb->getDictionary()->getEvent(event_name.c_str()));
+  NdbDictionary::Dictionary *dict = ndb->getDictionary();
+  const NdbDictionary::Event *existing_event =
+      dict->getEvent(event_name.c_str());
   if (existing_event) {
     // The event exist
+    delete existing_event;
+
     ndb_log_verbose(1, "Event '%s' for table '%s.%s' already exists",
                     event_name.c_str(), m_dbname, m_tabname);
+
     return true;
   }
   return false;  // Does not exist
@@ -193,11 +195,7 @@ void Ndb_binlog_client::log_warning(uint code, const char *fmt, ...) const {
     push_warning_printf(m_thd, Sql_condition::SL_WARNING, code, "%s", buf);
   } else {
     // Print the warning to log file
-    ndb_log_warning("Binlog: [%s.%s] %d: %s", m_dbname, m_tabname, code, buf);
+    ndb_log_warning("NDB Binlog: [%s.%s] %d: %s", m_dbname, m_tabname, code,
+                    buf);
   }
-}
-
-void Ndb_binlog_client::log_ndb_error(const struct NdbError &ndberr) const {
-  log_warning(ER_GET_ERRMSG, "Got NDB error: %d - %s", ndberr.code,
-              ndberr.message);
 }

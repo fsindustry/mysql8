@@ -1,8 +1,8 @@
 typedef uint64_t my_ulonglong;
 typedef int my_socket;
 #include "field_types.h"
-enum enum_field_types {
-  MYSQL_TYPE_DECIMAL,
+enum enum_field_types
+{ MYSQL_TYPE_DECIMAL,
   MYSQL_TYPE_TINY,
   MYSQL_TYPE_SHORT,
   MYSQL_TYPE_LONG,
@@ -35,8 +35,7 @@ enum enum_field_types {
   MYSQL_TYPE_BLOB = 252,
   MYSQL_TYPE_VAR_STRING = 253,
   MYSQL_TYPE_STRING = 254,
-  MYSQL_TYPE_GEOMETRY = 255
-};
+  MYSQL_TYPE_GEOMETRY = 255 };
 typedef enum enum_field_types enum_field_types;
 #include "my_list.h"
 typedef struct LIST {
@@ -284,35 +283,9 @@ uint64_t net_field_length_ll(unsigned char **packet);
 unsigned char *net_store_length(unsigned char *pkg, unsigned long long length);
 unsigned int net_length_size(unsigned long long num);
 unsigned int net_field_length_size(const unsigned char *pos);
-enum connect_stage {
-  CONNECT_STAGE_INVALID = 0,
-  CONNECT_STAGE_NOT_STARTED,
-  CONNECT_STAGE_NET_BEGIN_CONNECT,
-  CONNECT_STAGE_NET_WAIT_CONNECT,
-  CONNECT_STAGE_NET_COMPLETE_CONNECT,
-  CONNECT_STAGE_READ_GREETING,
-  CONNECT_STAGE_PARSE_HANDSHAKE,
-  CONNECT_STAGE_ESTABLISH_SSL,
-  CONNECT_STAGE_AUTHENTICATE,
-  CONNECT_STAGE_AUTH_BEGIN,
-  CONNECT_STAGE_AUTH_RUN_FIRST_AUTHENTICATE_USER,
-  CONNECT_STAGE_AUTH_HANDLE_FIRST_AUTHENTICATE_USER,
-  CONNECT_STAGE_AUTH_READ_CHANGE_USER_RESULT,
-  CONNECT_STAGE_AUTH_HANDLE_CHANGE_USER_REQUEST,
-  CONNECT_STAGE_AUTH_RUN_SECOND_AUTHENTICATE_USER,
-  CONNECT_STAGE_AUTH_INIT_MULTI_AUTH,
-  CONNECT_STAGE_AUTH_FINISH_AUTH,
-  CONNECT_STAGE_AUTH_HANDLE_SECOND_AUTHENTICATE_USER,
-  CONNECT_STAGE_AUTH_DO_MULTI_PLUGIN_AUTH,
-  CONNECT_STAGE_AUTH_HANDLE_MULTI_AUTH_RESPONSE,
-  CONNECT_STAGE_PREP_SELECT_DATABASE,
-  CONNECT_STAGE_PREP_INIT_COMMANDS,
-  CONNECT_STAGE_SEND_ONE_INIT_COMMAND,
-  CONNECT_STAGE_COMPLETE
-};
 #include "mysql/client_plugin.h"
 struct st_mysql_client_plugin {
-  int type; unsigned int interface_version; const char *name; const char *author; const char *desc; unsigned int version[3]; const char *license; void *mysql_api; int (*init)(char *, size_t, int, va_list); int (*deinit)(void); int (*options)(const char *option, const void *); int (*get_options)(const char *option, void *);
+   int type; unsigned int interface_version; const char *name; const char *author; const char *desc; unsigned int version[3]; const char *license; void *mysql_api; int (*init)(char *, size_t, int, va_list); int (*deinit)(void); int (*options)(const char *option, const void *); int (*get_options)(const char *option, void *);
 };
 struct MYSQL;
 #include "plugin_auth_common.h"
@@ -367,7 +340,7 @@ struct st_mysql_client_plugin *mysql_client_register_plugin(
 int mysql_plugin_options(struct st_mysql_client_plugin *plugin,
                          const char *option, const void *value);
 int mysql_plugin_get_option(struct st_mysql_client_plugin *plugin,
-                            const char *option, void *value);
+                         const char *option, void *value);
 #include "mysql_version.h"
 #include "mysql_time.h"
 enum enum_mysql_timestamp_type {
@@ -390,7 +363,7 @@ void init_client_errs(void);
 void finish_client_errs(void);
 extern const char *client_errors[];
 static inline const char *ER_CLIENT(int client_errno) {
-  if (client_errno >= 2000 && client_errno <= 2075)
+  if (client_errno >= 2000 && client_errno <= 2072)
     return client_errors[client_errno - 2000];
   return client_errors[2000 - 2000];
 }
@@ -480,8 +453,6 @@ enum mysql_option {
   MYSQL_OPT_ZSTD_COMPRESSION_LEVEL,
   MYSQL_OPT_LOAD_DATA_LOCAL_DIR,
   MYSQL_OPT_USER_PASSWORD,
-  MYSQL_OPT_SSL_SESSION_DATA,
-  MYSQL_OPT_TLS_SNI_SERVERNAME
 };
 struct st_mysql_options_extention;
 struct st_mysql_options {
@@ -635,10 +606,6 @@ bool mysql_ssl_set(MYSQL *mysql, const char *key, const char *cert,
                            const char *ca, const char *capath,
                            const char *cipher);
 const char * mysql_get_ssl_cipher(MYSQL *mysql);
-bool mysql_get_ssl_session_reused(MYSQL *mysql);
-void * mysql_get_ssl_session_data(MYSQL *mysql, unsigned int n_ticket,
-                                         unsigned int *out_len);
-bool mysql_free_ssl_session_data(MYSQL *mysql, void *data);
 bool mysql_change_user(MYSQL *mysql, const char *user,
                                const char *passwd, const char *db);
 MYSQL * mysql_real_connect(MYSQL *mysql, const char *host,
@@ -734,7 +701,6 @@ void myodbc_remove_escape(MYSQL *mysql, char *name);
 unsigned int mysql_thread_safe(void);
 bool mysql_read_query_result(MYSQL *mysql);
 int mysql_reset_connection(MYSQL *mysql);
-enum net_async_status mysql_reset_connection_nonblocking(MYSQL *mysql);
 int mysql_binlog_open(MYSQL *mysql, MYSQL_RPL *rpl);
 int mysql_binlog_fetch(MYSQL *mysql, MYSQL_RPL *rpl);
 void mysql_binlog_close(MYSQL *mysql, MYSQL_RPL *rpl);
@@ -851,4 +817,3 @@ MYSQL * mysql_real_connect_dns_srv(MYSQL *mysql,
                                           const char *user, const char *passwd,
                                           const char *db,
                                           unsigned long client_flag);
-enum connect_stage mysql_get_connect_nonblocking_stage(MYSQL *mysql);

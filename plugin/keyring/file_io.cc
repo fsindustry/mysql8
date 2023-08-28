@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 #include <sstream>
 #include <utility>
 
-#include "my_inttypes.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"
 #include "sql/current_thd.h"
@@ -58,7 +57,7 @@ bool is_super_user() {
 
 File File_io::open(PSI_file_key file_data_key [[maybe_unused]],
                    const char *filename, int flags, myf myFlags) {
-  const File file = mysql_file_open(file_data_key, filename, flags, MYF(0));
+  File file = mysql_file_open(file_data_key, filename, flags, MYF(0));
   if (file < 0 && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
     uint error_message_number = EE_FILENOTFOUND;
@@ -70,7 +69,7 @@ File File_io::open(PSI_file_key file_data_key [[maybe_unused]],
 }
 
 int File_io::close(File file, myf myFlags) {
-  const int result = mysql_file_close(file, MYF(0));
+  int result = mysql_file_close(file, MYF(0));
   if (result && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
     my_warning(EE_BADCLOSE, my_filename(file), my_errno(),
@@ -80,7 +79,7 @@ int File_io::close(File file, myf myFlags) {
 }
 
 size_t File_io::read(File file, uchar *buffer, size_t count, myf myFlags) {
-  const size_t bytes_read = mysql_file_read(file, buffer, count, MYF(0));
+  size_t bytes_read = mysql_file_read(file, buffer, count, MYF(0));
 
   if (bytes_read != count && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
@@ -92,7 +91,7 @@ size_t File_io::read(File file, uchar *buffer, size_t count, myf myFlags) {
 
 size_t File_io::write(File file, const uchar *buffer, size_t count,
                       myf myFlags) {
-  const size_t bytes_written = mysql_file_write(file, buffer, count, MYF(0));
+  size_t bytes_written = mysql_file_write(file, buffer, count, MYF(0));
 
   if (bytes_written != count && (myFlags & (MY_WME))) {
     char error_buffer[MYSYS_STRERROR_SIZE];
@@ -103,7 +102,7 @@ size_t File_io::write(File file, const uchar *buffer, size_t count,
 }
 
 my_off_t File_io::seek(File file, my_off_t pos, int whence, myf myFlags) {
-  const my_off_t moved_to_position = mysql_file_seek(file, pos, whence, MYF(0));
+  my_off_t moved_to_position = mysql_file_seek(file, pos, whence, MYF(0));
 
   if (moved_to_position == MY_FILEPOS_ERROR && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
@@ -114,7 +113,7 @@ my_off_t File_io::seek(File file, my_off_t pos, int whence, myf myFlags) {
 }
 
 my_off_t File_io::tell(File file, myf myFlags) {
-  const my_off_t position = mysql_file_tell(file, MYF(0));
+  my_off_t position = mysql_file_tell(file, MYF(0));
 
   if ((position == ((my_off_t)-1)) && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
@@ -125,7 +124,7 @@ my_off_t File_io::tell(File file, myf myFlags) {
 }
 
 int File_io::sync(File file, myf myFlags) {
-  const int result = my_sync(file, MYF(0));
+  int result = my_sync(file, MYF(0));
 
   if (result && (myFlags & MY_WME)) {
     char error_buffer[MYSYS_STRERROR_SIZE];
@@ -136,7 +135,7 @@ int File_io::sync(File file, myf myFlags) {
 }
 
 int File_io::fstat(File file, MY_STAT *stat_area, myf myFlags) {
-  const int result = my_fstat(file, stat_area);
+  int result = my_fstat(file, stat_area);
 
   if (result && (myFlags & MY_WME)) {
     std::stringstream error_message;

@@ -7,7 +7,7 @@
   Copyright Abandoned 1998 Irena Pancirov - Irnet Snc
   This file is public domain and comes with NO WARRANTY of any kind
 
-  Modifications Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+  Modifications Copyright (c) 2000, 2021, Oracle and/or its affiliates.
   All rights reserved.
 */
 #include "nt_servc.h"
@@ -24,6 +24,7 @@ static NTService *pService;
 
  -------------------------------------------------------------------------- */
 NTService::NTService() {
+  bOsNT = false;
   // service variables
   ServiceName = NULL;
   hExitEvent = 0;
@@ -64,6 +65,16 @@ NTService::~NTService() {
 
  -------------------------------------------------------------------------- */
 
+BOOL NTService::GetOS() {
+  bOsNT = false;
+  memset(&osVer, 0, sizeof(OSVERSIONINFO));
+  osVer.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+  if (GetVersionEx(&osVer)) {
+    if (osVer.dwPlatformId == VER_PLATFORM_WIN32_NT) bOsNT = true;
+  }
+  return bOsNT;
+}
+
 /**
   Registers the main service thread with the service manager.
 
@@ -80,7 +91,7 @@ long NTService::Init(LPCSTR szInternName, void *ServiceThread) {
   lstrcpy(ServiceName, szInternName);
 
   SERVICE_TABLE_ENTRY stb[] = {
-      {const_cast<char *>(szInternName), (LPSERVICE_MAIN_FUNCTION)ServiceMain},
+      {(char *)szInternName, (LPSERVICE_MAIN_FUNCTION)ServiceMain},
       {NULL, NULL}};
   return StartServiceCtrlDispatcher(stb);  // register with the Service Manager
 }
@@ -359,7 +370,7 @@ BOOL NTService::SeekStatus(LPCSTR szInternName, int OperationType) {
 
   // open a connection to the SCM
   if (!(scm = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE))) {
-    const DWORD ret_error = GetLastError();
+    DWORD ret_error = GetLastError();
     if (ret_error == ERROR_ACCESS_DENIED) {
       printf("Install/Remove of the Service Denied!\n");
       if (!is_super_user())
@@ -393,7 +404,7 @@ BOOL NTService::SeekStatus(LPCSTR szInternName, int OperationType) {
 
         memset(&ss, 0, sizeof(ss));
         if (QueryServiceStatus(service, &ss)) {
-          const DWORD dwState = ss.dwCurrentState;
+          DWORD dwState = ss.dwCurrentState;
           if (dwState == SERVICE_RUNNING)
             printf(
                 "Failed to remove the service because the service is "

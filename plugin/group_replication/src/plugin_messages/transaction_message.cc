@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,11 +22,7 @@
 
 #include "plugin/group_replication/include/plugin_messages/transaction_message.h"
 #include "my_dbug.h"
-#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_message.h"
-
-const uint64_t Transaction_message::s_sent_timestamp_pit_size =
-    Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE + 8;
 
 Transaction_message::Transaction_message(uint64_t payload_capacity)
     : Transaction_message_interface(CT_TRANSACTION_MESSAGE) {
@@ -38,8 +34,7 @@ Transaction_message::Transaction_message(uint64_t payload_capacity)
   const uint64_t headers_size =
       Plugin_gcs_message::WIRE_FIXED_HEADER_SIZE +
       Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE;
-  const uint64_t message_capacity =
-      headers_size + payload_capacity + s_sent_timestamp_pit_size;
+  const uint64_t message_capacity = headers_size + payload_capacity;
   m_gcs_message_data = new Gcs_message_data(0, message_capacity);
 
   std::vector<unsigned char> buffer;
@@ -75,16 +70,6 @@ uint64_t Transaction_message::length() {
 
 Gcs_message_data *Transaction_message::get_message_data_and_reset() {
   DBUG_TRACE;
-
-  /*
-    Add the PIT_SENT_TIMESTAMP to the Gcs_message_data.
-  */
-  std::vector<unsigned char> buffer;
-  encode_payload_item_int8(&buffer, PIT_SENT_TIMESTAMP,
-                           Metrics_handler::get_current_time());
-  m_gcs_message_data->append_to_payload(&buffer.front(),
-                                        s_sent_timestamp_pit_size);
-
   Gcs_message_data *result = m_gcs_message_data;
   m_gcs_message_data = nullptr;
   return result;
@@ -99,11 +84,4 @@ void Transaction_message::decode_payload(const unsigned char *,
                                          const unsigned char *) {
   DBUG_TRACE;
   assert(0);
-}
-
-uint64_t Transaction_message::get_sent_timestamp(const unsigned char *buffer,
-                                                 size_t length) {
-  DBUG_TRACE;
-  return Plugin_gcs_message::get_sent_timestamp(buffer, length,
-                                                PIT_SENT_TIMESTAMP);
 }

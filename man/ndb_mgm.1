@@ -2,12 +2,12 @@
 .\"     Title: ndb_mgm
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/21/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "NDB_MGM" "1" "06/21/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "NDB_MGM" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -45,7 +45,7 @@ To start the management client, it is necessary to supply the host name and port
 .RS 4
 .\}
 .nf
-$> \fBndb_mgm [\fR\fB\fIhost_name\fR\fR\fB [\fR\fB\fIport_num\fR\fR\fB]]\fR
+shell> \fBndb_mgm [\fR\fB\fIhost_name\fR\fR\fB [\fR\fB\fIport_num\fR\fR\fB]]\fR
 .fi
 .if n \{\
 .RE
@@ -57,7 +57,7 @@ For example:
 .RS 4
 .\}
 .nf
-$> \fBndb_mgm ndb_mgmd\&.mysql\&.com 1186\fR
+shell> \fBndb_mgm ndb_mgmd\&.mysql\&.com 1186\fR
 .fi
 .if n \{\
 .RE
@@ -75,7 +75,7 @@ are shown in the following table\&. Additional descriptions follow the table\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&23.26.\ \&Command\-line options used with the program ndb_mgm
+.B Table\ \&23.27.\ \&Command\-line options used with the program ndb_mgm
 .TS
 allbox tab(:);
 lB lB lB.
@@ -105,16 +105,28 @@ lB l l
 lB l l
 lB l l
 lB l l
+lB l l
+lB l l
+lB l l
 lB l l.
 T{
 .PP
-\fB \fR\fB--backup-password-from-stdin\fR\fB \fR
+\fB \fR\fB--backup-password-from-stdin[=value]\fR\fB \fR
 T}:T{
 Get decryption password in a secure fashion from STDIN; use together
-              with --execute and ndb_mgm START BACKUP command
+              with --execute and START BACKUP command
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
+T}
+T{
+.PP
+\fB \fR\fB--character-sets-dir=path\fR\fB \fR
+T}:T{
+Directory containing character sets
+T}:T{
+.PP
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -124,7 +136,7 @@ Set number of times to retry connection before giving up; 0 means 1
               attempt only (and no retries)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -133,18 +145,27 @@ T}:T{
 Number of seconds to wait between attempts to contact management server
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--connect-string=connection_string\fR,
+\fB--connect-string=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Same as --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
+T}
+T{
+.PP
+\fB \fR\fB--core-file\fR\fB \fR
+T}:T{
+Write core file on error; used in debugging
+T}:T{
+.PP
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -153,7 +174,7 @@ T}:T{
 Read given file after global files are read
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -162,7 +183,7 @@ T}:T{
 Read default options from given file only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -171,28 +192,28 @@ T}:T{
 Also read groups with concat(group, suffix)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB \fR\fB--encrypt-backup\fR\fB \fR
+\fB \fR\fB--encrypt-backup[=TRUE|FALSE]\fR\fB \fR
 T}:T{
 Cause START BACKUP to encrypt whenever making a backup, prompting for
               password if not supplied by user
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
-\fB--execute=command\fR,
+\fB--execute=name\fR,
 .PP
-\fB \fR\fB-e command\fR\fB \fR
+\fB \fR\fB-e\fR\fB \fR
 T}:T{
 Execute command and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -203,7 +224,7 @@ T}:T{
 Display help text and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -212,31 +233,31 @@ T}:T{
 Read given path from login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--ndb-connectstring=connection_string\fR,
+\fB--ndb-connectstring=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Set connect string for connecting to ndb_mgmd. Syntax:
               "[nodeid=id;][host=]hostname[:port]". Overrides entries in
               NDB_CONNECTSTRING and my.cnf
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
-\fB--ndb-mgmd-host=connection_string\fR,
+\fB--ndb-mgmd-host=connection-string\fR,
 .PP
-\fB \fR\fB-c connection_string\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Same as --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -245,7 +266,18 @@ T}:T{
 Set node ID for this node, overriding any ID set by --ndb-connectstring
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
+T}
+T{
+.PP
+\fB \fR\fB--ndb-optimized-node-selection\fR\fB \fR
+T}:T{
+Enable optimizations for selection of nodes for transactions. Enabled by
+              default; use --skip-ndb-optimized-node-selection to
+              disable
+T}:T{
+.PP
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -254,7 +286,7 @@ T}:T{
 Do not read default options from any option file other than login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -263,19 +295,19 @@ T}:T{
 Print program argument list and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
 \fB--try-reconnect=#\fR,
 .PP
-\fB \fR\fB-t #\fR\fB \fR
+\fB \fR\fB-t\fR\fB \fR
 T}:T{
 Set number of times to retry connection before giving up; synonym for
               --connect-retries
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -286,7 +318,7 @@ T}:T{
 Display help text and exit; same as --help
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -297,7 +329,7 @@ T}:T{
 Display version information and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 .TE
 .sp 1
@@ -313,11 +345,29 @@ T}
 \fB\-\-backup\-password\-from\-stdin[=TRUE|FALSE]\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---backup-password-from-stdin
+--backup-password-from-stdin[=value]
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -464,7 +514,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---connect-string=connection_string
+--connect-string=connection-string
 T}
 T{
 Type
@@ -617,11 +667,29 @@ Also read groups with concat(group, suffix)\&.
 \fB\-\-encrypt\-backup\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---encrypt-backup
+--encrypt-backup[=TRUE|FALSE]
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -650,7 +718,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---execute=command
+--execute=name
 T}
 .TE
 .sp 1
@@ -662,8 +730,8 @@ in the management client:
 .RS 4
 .\}
 .nf
-$> \fBndb_mgm \-e "SHOW"\fR
-$> \fBndb_mgm \-\-execute="SHOW"\fR
+shell> \fBndb_mgm \-e "SHOW"\fR
+shell> \fBndb_mgm \-\-execute="SHOW"\fR
 .fi
 .if n \{\
 .RE
@@ -769,7 +837,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---ndb-connectstring=connection_string
+--ndb-connectstring=connection-string
 T}
 T{
 Type
@@ -842,7 +910,7 @@ lB l.
 T{
 Command-Line Format
 T}:T{
---ndb-mgmd-host=connection_string
+--ndb-mgmd-host=connection-string
 T}
 T{
 Type
@@ -1049,7 +1117,7 @@ Section\ \&23.6.1, \(lqCommands in the NDB Cluster Management Client\(rq\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

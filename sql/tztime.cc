@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,6 +41,8 @@
 #include <time.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"  // strmake
 #include "map_helpers.h"
 #include "mutex_lock.h"  // MUTEX_LOCK
 #include "my_alloc.h"
@@ -50,22 +52,21 @@
 #include "my_dir.h"
 #include "my_inttypes.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_pointer_arithmetic.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
-#include "my_time.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
+#include "my_time.h"  // MY_TIME_T_MIN
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/bits/psi_memory_bits.h"
-#include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/psi_memory_bits.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/dd/types/event.h"
 #include "sql/field.h"
@@ -77,7 +78,6 @@
 #include "sql/thr_malloc.h"
 #include "sql/time_zone_common.h"  // ABBR_ARE_USED
 #include "sql/tzfile.h"            // TZ_MAX_REV_RANGES
-#include "string_with_len.h"
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "thr_mutex.h"
@@ -88,9 +88,8 @@
 #include "sql/sql_base.h"   // close_trans_system_tables
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_time.h"   // localtime_to_TIME
-#include "sql/table.h"      // Table_ref
+#include "sql/table.h"      // TABLE_LIST
 #include "sql_string.h"     // String
-#include "strmake.h"
 
 #include <algorithm>
 #include <string>
@@ -187,11 +186,11 @@ void sec_to_TIME(MYSQL_TIME *tmp, my_time_t t, int64 offset) {
 }
 
 /*
-  Find time range which contains given time value
+  Find time range wich contains given my_time_t value
 
   SYNOPSIS
     find_time_range()
-      t                - time value for which we looking for containing range
+      t                - my_time_t value for which we looking for range
       range_boundaries - sorted array of range starts.
       higher_bound     - number of ranges
 
@@ -199,7 +198,7 @@ void sec_to_TIME(MYSQL_TIME *tmp, my_time_t t, int64 offset) {
     Performs binary search for range which contains given my_time_t value.
     It has sense if number of ranges is greater than zero and my_time_t value
     is greater or equal than beginning of first range. It also assumes that
-    t belongs to some range specified or end of last is MYTIME_MAX_VALUE.
+    t belongs to some range specified or end of last is MY_TIME_T_MAX.
 
     With this localtime_r on real data may takes less time than with linear
     search (I've seen 30% speed up).
@@ -269,7 +268,7 @@ static const TRAN_TYPE_INFO *find_transition_type(my_time_t t,
 
   SYNOPSIS
     gmt_sec_to_TIME()
-      tmp          - pointer to structure for broken down representation
+      tmp          - pointer to structure for broken down represenatation
       sec_in_utc   - my_time_t value to be converted
       sp           - pointer to struct with time zone description
 
@@ -280,7 +279,7 @@ static const TRAN_TYPE_INFO *find_transition_type(my_time_t t,
     (60th and 61st second, look how we calculate them as "hit" in this
     function).
     Under realistic assumptions about frequency of transitions the same array
-    can be used for MYSQL_TIME -> my_time_t conversion. For this we need to
+    can be used fot MYSQL_TIME -> my_time_t conversion. For this we need to
     implement tweaked binary search which will take into account that some
     MYSQL_TIME has two matching my_time_t ranges and some of them have none.
 */
@@ -332,9 +331,34 @@ static void gmt_sec_to_TIME(MYSQL_TIME *tmp, my_time_t sec_in_utc,
   tmp->second += hit;
 }
 
+/**
+  Converts time from a MYSQL_TIME struct to a unix timestamp-like 64 bit
+  integer. The function is guaranteed to use 64 bits on any platform.
+
+  @todo Make sec_since_epoch() call this function instead of duplicating the
+  code.
+
+  @param mt The time to convert.
+  @return A value compatible with a 64 bit Unix timestamp.
+*/
+static int64_t sec_since_epoch64(const MYSQL_TIME &mt) {
+  assert(mt.month > 0 && mt.month < 13);
+  // The year can be negative wrt to the epoch, hence the cast to signed.
+  auto year = static_cast<int64_t>(mt.year);
+  int64_t days = year * DAYS_PER_NYEAR - EPOCH_YEAR * DAYS_PER_NYEAR +
+                 LEAPS_THRU_END_OF(year - 1) -
+                 LEAPS_THRU_END_OF(EPOCH_YEAR - 1);
+  days += mon_starts[isleap(year)][mt.month - 1];
+  days += mt.day - 1;
+
+  return ((days * HOURS_PER_DAY + mt.hour) * MINS_PER_HOUR + mt.minute) *
+             SECS_PER_MIN +
+         mt.second;
+}
+
 /*
   Converts local time in broken down representation to local
-  time zone analog of my_time_t representation.
+  time zone analog of my_time_t represenation.
 
   SYNOPSIS
     sec_since_epoch()
@@ -342,45 +366,29 @@ static void gmt_sec_to_TIME(MYSQL_TIME *tmp, my_time_t sec_in_utc,
 
   DESCRIPTION
     Converts time in broken down representation to my_time_t representation
-    ignoring time zone.
+    ignoring time zone. Note that we cannot convert back some valid _local_
+    times near ends of my_time_t range because of my_time_t  overflow. But we
+    ignore this fact now since MySQL will never pass such argument.
 
   RETURN VALUE
     Seconds since epoch time representation.
 */
 static my_time_t sec_since_epoch(int year, int mon, int mday, int hour, int min,
                                  int sec) {
+  /* Guard against my_time_t overflow(on system with 32 bit my_time_t) */
+  assert(!(year == TIMESTAMP_MAX_YEAR && mon == 1 && mday > 17));
   /*
     It turns out that only whenever month is normalized or unnormalized
     plays role.
   */
-  assert(mon > 0 && mon < 13 && year <= 9999);
-  my_time_t days = year * DAYS_PER_NYEAR - EPOCH_YEAR * DAYS_PER_NYEAR +
-                   LEAPS_THRU_END_OF(year - 1) -
-                   LEAPS_THRU_END_OF(EPOCH_YEAR - 1);
+  assert(mon > 0 && mon < 13);
+  long days = year * DAYS_PER_NYEAR - EPOCH_YEAR * DAYS_PER_NYEAR +
+              LEAPS_THRU_END_OF(year - 1) - LEAPS_THRU_END_OF(EPOCH_YEAR - 1);
   days += mon_starts[isleap(year)][mon - 1];
   days += mday - 1;
 
-  const my_time_t result =
-      ((days * HOURS_PER_DAY + hour) * MINS_PER_HOUR + min) * SECS_PER_MIN +
-      sec;
-  return result;
-}
-
-/**
- Converts time from a MYSQL_TIME struct to a unix timestamp-like 64 bit
- integer. The function is guaranteed to use 64 bits on any platform.
-
- @todo Make sec_since_epoch() call this function instead of duplicating the
- code.
-
- @param mt The time to convert.
- @return A value compatible with a 64 bit Unix timestamp.
-*/
-static int64_t sec_since_epoch64(const MYSQL_TIME &mt) {
-  assert(mt.month > 0 && mt.month < 13);
-  // The year can be negative wrt to the epoch, hence the cast to signed.
-  auto year = static_cast<int64_t>(mt.year);
-  return sec_since_epoch(year, mt.month, mt.day, mt.hour, mt.minute, mt.second);
+  return ((days * HOURS_PER_DAY + hour) * MINS_PER_HOUR + min) * SECS_PER_MIN +
+         sec;
 }
 
 static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
@@ -396,7 +404,7 @@ static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
 
   SYNOPSIS
     TIME_to_gmt_sec()
-      t               - pointer to structure for broken down representation
+      t               - pointer to structure for broken down represenatation
       sp              - pointer to struct with time zone description
       in_dst_time_gap - pointer to bool which is set to true if datetime
                         value passed doesn't really exist (i.e. falls into
@@ -412,12 +420,11 @@ static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
     - It can give wrong results near the ends of my_time_t due to
       overflows, but we are safe since in MySQL we will never
       call this function for such dates (its restriction for year
-      between 1970 and 2038 gives us several days of reserve for 32 bit
-      time platforms).
+      between 1970 and 2038 gives us several days of reserve).
     - By default it doesn't support un-normalized input. But if
       sec_since_epoch() function supports un-normalized dates
       then this function should handle un-normalized input right,
-      although it won't normalize structure TIME.
+      altough it won't normalize structure TIME.
 
     Traditional approach to problem of conversion from broken down
     representation to time_t is iterative. Both elsie's and glibc
@@ -433,7 +440,7 @@ static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
     and we have two possible answers).
 
     We use completely different approach. It is better since it is both
-    faster than iterative implementations and fully deterministic. If you
+    faster than iterative implementations and fully determenistic. If you
     look at my_time_t to MYSQL_TIME conversion then you'll find that it consist
     of two steps:
     The first is calculating shifted my_time_t value and the second - TIME
@@ -442,7 +449,7 @@ static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
     my_time_t conversion. It is piecewise linear function which is defined
     by combination of transition times as break points and times offset
     as changing function parameter. The possible inverse function for this
-    conversion would be ambiguous but with MySQL's restrictions we can use
+    converison would be ambiguos but with MySQL's restrictions we can use
     some function which is the same as inverse function on unambigiuos
     ranges and coincides with one of branches of inverse function in
     other ranges. Thus we just need to build table which will determine
@@ -465,14 +472,14 @@ static my_time_t sec_since_epoch(const MYSQL_TIME &mt) {
 */
 static my_time_t TIME_to_gmt_sec(const MYSQL_TIME *t, const TIME_ZONE_INFO *sp,
                                  bool *in_dst_time_gap) {
-  my_time_t local_t;
+  longlong local_t;
   uint saved_seconds;
   uint i;
   int shift = 0;
 
   DBUG_TRACE;
 
-  if (!validate_my_time(*t)) return 0;
+  if (!validate_timestamp_range(*t)) return 0;
 
   /* We need this for correct leap seconds handling */
   if (t->second < SECS_PER_MIN)
@@ -492,11 +499,11 @@ static my_time_t TIME_to_gmt_sec(const MYSQL_TIME *t, const TIME_ZONE_INFO *sp,
     => we negative values of local_t are ok.
   */
 
-  if ((t->year == MYTIME_MAX_YEAR) && (t->month == 1) && t->day > 4) {
+  if ((t->year == TIMESTAMP_MAX_YEAR) && (t->month == 1) && t->day > 4) {
     /*
       We will pass (t->day - shift) to sec_since_epoch(), and
       want this value to be a positive number, so we shift
-      only dates > 2038-01-04 (to avoid overflow).
+      only dates > 4.01.2038 (to avoid owerflow).
     */
     shift = 2;
   }
@@ -519,13 +526,13 @@ static my_time_t TIME_to_gmt_sec(const MYSQL_TIME *t, const TIME_ZONE_INFO *sp,
   i = find_time_range(local_t, sp->revts, sp->revcnt);
 
   /*
-    As there are no offset switches at the end of my_time_t range,
+    As there are no offset switches at the end of TIMESTAMP range,
     we could simply check for overflow here (and don't need to bother
     about DST gaps etc)
   */
   if (shift) {
-    if (local_t > MYTIME_MAX_VALUE - shift * SECS_PER_DAY +
-                      sp->revtis[i].rt_offset - saved_seconds) {
+    if (local_t > (my_time_t)(TIMESTAMP_MAX_VALUE - shift * SECS_PER_DAY +
+                              sp->revtis[i].rt_offset - saved_seconds)) {
       return 0; /* my_time_t overflow */
     }
     local_t += shift * SECS_PER_DAY;
@@ -543,10 +550,10 @@ static my_time_t TIME_to_gmt_sec(const MYSQL_TIME *t, const TIME_ZONE_INFO *sp,
   } else
     local_t = local_t + saved_seconds - sp->revtis[i].rt_offset;
 
-  if (is_time_t_valid_for_timestamp(local_t))
-    return static_cast<my_time_t>(local_t);
-  else
-    return 0;
+  /* check for TIMESTAMP_MAX_VALUE was already done above */
+  if (local_t < TIMESTAMP_MIN_VALUE) local_t = 0;
+
+  return static_cast<my_time_t>(local_t);
 }
 
 /*
@@ -614,10 +621,10 @@ bool convert_time_zone_displacement(const Time_zone *tz, MYSQL_TIME *mt) {
   if (check_time_zone_convertibility(*mt)) return true;
 
   MYSQL_TIME out;
-  const std::int64_t epoch_secs_in_utc =
+  std::int64_t epoch_secs_in_utc =
       sec_since_epoch64(*mt) - mt->time_zone_displacement;
 
-  const ulong microseconds = mt->second_part;
+  ulong microseconds = mt->second_part;
 
   tz->gmt_sec_to_TIME(&out, epoch_secs_in_utc);
   out.second_part = microseconds;
@@ -640,7 +647,7 @@ bool convert_time_zone_displacement(const Time_zone *tz, MYSQL_TIME *mt) {
   were no explicit time zone specified. On the other hand because of this
   conversion methods provided by this class is significantly slower and
   possibly less multi-threaded-friendly than corresponding Time_zone_db
-  methods so the latter should be preferred there it is possible.
+  methods so the latter should be preffered there it is possible.
 */
 class Time_zone_system : public Time_zone {
  public:
@@ -685,7 +692,7 @@ my_time_t Time_zone_system::TIME_to_gmt_sec(const MYSQL_TIME *mt,
   if (mt->time_type == MYSQL_TIMESTAMP_DATETIME_TZ)
     return sec_since_epoch(*mt) - mt->time_zone_displacement;
 
-  my_time_t not_used;
+  long not_used;
   return my_system_gmt_sec(*mt, &not_used, in_dst_time_gap);
 }
 
@@ -707,20 +714,9 @@ my_time_t Time_zone_system::TIME_to_gmt_sec(const MYSQL_TIME *mt,
 */
 void Time_zone_system::gmt_sec_to_TIME(MYSQL_TIME *tmp, my_time_t t) const {
   struct tm tmp_tm;
-  const time_t tmp_t = (time_t)t;
+  time_t tmp_t = (time_t)t;
 
   localtime_r(&tmp_t, &tmp_tm);
-  if (tmp_tm.tm_year <= 0) {  // Windows sets -1 if timestamp is too high.
-    tmp->year = 0;
-    tmp->month = 0;
-    tmp->day = 0;
-    tmp->hour = 0;
-    tmp->minute = 0;
-    tmp->second = 0;
-    tmp->second_part = 0;
-    tmp->time_type = MYSQL_TIMESTAMP_DATETIME;
-    return;
-  }
   localtime_to_TIME(tmp, &tmp_tm);
   tmp->time_type = MYSQL_TIMESTAMP_DATETIME;
   adjust_leap_second(tmp);
@@ -789,24 +785,12 @@ my_time_t Time_zone_utc::TIME_to_gmt_sec(const MYSQL_TIME *mt,
       t   - my_time_t value to be converted
 
   NOTE
-    See note for appropriate Time_zone_system method.
+    See note for apropriate Time_zone_system method.
 */
 void Time_zone_utc::gmt_sec_to_TIME(MYSQL_TIME *tmp, my_time_t t) const {
   struct tm tmp_tm;
-  const time_t tmp_t = (time_t)t;
+  time_t tmp_t = (time_t)t;
   gmtime_r(&tmp_t, &tmp_tm);
-
-  if (tmp_tm.tm_year <= 0) {  // Windows sets -1 if timestamp is too high.
-    tmp->year = 0;
-    tmp->month = 0;
-    tmp->day = 0;
-    tmp->hour = 0;
-    tmp->minute = 0;
-    tmp->second = 0;
-    tmp->second_part = 0;
-    tmp->time_type = MYSQL_TIMESTAMP_DATETIME;
-    return;
-  }
   localtime_to_TIME(tmp, &tmp_tm);
   tmp->time_type = MYSQL_TIMESTAMP_DATETIME;
   adjust_leap_second(tmp);
@@ -951,10 +935,10 @@ class Time_zone_offset : public Time_zone {
                       Positive for direction to east.
 */
 Time_zone_offset::Time_zone_offset(long tz_offset_arg) : offset(tz_offset_arg) {
-  const uint hours = abs((int)(offset / SECS_PER_HOUR));
-  const uint minutes = abs((int)(offset % SECS_PER_HOUR / SECS_PER_MIN));
-  const size_t length = snprintf(name_buff, sizeof(name_buff), "%s%02d:%02d",
-                                 (offset >= 0) ? "+" : "-", hours, minutes);
+  uint hours = abs((int)(offset / SECS_PER_HOUR));
+  uint minutes = abs((int)(offset % SECS_PER_HOUR / SECS_PER_MIN));
+  size_t length = snprintf(name_buff, sizeof(name_buff), "%s%02d:%02d",
+                           (offset >= 0) ? "+" : "-", hours, minutes);
   name.set(name_buff, length, &my_charset_latin1);
 }
 
@@ -973,18 +957,23 @@ Time_zone_offset::Time_zone_offset(long tz_offset_arg) : offset(tz_offset_arg) {
 my_time_t Time_zone_offset::TIME_to_gmt_sec(const MYSQL_TIME *t,
                                             bool *in_dst_time_gap
                                             [[maybe_unused]]) const {
-  if (!validate_my_time(*t)) return 0;
+  /*
+    Check timestamp range. We have to do this as the caller relies on
+    us to make all validation checks here.
+  */
+  if (!validate_timestamp_range(*t)) return 0;
 
   /*
     Do a temporary shift of the boundary dates to avoid
     overflow of my_time_t if the time value is near its
     maximum range
   */
-  const int shift =
-      ((t->year == MYTIME_MAX_YEAR) && (t->month == 1) && t->day > 4) ? 2 : 0;
+  int shift = ((t->year == TIMESTAMP_MAX_YEAR) && (t->month == 1) && t->day > 4)
+                  ? 2
+                  : 0;
 
-  my_time_t local_t = sec_since_epoch(t->year, t->month, (t->day - shift),
-                                      t->hour, t->minute, t->second);
+  longlong local_t = sec_since_epoch(t->year, t->month, (t->day - shift),
+                                     t->hour, t->minute, t->second);
 
   if (t->time_type == MYSQL_TIMESTAMP_DATETIME_TZ)
     local_t -= t->time_zone_displacement;
@@ -996,8 +985,8 @@ my_time_t Time_zone_offset::TIME_to_gmt_sec(const MYSQL_TIME *t,
     local_t += shift * SECS_PER_DAY;
   }
 
-  if (local_t >= MYTIME_MIN_VALUE && local_t <= MYTIME_MAX_VALUE)
-    return local_t;
+  if (local_t >= TIMESTAMP_MIN_VALUE && local_t <= TIMESTAMP_MAX_VALUE)
+    return static_cast<my_time_t>(local_t);
 
   /* range error*/
   return 0;
@@ -1065,7 +1054,7 @@ static mysql_mutex_t tz_LOCK;
 static bool tz_inited = false;
 
 /*
-  These two static variables are intended for holding info about leap seconds
+  This two static variables are inteded for holding info about leap seconds
   shared by all time zones.
 */
 static uint tz_leapcnt = 0;
@@ -1105,16 +1094,16 @@ class Tz_names_entry {
   SYNOPSIS
     tz_init_table_list()
       tz_tabs         - pointer to preallocated array of MY_TZ_TABLES_COUNT
-                        Table_ref objects
+                        TABLE_LIST objects
 
   DESCRIPTION
-    This function prepares list of Table_ref objects which can be used
+    This function prepares list of TABLE_LIST objects which can be used
     for opening of time zone tables from preallocated array.
 */
 
-static void tz_init_table_list(Table_ref *tz_tabs) {
+static void tz_init_table_list(TABLE_LIST *tz_tabs) {
   for (int i = 0; i < MY_TZ_TABLES_COUNT; i++) {
-    new (&tz_tabs[i]) Table_ref;
+    new (&tz_tabs[i]) TABLE_LIST;
     tz_tabs[i].alias = tz_tabs[i].table_name = tz_tables_names[i].str;
     tz_tabs[i].table_name_length = tz_tables_names[i].length;
     tz_tabs[i].db = tz_tables_db_name.str;
@@ -1185,11 +1174,11 @@ static void init_tz_psi_keys(void) {
 */
 bool my_tz_init(THD *org_thd, const char *default_tzname, bool bootstrap) {
   THD *thd;
-  Table_ref tz_tables[1 + MY_TZ_TABLES_COUNT];
+  TABLE_LIST tz_tables[1 + MY_TZ_TABLES_COUNT];
   TABLE *table;
   Tz_names_entry *tmp_tzname;
   bool return_val = true;
-  const LEX_CSTRING db = {STRING_WITH_LEN("mysql")};
+  LEX_CSTRING db = {STRING_WITH_LEN("mysql")};
   int res;
   DBUG_TRACE;
 
@@ -1205,7 +1194,7 @@ bool my_tz_init(THD *org_thd, const char *default_tzname, bool bootstrap) {
   thd->store_globals();
 
   /* Init all memory structures that require explicit destruction */
-  init_sql_alloc(key_memory_tz_storage, &tz_storage, 32 * 1024);
+  init_sql_alloc(key_memory_tz_storage, &tz_storage, 32 * 1024, 0);
   mysql_mutex_init(key_tz_LOCK, &tz_LOCK, MY_MUTEX_INIT_FAST);
   tz_inited = true;
 
@@ -1253,7 +1242,7 @@ bool my_tz_init(THD *org_thd, const char *default_tzname, bool bootstrap) {
     goto end_with_setting_default_tz;
   }
 
-  for (Table_ref *tl = tz_tables; tl; tl = tl->next_global) {
+  for (TABLE_LIST *tl = tz_tables; tl; tl = tl->next_global) {
     /* Force close at the end of the function to free memory. */
     tl->table->invalidate_dict();
   }
@@ -1318,7 +1307,7 @@ end_with_close:
 end_with_setting_default_tz:
   /* If we have default time zone try to load it */
   if (!return_val && default_tzname) {
-    const String tmp_tzname2(default_tzname, &my_charset_latin1);
+    String tmp_tzname2(default_tzname, &my_charset_latin1);
     /*
       Time zone tables may be open here, and my_tz_find() may open
       most of them once more, but this is OK for system tables open
@@ -1386,7 +1375,7 @@ void my_tz_free() {
 */
 
 static Time_zone *tz_load_from_open_tables(const String *tz_name,
-                                           Table_ref *tz_tables) {
+                                           TABLE_LIST *tz_tables) {
   TABLE *table = nullptr;
   TIME_ZONE_INFO *tz_info = nullptr;
   Tz_names_entry *tmp_tzname;
@@ -1591,7 +1580,7 @@ static Time_zone *tz_load_from_open_tables(const String *tz_name,
 
   /*
     We have to allow HA_ERR_KEY_NOT_FOUND because some time zones
-    for example UTC have no transitions.
+    for example UTC have no transitons.
   */
   if (res != HA_ERR_END_OF_FILE && res != HA_ERR_KEY_NOT_FOUND) {
     assert(res != HA_ERR_LOCK_WAIT_TIMEOUT && res != HA_ERR_LOCK_DEADLOCK);
@@ -1835,7 +1824,7 @@ Time_zone *my_tz_find(THD *thd, const String *name) {
     if (it != tz_names.end())
       return it->second->tz;
     else if (time_zone_tables_exist) {
-      Table_ref tz_tables[MY_TZ_TABLES_COUNT];
+      TABLE_LIST tz_tables[MY_TZ_TABLES_COUNT];
 
       tz_init_table_list(tz_tables);
       init_mdl_requests(tz_tables);

@@ -1,7 +1,7 @@
 #ifndef LEX_INCLUDED
 #define LEX_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,8 @@
 
 /* This file includes all reserved words and functions */
 
+#include "m_string.h"
 #include "sql/lex_symbol.h"
-#include "string_with_len.h"
 
 /* We don't want to include sql_yacc.h into gen_lex_hash */
 #ifdef NO_YACC_SYMBOLS
@@ -115,7 +115,6 @@ static const SYMBOL symbols[] = {
     {SYM("BOTH", BOTH)},
     {SYM("BTREE", BTREE_SYM)},
     {SYM("BUCKETS", BUCKETS_SYM)},
-    {SYM("BULK", BULK_SYM)},
     {SYM("BY", BY)},
     {SYM("BYTE", BYTE_SYM)},
     {SYM("CACHE", CACHE_SYM)},
@@ -291,7 +290,6 @@ static const SYMBOL symbols[] = {
     {SYM("GET_MASTER_PUBLIC_KEY", GET_MASTER_PUBLIC_KEY_SYM)},
     {SYM("GET_SOURCE_PUBLIC_KEY", GET_SOURCE_PUBLIC_KEY_SYM)},
     {SYM("GET", GET_SYM)},
-    {SYM("GENERATE", GENERATE_SYM)},
     {SYM("GENERATED", GENERATED)},
     {SYM("GLOBAL", GLOBAL_SYM)},
     {SYM("GRANT", GRANT)},
@@ -322,7 +320,7 @@ static const SYMBOL symbols[] = {
     {SYM("INACTIVE", INACTIVE_SYM)},
     {SYM("INDEX", INDEX_SYM)},
     {SYM("INDEXES", INDEXES)},
-    {SYM("INFILE", INFILE_SYM)},
+    {SYM("INFILE", INFILE)},
     {SYM("INITIAL", INITIAL_SYM)},
     {SYM("INITIAL_SIZE", INITIAL_SIZE_SYM)},
     {SYM("INITIATE", INITIATE_SYM)},
@@ -339,7 +337,6 @@ static const SYMBOL symbols[] = {
     {SYM("INT4", INT_SYM)},
     {SYM("INT8", BIGINT_SYM)},
     {SYM("INTEGER", INT_SYM)},
-    {SYM("INTERSECT", INTERSECT_SYM)},
     {SYM("INTERVAL", INTERVAL_SYM)},
     {SYM("INTO", INTO)},
     {SYM("IO", IO_SYM)},
@@ -507,7 +504,6 @@ static const SYMBOL symbols[] = {
     {SYM("OWNER", OWNER_SYM)},
     {SYM("PACK_KEYS", PACK_KEYS_SYM)},
     {SYM("PATH", PATH_SYM)},
-    {SYM("PARSE_TREE", PARSE_TREE_SYM)},
     {SYM("PARSER", PARSER_SYM)},
     {SYM("PAGE", PAGE_SYM)},
     {SYM("PARTIAL", PARTIAL)},
@@ -778,7 +774,6 @@ static const SYMBOL symbols[] = {
     {SYM("UNSIGNED", UNSIGNED_SYM)},
     {SYM("UNTIL", UNTIL_SYM)},
     {SYM("UPGRADE", UPGRADE_SYM)},
-    {SYM("URL", URL_SYM)},
     {SYM("USAGE", USAGE)},
     {SYM("USE", USE_SYM)},
     {SYM("USER", USER)},

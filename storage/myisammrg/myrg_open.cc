@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +33,6 @@
 #include "mysql/psi/mysql_file.h"
 #include "storage/myisam/myisamdef.h"
 #include "storage/myisammrg/myrg_def.h"
-#include "strmake.h"
 #include "typelib.h"
 
 /*
@@ -485,7 +484,7 @@ err:
   @param[in]    m_info          MERGE parent table structure
 
   @note Detach must not touch the children in any way.
-    They may have been closed at this point already.
+    They may have been closed at ths point already.
     All references to the children should be removed.
 
   @return status

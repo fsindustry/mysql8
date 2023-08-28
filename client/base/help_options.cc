@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -80,7 +80,7 @@ void Mysql::Tools::Base::Options::Help_options::print_usage() {
     copyright = ORACLE_WELCOME_COPYRIGHT_NOTICE(COPYRIGHT_NOTICE_CURRENT_YEAR);
   } else {
 #define FIRST_YEAR_CONSTANT "$first_year$"
-    const string first_year_constant_str = FIRST_YEAR_CONSTANT;
+    string first_year_constant_str = FIRST_YEAR_CONSTANT;
 
     copyright = ORACLE_WELCOME_COPYRIGHT_NOTICE(FIRST_YEAR_CONSTANT);
     copyright =

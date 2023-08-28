@@ -309,7 +309,6 @@ SHOW FUNCTION STATUS LIKE 'fn_%';
 Db	db_storedproc
 Name	fn_1
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -321,7 +320,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	fn_2
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -334,7 +332,6 @@ SHOW PROCEDURE STATUS LIKE 'sp_%';
 Db	db_storedproc
 Name	sp_1
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -346,7 +343,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	sp_2
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -574,7 +570,6 @@ SHOW FUNCTION STATUS LIKE 'fn_%';
 Db	db_storedproc
 Name	fn_1
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -586,7 +581,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	fn_2
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -599,7 +593,6 @@ SHOW PROCEDURE STATUS LIKE 'sp_%';
 Db	db_storedproc
 Name	sp_1
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -611,7 +604,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	sp_2
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -826,7 +818,6 @@ SHOW FUNCTION STATUS LIKE 'fn_%';
 Db	db_storedproc
 Name	fn_1
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -838,7 +829,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	fn_2
 Type	FUNCTION
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -851,7 +841,6 @@ SHOW PROCEDURE STATUS LIKE 'sp_%';
 Db	db_storedproc
 Name	sp_1
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>
@@ -863,7 +852,6 @@ Database Collation	utf8mb4_0900_ai_ci
 Db	db_storedproc
 Name	sp_2
 Type	PROCEDURE
-Language	SQL
 Definer	root@localhost
 Modified	<modified>
 Created	<created>

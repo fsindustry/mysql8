@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,8 @@
 #ifndef SHM_BUFFER_HPP
 #define SHM_BUFFER_HPP
 
-#include "util/require.h"
 #include <ndb_global.h>
-#include "portlib/mt-asm.h"
-#include "transporter/TransporterRegistry.hpp"
+#include "../../kernel/vm/mt-asm.h"
 
 #include <NdbSleep.h>
 
@@ -50,7 +48,7 @@
 class SHM_Reader {
 public:
   SHM_Reader() :
-    m_startOfBuffer(nullptr),
+    m_startOfBuffer(0),
     m_readIndex(0)
   {
   }
@@ -182,10 +180,10 @@ SHM_Reader::updateReadPtr(Uint32 *ptr)
 class SHM_Writer {
 public:
   SHM_Writer() :
-    m_startOfBuffer(nullptr),
+    m_startOfBuffer(0),
     m_totalBufferSize(0),
     m_bufferSize(0),
-    m_sharedWriteIndex(nullptr)
+    m_sharedWriteIndex(0)
   {
   }
   SHM_Writer(char * const _startOfBuffer,

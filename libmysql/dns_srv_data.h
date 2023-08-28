@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,7 +44,7 @@
  Entries can be stored by calling Dns_srv_data::add()
  in any order.
 
- This usage pattern is roughly as follows:
+ This usage pattern is rougly as follows:
  1. Dns_srv_data construct
  2. one or more Dns_srv_data::add()
  3. one or more Dns_srv_data::pop_next()
@@ -79,7 +79,7 @@ class Dns_srv_data {
   void clear() { data_.clear(); }
   void add(const std::string &host, unsigned port, unsigned priority,
            unsigned weight) {
-    const dns_entry_data_t::iterator list = data_.find(priority);
+    dns_entry_data_t::iterator list = data_.find(priority);
     if (list == data_.cend())
       data_.emplace(priority,
                     dns_entry_list_t(1, Dns_entry(host, port, weight)));
@@ -100,7 +100,7 @@ class Dns_srv_data {
     unsigned long sum = 0;
     for (Dns_entry &elt : list) elt.add_weight_sum(sum);
 
-    const unsigned long draw = (std::rand() * 1UL * sum) / RAND_MAX;
+    unsigned long draw = (std::rand() * 1UL * sum) / RAND_MAX;
 
     dns_entry_list_t::const_iterator iter = list.cbegin();
     while (iter->weight_sum() < draw) iter++;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -24,9 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 TempTable public handler API implementation. */
 
 #include "storage/temptable/include/temptable/handler.h"
-
-#include <string.h>
-
 #include "my_base.h"
 #include "my_dbug.h"
 #include "mysql/plugin.h"
@@ -49,7 +46,7 @@ static Sharded_key_value_store<KV_STORE_SHARDS_COUNT> kv_store_shard;
  * */
 static Lock_free_shared_block_pool<SHARED_BLOCK_POOL_SIZE> shared_block_pool;
 
-/** Small helper function which debug-prints the miscellaneous statistics which
+/** Small helper function which debug-prints the miscelaneous statistics which
  * key-value store has collected.
  * */
 void kv_store_shards_debug_dump() { kv_store_shard.dbug_print(); }
@@ -132,20 +129,11 @@ int Handler::create(const char *table_name, TABLE *mysql_table,
     DBUG_EXECUTE_IF("temptable_create_return_non_result_type_exception",
                     throw 42;);
 
-    // Calculate m_number_of_elements_per_page, see Table::Table():
-    if (all_columns_are_fixed_size) {
-      Storage rows_of_the_table = Storage(nullptr);
-      rows_of_the_table.element_size(mysql_table->s->rec_buff_length);
-      if (rows_of_the_table.number_of_elements_per_page() == 0)
-        DBUG_RET(Result::TOO_BIG_ROW);
-    }
-
-    size_t per_table_limit = thd_get_tmp_table_size(ha_thd());
     auto &kv_store = kv_store_shard[thd_thread_id(ha_thd())];
     const auto insert_result = kv_store.emplace(
         std::piecewise_construct, std::forward_as_tuple(table_name),
         std::forward_as_tuple(mysql_table, m_shared_block,
-                              all_columns_are_fixed_size, per_table_limit));
+                              all_columns_are_fixed_size));
 
     ret = insert_result.second ? Result::OK : Result::TABLE_EXIST;
 
@@ -317,8 +305,7 @@ int Handler::rnd_pos(uchar *mysql_row, uchar *position) {
 
   handler::ha_statistic_increment(&System_status_var::ha_read_rnd_count);
 
-  Storage::Element *row;
-  memcpy(&row, position, sizeof(row));
+  Storage::Element *row = *reinterpret_cast<Storage::Element **>(position);
 
   m_rnd_iterator = Storage::Iterator(&m_opened_table->rows(), row);
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,8 +47,6 @@
 #include "my_sys.h"
 #include "my_thread_local.h"
 #include "mysys_err.h"
-#include "nulls.h"
-#include "strmake.h"
 #ifndef _WIN32
 #include <sys/stat.h>
 #endif
@@ -65,7 +63,6 @@
 
 int my_readlink(char *to, const char *filename, myf MyFlags) {
 #ifdef _WIN32
-  (void)MyFlags;  // maybe_unused
   my_stpcpy(to, filename);
   return 1;
 #else
@@ -123,8 +120,7 @@ int my_is_symlink(const char *filename, ST_FILE_ID *file_id) {
   return result;
 
 #else
-  (void)file_id;  // maybe_unused
-  const DWORD dwAttr = GetFileAttributes(filename);
+  DWORD dwAttr = GetFileAttributes(filename);
   return (dwAttr != INVALID_FILE_ATTRIBUTES) &&
          (dwAttr & FILE_ATTRIBUTE_REPARSE_POINT);
 #endif
@@ -160,7 +156,7 @@ int my_realpath(char *to, const char *filename, myf MyFlags) {
   }
   return result;
 #else
-  const int ret = GetFullPathName(filename, FN_REFLEN, to, NULL);
+  int ret = GetFullPathName(filename, FN_REFLEN, to, NULL);
   if (ret == 0 || ret > FN_REFLEN) {
     set_my_errno((ret > FN_REFLEN) ? ENAMETOOLONG : GetLastError());
     if (MyFlags & MY_WME) {

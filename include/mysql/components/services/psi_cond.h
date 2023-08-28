@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,6 @@
 
 extern REQUIRES_PSI_COND_SERVICE_PLACEHOLDER;
 
-#define PSI_COND_CALL(M) SERVICE_PLACEHOLDER(psi_cond_v1)->M
+#define PSI_COND_CALL(M) mysql_service_psi_cond_v1->M
 
 #endif /* COMPONENTS_SERVICES_PSI_COND_H */

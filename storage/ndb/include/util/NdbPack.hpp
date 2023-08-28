@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,6 @@
 #define NDB_PACK_HPP
 
 #include <ndb_global.h>
-#include "portlib/ndb_compiler.h"
-#include "my_config.h"
 #include "my_sys.h"
 #include <kernel/AttributeHeader.hpp>
 #include <NdbSqlUtil.hpp>
@@ -179,7 +177,7 @@ public:
 
   /*
    * Data specification i.e. array of types.  Usually constructed on the
-   * heap, so keep fairly small.  Used for both keys and bounds.
+   * heap, so keep fairly small.  Used for boths keys and bounds.
    */
   class Spec : public Error {
   public:
@@ -345,7 +343,6 @@ public:
     Uint32 get_max_len() const;
     Uint32 get_max_len4() const;
     Uint32 get_var_bytes() const;
-    void* get_full_buf();
     const void* get_full_buf() const;
     Uint32 get_full_len() const;
     Uint32 get_data_len() const;
@@ -364,7 +361,7 @@ public:
     Data(const Data&);
     Data& operator=(const Data&);
     int finalize_impl();
-    int convert_impl();
+    int convert_impl(Endian::Value to_endian);
     const Uint32 m_varBytes;
     Uint8* m_buf;
     Uint32 m_bufMaxLen;
@@ -457,7 +454,7 @@ public:
     ~DataEntry() {}
   private:
     friend class DataArray;
-    const Uint8* m_data_ptr;
+    Uint8* m_data_ptr;
     Uint32 m_data_len;
   };
 
@@ -612,7 +609,7 @@ inline
 NdbPack::Spec::Spec()
 {
   reset();
-  m_buf = nullptr;
+  m_buf = 0;
   m_bufMaxCnt = 0;
 }
 
@@ -708,7 +705,7 @@ NdbPack::DataC::DataC(const Spec& spec, bool allNullable) :
   m_spec(spec),
   m_allNullable(allNullable)
 {
-  m_buf = nullptr;
+  m_buf = 0;
   m_bufMaxLen = 0;
   m_cnt = 0;
 }
@@ -759,7 +756,7 @@ NdbPack::Data::Data(const Spec& spec, bool allNullable, Uint32 varBytes) :
   m_varBytes(varBytes),
   m_iter(*this)
 {
-  m_buf = nullptr;
+  m_buf = 0;
   m_bufMaxLen = 0;
   m_endian = Endian::get_endian();
 }
@@ -800,7 +797,7 @@ NdbPack::Data::convert(Endian::Value to_endian)
     to_endian = Endian::get_endian();
   if (m_endian == to_endian)
     return 0;
-  if (convert_impl() == 0)
+  if (convert_impl(to_endian) == 0)
   {
     m_endian = to_endian;
     return 0;
@@ -830,9 +827,11 @@ NdbPack::Data::get_var_bytes() const
   return m_varBytes;
 }
 
-inline const void* NdbPack::Data::get_full_buf() const { return m_buf; }
-
-inline void* NdbPack::Data::get_full_buf() { return m_buf; }
+inline const void*
+NdbPack::Data::get_full_buf() const
+{
+  return &m_buf[0];
+}
 
 inline Uint32
 NdbPack::Data::get_full_len() const
@@ -950,8 +949,8 @@ NdbPack::DataArray::get_data_len() const
 }
 
 inline NdbPack::BoundArray::BoundArray() :
-  m_spec(nullptr),
-  m_data_array(nullptr),
+  m_spec(NULL),
+  m_data_array(NULL),
   m_side(0)
 {
 }

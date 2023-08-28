@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,8 +41,7 @@ void xcom_tcp_server_startup(Xcom_network_provider *net_provider) {
   xcom_port port = net_provider->get_port();
 
   result tcp_fd = {0, 0};
-  tcp_fd = Xcom_network_provider_library::announce_tcp(port);
-  if (tcp_fd.val < 0) {
+  if ((tcp_fd = Xcom_network_provider_library::announce_tcp(port)).val < 0) {
     g_critical("Unable to announce tcp port %d. Port already in use?", port);
     net_provider->notify_provider_ready(true);
     return;
@@ -145,10 +144,12 @@ void ssl_shutdown_con(connection_descriptor *con) {
   }
 }
 
-void Xcom_network_provider::cleanup_secure_connections_context() {
-  auto secure_connections_context_cleaner =
-      this->get_secure_connections_context_cleaner();
-  std::invoke(secure_connections_context_cleaner);
+bool Xcom_network_provider::cleanup_secure_connections_context() {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  ERR_remove_thread_state(0);
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+  return false;
 }
 
 bool Xcom_network_provider::finalize_secure_connections_context() {
@@ -197,7 +198,7 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
   char buffer[20];
   sprintf(buffer, "%d", port);
 
-  checked_getaddrinfo(address.c_str(), buffer, nullptr, &from_ns);
+  checked_getaddrinfo(address.c_str(), buffer, 0, &from_ns);
 
   if (from_ns == nullptr) {
     /* purecov: begin inspected */
@@ -398,9 +399,9 @@ void Xcom_network_provider::notify_provider_ready(bool init_error) {
   m_init_cond_var.notify_one();
 }
 
-std::pair<bool, int> Xcom_network_provider::start() {
+int Xcom_network_provider::start() {
   if (is_provider_initialized()) {
-    return std::make_pair(true, -1);
+    return true;
   }
 
   set_shutdown_tcp_server(false);
@@ -423,12 +424,12 @@ std::pair<bool, int> Xcom_network_provider::start() {
     lck.unlock();
   }
 
-  return std::make_pair(init_error, init_error ? -1 : 0);
+  return init_error;
 }
 
-std::pair<bool, int> Xcom_network_provider::stop() {
+int Xcom_network_provider::stop() {
   if (!is_provider_initialized()) {
-    return std::make_pair(true, -1);
+    return true;
   }
 
   set_shutdown_tcp_server(true);
@@ -439,10 +440,10 @@ std::pair<bool, int> Xcom_network_provider::stop() {
   std::lock_guard<std::mutex> lck(m_init_lock);
   m_initialized = false;
 
-  this->reset_new_connection();
-
   if (m_network_provider_tcp_server.joinable())
     m_network_provider_tcp_server.join();
 
-  return std::make_pair(false, 0);
+  this->reset_new_connection();
+
+  return 0;
 }

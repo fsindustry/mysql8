@@ -5,8 +5,7 @@
 show global variables like "performance_schema%";
 
 # Not empty
-select NAME, ENABLED, TIMED, PROPERTIES, VOLATILITY, DOCUMENTATION
-  from performance_schema.setup_instruments
+select * from performance_schema.setup_instruments
   order by name;
 select TIMER_NAME from performance_schema.performance_timers;
 select * from performance_schema.setup_consumers;

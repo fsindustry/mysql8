@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2023, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -39,7 +39,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0types.h"
 #include "rem0types.h"
 #include "sync0rw.h"
-#include "ut0rnd.h"
 
 /** Persistent cursor */
 struct btr_pcur_t;
@@ -50,22 +49,17 @@ struct btr_search_t;
 
 /** Is search system enabled.
 Search system is protected by array of latches. */
-extern std::atomic_bool btr_search_enabled;
+extern bool btr_search_enabled;
 
 /** Number of adaptive hash index partition. */
 extern ulong btr_ahi_parts;
 
-/** Structure to facilitate fast modulo for number of adaptive hash index
-partition. */
-extern ut::fast_modulo_t btr_ahi_parts_fast_modulo;
-
 /** The size of a reference to data stored on a different page.
 The reference is stored at the end of the prefix of the field
 in the index record. */
-constexpr uint32_t BTR_EXTERN_FIELD_REF_SIZE = FIELD_REF_SIZE;
+#define BTR_EXTERN_FIELD_REF_SIZE FIELD_REF_SIZE
 
 /** If the data don't exceed the size, the data are stored locally. */
-constexpr uint32_t BTR_EXTERN_LOCAL_STORED_MAX_SIZE =
-    BTR_EXTERN_FIELD_REF_SIZE * 2;
+#define BTR_EXTERN_LOCAL_STORED_MAX_SIZE (BTR_EXTERN_FIELD_REF_SIZE * 2)
 
 #endif

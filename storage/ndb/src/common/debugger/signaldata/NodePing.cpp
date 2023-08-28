@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,17 +24,9 @@
 
 #include <signaldata/NodePing.hpp>
 
-bool printNODE_PING_REQ(FILE* output,
-                        const Uint32* theData,
-                        Uint32 len,
-                        Uint16 /*receiverBlockNo*/)
-{
-  if (len < NodePingReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
+bool
+printNODE_PING_REQ(FILE * output, const Uint32 * theData,
+                   Uint32 len, Uint16 receiverBlockNo) {
   const NodePingReq * const sig = CAST_CONSTPTR(NodePingReq, theData);
   fprintf(output, " senderRef : %x round : %u\n",
           sig->senderRef,
@@ -42,17 +34,9 @@ bool printNODE_PING_REQ(FILE* output,
   return true;
 }
 
-bool printNODE_PING_CONF(FILE* output,
-                         const Uint32* theData,
-                         Uint32 len,
-                         Uint16 /*receiverBlockNo*/)
-{
-  if (len < NodePingConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
+bool
+printNODE_PING_CONF(FILE * output, const Uint32 * theData,
+                    Uint32 len, Uint16 receiverBlockNo) {
   const NodePingConf * const sig = CAST_CONSTPTR(NodePingConf, theData);
   fprintf(output, " senderRef : %x round : %u\n",
           sig->senderRef,

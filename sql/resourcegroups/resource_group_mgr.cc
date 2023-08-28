@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_compiler.h"
 #include "my_psi_config.h"
@@ -39,7 +40,6 @@
 #include "mysql/components/services/log_builtins.h"  // LogErr
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql/service_plugin_registry.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/thread_type.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
@@ -61,7 +61,6 @@
 #include "sql/system_variables.h"
 #include "sql/thd_raii.h"
 #include "sql_string.h"  // to_lex_cstring
-#include "string_with_len.h"
 
 namespace resourcegroups {
 const char *SYS_DEFAULT_RESOURCE_GROUP_NAME = "SYS_default";
@@ -161,11 +160,11 @@ static bool deserialize_resource_groups(THD *thd) {
 
   auto res_grp_mgr = Resource_group_mgr::instance();
   for (const auto &resource_group : resource_group_vec) {
-    if (my_strcasecmp(&my_charset_utf8mb3_general_ci,
+    if (my_strcasecmp(&my_charset_utf8_general_ci,
                       resource_group->name().c_str(),
                       USR_DEFAULT_RESOURCE_GROUP_NAME) == 0)
       usr_default_in_dd = true;
-    else if (my_strcasecmp(&my_charset_utf8mb3_general_ci,
+    else if (my_strcasecmp(&my_charset_utf8_general_ci,
                            resource_group->name().c_str(),
                            SYS_DEFAULT_RESOURCE_GROUP_NAME) == 0)
       sys_default_in_dd = true;
@@ -376,7 +375,7 @@ bool Resource_group_mgr::init() {
 
   m_resource_group_hash =
       new collation_unordered_map<std::string, std::unique_ptr<Resource_group>>(
-          &my_charset_utf8mb3_tolower_ci, PSI_INSTRUMENT_ME);
+          &my_charset_utf8_tolower_ci, PSI_INSTRUMENT_ME);
   if (m_resource_group_hash == nullptr) {
     LogErr(ERROR_LEVEL, ER_FAILED_TO_ALLOCATE_MEMORY_FOR_RESOURCE_GROUP_HASH);
     return true;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,13 +32,13 @@
 #include <sys/types.h>
 #include <algorithm>
 
+#include "m_ctype.h"
 #include "my_base.h"
 #include "my_byteorder.h"
 #include "my_compare.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "myisampack.h"
-#include "mysql/strings/m_ctype.h"
 
 #define CMP_NUM(a, b) (((a) < (b)) ? -1 : ((a) == (b)) ? 0 : 1)
 
@@ -54,7 +54,7 @@ int ha_compare_text(const CHARSET_INFO *charset_info, const uchar *a,
 
 static int compare_bin(const uchar *a, uint a_length, const uchar *b,
                        uint b_length, bool part_key, bool skip_end_space) {
-  const uint length = std::min(a_length, b_length);
+  uint length = std::min(a_length, b_length);
   const uchar *end = a + length;
   int flag;
 
@@ -66,7 +66,7 @@ static int compare_bin(const uchar *a, uint a_length, const uchar *b,
     /*
       We are using space compression. We have to check if longer key
       has next character < ' ', in which case it's less than the shorter
-      key that has an implicit space afterwards.
+      key that has an implicite space afterwards.
 
       This code is identical to the one in
       strings/ctype-simple.c:my_strnncollsp_simple
@@ -108,12 +108,12 @@ static int compare_bin(const uchar *a, uint a_length, const uchar *b,
    Example1: if the function is called for tuples
      ('aaa','bbb') and ('eee','fff'), then
      diff_pos[0] = 1 (as 'aaa' != 'eee')
-     diff_pos[1] = 0 (offset from beginning of tuple b to 'eee' keypart).
+     diff_pos[1] = 0 (offset from beggining of tuple b to 'eee' keypart).
 
    Example2: if the index function is called for tuples
      ('aaa','bbb') and ('aaa','fff'),
      diff_pos[0] = 2 (as 'aaa' != 'eee')
-     diff_pos[1] = 3 (offset from beginning of tuple b to 'fff' keypart,
+     diff_pos[1] = 3 (offset from beggining of tuple b to 'fff' keypart,
                       here we assume that first key part is CHAR(3) NOT NULL)
 
   NOTES
@@ -141,7 +141,7 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
   *diff_pos = 0;
   for (; (int)key_length > 0; key_length = next_key_length, keyseg++) {
     const uchar *end;
-    const uint piks = !(keyseg->flag & HA_NO_SORT);
+    uint piks = !(keyseg->flag & HA_NO_SORT);
     (*diff_pos)++;
     diff_pos[1] = (uint)(b - orig_b);
 
@@ -176,8 +176,8 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
       case HA_KEYTYPE_TEXT: /* Ascii; Key is converted */
         if (keyseg->flag & HA_SPACE_PACK) {
           uint pack_length;
-          const int a_length = get_key_length(&a);
-          const int b_length = get_key_pack_length(&b, &pack_length);
+          int a_length = get_key_length(&a);
+          int b_length = get_key_pack_length(&b, &pack_length);
           next_key_length = key_length - b_length - pack_length;
 
           if (piks &&
@@ -189,8 +189,7 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
           b += b_length;
           break;
         } else {
-          const uint length = (uint)(end - a), a_length = length,
-                     b_length = length;
+          uint length = (uint)(end - a), a_length = length, b_length = length;
           if (piks &&
               (flag = ha_compare_text(
                    keyseg->charset, a, a_length, b, b_length,
@@ -204,8 +203,8 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
       case HA_KEYTYPE_BIT:
         if (keyseg->flag & HA_SPACE_PACK) {
           uint pack_length;
-          const int a_length = get_key_length(&a);
-          const int b_length = get_key_pack_length(&b, &pack_length);
+          int a_length = get_key_length(&a);
+          int b_length = get_key_pack_length(&b, &pack_length);
           next_key_length = key_length - b_length - pack_length;
 
           if (piks && (flag = compare_bin(a, a_length, b, b_length,
@@ -217,7 +216,7 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
           b += b_length;
           break;
         } else {
-          const uint length = keyseg->length;
+          uint length = keyseg->length;
           if (piks && (flag = compare_bin(a, length, b, length,
                                           (bool)((nextflag & SEARCH_PREFIX) &&
                                                  next_key_length <= 0),
@@ -230,8 +229,8 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
       case HA_KEYTYPE_VARTEXT1:
       case HA_KEYTYPE_VARTEXT2: {
         uint pack_length;
-        const int a_length = get_key_length(&a);
-        const int b_length = get_key_pack_length(&b, &pack_length);
+        int a_length = get_key_length(&a);
+        int b_length = get_key_pack_length(&b, &pack_length);
         next_key_length = key_length - b_length - pack_length;
 
         if (piks &&
@@ -246,8 +245,8 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
       case HA_KEYTYPE_VARBINARY1:
       case HA_KEYTYPE_VARBINARY2: {
         uint pack_length;
-        const int a_length = get_key_length(&a);
-        const int b_length = get_key_pack_length(&b, &pack_length);
+        int a_length = get_key_length(&a);
+        int b_length = get_key_pack_length(&b, &pack_length);
         next_key_length = key_length - b_length - pack_length;
 
         if (piks && (flag = compare_bin(a, a_length, b, b_length,
@@ -259,8 +258,8 @@ int ha_key_cmp(const HA_KEYSEG *keyseg, const uchar *a, const uchar *b,
         b += b_length;
       } break;
       case HA_KEYTYPE_INT8: {
-        const int i_1 = static_cast<signed char>(*a);
-        const int i_2 = static_cast<signed char>(*b);
+        int i_1 = static_cast<signed char>(*a);
+        int i_2 = static_cast<signed char>(*b);
         if (piks && (flag = CMP_NUM(i_1, i_2)))
           return ((keyseg->flag & HA_REVERSE_SORT) ? -flag : flag);
         a = end;

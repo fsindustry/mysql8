@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 
 #include "lex_string.h"
 #include "sql/mem_root_array.h"
-#include "sql/parse_location.h"
 
 class Item;
 class PT_derived_table;
@@ -35,6 +34,9 @@ class PT_table_reference;
 class Query_block;
 class String;
 class THD;
+struct YYLTYPE;
+
+typedef YYLTYPE POS;
 
 namespace dd {
 namespace info_schema {
@@ -161,7 +163,7 @@ class Select_lex_builder {
   Item *prepare_like_item(const LEX_CSTRING &field_name, const String *wild);
 
   /**
-    Prepare item representing a equal to comparison condition,
+    Prepare item representing a equal to comparision condition,
     @code
     SELECT ... WHERE <field_name> = <value> ...
     @endcode
@@ -244,7 +246,7 @@ class Select_lex_builder {
   bool add_to_select_item_list(Item *expr);
 
  private:
-  // Parser current position represented by POS
+  // Parser current position represented by YYLTYPE
   const POS *m_pos;
 
   // Current thread

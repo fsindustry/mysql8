@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -88,7 +88,7 @@ MACRO(GET_PACKAGE_FILE_NAME Var)
 
       STRING(REGEX MATCH
         "ProductVersion:[\n\t ]*([0-9]+)\\.([0-9]+)" UNUSED ${SW_VERS_PRODUCTVERSION})
-      IF(NOT DEFINED CMAKE_MATCH_1 OR NOT DEFINED CMAKE_MATCH_2)
+      IF(NOT CMAKE_MATCH_1 OR NOT CMAKE_MATCH_2)
         MESSAGE(FATAL_ERROR "Could not run sw_vers")
       ENDIF()
 
@@ -129,7 +129,7 @@ MACRO(GET_PACKAGE_FILE_NAME Var)
     SET(PRODUCT_TAG)
   ENDIF()
 
-  IF(WITH_NDB)
+  IF(WITH_NDBCLUSTER)
     SET(package_name "mysql${PRODUCT_TAG}-${MYSQL_CLUSTER_VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
   ELSE()
     SET(package_name "mysql${PRODUCT_TAG}-${VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
@@ -152,7 +152,7 @@ ENDIF()
 
 IF(NOT CPACK_SOURCE_PACKAGE_FILE_NAME)
   SET(CPACK_SOURCE_PACKAGE_FILE_NAME "mysql-${VERSION}")
-  IF(WITH_NDB)
+  IF(WITH_NDBCLUSTER)
     SET(CPACK_SOURCE_PACKAGE_FILE_NAME "mysql-cluster-gpl-${MYSQL_CLUSTER_VERSION}")
     MESSAGE(STATUS "MySQL Cluster package name: ${CPACK_SOURCE_PACKAGE_FILE_NAME}")
   ELSE()

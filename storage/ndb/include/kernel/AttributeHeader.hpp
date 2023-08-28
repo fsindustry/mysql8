@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,9 +24,6 @@
 
 #ifndef ATTRIBUTE_HEADER
 #define ATTRIBUTE_HEADER
-
-#include <stdio.h>  // FILE
-#include "ndb_types.h"
 
 #define JAM_FILE_ID 6
 
@@ -113,12 +110,10 @@ public:
   void insertHeader(Uint32*);
 
   /** Get next attribute header (if there is one) */
-  AttributeHeader* getNext();
-  const AttributeHeader* getNext() const;
+  AttributeHeader* getNext() const;             
 
   /** Get location of attribute value */
-  Uint32* getDataPtr();
-  const Uint32* getDataPtr() const;
+  Uint32* getDataPtr() const;
 
   /** Getters and Setters */
   Uint32  getAttributeId() const;
@@ -245,14 +240,10 @@ void AttributeHeader::setNULL()
   setDataSize(0);
 }
 
-inline Uint32* AttributeHeader::getDataPtr()
+inline
+Uint32* AttributeHeader::getDataPtr() const
 {
-  return &m_value + getHeaderSize();
-}
-
-inline const Uint32* AttributeHeader::getDataPtr() const
-{
-  return &m_value + getHeaderSize();
+  return (Uint32*)&m_value + getHeaderSize();
 }
 
 inline
@@ -261,14 +252,10 @@ void AttributeHeader::insertHeader(Uint32* target)
   *target = m_value;
 }
 
-inline AttributeHeader* AttributeHeader::getNext()
-{
+inline
+AttributeHeader* 
+AttributeHeader::getNext() const {
   return (AttributeHeader*)(getDataPtr() + getDataSize());
-}
-
-inline const AttributeHeader* AttributeHeader::getNext() const
-{
-  return (const AttributeHeader*)(getDataPtr() + getDataSize());
 }
 
 inline

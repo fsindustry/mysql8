@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,6 @@
 
 #include <algorithm>  // min
 #include <array>
-#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>  // index_sequence
@@ -51,18 +50,18 @@ enum class Base64Endianess { LITTLE, BIG };
  * they differ by
  *
  * - alphabet
- * - endianness
+ * - endianess
  * - padding
  *
  * Base64Impl provides generic encode and decode methods which are parametrized
- * by Endianness, Padding.
+ * by Endianess, Padding.
  *
  * Parametrization with templates allows to provide:
  *
  * - one implementation for all combinations
  * - without extra runtime overhead as dead code is removed by the compiler
  *
- * Endianness
+ * Endianess
  * =========
  *
  * Little Endian

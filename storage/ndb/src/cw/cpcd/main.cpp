@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,7 +38,6 @@
 #include <logger/Logger.hpp>
 #include <logger/FileLogHandler.hpp>
 #include <logger/SysLogHandler.hpp>
-#include "portlib/ndb_sockaddr.h"
 
 #include "common.hpp"
 
@@ -54,31 +53,32 @@ static char *user = 0;
 static struct my_option my_long_options[] =
 {
   { "work-dir", 'w', "Work directory",
-    &work_dir, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &work_dir, (uchar**) &work_dir,  0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "port", 'p', "TCP port to listen on",
-    &port, nullptr, nullptr, GET_INT, REQUIRED_ARG,
-    CPCD_DEFAULT_TCP_PORT, 0, 0, 0, 0, 0 },
+    (uchar**) &port, (uchar**) &port, 0,
+    GET_INT, REQUIRED_ARG, CPCD_DEFAULT_TCP_PORT, 0, 0, 0, 0, 0 }, 
   { "syslog", 'S', "Log events to syslog",
-    &use_syslog, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &use_syslog, (uchar**) &use_syslog, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "logfile", 'L', "File to log events to",
-    &logfile, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &logfile, (uchar**) &logfile, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "debug", 'D', "Enable debug mode",
-    &debug, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &debug, (uchar**) &debug, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "version", 'V', "Output version information and exit",
-    &show_version, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &show_version, (uchar**) &show_version, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "user", 'u', "Run as user",
-    &user, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &user, (uchar**) &user, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
-static bool get_one_option(int /*optid*/, const struct my_option * /*opt*/,
-                           char * /*argument*/)
+static bool
+get_one_option(int optid, const struct my_option *opt [[maybe_unused]],
+	       char *argument)
 {
   return 0;
 }
@@ -171,15 +171,13 @@ int main(int argc, char** argv){
   SocketServer * ss = new SocketServer();
   CPCDAPIService * serv = new CPCDAPIService(cpcd);
   unsigned short real_port= port; // correct type
-  ndb_sockaddr addr(real_port);
-  if(!ss->setup(serv, &addr)){
+  if(!ss->setup(serv, &real_port)){
     logger.critical("Cannot setup server: %s", strerror(errno));
     NdbSleep_SecSleep(1);
     delete ss;
     delete serv;
     return 1;
   }
-  real_port = addr.get_port();
 
   ss->startServer();
 

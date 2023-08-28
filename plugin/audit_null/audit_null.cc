@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,16 +27,12 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
-#include "m_string.h"
+#include "m_ctype.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "my_sys.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/m_ctype.h"
-#include "nulls.h"
-#include "string_with_len.h"
-#include "strxnmov.h"
 #include "thr_mutex.h"
 
 /** Event strings. */
@@ -324,8 +320,8 @@ static char *add_event(const char *var, LEX_CSTRING event, const char *data,
 static void process_event_record(MYSQL_THD thd, LEX_CSTRING event_name,
                                  const char *data, size_t data_length) {
   char *record_str = THDVAR(thd, event_record_def);
-  const LEX_CSTRING record_begin = get_token(&record_str);
-  const LEX_CSTRING record_end = get_token(&record_str);
+  LEX_CSTRING record_begin = get_token(&record_str);
+  LEX_CSTRING record_end = get_token(&record_str);
 
   if (record_str == nullptr) {
     return;
@@ -396,15 +392,15 @@ static void process_event_record(MYSQL_THD thd, LEX_CSTRING event_name,
 
 static int process_command(MYSQL_THD thd, LEX_CSTRING event_command,
                            bool consume_event) {
-  const LEX_CSTRING abort_ret_command = {STRING_WITH_LEN("ABORT_RET")};
+  LEX_CSTRING abort_ret_command = {STRING_WITH_LEN("ABORT_RET")};
 
   if (!my_charset_latin1.coll->strnncoll(
           &my_charset_latin1, (const uchar *)event_command.str,
           event_command.length, (const uchar *)abort_ret_command.str,
           abort_ret_command.length, false)) {
-    const int ret_code = (int)THDVAR(thd, abort_value);
+    int ret_code = (int)THDVAR(thd, abort_value);
     const char *err_message = (const char *)THDVAR(thd, abort_message);
-    const LEX_CSTRING status = {STRING_WITH_LEN("EVENT-ORDER-ABORT")};
+    LEX_CSTRING status = {STRING_WITH_LEN("EVENT-ORDER-ABORT")};
 
     char *order_str = THDVAR(thd, event_order_check);
 
@@ -443,14 +439,14 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
       0,
   };
   int buffer_data = 0;
-  const unsigned long event_subclass =
+  unsigned long event_subclass =
       static_cast<unsigned long>(*static_cast<const int *>(event));
   char *order_str = THDVAR(thd, event_order_check);
-  const int event_order_started = (int)THDVAR(thd, event_order_started);
-  const int exact_check = (int)THDVAR(thd, event_order_check_exact);
-  const LEX_CSTRING event_name = event_to_str(event_class, event_subclass);
-  const LEX_CSTRING event_token = get_token(&order_str);
-  const LEX_CSTRING event_data = get_token(&order_str);
+  int event_order_started = (int)THDVAR(thd, event_order_started);
+  int exact_check = (int)THDVAR(thd, event_order_check_exact);
+  LEX_CSTRING event_name = event_to_str(event_class, event_subclass);
+  LEX_CSTRING event_token = get_token(&order_str);
+  LEX_CSTRING event_data = get_token(&order_str);
   LEX_CSTRING event_command = get_token(&order_str);
   bool consume_event = true;
 
@@ -564,13 +560,13 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
        (const struct mysql_event_server_shutdown *) event; */
     number_of_calls_server_shutdown++;
   } else if (event_class == MYSQL_AUDIT_COMMAND_CLASS) {
-    const struct mysql_event_command *local_event_command =
+    const struct mysql_event_command *event_command =
         (const struct mysql_event_command *)event;
 
     buffer_data =
-        sprintf(buffer, "command_id=\"%d\"", local_event_command->command_id);
+        sprintf(buffer, "command_id=\"%d\"", event_command->command_id);
 
-    switch (local_event_command->event_subclass) {
+    switch (event_command->event_subclass) {
       case MYSQL_AUDIT_COMMAND_START:
         number_of_calls_command_start++;
         break;
@@ -732,7 +728,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
       return 1;
     }
   } else {
-    const LEX_CSTRING ignore = {STRING_WITH_LEN("<IGNORE>")};
+    LEX_CSTRING ignore = {STRING_WITH_LEN("<IGNORE>")};
 
     /* When we are not in the event order check, check if the specified
        data corresponds to the actual event data. */
@@ -748,19 +744,18 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         char invalid_data_buffer[sizeof(buffer)] = {
             0,
         };
-        const LEX_CSTRING status = {
-            STRING_WITH_LEN("EVENT-ORDER-INVALID-DATA")};
+        LEX_CSTRING status = {STRING_WITH_LEN("EVENT-ORDER-INVALID-DATA")};
 
-        char *local_order_str = THDVAR(thd, event_order_check);
+        char *order_str = THDVAR(thd, event_order_check);
 
-        memmove(local_order_str, status.str, status.length + 1);
+        memmove(order_str, status.str, status.length + 1);
 
         strxnmov(invalid_data_buffer, sizeof(invalid_data_buffer),
                  "Invalid data for '", event_name.str, "' -> ", buffer, NullS);
         my_message(ER_AUDIT_API_ABORT, invalid_data_buffer, MYF(0));
 
         THDVAR(thd, event_order_started) = 0;
-        THDVAR(thd, event_order_check) = local_order_str;
+        THDVAR(thd, event_order_check) = order_str;
 
         return 1;
       }
@@ -770,7 +765,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
       event_command.length = 0;
     } else {
       LEX_STRING order_cstr;
-      const ulong consume = THDVAR(thd, event_order_check_consume_ignore_count);
+      ulong consume = THDVAR(thd, event_order_check_consume_ignore_count);
       lex_string_set(&order_cstr, THDVAR(thd, event_order_check));
 
       THDVAR(thd, event_order_started) = 1;
@@ -791,7 +786,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         lex_string_set(&order_cstr, order_cstr.str);
 
         if (order_cstr.length == 0) {
-          const LEX_CSTRING status = {STRING_WITH_LEN("EVENT-ORDER-OK")};
+          LEX_CSTRING status = {STRING_WITH_LEN("EVENT-ORDER-OK")};
 
           memmove(order_cstr.str, status.str, status.length + 1);
 

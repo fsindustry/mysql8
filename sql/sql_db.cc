@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_command.h"
 #include "my_dbug.h"
@@ -55,12 +56,9 @@
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"  // EE_*
-#include "nulls.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // SELECT_ACL
 #include "sql/auth/sql_security_ctx.h"
@@ -96,13 +94,10 @@
 #include "sql/sql_handler.h"  // mysql_ha_rm_tables
 #include "sql/sql_table.h"    // build_table_filename
 #include "sql/system_variables.h"
-#include "sql/table.h"  // Table_ref
+#include "sql/table.h"  // TABLE_LIST
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"  // trans_rollback_stmt
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strmake.h"
-#include "strxmov.h"
 #include "typelib.h"
 
 /*
@@ -118,7 +113,7 @@ static bool find_unknown_and_remove_deletable_files(THD *thd, MY_DIR *dirp,
                                                     const char *path);
 
 static bool find_db_tables(THD *thd, const dd::Schema &schema, const char *db,
-                           Table_ref **tables);
+                           TABLE_LIST **tables);
 
 static long mysql_rm_arc_files(THD *thd, MY_DIR *dirp, const char *org_path);
 static bool rm_dir_w_symlink(const char *org_path, bool send_error);
@@ -153,7 +148,7 @@ bool get_default_db_collation(THD *thd, const char *db_name,
                               const CHARSET_INFO **collation) {
   // We must make sure the schema is released and unlocked in the right order.
   dd::Schema_MDL_locker mdl_handler(thd);
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   const dd::Schema *sch_obj = nullptr;
 
   if (mdl_handler.ensure_locked(db_name) ||
@@ -238,7 +233,7 @@ bool check_schema_readonly(THD *thd, const char *schema_name,
   }
 
   dd::Schema_MDL_locker mdl_handler(thd);
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   const dd::Schema *sch_obj = nullptr;
 
   if (mdl_handler.ensure_locked(schema_name) ||
@@ -266,7 +261,7 @@ bool check_schema_readonly(THD *thd, const char *schema_name,
 
 static bool write_db_cmd_to_binlog(THD *thd, const char *db, bool trx_cache) {
   if (mysql_bin_log.is_open()) {
-    const int errcode = query_error_code(thd, true);
+    int errcode = query_error_code(thd, true);
     Query_log_event qinfo(thd, thd->query().str, thd->query().length, trx_cache,
                           false, /* suppress_use */ true, errcode);
     /*
@@ -333,7 +328,7 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
     Use Auto_releaser to keep uncommitted object for database until
     trans_commit() call.
   */
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
   // Reject creation of the system schema except for system threads.
   if (!thd->is_dd_system_thread() &&
@@ -375,7 +370,7 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   const char *lock_db_name = db;
   if (lower_case_table_names == 2) {
     my_stpcpy(name_buf, db);
-    my_casedn_str(&my_charset_utf8mb3_tolower_ci, name_buf);
+    my_casedn_str(&my_charset_utf8_tolower_ci, name_buf);
     lock_db_name = name_buf;
   }
   if (lock_schema_name(thd, lock_db_name)) return true;
@@ -388,8 +383,7 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   }
 
   bool store_in_dd = true;
-  const bool if_not_exists =
-      (create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS);
+  bool if_not_exists = (create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS);
   if (existing_schema != nullptr) {
     if (if_not_exists == false) {
       my_error(ER_DB_CREATE_EXISTS, MYF(0), db);
@@ -404,8 +398,8 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   /* Check directory */
   char path[FN_REFLEN + 16];
   bool was_truncated;
-  const size_t path_len = build_table_filename(path, sizeof(path) - 1, db, "",
-                                               "", 0, &was_truncated);
+  size_t path_len = build_table_filename(path, sizeof(path) - 1, db, "", "", 0,
+                                         &was_truncated);
   if (was_truncated) {
     my_error(ER_IDENT_CAUSES_TOO_LONG_PATH, MYF(0), sizeof(path) - 1, path);
     return true;
@@ -418,7 +412,7 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   // the physical representation of the schema is not re-created since it
   // already exists.
   MY_STAT stat_info;
-  const bool schema_dir_exists =
+  bool schema_dir_exists =
       (mysql_file_stat(key_file_misc, path, &stat_info, MYF(0)) != nullptr);
   if (thd->is_dd_system_thread() &&
       (!opt_initialize || dd::upgrade_57::in_progress()) &&
@@ -536,7 +530,7 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
 
   if (lock_schema_name(thd, db)) return true;
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   dd::Schema *schema = nullptr;
   if (thd->dd_client()->acquire_for_modification(db, &schema)) return true;
 
@@ -576,7 +570,7 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
     only check and the COMMIT are not done atomically, we use the table MDL
     to serialize ALTER SCHEMA and any write statements.
   */
-  Table_ref *tables = nullptr;
+  TABLE_LIST *tables = nullptr;
   if (find_db_tables(thd, *schema, db, &tables) ||
       lock_table_names(thd, tables, nullptr, thd->variables.lock_wait_timeout,
                        0))
@@ -620,7 +614,7 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
 
   /*
     Commit the statement locally instead of relying on caller,
-    in order to be sure that it is successful, before changing
+    in order to be sure that it is  successfull, before changing
     options of current database.
   */
   if (trans_commit_stmt(thd) || trans_commit(thd)) return true;
@@ -646,7 +640,7 @@ bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   */
   if (create_info->used_fields & HA_CREATE_USED_READ_ONLY) {
     mysql_ha_flush_tables(thd, tables);
-    for (Table_ref *table = tables; table != nullptr;
+    for (TABLE_LIST *table = tables; table != nullptr;
          table = table->next_global) {
       tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table->db, table->table_name,
                        false);
@@ -711,8 +705,8 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
   ulong deleted_tables = 0;
   bool error = false;
   char path[2 * FN_REFLEN + 16];
-  Table_ref *tables = nullptr;
-  Table_ref *table;
+  TABLE_LIST *tables = nullptr;
+  TABLE_LIST *table;
   Drop_table_error_handler err_handler;
   bool dropped_non_atomic = false;
   std::set<handlerton *> post_ddl_htons;
@@ -720,7 +714,7 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
   DBUG_TRACE;
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
   // Reject dropping the system schema except for system threads.
   if (!thd->is_dd_system_thread() &&
@@ -800,7 +794,7 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
         lock_db_routines(thd, *schema) || lock_trigger_names(thd, tables))
       return true;
 
-    /* mysql_ha_rm_tables() requires a non-null Table_ref. */
+    /* mysql_ha_rm_tables() requires a non-null TABLE_LIST. */
     if (tables) mysql_ha_rm_tables(thd, tables);
 
     for (table = tables; table; table = table->next_local) {
@@ -842,7 +836,7 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
       ha_drop_database(path);
       thd->clear_error(); /* @todo Do not ignore errors */
-      const Disable_binlog_guard binlog_guard(thd);
+      Disable_binlog_guard binlog_guard(thd);
       error = Events::drop_schema_events(thd, *schema);
       error = (error || sp_drop_db_routines(thd, *schema));
     }
@@ -938,8 +932,10 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
     */
     if (thd->session_tracker.get_tracker(CURRENT_SCHEMA_TRACKER)
             ->is_enabled()) {
+      LEX_CSTRING dummy = {STRING_WITH_LEN("")};
+      dummy.length = dummy.length * 1;
       thd->session_tracker.get_tracker(CURRENT_SCHEMA_TRACKER)
-          ->mark_as_changed(thd, {});
+          ->mark_as_changed(thd, &dummy);
     }
   }
 
@@ -969,7 +965,7 @@ static bool find_unknown_and_remove_deletable_files(THD *thd, MY_DIR *dirp,
     char *extension;
     DBUG_PRINT("info", ("Examining: %s", file->name));
 
-    /* skipping . and .. */
+    /* skiping . and .. */
     if (file->name[0] == '.' &&
         (!file->name[1] || (file->name[1] == '.' && !file->name[2])))
       continue;
@@ -1025,8 +1021,8 @@ found_other_files:
 */
 
 static bool find_db_tables(THD *thd, const dd::Schema &schema, const char *db,
-                           Table_ref **tables) {
-  Table_ref *tot_list = nullptr, **tot_list_next_local, **tot_list_next_global;
+                           TABLE_LIST **tables) {
+  TABLE_LIST *tot_list = nullptr, **tot_list_next_local, **tot_list_next_global;
   DBUG_TRACE;
 
   tot_list_next_local = tot_list_next_global = &tot_list;
@@ -1043,7 +1039,7 @@ static bool find_db_tables(THD *thd, const dd::Schema &schema, const char *db,
     return true;
 
   for (const dd::String_type &table_name : sch_tables) {
-    Table_ref *table_list = new (thd->mem_root) Table_ref;
+    TABLE_LIST *table_list = new (thd->mem_root) TABLE_LIST;
     if (table_list == nullptr) return true; /* purecov: inspected */
 
     table_list->db = thd->mem_strdup(db);
@@ -1150,7 +1146,7 @@ long mysql_rm_arc_files(THD *thd, MY_DIR *dirp, const char *org_path) {
     char *extension, *revision;
     DBUG_PRINT("info", ("Examining: %s", file->name));
 
-    /* skipping . and .. */
+    /* skiping . and .. */
     if (file->name[0] == '.' &&
         (!file->name[1] || (file->name[1] == '.' && !file->name[2])))
       continue;
@@ -1365,7 +1361,7 @@ bool mysql_change_db(THD *thd, const LEX_CSTRING &new_db_name,
 
   // We must make sure the schema is released and unlocked in the right order.
   dd::Schema_MDL_locker mdl_handler(thd);
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   const dd::Schema *schema = nullptr;
 
   DBUG_TRACE;
@@ -1448,7 +1444,7 @@ bool mysql_change_db(THD *thd, const LEX_CSTRING &new_db_name,
   }
 
   if (!force_switch && !(db_access & DB_OP_ACLS) &&
-      check_grant_db(thd, new_db_file_name.str, true)) {
+      check_grant_db(thd, new_db_file_name.str)) {
     my_error(ER_DBACCESS_DENIED_ERROR, MYF(0), sctx->priv_user().str,
              sctx->priv_host().str, new_db_file_name.str);
     query_logger.general_log_print(
@@ -1510,13 +1506,15 @@ done:
     Check if current database tracker is enabled. If so, set the 'changed' flag.
   */
   if (thd->session_tracker.get_tracker(CURRENT_SCHEMA_TRACKER)->is_enabled()) {
+    LEX_CSTRING dummy = {STRING_WITH_LEN("")};
+    dummy.length = dummy.length * 1;
     thd->session_tracker.get_tracker(CURRENT_SCHEMA_TRACKER)
-        ->mark_as_changed(thd, {});
+        ->mark_as_changed(thd, &dummy);
   }
   if (thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)
           ->is_enabled())
     thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)
-        ->mark_as_changed(thd, {});
+        ->mark_as_changed(thd, nullptr);
   return false;
 }
 
@@ -1538,7 +1536,7 @@ done:
   forced @see mysql_change_db()
   @param[out]     cur_db_changed  out-flag to indicate whether the current
                                   database has been changed (valid only if
-                                  the function succeeded)
+                                  the function suceeded)
 */
 
 bool mysql_opt_change_db(THD *thd, const LEX_CSTRING &new_db_name,

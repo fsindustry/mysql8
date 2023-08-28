@@ -191,9 +191,7 @@ SET global.key_cache_age_threshold = 10;
 --Error ER_UNKNOWN_TABLE
 SELECT global.key_cache_age_threshold;
 --Error ER_BAD_FIELD_ERROR
-SELECT key_cache_age_threshold;
---Error ER_INCORRECT_GLOBAL_LOCAL_VAR
-SELECT @@session.key_cache_age_threshold;
+SELECT key_cache_age_threshold = @@session.key_cache_age_threshold;
 
 
 ##############################  

@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -166,6 +166,7 @@ SET(HAVE_VISIBILITY_HIDDEN CACHE INTERNAL "")
 # Code tests
 SET(HAVE_CLOCK_GETTIME CACHE  INTERNAL "")
 SET(HAVE_CLOCK_REALTIME CACHE INTERNAL "")
+SET(STACK_DIRECTION -1 CACHE INTERNAL "")
 SET(TIME_WITH_SYS_TIME CACHE INTERNAL "")
 SET(HAVE_FCNTL_NONBLOCK CACHE  INTERNAL "") # Only needed by CMake
 # Derived result NO_FCNTL_NONBLOCK

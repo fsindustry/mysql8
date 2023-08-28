@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,13 +42,10 @@
 #include "mysqld_error.h"
 #include "sql/mdl.h"
 #include "sql/mysqld.h"
-#include "sql/mysqld_cs.h"
 #include "sql/thr_malloc.h"
 #include "unittest/gunit/benchmark.h"
 #include "unittest/gunit/test_mdl_context_owner.h"
 #include "unittest/gunit/thread_utils.h"
-
-struct CHARSET_INFO;
 
 /*
   Mock thd_wait_begin/end functions
@@ -127,7 +124,7 @@ class MDLTest : public ::testing::Test, public Test_MDL_context_owner {
     m_mdl_context.init(this);
     EXPECT_FALSE(m_mdl_context.has_locks());
     m_charset = system_charset_info;
-    system_charset_info = &my_charset_utf8mb3_bin;
+    system_charset_info = &my_charset_utf8_bin;
     EXPECT_TRUE(system_charset_info != nullptr);
 
     MDL_REQUEST_INIT(&m_global_request, MDL_key::GLOBAL, "", "",
@@ -160,8 +157,7 @@ class MDLTest : public ::testing::Test, public Test_MDL_context_owner {
 
  private:
   CHARSET_INFO *m_charset;
-  MDLTest(MDLTest const &) = delete;
-  MDLTest &operator=(MDLTest const &) = delete;
+  GTEST_DISALLOW_COPY_AND_ASSIGN_(MDLTest);
 
   static ErrorHandlerFunctionPointer m_old_error_handler_hook;
 };
@@ -3836,8 +3832,7 @@ class MDLHtonNotifyTest : public MDLTest {
   void set_refuse_acquire() { m_refuse_acquire = true; }
 
  private:
-  MDLHtonNotifyTest(MDLHtonNotifyTest const &) = delete;
-  MDLHtonNotifyTest &operator=(MDLHtonNotifyTest const &) = delete;
+  GTEST_DISALLOW_COPY_AND_ASSIGN_(MDLHtonNotifyTest);
 
   uint m_pre_acquire_count, m_post_release_count;
   MDL_key m_pre_acquire_key, m_post_release_key;
@@ -4586,8 +4581,7 @@ class MDLKeyTest : public ::testing::Test {
   MDLKeyTest() = default;
 
  private:
-  MDLKeyTest(MDLKeyTest const &) = delete;
-  MDLKeyTest &operator=(MDLKeyTest const &) = delete;
+  GTEST_DISALLOW_COPY_AND_ASSIGN_(MDLKeyTest);
 };
 
 // Google Test recommends DeathTest suffix for classes use in death tests.
@@ -4652,7 +4646,7 @@ TEST_F(MDLKeyTest, TruncateTooLongNames) {
 struct Mock_MDL_context_owner : public Test_MDL_context_owner {
   void notify_shared_lock(MDL_context_owner *in_use,
                           bool needs_thr_lock_abort) final {
-    in_use->notify_shared_lock(nullptr, needs_thr_lock_abort);
+    in_use->notify_shared_lock(NULL, needs_thr_lock_abort);
   }
 };
 
@@ -4699,7 +4693,7 @@ static void lock_bench(MDL_context &ctx, const Name_vec &names) {
 */
 static void BM_FindTicket(size_t num_iterations) {
   StopBenchmarkTiming();
-  system_charset_info = &my_charset_utf8mb3_bin;
+  system_charset_info = &my_charset_utf8_bin;
   mdl_init();
   MDL_context ctx;
   Mock_MDL_context_owner owner;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,8 +49,6 @@ class Country_record {
   unsigned int name_length;
   char continent_name[CONTINENT_NAME_LEN];
   unsigned int continent_name_length;
-  char country_code[COUNTRY_CODE_LEN];
-  unsigned int country_code_length;
   PSI_year year;
   PSI_bigint population;
   PSI_double growth_factor;
@@ -93,13 +91,9 @@ class Country_POS {
 
 class Country_index {
  public:
-  Country_index() : m_fields(0) {}
-
   virtual ~Country_index() = default;
 
   virtual bool match(Country_record *record) = 0;
-
-  unsigned int m_fields;
 };
 
 /* An index on Country Name */
@@ -112,22 +106,11 @@ class Country_index_by_name : public Country_index {
   char m_country_name_buffer[COUNTRY_NAME_LEN];
 
   bool match(Country_record *record) override {
-    if (m_fields >= 1) {
-      if (!pc_string_srv->match_key_string(
-              false, record->name, record->name_length, &m_country_name)) {
-        return false;
-      }
-    }
-
-    if (m_fields >= 2) {
-      if (!pc_string_srv->match_key_string(false, record->continent_name,
-                                           record->continent_name_length,
-                                           &m_continent_name)) {
-        return false;
-      }
-    }
-
-    return true;
+    return mysql_service_pfs_plugin_table->match_key_string(
+               false, record->name, record->name_length, &m_country_name) &&
+           mysql_service_pfs_plugin_table->match_key_string(
+               false, record->continent_name, record->continent_name_length,
+               &m_continent_name);
   }
 };
 

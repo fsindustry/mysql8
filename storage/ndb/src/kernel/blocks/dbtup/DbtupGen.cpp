@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,7 +24,6 @@
 
 #define DBTUP_C
 #define DBTUP_GEN_CPP
-#include "util/require.h"
 #include <dblqh/Dblqh.hpp>
 #include "Dbtup.hpp"
 #include <RefConvert.hpp>
@@ -252,7 +251,7 @@ Dbtup::Dbtup(Block_context& ctx,
     &c_scanLockPool;
   c_transient_pools[DBTUP_SCAN_OPERATION_TRANSIENT_POOL_INDEX] =
     &c_scanOpPool;
-  static_assert(c_transient_pool_count == 4);
+  NDB_STATIC_ASSERT(c_transient_pool_count == 4);
   c_transient_pools_shrinking.clear();
 }//Dbtup::Dbtup()
 
@@ -493,8 +492,7 @@ void Dbtup::execCONTINUEB(Signal* signal)
     SectionHandle handle(this, signal);
     ndbrequire(handle.m_cnt == 1);
     SegmentedSectionPtr ssptr;
-    ndbrequire(handle.getSection(ssptr, 0));
-    ndbrequire(ssptr.sz <= NDB_ARRAY_SIZE(f_undo.m_data));
+    handle.getSection(ssptr, 0);
     ::copy(f_undo.m_data, ssptr);
     releaseSections(handle);
     disk_restart_undo(signal,
@@ -1240,7 +1238,7 @@ void Dbtup::execNODE_FAILREP(Signal* signal)
         getNodeInfo(refToNode(signal->getSendersBlockRef())).m_version));
     SegmentedSectionPtr ptr;
     SectionHandle handle(this, signal);
-    ndbrequire(handle.getSection(ptr, 0));
+    handle.getSection(ptr, 0);
     memset(rep->theNodes, 0, sizeof(rep->theNodes));
     copy(rep->theNodes, ptr);
     releaseSections(handle);

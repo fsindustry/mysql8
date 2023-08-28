@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #include <ndb_global.h>
 #include <ndberror.h>
 
+#include "../mgmsrv/ndb_mgmd_error.h"
 #include "NdbQueryBuilderImpl.hpp"
 #include "m_string.h"
 #include "my_base.h"
@@ -344,6 +345,8 @@ ErrorBundle ErrorCodes[] = {
   { 296,  HA_ERR_LOCK_WAIT_TIMEOUT, TO, "Time-out in NDB, probably caused by deadlock" }, /* Scan trans timeout */
   { 297,  HA_ERR_LOCK_WAIT_TIMEOUT, TO, "Time-out in NDB, probably caused by deadlock" }, /* Scan trans timeout, temporary!! */
   { 237,  HA_ERR_LOCK_WAIT_TIMEOUT, TO, "Transaction had timed out when trying to commit it" },
+  { 5024, DMEC, TO, "Time-out due to node shutdown not starting in time" },
+  { 5025, DMEC, TO, "Time-out due to node shutdown not completing in time" },
   { 635,  HA_ERR_LOCK_WAIT_TIMEOUT, TO, "Lock already taken, not waiting" }, // HA_ERR_NO_WAIT_LOCK
   
   /**
@@ -450,9 +453,7 @@ ErrorBundle ErrorCodes[] = {
   { 884,  DMEC, AE, "Stack overflow in interpreter" },
   { 885,  DMEC, AE, "Stack underflow in interpreter" },
   { 886,  DMEC, AE, "More than 65535 instructions executed in interpreter" },
-  { 897,  DMEC, AE, "Update attempt of primary key via ndbcluster internal api"
-                    " (if this occurs via the MySQL server it is a bug,"
-                    " please report)" },
+  { 897,  DMEC, AE, "Update attempt of primary key via ndbcluster internal api (if this occurs via the MySQL server it is a bug, please report)" },
   { 892,  DMEC, AE, "Unsupported type in scan filter" },
   { 1233, DMEC, AE, "Table read-only" },
   { 4256, DMEC, AE, "Must call Ndb::init() before this function" },
@@ -823,11 +824,9 @@ ErrorBundle ErrorCodes[] = {
   { 4556, DMEC, AE, "RecordSpecification has illegal value in column_flags" },
   { 4557, DMEC, AE, "Column types must be identical when comparing two columns" },
   { 4558, DMEC, AE, "Pending Blob operations must be executed before this call" },
-  { 4559, DMEC, AE, "Failed to transfer KeyInfo to AttrInfo for InterpretedWrite" },
 
   { 4200, DMEC, AE, "Status Error when defining an operation" },
   { 4201, DMEC, AE, "Variable Arrays not yet supported" },
-  // Error 4202 has been deprecated by bug# ..
   { 4202, DMEC, AE, "Set value on tuple key attribute is not allowed" },
   { 4203, DMEC, AE, "Trying to set a NOT NULL attribute to NULL" },
   { 4204, DMEC, AE, "Set value and Read/Delete Tuple is incompatible" },
@@ -987,39 +986,32 @@ ErrorBundle ErrorCodes[] = {
   { QRY_NEST_NOT_SUPPORTED, DMEC, AE,
     "FirstInner/Upper has to be an ancestor or a sibling" },
 
-  /*
-   * Management server error codes
-   */
-  { 5000 /* NO_CONTACT_WITH_PROCESS */, DMEC, AE,
+  { NO_CONTACT_WITH_PROCESS, DMEC, AE,
     "No contact with the process (dead ?)."},
-  { 5002 /* WRONG_PROCESS_TYPE */, DMEC, AE,
+  { WRONG_PROCESS_TYPE, DMEC, AE,
    "The process has wrong type. Expected a DB process."},
-  { 5005 /* SEND_OR_RECEIVE_FAILED */, DMEC, AE,
+  { SEND_OR_RECEIVE_FAILED, DMEC, AE,
     "Send to process or receive failed."},
-  { 5007 /* INVALID_ERROR_NUMBER */, DMEC, AE,
+  { INVALID_ERROR_NUMBER, DMEC, AE,
     "Invalid error number. Should be >= 0."},
-  { 5008 /* INVALID_TRACE_NUMBER */, DMEC, AE,
+  { INVALID_TRACE_NUMBER, DMEC, AE,
     "Invalid trace number."},
-  { 5010 /* INVALID_BLOCK_NAME */, DMEC, AE,
+  { INVALID_BLOCK_NAME, DMEC, AE,
     "Invalid block name"},
-  { 5024 /* WAIT_FOR_NDBD_SHUTDOWN_FAILED */, DMEC, TO,
-    "Time-out due to node shutdown not starting in time" },
-  { 5025 /* WAIT_FOR_NDBD_SHUTDOWN_FAILED */, DMEC, TO,
-    "Time-out due to node shutdown not completing in time" },
-  { 5026 /* NODE_SHUTDOWN_IN_PROGESS */, DMEC, AE,
+  { NODE_SHUTDOWN_IN_PROGESS, DMEC, AE,
     "Node shutdown in progress" },
-  { 5027 /* SYSTEM_SHUTDOWN_IN_PROGRESS */, DMEC, AE,
+  { SYSTEM_SHUTDOWN_IN_PROGRESS, DMEC, AE,
     "System shutdown in progress" },
-  { 5028 /* NODE_SHUTDOWN_WOULD_CAUSE_SYSTEM_CRASH */, DMEC, AE,
+  { NODE_SHUTDOWN_WOULD_CAUSE_SYSTEM_CRASH, DMEC, AE,
    "Node shutdown would cause system crash" },
-  { 5030 /* NO_CONTACT_WITH_DB_NODES */, DMEC, AE,
-    "No contact with database nodes" },
-  { 5031 /* UNSUPPORTED_NODE_SHUTDOWN */, DMEC, AE,
+  { UNSUPPORTED_NODE_SHUTDOWN, DMEC, AE,
    "Unsupported multi node shutdown. Abort option required." },
-  { 5062 /* NODE_NOT_API_NODE */, DMEC, AE,
+  { NODE_NOT_API_NODE, DMEC, AE,
     "The specified node is not an API node." },
-  { 5063 /* OPERATION_NOT_ALLOWED_START_STOP */, DMEC, AE,
-   "Operation not allowed while nodes are starting or stopping."}
+  { OPERATION_NOT_ALLOWED_START_STOP, DMEC, AE,
+   "Operation not allowed while nodes are starting or stopping."},
+  { NO_CONTACT_WITH_DB_NODES, DMEC, AE,
+    "No contact with database nodes" }
 };
 
 static

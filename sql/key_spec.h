@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,8 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_string.h"
 #include "my_base.h"
-#include "nulls.h"
 #include "sql/mem_root_array.h"
 #include "sql/sql_list.h"
 

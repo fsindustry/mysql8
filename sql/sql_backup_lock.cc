@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,6 +24,7 @@
 
 #include <utility>
 
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
@@ -32,7 +33,6 @@
 #include "sql/mdl.h"
 #include "sql/system_variables.h"
 #include "sql_class.h"  // THD
-#include "string_with_len.h"
 
 /**
   Check if a current user has the privilege BACKUP_ADMIN required to run
@@ -75,47 +75,6 @@ bool Sql_cmd_unlock_instance::execute(THD *thd) {
 
   my_ok(thd);
   return false;
-}
-
-Shared_backup_lock_guard::Shared_backup_lock_guard(THD *thd) : m_thd(thd) {
-  // If instance is locked for the backup, then even block operations requisting
-  // shared backup lock. For example, PURGE BINARY LOG is not allowed even when
-  // instance is locked for backup by the same session.
-  if (thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::BACKUP_LOCK, "", "",
-                                                   MDL_SHARED)) {
-    m_lock_state = Shared_backup_lock_guard::Lock_result::not_locked;
-    return;
-  }
-  m_lock_state = try_acquire_shared_backup_lock(m_thd, false);
-}
-
-Shared_backup_lock_guard::~Shared_backup_lock_guard() {
-  if (m_lock_state == Shared_backup_lock_guard::Lock_result::locked) {
-    release_backup_lock(m_thd);
-  }
-}
-
-Shared_backup_lock_guard::operator Shared_backup_lock_guard::Lock_result()
-    const {
-  return m_lock_state;
-}
-
-Shared_backup_lock_guard::Lock_result
-Shared_backup_lock_guard::try_acquire_shared_backup_lock(THD *thd,
-                                                         bool for_trx) {
-  MDL_request mdl_request;
-  const enum_mdl_duration duration = (for_trx ? MDL_TRANSACTION : MDL_EXPLICIT);
-
-  MDL_REQUEST_INIT(&mdl_request, MDL_key::BACKUP_LOCK, "", "",
-                   MDL_INTENTION_EXCLUSIVE, duration);
-
-  if (thd->mdl_context.try_acquire_lock(&mdl_request)) {
-    return Shared_backup_lock_guard::Lock_result::oom;
-  }
-  if (mdl_request.ticket == nullptr) {
-    return Shared_backup_lock_guard::Lock_result::not_locked;
-  }
-  return Shared_backup_lock_guard::Lock_result::locked;
 }
 
 /**
@@ -175,13 +134,30 @@ void release_backup_lock(THD *thd) {
 
 bool acquire_exclusive_backup_lock(THD *thd, ulong lock_wait_timeout,
                                    bool for_trx) {
-  const enum_mdl_duration duration = (for_trx ? MDL_TRANSACTION : MDL_EXPLICIT);
+  enum_mdl_duration duration = (for_trx ? MDL_TRANSACTION : MDL_EXPLICIT);
   return acquire_mdl_for_backup(thd, MDL_SHARED, duration, lock_wait_timeout);
 }
 
 bool acquire_shared_backup_lock(THD *thd, ulong lock_wait_timeout,
                                 bool for_trx) {
-  const enum_mdl_duration duration = (for_trx ? MDL_TRANSACTION : MDL_EXPLICIT);
+  enum_mdl_duration duration = (for_trx ? MDL_TRANSACTION : MDL_EXPLICIT);
   return acquire_mdl_for_backup(thd, MDL_INTENTION_EXCLUSIVE, duration,
                                 lock_wait_timeout);
+}
+
+Is_instance_backup_locked_result is_instance_backup_locked(THD *thd) {
+  Is_instance_backup_locked_result res;
+  MDL_key key(MDL_key::BACKUP_LOCK, "", "");
+  MDL_lock_is_owned_visitor backup_lock_owner;
+
+  if (thd->mdl_context.find_lock_owner(&key, &backup_lock_owner))
+    res = Is_instance_backup_locked_result::OOM;
+  else {
+    if (backup_lock_owner.exists())
+      res = Is_instance_backup_locked_result::LOCKED;
+    else
+      res = Is_instance_backup_locked_result::NOT_LOCKED;
+  }
+
+  return res;
 }

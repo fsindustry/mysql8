@@ -8,7 +8,6 @@
 [mysqld]
 log-replica-updates
 ndb-log-apply-status
-replica-parallel-workers=1
 
 [mysqld.1.1]
 server-id= 1

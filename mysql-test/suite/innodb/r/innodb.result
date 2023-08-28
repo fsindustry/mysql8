@@ -1127,8 +1127,6 @@ id	code	name
 5	3	Sasha
 COMMIT;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 BEGIN;
 SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 insert into t1 (code, name) values (3, 'Jeremy'), (4, 'Matt');
@@ -1857,6 +1855,73 @@ variable_value - @innodb_row_lock_time_max_orig
 SELECT variable_value - @innodb_row_lock_time_avg_orig FROM performance_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_avg';
 variable_value - @innodb_row_lock_time_avg_orig
 0
+SET @innodb_sync_spin_loops_orig = @@innodb_sync_spin_loops;
+show variables like "innodb_sync_spin_loops";
+Variable_name	Value
+innodb_sync_spin_loops	30
+set global innodb_sync_spin_loops=1000;
+show variables like "innodb_sync_spin_loops";
+Variable_name	Value
+innodb_sync_spin_loops	1000
+set global innodb_sync_spin_loops=0;
+show variables like "innodb_sync_spin_loops";
+Variable_name	Value
+innodb_sync_spin_loops	0
+set global innodb_sync_spin_loops=20;
+show variables like "innodb_sync_spin_loops";
+Variable_name	Value
+innodb_sync_spin_loops	20
+set global innodb_sync_spin_loops=@innodb_sync_spin_loops_orig;
+show variables like "innodb_thread_concurrency";
+Variable_name	Value
+innodb_thread_concurrency	0
+set global innodb_thread_concurrency=1001;
+Warnings:
+Warning	1292	Truncated incorrect innodb_thread_concurrency value: '1001'
+Warning	1210	Current innodb_thread_concurrency is too big for safety of log files. Consider decreasing it or increase number of log files.
+show variables like "innodb_thread_concurrency";
+Variable_name	Value
+innodb_thread_concurrency	1000
+set global innodb_thread_concurrency=0;
+show variables like "innodb_thread_concurrency";
+Variable_name	Value
+innodb_thread_concurrency	0
+set global innodb_thread_concurrency=16;
+show variables like "innodb_thread_concurrency";
+Variable_name	Value
+innodb_thread_concurrency	16
+show variables like "innodb_concurrency_tickets";
+Variable_name	Value
+innodb_concurrency_tickets	5000
+set global innodb_concurrency_tickets=1000;
+show variables like "innodb_concurrency_tickets";
+Variable_name	Value
+innodb_concurrency_tickets	1000
+set global innodb_concurrency_tickets=0;
+Warnings:
+Warning	1292	Truncated incorrect innodb_concurrency_tickets value: '0'
+show variables like "innodb_concurrency_tickets";
+Variable_name	Value
+innodb_concurrency_tickets	1
+set global innodb_concurrency_tickets=5000;
+show variables like "innodb_concurrency_tickets";
+Variable_name	Value
+innodb_concurrency_tickets	5000
+show variables like "innodb_thread_sleep_delay";
+Variable_name	Value
+innodb_thread_sleep_delay	10000
+set global innodb_thread_sleep_delay=100000;
+show variables like "innodb_thread_sleep_delay";
+Variable_name	Value
+innodb_thread_sleep_delay	100000
+set global innodb_thread_sleep_delay=0;
+show variables like "innodb_thread_sleep_delay";
+Variable_name	Value
+innodb_thread_sleep_delay	0
+set global innodb_thread_sleep_delay=10000;
+show variables like "innodb_thread_sleep_delay";
+Variable_name	Value
+innodb_thread_sleep_delay	10000
 set default_storage_engine=INNODB;
 set session old_alter_table=1;
 drop table if exists t1,t2,t3;
@@ -1941,7 +2006,7 @@ t1	CREATE TABLE `t1` (
 select count(*) from t1;
 count(*)
 270
-insert into t1 values(concat('a','!'),concat('a','!'),concat('a','!'));
+insert into t1 values(concat('a',char(1)),concat('a',char(1)),concat('a',char(1)));
 select count(*) from t1 where v='a';
 count(*)
 10
@@ -2032,8 +2097,8 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select TRIM(v),count(*) from t1 group by TRIM(v) order by TRIM(v) limit 10;
 TRIM(v)	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2044,8 +2109,8 @@ h	10
 i	10
 select TRIM(v),count(t) from t1 group by TRIM(v) order by TRIM(v) limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2056,8 +2121,8 @@ h	10
 i	10
 select TRIM(v),count(c) from t1 group by TRIM(v) order by TRIM(v) limit 10;
 TRIM(v)	count(c)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2068,8 +2133,8 @@ h	10
 i	10
 select sql_big_result TRIM(v),count(t) from t1 group by TRIM(v) order by TRIM(v) limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2080,8 +2145,8 @@ h	10
 i	10
 select sql_big_result TRIM(v),count(c) from t1 group by TRIM(v) order by TRIM(v) limit 10;
 TRIM(v)	count(c)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2092,8 +2157,8 @@ h	10
 i	10
 select c,count(*) from t1 group by c order by c limit 10;
 c	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2104,8 +2169,8 @@ h	10
 i	10
 select c,count(t) from t1 group by c order by c limit 10;
 c	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2116,8 +2181,8 @@ h	10
 i	10
 select sql_big_result c,count(t) from t1 group by c limit 10;
 c	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2128,8 +2193,8 @@ h	10
 i	10
 select TRIM(t),count(*) from t1 group by TRIM(t) order by TRIM(t) limit 10;
 TRIM(t)	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2140,8 +2205,8 @@ h	10
 i	10
 select TRIM(t),count(t) from t1 group by TRIM(t) order by TRIM(t) limit 10;
 TRIM(t)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2152,8 +2217,8 @@ h	10
 i	10
 select sql_big_result TRIM(t),count(t) from t1 group by TRIM(t) order by TRIM(t) limit 10;
 TRIM(t)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2218,8 +2283,8 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select v,count(*) from t1 group by v order by v limit 10;
 v	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2230,8 +2295,8 @@ h	10
 i	10
 select TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2242,8 +2307,8 @@ h	10
 i	10
 select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2308,8 +2373,8 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select TRIM(v),count(*) from t1 group by v order by v limit 10;
 TRIM(v)	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2320,8 +2385,8 @@ h	10
 i	10
 select TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2332,8 +2397,8 @@ h	10
 i	10
 select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2355,8 +2420,8 @@ t1	CREATE TABLE `t1` (
 ) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB DEFAULT CHARSET=latin1 STATS_PERSISTENT=0
 select TRIM(v),count(*) from t1 group by v order by v limit 10;
 TRIM(v)	count(*)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2367,8 +2432,8 @@ h	10
 i	10
 select TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2379,8 +2444,8 @@ h	10
 i	10
 select sql_big_result TRIM(v),count(t) from t1 group by v order by v limit 10;
 TRIM(v)	count(t)
+a	1
 a	10
-a!	1
 b	10
 c	10
 d	10
@@ -2440,7 +2505,7 @@ Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but wil
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` char(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL
+  `v` char(10) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 (v varchar(10), c char(10)) row_format=fixed;
@@ -2498,7 +2563,7 @@ Note	1246	Converting column 'v' from VARCHAR to TEXT
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` mediumtext CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci
+  `v` mediumtext CHARACTER SET utf8 COLLATE utf8_general_ci
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 SET sql_mode = default;
@@ -2947,14 +3012,10 @@ create table t1(a int not null, b int, primary key(a)) engine=innodb;
 insert into t1 values(1,1),(2,2),(3,1),(4,2),(5,1),(6,2),(7,3);
 commit;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t1 set b = 5 where b = 1;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 select * from t1 where a = 7 and b = 3 for update;
@@ -2994,8 +3055,6 @@ d	e
 8	6
 12	1
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t1 select * from t2;
@@ -3027,56 +3086,38 @@ a	b
 8	6
 12	1
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 insert into t1 select * from t2;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 update t3 set b = (select b from t2 where a = d);
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 create table t4(a int not null, b int, primary key(a)) engine=innodb select * from t2;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t5 (select * from t2 lock in share mode);
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t6 set e = (select b from t2 where a = d lock in share mode);
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 create table t7(a int not null, b int, primary key(a)) engine=innodb select * from t2 lock in share mode;
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 insert into t8 (select * from t2 for update);
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 update t9 set e = (select b from t2 where a = d for update);
 SET binlog_format='MIXED';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set autocommit = 0;
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 create table t10(a int not null, b int, primary key(a)) engine=innodb select * from t2 for update;
@@ -3177,7 +3218,7 @@ DROP TABLE t2,t1;
 CREATE TABLE t1 (a VARCHAR(5) COLLATE utf8_unicode_ci PRIMARY KEY)
 ENGINE=InnoDB;
 Warnings:
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 INSERT INTO t1 VALUES (0xEFBCA4EFBCA4EFBCA4);
 DELETE FROM t1;
 INSERT INTO t1 VALUES ('DDD');
@@ -3404,11 +3445,7 @@ count_alloc WHERE event_name like 'memory/innodb/other'
 count_alloc
 0
 SET @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 SET GLOBAL log_bin_trust_function_creators = 1;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 create table t1 (col1 integer primary key, col2 integer) engine=innodb;
 insert t1 values (1,100);
 create function f1 () returns integer begin
@@ -3429,5 +3466,3 @@ rollback;
 drop table t1;
 drop function f1;
 SET @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.

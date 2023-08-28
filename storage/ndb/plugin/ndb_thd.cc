@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,13 +40,15 @@
 Ndb *check_ndb_in_thd(THD *thd, bool validate_ndb) {
   Thd_ndb *thd_ndb = get_thd_ndb(thd);
   if (!thd_ndb) {
-    if (!(thd_ndb = Thd_ndb::seize(thd))) return nullptr;
+    if (!(thd_ndb = Thd_ndb::seize(thd))) return NULL;
     thd_set_thd_ndb(thd, thd_ndb);
   }
 
   else if (validate_ndb && !thd_ndb->valid_ndb()) {
-    if (!thd_ndb->recycle_ndb()) return nullptr;
+    if (!thd_ndb->recycle_ndb()) return NULL;
   }
+
+  assert(thd_ndb->is_slave_thread() == thd->slave_thread);
 
   return thd_ndb->ndb;
 }
@@ -84,11 +86,6 @@ size_t ndb_thd_query_length(const THD *thd) { return thd->query().length; }
 
 bool ndb_thd_is_binlog_thread(const THD *thd) {
   return thd->system_thread == SYSTEM_THREAD_NDBCLUSTER_BINLOG;
-}
-
-bool ndb_thd_is_replica_thread(const THD *thd) {
-  return thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
-         thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER;
 }
 
 bool ndb_thd_is_background_thread(const THD *thd) {
@@ -135,16 +132,4 @@ void log_and_clear_thd_conditions(THD *thd,
     }
   }
   clear_thd_conditions(thd);
-}
-
-Ndb_thd_memory_guard::Ndb_thd_memory_guard(THD *thd [[maybe_unused]])
-#ifndef NDEBUG
-    : m_thd(thd),
-      m_thd_mem_root_size_before(thd->mem_root->allocated_size())
-#endif
-{
-}
-
-Ndb_thd_memory_guard::~Ndb_thd_memory_guard() {
-  assert(m_thd->mem_root->allocated_size() <= m_thd_mem_root_size_before);
 }

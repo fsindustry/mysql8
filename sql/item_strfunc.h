@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,12 +31,12 @@
 
 #include "lex_string.h"
 #include "libbinlogevents/include/uuid.h"  // Uuid
+#include "m_ctype.h"
 
 #include "my_hostname.h"  // HOSTNAME_LENGTH
 #include "my_inttypes.h"
 #include "my_table_map.h"
 #include "my_time.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
@@ -103,9 +103,7 @@ class Item_str_func : public Item_func {
 
   Item_str_func(const POS &pos, Item *a, Item *b, Item *c, Item *d, Item *e)
       : Item_func(pos, a, b, c, d, e) {}
-  Item_str_func(const POS &pos, Item *a, Item *b, Item *c, Item *d, Item *e,
-                Item *f)
-      : Item_func(pos, a, b, c, d, e, f) {}
+
   explicit Item_str_func(mem_root_deque<Item *> *list) : Item_func(list) {}
 
   Item_str_func(const POS &pos, PT_item_list *opt_list)
@@ -135,10 +133,6 @@ class Item_str_func : public Item_func {
     @return error_str().
    */
   String *push_packet_overflow_warning(THD *thd, const char *func);
-
-  void add_json_info(Json_object *obj) override {
-    obj->add_alias("func_name", create_dom_ptr<Json_string>(func_name()));
-  }
 };
 
 /*
@@ -285,15 +279,8 @@ class Item_func_aes_encrypt final : public Item_str_func {
       : Item_str_func(pos, a, b) {}
   Item_func_aes_encrypt(const POS &pos, Item *a, Item *b, Item *c)
       : Item_str_func(pos, a, b, c) {}
-  Item_func_aes_encrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d)
-      : Item_str_func(pos, a, b, c, d) {}
-  Item_func_aes_encrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d,
-                        Item *e)
-      : Item_str_func(pos, a, b, c, d, e) {}
-  Item_func_aes_encrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d,
-                        Item *e, Item *f)
-      : Item_str_func(pos, a, b, c, d, e, f) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+
+  bool itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *) override;
   bool resolve_type(THD *) override;
   const char *func_name() const override { return "aes_encrypt"; }
@@ -307,15 +294,8 @@ class Item_func_aes_decrypt : public Item_str_func {
       : Item_str_func(pos, a, b) {}
   Item_func_aes_decrypt(const POS &pos, Item *a, Item *b, Item *c)
       : Item_str_func(pos, a, b, c) {}
-  Item_func_aes_decrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d)
-      : Item_str_func(pos, a, b, c, d) {}
-  Item_func_aes_decrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d,
-                        Item *e)
-      : Item_str_func(pos, a, b, c, d, e) {}
-  Item_func_aes_decrypt(const POS &pos, Item *a, Item *b, Item *c, Item *d,
-                        Item *e, Item *f)
-      : Item_str_func(pos, a, b, c, d, e, f) {}
-  bool do_itemize(Parse_context *pc, Item **res) override;
+
+  bool itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *) override;
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "aes_decrypt"; }
@@ -330,14 +310,11 @@ class Item_func_random_bytes : public Item_str_func {
  public:
   Item_func_random_bytes(const POS &pos, Item *a) : Item_str_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   bool resolve_type(THD *thd) override;
   String *val_str(String *a) override;
 
   const char *func_name() const override { return "random_bytes"; }
-  table_map get_initial_pseudo_tables() const override {
-    return RAND_TABLE_BIT;
-  }
 };
 
 class Item_func_concat : public Item_str_func {
@@ -611,7 +588,7 @@ class Item_func_database : public Item_func_sysconst {
  public:
   explicit Item_func_database(const POS &pos) : Item_func_sysconst(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   String *val_str(String *) override;
   bool resolve_type(THD *) override {
@@ -646,15 +623,14 @@ class Item_func_user : public Item_func_sysconst {
     return INNER_TABLE_BIT;
   }
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   bool check_function_as_value_generator(uchar *checker_args) override {
     Check_function_as_value_generator_parameters *func_arg =
         pointer_cast<Check_function_as_value_generator_parameters *>(
             checker_args);
     func_arg->banned_function_name = func_name();
-    return ((func_arg->source == VGS_GENERATED_COLUMN) ||
-            (func_arg->source == VGS_CHECK_CONSTRAINT));
+    return true;
   }
   bool resolve_type(THD *) override {
     set_data_type_string(uint32{USERNAME_CHAR_LENGTH + HOSTNAME_LENGTH + 1U});
@@ -684,7 +660,7 @@ class Item_func_current_user : public Item_func_user {
  public:
   explicit Item_func_current_user(const POS &pos) : super(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return "current_user"; }
   const Name_string fully_qualified_func_name() const override {
     return NAME_STRING("current_user()");
@@ -725,13 +701,13 @@ class Item_func_make_set final : public Item_str_func {
   Item_func_make_set(const POS &pos, Item *a, PT_item_list *opt_list)
       : Item_str_func(pos, opt_list), item(a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *str) override;
   bool fix_fields(THD *thd, Item **ref) override {
     assert(fixed == 0);
     bool res = ((!item->fixed && item->fix_fields(thd, &item)) ||
                 item->check_cols(1) || Item_func::fix_fields(thd, ref));
-    set_nullable(is_nullable() || item->is_nullable());
+    set_nullable(is_nullable() | item->is_nullable());
     return res;
   }
   void split_sum_func(THD *thd, Ref_item_array ref_item_array,
@@ -789,11 +765,6 @@ class Item_func_char final : public Item_str_func {
     return false;
   }
   const char *func_name() const override { return "char"; }
-  void add_json_info(Json_object *obj) override {
-    Item_str_func::add_json_info(obj);
-    obj->add_alias("charset",
-                   create_dom_ptr<Json_string>(collation.collation->csname));
-  }
 };
 
 class Item_func_repeat final : public Item_str_func {
@@ -897,7 +868,11 @@ class Item_func_hex : public Item_str_ascii_func {
   Item_func_hex(const POS &pos, Item *a) : Item_str_ascii_func(pos, a) {}
   const char *func_name() const override { return "hex"; }
   String *val_str_ascii(String *) override;
-  bool resolve_type(THD *thd) override;
+  bool resolve_type(THD *thd) override {
+    if (param_type_is_default(thd, 0, -1)) return true;
+    set_data_type_string(args[0]->max_length * 2U, default_charset());
+    return false;
+  }
 };
 
 class Item_func_unhex final : public Item_str_func {
@@ -949,89 +924,23 @@ class Item_func_like_range_max final : public Item_func_like_range {
 };
 #endif
 
-/**
-  The following types of conversions are considered safe:
-
-  Conversion to and from "binary".
-  Conversion to Unicode.
-  Other kind of conversions are potentially lossy.
-*/
-class Item_charset_conversion : public Item_str_func {
- protected:
-  /// If true, conversion is needed so do it, else allow string copy.
-  bool m_charset_conversion{false};
-  /// The character set we are converting to
-  const CHARSET_INFO *m_cast_cs;
-  /// The character set we are converting from
-  const CHARSET_INFO *m_from_cs{nullptr};
-  String m_tmp_value;
-  /// Marks whether the underlying Item is constant and may be cached.
-  bool m_use_cached_value{false};
-  /// Length argument value, if any given.
-  longlong m_cast_length{-1};  // a priori not used
- public:
-  bool m_safe;
-
- protected:
-  /**
-    Helper for CAST and CONVERT type resolution: common logic to compute the
-    maximum numbers of characters of the type of the conversion.
-
-    @returns the maximum numbers of characters possible after the conversion
-  */
-  uint32 compute_max_char_length();
-
-  bool resolve_type(THD *thd) override;
-
-  void add_json_info(Json_object *obj) override {
-    Item_str_func::add_json_info(obj);
-    obj->add_alias("charset", create_dom_ptr<Json_string>(m_cast_cs->csname));
-  }
+class Item_typecast_char final : public Item_str_func {
+  longlong cast_length;
+  const CHARSET_INFO *cast_cs, *from_cs;
+  bool charset_conversion;
+  String tmp_value;
 
  public:
-  Item_charset_conversion(THD *thd, Item *a, const CHARSET_INFO *cs_arg,
-                          bool cache_if_const)
-      : Item_str_func(a), m_cast_cs(cs_arg) {
-    if (cache_if_const && args[0]->may_evaluate_const(thd)) {
-      uint errors = 0;
-      String tmp, *str = args[0]->val_str(&tmp);
-      if (!str || str_value.copy(str->ptr(), str->length(), str->charset(),
-                                 m_cast_cs, &errors))
-        null_value = true;
-      m_use_cached_value = true;
-      str_value.mark_as_const();
-      m_safe = (errors == 0);
-    } else {
-      m_use_cached_value = false;
-      // Marks whether the conversion is safe
-      m_safe = (args[0]->collation.collation == &my_charset_bin ||
-                cs_arg == &my_charset_bin || (cs_arg->state & MY_CS_UNICODE));
-    }
-  }
-  Item_charset_conversion(const POS &pos, Item *a, const CHARSET_INFO *cs_arg)
-      : Item_str_func(pos, a), m_cast_cs(cs_arg) {}
-
-  String *val_str(String *) override;
-};
-
-class Item_typecast_char final : public Item_charset_conversion {
- protected:
-  void add_json_info(Json_object *obj) override;
-
- public:
-  Item_typecast_char(THD *thd, Item *a, longlong length_arg,
-                     const CHARSET_INFO *cs_arg)
-      : Item_charset_conversion(thd, a, cs_arg, false) {
-    m_cast_length = length_arg;
-  }
+  Item_typecast_char(Item *a, longlong length_arg, const CHARSET_INFO *cs_arg)
+      : Item_str_func(a), cast_length(length_arg), cast_cs(cs_arg) {}
   Item_typecast_char(const POS &pos, Item *a, longlong length_arg,
                      const CHARSET_INFO *cs_arg)
-      : Item_charset_conversion(pos, a, cs_arg) {
-    m_cast_length = length_arg;
-  }
+      : Item_str_func(pos, a), cast_length(length_arg), cast_cs(cs_arg) {}
   enum Functype functype() const override { return TYPECAST_FUNC; }
   bool eq(const Item *item, bool binary_cmp) const override;
   const char *func_name() const override { return "cast_as_char"; }
+  String *val_str(String *a) override;
+  bool resolve_type(THD *) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 };
@@ -1044,7 +953,7 @@ class Item_load_file final : public Item_str_func {
  public:
   Item_load_file(const POS &pos, Item *a) : Item_str_func(pos, a) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *) override;
   const char *func_name() const override { return "load_file"; }
   table_map get_initial_pseudo_tables() const override {
@@ -1053,7 +962,7 @@ class Item_load_file final : public Item_str_func {
   bool resolve_type(THD *thd) override {
     if (param_type_is_default(thd, 0, 1)) return true;
     collation.set(&my_charset_bin, DERIVATION_COERCIBLE);
-    set_data_type_blob(MYSQL_TYPE_LONG_BLOB, MAX_BLOB_WIDTH);
+    set_data_type_blob(MAX_BLOB_WIDTH);
     set_nullable(true);
     return false;
   }
@@ -1090,18 +999,52 @@ class Item_func_quote : public Item_str_func {
   bool resolve_type(THD *thd) override;
 };
 
-class Item_func_conv_charset final : public Item_charset_conversion {
+class Item_func_conv_charset final : public Item_str_func {
+  /// Marks weather the underlying Item is constant and may be cached.
+  bool use_cached_value;
+  String tmp_value;
+
  public:
+  /**
+    The following types of conversions are considered safe:
+
+    Conversion to and from "binary".
+    Conversion to Unicode.
+    Other kind of conversions are potentially lossy.
+  */
+  bool safe;
+  const CHARSET_INFO *conv_charset;  // keep it public
   Item_func_conv_charset(const POS &pos, Item *a, const CHARSET_INFO *cs)
-      : Item_charset_conversion(pos, a, cs) {
-    m_safe = false;
+      : Item_str_func(pos, a) {
+    conv_charset = cs;
+    use_cached_value = false;
+    safe = false;
   }
 
   Item_func_conv_charset(THD *thd, Item *a, const CHARSET_INFO *cs,
                          bool cache_if_const)
-      : Item_charset_conversion(thd, a, cs, cache_if_const) {
+      : Item_str_func(a) {
     assert(args[0]->fixed);
+
+    conv_charset = cs;
+    if (cache_if_const && args[0]->may_evaluate_const(thd)) {
+      uint errors = 0;
+      String tmp, *str = args[0]->val_str(&tmp);
+      if (!str || str_value.copy(str->ptr(), str->length(), str->charset(),
+                                 conv_charset, &errors))
+        null_value = true;
+      use_cached_value = true;
+      str_value.mark_as_const();
+      safe = (errors == 0);
+    } else {
+      use_cached_value = false;
+      // Marks weather the conversion is safe
+      safe = (args[0]->collation.collation == &my_charset_bin ||
+              cs == &my_charset_bin || (cs->state & MY_CS_UNICODE));
+    }
   }
+  String *val_str(String *) override;
+  bool resolve_type(THD *) override;
   const char *func_name() const override { return "convert"; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
@@ -1117,7 +1060,7 @@ class Item_func_set_collation final : public Item_str_func {
                           const LEX_STRING &collation_string_arg)
       : super(pos, a, nullptr), collation_string(collation_string_arg) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *) override;
   bool resolve_type(THD *) override;
   bool eq(const Item *item, bool binary_cmp) const override;
@@ -1128,13 +1071,6 @@ class Item_func_set_collation final : public Item_str_func {
   Item_field *field_for_view_update() override {
     /* this function is transparent for view updating */
     return args[0]->field_for_view_update();
-  }
-
- protected:
-  void add_json_info(Json_object *obj) override {
-    obj->add_alias("collation",
-                   create_dom_ptr<Json_string>(collation_string.str,
-                                               collation_string.length));
   }
 };
 
@@ -1187,7 +1123,7 @@ class Item_func_weight_string final : public Item_str_func {
         result_length(result_length_arg),
         as_binary(as_binary_arg) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   const char *func_name() const override { return "weight_string"; }
   bool eq(const Item *item, bool binary_cmp) const override;
@@ -1260,7 +1196,7 @@ class Item_func_uuid final : public Item_str_func {
   Item_func_uuid() : Item_str_func() {}
   explicit Item_func_uuid(const POS &pos) : Item_str_func(pos) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   table_map get_initial_pseudo_tables() const override {
     return RAND_TABLE_BIT;
   }
@@ -1275,6 +1211,17 @@ class Item_func_uuid final : public Item_str_func {
     return ((func_arg->source == VGS_GENERATED_COLUMN) ||
             (func_arg->source == VGS_CHECK_CONSTRAINT));
   }
+};
+
+class Item_func_gtid_subtract final : public Item_str_ascii_func {
+  String buf1, buf2;
+
+ public:
+  Item_func_gtid_subtract(const POS &pos, Item *a, Item *b)
+      : Item_str_ascii_func(pos, a, b) {}
+  bool resolve_type(THD *) override;
+  const char *func_name() const override { return "gtid_subtract"; }
+  String *val_str_ascii(String *) override;
 };
 
 class Item_func_current_role final : public Item_func_sysconst {

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,14 +70,14 @@ runClusterMgr_C(void * me)
 {
   ((ClusterMgr*) me)->threadMain();
 
-  return nullptr;
+  return NULL;
 }
 
 ClusterMgr::ClusterMgr(TransporterFacade & _facade):
   theStop(0),
   m_sent_API_REGREQ_to_myself(false),
   theFacade(_facade),
-  theArbitMgr(nullptr),
+  theArbitMgr(NULL),
   m_connect_count(0),
   m_max_api_reg_req_interval(~0),
   noOfAliveNodes(0),
@@ -85,8 +85,8 @@ ClusterMgr::ClusterMgr(TransporterFacade & _facade):
   noOfConnectedDBNodes(0),
   minDbVersion(0),
   minApiVersion(0),
-  theClusterMgrThread(nullptr),
-  m_process_info(nullptr),
+  theClusterMgrThread(NULL),
+  m_process_info(NULL),
   m_cluster_state(CS_waiting_for_clean_cache),
   m_hbFrequency(0)
 {
@@ -108,10 +108,10 @@ ClusterMgr::~ClusterMgr()
 {
   DBUG_ENTER("ClusterMgr::~ClusterMgr");
   assert(theStop == 1);
-  if (theArbitMgr != nullptr)
+  if (theArbitMgr != 0)
   {
     delete theArbitMgr;
-    theArbitMgr = nullptr;
+    theArbitMgr = 0;
   }
   NdbCondition_Destroy(waitForHBCond);
   NdbMutex_Destroy(clusterMgrThreadMutex);
@@ -192,9 +192,9 @@ ClusterMgr::configure(Uint32 nodeId,
   else if (theArbitMgr)
   {
     // No arbitrator should be started
-    theArbitMgr->doStop(nullptr);
+    theArbitMgr->doStop(NULL);
     delete theArbitMgr;
-    theArbitMgr= nullptr;
+    theArbitMgr= NULL;
   }
 
   // Configure heartbeats.
@@ -238,12 +238,12 @@ ClusterMgr::startThread()
                                          0, // default stack size
                                          "ndb_clustermgr",
                                          NDB_THREAD_PRIO_HIGH);
-  if (theClusterMgrThread == nullptr)
+  if (theClusterMgrThread == NULL)
   {
     g_eventLogger->info(
         "ClusterMgr::startThread:"
         " Failed to create thread for cluster management.");
-    assert(theClusterMgrThread != nullptr);
+    assert(theClusterMgrThread != NULL);
     DBUG_VOID_RETURN;
   }
 
@@ -275,9 +275,9 @@ ClusterMgr::doStop( ){
     NdbThread_Destroy(&theClusterMgrThread);
   }
 
-  if (theArbitMgr != nullptr)
+  if (theArbitMgr != NULL)
   {
-    theArbitMgr->doStop(nullptr);
+    theArbitMgr->doStop(NULL);
   }
   {
     /**
@@ -466,18 +466,7 @@ ClusterMgr::threadMain()
 	raw_sendSignal(&signal, nodeId);
       }//if
       
-      /**
-       * Node can be reported as disconnected in two different ways
-       * 1 - Node was reported as connected, hbFrequency already configured
-       * (arrived as part of an earlier API_REGCONF signal received) but no
-       * API_REGCONF arriving for, at least, 4 * hbFrequency millisecond.
-       * 2 - Node reported as connected, first API_REGCONF missed for more
-       * them maxTimeWithoutFirstApiRegConfMillis / minHeartBeatInterval
-       * (60 seconds).
-       */
-      if ((cm_node.hbMissed == 4 && cm_node.hbFrequency > 0) ||
-          (cm_node.hbMissed == maxIntervalsWithoutFirstApiRegConf &&
-           cm_node.hbFrequency == 0))
+      if (cm_node.hbMissed == 4 && cm_node.hbFrequency > 0)
       {
         nodeFailRep->noOfNodes++;
         NodeBitmask::set(theAllNodes, nodeId);
@@ -539,23 +528,23 @@ ClusterMgr::trp_deliver_signal(const NdbApiSignal* sig,
     execNF_COMPLETEREP(sig, ptr);
     break;
   case GSN_ARBIT_STARTREQ:
-    if (theArbitMgr != nullptr)
+    if (theArbitMgr != NULL)
       theArbitMgr->doStart(theData);
     break;
 
   case GSN_ARBIT_CHOOSEREQ:
-    if (theArbitMgr != nullptr)
+    if (theArbitMgr != NULL)
       theArbitMgr->doChoose(theData);
     break;
 
   case GSN_ARBIT_STOPORD:
-    if(theArbitMgr != nullptr)
+    if(theArbitMgr != NULL)
       theArbitMgr->doStop(theData);
     break;
 
   case GSN_ALTER_TABLE_REP:
   {
-    if (theFacade.m_globalDictCache == nullptr)
+    if (theFacade.m_globalDictCache == NULL)
       break;
     const AlterTableRep* rep = (const AlterTableRep*)theData;
     theFacade.m_globalDictCache->lock();
@@ -769,7 +758,7 @@ ClusterMgr::sendProcessInfoReport(NodeId nodeId)
   m_process_info->buildProcessInfoReport(report);
 
   const char * uri_path = m_process_info->getUriPath();
-  pathSection.p = (const Uint32*)uri_path;
+  pathSection.p = (Uint32 *) uri_path;
   pathSection.sz = ProcessInfo::UriPathLengthInWords;
   if(uri_path[0])
   {
@@ -780,7 +769,7 @@ ClusterMgr::sendProcessInfoReport(NodeId nodeId)
   if(hostAddress[0])
   {
     nsections = 2;
-    hostSection.p = (const Uint32*)hostAddress;
+    hostSection.p = (Uint32 *) hostAddress;
     hostSection.sz = ProcessInfo::AddressStringLengthInWords;
   }
   safe_noflush_sendSignal(&signal, nodeId, ptr, nsections);
@@ -793,7 +782,7 @@ ClusterMgr::sendProcessInfoReport(NodeId nodeId)
 
 void
 ClusterMgr::execAPI_REGREQ(const Uint32 * theData){
-  const ApiRegReq* const apiRegReq = (const ApiRegReq*)&theData[0];
+  const ApiRegReq * const apiRegReq = (ApiRegReq *)&theData[0];
   const NodeId nodeId = refToNode(apiRegReq->ref);
 
 #ifdef DEBUG_REG
@@ -980,8 +969,9 @@ ClusterMgr::execAPI_REGCONF(const NdbApiSignal * signal,
 
 void
 ClusterMgr::execAPI_REGREF(const Uint32 * theData){
-  const ApiRegRef* ref = (const ApiRegRef*)theData;
-
+  
+  ApiRegRef * ref = (ApiRegRef*)theData;
+  
   const NodeId nodeId = refToNode(ref->ref);
 
   assert(nodeId > 0 && nodeId < MAX_NODES);
@@ -1090,6 +1080,7 @@ ClusterMgr::execDUMP_STATE_ORD(const NdbApiSignal* signal,
     {
       return;
     }
+    Uint32 tot_len = length;
     LinearSectionPtr ptr[3];
     Uint32 sec_max_len = 0;
     for (Uint32 i = 0; i < num_secs; i++)
@@ -1100,6 +1091,7 @@ ClusterMgr::execDUMP_STATE_ORD(const NdbApiSignal* signal,
         sec_max_len = sec_len;
       }
       ptr[i].sz = sec_len;
+      tot_len += sec_len;
     }
     Uint32* dummy_data = new Uint32[sec_max_len];
     for (Uint32 i = 0; i < sec_max_len; i++)
@@ -1113,7 +1105,7 @@ ClusterMgr::execDUMP_STATE_ORD(const NdbApiSignal* signal,
     for (Uint32 i = num_secs; i < 3; i++)
     {
       ptr[i].sz = 0;
-      ptr[i].p = nullptr;
+      ptr[i].p = NULL;
     }
     NdbApiSignal dummy_signal(numberToRef(API_CLUSTERMGR, getOwnNodeId()));
     Uint32* dummy_sigdata = dummy_signal.getDataPtrSend();
@@ -1270,7 +1262,7 @@ ClusterMgr::reportConnected(NodeId nodeId)
   signal.theTrace  = 0;
   signal.theLength = 1;
   signal.getDataPtrSend()[0] = nodeId;
-  theFacade.for_each(this, &signal, nullptr);
+  theFacade.for_each(this, &signal, NULL);
   DBUG_VOID_RETURN;
 }
 
@@ -1459,7 +1451,7 @@ ClusterMgr::execNODE_FAILREP(const NdbApiSignal* sig,
       if (theNode.defined && theNode.nfCompleteRep == false)
       {
         rep->failedNodeId = i;
-        execNF_COMPLETEREP(&signal, nullptr);
+        execNF_COMPLETEREP(&signal, 0);
       }
     }
   }
@@ -1585,25 +1577,28 @@ ClusterMgr::setProcessInfoUri(const char * scheme, const char * address_string,
 /******************************************************************************
  * Arbitrator
  ******************************************************************************/
-ArbitMgr::ArbitMgr(ClusterMgr& c)
-    : m_clusterMgr(c),
-      theRank(0),
-      theDelay(0),
-      theThread(nullptr),
-      theInputTimeout(0),
-      theInputFull(false),
-      theInputBuffer(),
-      theState(StateInit),
-      theStartReq(),
-      theChooseReq1(),
-      theChooseReq2(),
-      theStopOrd()
+ArbitMgr::ArbitMgr(ClusterMgr & c)
+  : m_clusterMgr(c)
 {
   DBUG_ENTER("ArbitMgr::ArbitMgr");
 
   theThreadMutex = NdbMutex_Create();
   theInputCond = NdbCondition_Create();
   theInputMutex = NdbMutex_Create();
+  
+  theRank = 0;
+  theDelay = 0;
+  theThread = 0;
+
+  theInputTimeout = 0;
+  theInputFull = false;
+  memset(&theInputBuffer, 0, sizeof(theInputBuffer));
+  theState = StateInit;
+
+  memset(&theStartReq, 0, sizeof(theStartReq));
+  memset(&theChooseReq1, 0, sizeof(theChooseReq1));
+  memset(&theChooseReq2, 0, sizeof(theChooseReq2));
+  memset(&theStopOrd, 0, sizeof(theStopOrd));
 
   DBUG_VOID_RETURN;
 }
@@ -1626,8 +1621,8 @@ ArbitMgr::doStart(const Uint32* theData)
   DBUG_ENTER("ArbitMgr::doStart");
   ArbitSignal aSignal;
   NdbMutex_Lock(theThreadMutex);
-  if (theThread != nullptr) {
-    aSignal.init(GSN_ARBIT_STOPORD, nullptr);
+  if (theThread != NULL) {
+    aSignal.init(GSN_ARBIT_STOPORD, NULL);
     aSignal.data.code = StopRestart;
     sendSignalToThread(aSignal);
     void* value;
@@ -1643,11 +1638,11 @@ ArbitMgr::doStart(const Uint32* theData)
     0, // default stack size
     "ndb_arbitmgr",
     NDB_THREAD_PRIO_HIGH);
-  if (theThread == nullptr)
+  if (theThread == NULL)
   {
     g_eventLogger->info(
         "ArbitMgr::doStart: Failed to create thread for arbitration.");
-    assert(theThread != nullptr);
+    assert(theThread != NULL);
   }
   NdbMutex_Unlock(theThreadMutex);
   DBUG_VOID_RETURN;
@@ -1670,9 +1665,9 @@ ArbitMgr::doStop(const Uint32* theData)
   DBUG_ENTER("ArbitMgr::doStop");
   ArbitSignal aSignal;
   NdbMutex_Lock(theThreadMutex);
-  if (theThread != nullptr) {
+  if (theThread != NULL) {
     aSignal.init(GSN_ARBIT_STOPORD, theData);
-    if (theData == nullptr) {
+    if (theData == 0) {
       aSignal.data.code = StopExit;
     } else {
       aSignal.data.code = StopRequest;
@@ -1694,7 +1689,7 @@ void*
 runArbitMgr_C(void* me)
 {
   ((ArbitMgr*) me)->threadMain();
-  return nullptr;
+  return NULL;
 }
 
 void

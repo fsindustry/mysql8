@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+// Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -173,9 +173,9 @@ bool Sql_cmd_create_srs::execute(THD *thd) {
       acquire_shared_backup_lock(thd, thd->variables.lock_wait_timeout))
     return true;
 
-  const Disable_autocommit_guard dag(thd);
+  Disable_autocommit_guard dag(thd);
   dd::cache::Dictionary_client *dd_client = thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser(dd_client);
+  dd::cache::Dictionary_client::Auto_releaser releaser(dd_client);
   auto rollback_guard = create_scope_guard([thd]() {
     if (rollback(thd)) assert(false); /* purecov: deadcode */
   });
@@ -243,9 +243,9 @@ bool Sql_cmd_drop_srs::execute(THD *thd) {
       acquire_shared_backup_lock(thd, thd->variables.lock_wait_timeout))
     return true;
 
-  const Disable_autocommit_guard dag(thd);
+  Disable_autocommit_guard dag(thd);
   dd::cache::Dictionary_client *dd_client = thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser(dd_client);
+  dd::cache::Dictionary_client::Auto_releaser releaser(dd_client);
   auto rollback_guard = create_scope_guard([thd]() {
     if (rollback(thd)) assert(false); /* purecov: deadcode */
   });

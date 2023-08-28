@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +36,7 @@
 
 // big brother
 #include <dbtup/Dbtup.hpp>
+#include <dblqh/Dblqh.hpp>
 #include <dbacc/Dbacc.hpp>
 
 // packed index keys and bounds
@@ -70,7 +71,6 @@
 
 class Configuration;
 struct mt_BuildIndxCtx;
-class Dblqh;
 
 class Dbtux : public SimulatedBlock {
   friend class Dbqtux;
@@ -375,7 +375,7 @@ private:
       Found = 3,                // return current as next scan result
       Blocked = 4,              // found and waiting for ACC lock
       Locked = 5,               // found and locked or no lock needed
-      Next = 6,                 // looking for next entry
+      Next = 6,                 // looking for next extry
       Last = 7,                 // after last entry
       Aborting = 8
     };
@@ -652,7 +652,7 @@ private:
                     TreeEnt ent,
                     Uint32 count,
                     Uint32 *outputBuffer);
-  void readTableHashKey(TreeEnt ent, Uint32* pkData, unsigned& pkSize);
+  void readTablePk(TreeEnt ent, Uint32* pkData, unsigned& pkSize);
   void unpackBound(Uint32* const outputBuffer,
                    const ScanBound& bound,
                    KeyBoundC& searchBound);
@@ -736,7 +736,7 @@ private:
   void linkScan(NodeHandle& node, ScanOpPtr scanPtr, Uint32 scanInstance);
   void unlinkScan(NodeHandle& node, ScanOpPtr scanPtr, Uint32 scanInstance);
   bool islinkScan(NodeHandle& node, ScanOpPtr scanPtr, Uint32 scanInstance);
-  void relinkScan(ScanOp&, Uint32 scanInstance, Frag&, bool need_lock = true, Uint32 line = 0);
+  void relinkScan(ScanOp&, Frag&, bool need_lock = true, Uint32 line = 0);
 
   /*
    * DbtuxTree.cpp
@@ -830,6 +830,9 @@ private:
                            Dbtux *tux_block);
   void prepare_move_scan_ctx(ScanOpPtr scanPtr, Dbtux *tux_block);
 
+  /*
+   * DbtuxCmp.cpp
+   */
   int cmpSearchKey(TuxCtx&, const KeyDataC& searchKey, const KeyDataC& entryKey, Uint32 cnt);
   int cmpSearchBound(TuxCtx&, const KeyBoundC& searchBound, const KeyDataC& entryKey, Uint32 cnt);
 
@@ -1041,7 +1044,6 @@ private:
   Uint32 get_my_scan_instance();
   Uint32 get_block_from_scan_instance(Uint32);
   Uint32 get_instance_from_scan_instance(Uint32);
-  bool checkScanInstance(Uint32 scanInstance);
 public:
   static Uint64 getTransactionMemoryNeed(
     const Uint32 ldm_instance_count,
@@ -1710,6 +1712,8 @@ Dbtux::max(unsigned x, unsigned y)
   return x > y ? x : y;
 }
 
+// DbtuxCmp.cpp
+
 /**
  * Can be called from MT-build of ordered indexes,
  * but it doesn't make use of the MT-context other
@@ -1773,7 +1777,7 @@ Dbtux::relinkScan(Uint32 line)
   ndbrequire(c_ctx.scanPtr.p != nullptr);
   ScanOp& scan = *c_ctx.scanPtr.p;
   Frag& frag = *c_ctx.fragPtr.p;
-  relinkScan(scan, m_my_scan_instance, frag, true, line);
+  relinkScan(scan, frag, true, line);
 }
 #undef JAM_FILE_ID
 

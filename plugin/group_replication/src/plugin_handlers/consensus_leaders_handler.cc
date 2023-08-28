@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,8 +32,7 @@
  */
 /// @cond
 Member_version const Consensus_leaders_handler::
-    s_first_protocol_with_support_for_consensus_leaders{
-        FIRST_PROTOCOL_WITH_SUPPORT_FOR_CONSENSUS_LEADERS};
+    s_first_protocol_with_support_for_consensus_leaders{0x080027};
 /// @endcond
 
 Consensus_leaders_handler::Consensus_leaders_handler(
@@ -56,11 +55,13 @@ int Consensus_leaders_handler::after_view_change(
 }
 
 int Consensus_leaders_handler::after_primary_election(
-    std::string primary_uuid,
-    enum_primary_election_primary_change_status primary_change_status,
+    std::string primary_uuid, bool primary_changed,
     enum_primary_election_mode /*election_mode*/, int error) {
-  if (enum_primary_election_primary_change_status::PRIMARY_DID_CHANGE ==
-      primary_change_status) {
+  bool const successful_election =
+      (error == 0 && primary_changed && !primary_uuid.empty() &&
+       group_member_mgr->is_member_info_present(primary_uuid));
+
+  if (successful_election) {
     Member_version const communication_protocol =
         convert_to_mysql_version(gcs_module->get_protocol_version());
 
@@ -91,17 +92,7 @@ void Consensus_leaders_handler::set_consensus_leaders(
     Member_version const &communication_protocol, bool is_single_primary_mode,
     Group_member_info::Group_member_role role,
     Gcs_member_identifier const &my_gcs_id) {
-  return this->set_consensus_leaders(
-      communication_protocol, is_single_primary_mode, role, my_gcs_id,
-      []() { return get_allow_single_leader(); });
-}
-
-void Consensus_leaders_handler::set_consensus_leaders(
-    Member_version const &communication_protocol, bool is_single_primary_mode,
-    Group_member_info::Group_member_role role,
-    Gcs_member_identifier const &my_gcs_id,
-    std::function<bool()> allow_single_leader_getter) {
-  if (!allow_single_leader_getter()) return;
+  if (!get_allow_single_leader()) return;
 
   bool const support_single_consensus_leader =
       (communication_protocol >=

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <cstring>
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
@@ -2360,7 +2359,7 @@ runOneNodeWithCleanFilesystem(NDBT_Context* ctx, NDBT_Step* step)
     CHECK(restarter.waitClusterNoStart() == 0);
     g_info << "Cluster failed start as expected" << endl;
 
-    // A successful test must leave a live cluster behind
+    // A successul test must leave a live cluster behind
     g_info << "Restore file system on restart for node " << node << endl;
     CHECK(restarter.insertError2InNode(node, 2001, 0) == 0);
     restarter.startAll();
@@ -2494,7 +2493,7 @@ int runSR_DD_1(NDBT_Context* ctx, NDBT_Step* step)
 
       /**
        * As table space is a (fixed) limited resource on our
-       * test rigs, we can't allow a fast test client to fill tables at
+       * test rigs, we cant allow a fast test client to fill tables at
        * an unlimited speed. Limit to 10.000 row inserts/sec.
        */ 
       const NDB_TICKS now = NdbTick_getCurrentTicks();
@@ -2623,7 +2622,7 @@ int runSR_DD_2(NDBT_Context* ctx, NDBT_Step* step)
 
       /**
        * As redo/undo log is a (fixed) limited resource on our
-       * test rigs, we can't allow a fast test client to create such logs at
+       * test rigs, we cant allow a fast test client to create such logs at
        * an unlimited speed. Limit to 10.000 row inserts+deletes/sec.
        */ 
       const NDB_TICKS now = NdbTick_getCurrentTicks();
@@ -3878,7 +3877,7 @@ int runMixedModeRestart(NDBT_Context* ctx, NDBT_Step* step){
   int nodeToKill = nodeIds[0];
   int val[] = { DumpStateOrd::CmvmiSetRestartOnErrorInsert, 1 };
   /**
-  1. Killing two nodes of different groups.
+  1. Killing two nodes of diffrent groups.
   2. Starting nodes with and without --initial option.
   **/
 
@@ -4007,7 +4006,7 @@ int runMixedModeRestart4Node(NDBT_Context* ctx, NDBT_Step* step){
     nodeIds.push_back(restarter.getDbNodeId(i));
   int val[] = { DumpStateOrd::CmvmiSetRestartOnErrorInsert, 1 };
   /**
-  1. Killing four nodes of different groups.
+  1. Killing four nodes of diffrent groups.
   2. Starting nodes with and without --initial option.
   **/
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,7 @@
 
 #include <string.h>
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "my_sys.h"
 
 #define MYSQL_BINARY_CHARSET 63
@@ -39,6 +39,7 @@ void CharsetMapImpl::build_map()
 {   
     int cs_ucs2 = 0;
     int cs_utf16 = 0;
+    int cs_utf8 = 0;
     int cs_utf8_3 = 0;
     int cs_utf8_4 = 0;
     
@@ -67,6 +68,7 @@ void CharsetMapImpl::build_map()
     put("tis620", "TIS-620");
     
     /* Unicode */
+    put("utf8", "UTF-8");
     put("utf8mb3", "UTF-8");
     put("utf8mb4", "UTF-8");
     put("ucs2", "UTF-16");
@@ -89,8 +91,8 @@ void CharsetMapImpl::build_map()
     for(unsigned int i = 0 ; i < NDB_ARRAY_SIZE(mysql_charset_name) ; i++)
     {
         CHARSET_INFO *cs = get_charset(i, MYF(0));
-        const char *mysql_name = nullptr;
-        const char *mapped_name = nullptr;
+        const char *mysql_name = 0;
+        const char *mapped_name = 0;
         
         if(cs) 
         {
@@ -98,6 +100,7 @@ void CharsetMapImpl::build_map()
             mapped_name = get(mysql_name);
             if(! cs_ucs2 && ! strcmp(mysql_name, "ucs2"))       cs_ucs2 = i;
             if(! cs_utf16 && ! strcmp(mysql_name, "utf16"))     cs_utf16 = i;
+            if(! cs_utf8 && ! strcmp(mysql_name, "utf8"))       cs_utf8 = i;
             if(! cs_utf8_3 && ! strcmp(mysql_name, "utf8mb3"))  cs_utf8_3 = i;
             if(! cs_utf8_4 && ! strcmp(mysql_name, "utf8mb4"))  cs_utf8_4 = i;            
         }
@@ -117,6 +120,8 @@ void CharsetMapImpl::build_map()
         UTF8Charset = cs_utf8_4;
     else if(cs_utf8_3)
         UTF8Charset = cs_utf8_3;
+    else if(cs_utf8)
+        UTF8Charset = cs_utf8;
     else
         UTF8Charset = 0;
         
@@ -128,7 +133,7 @@ const char * CharsetMapImpl::getName(int csnum)
 {
     if((csnum >= (int)NDB_ARRAY_SIZE(mysql_charset_name)) || (csnum < 0))
     {
-        return nullptr;
+        return 0;
     }
     return mysql_charset_name[csnum];
 }
@@ -173,5 +178,5 @@ const char * CharsetMapImpl::get(const char *name) const
             if(! strcmp(name, i->name)) return i->value;
         }
     }
-    return nullptr;
+    return 0;
 }

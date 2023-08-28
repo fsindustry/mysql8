@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 
 #include "include/mysql/psi/mysql_ps.h"
 #include "my_inttypes.h"
-#include "storage/perfschema/pfs_name.h"
 #include "storage/perfschema/pfs_program.h"
 #include "storage/perfschema/pfs_stat.h"
 
@@ -63,19 +62,18 @@ struct PFS_ALIGNED PFS_prepared_stmt : public PFS_instr {
   enum_object_type m_owner_object_type;
 
   /** Column OBJECT_OWNER_SCHEMA. */
-  PFS_schema_name m_owner_object_schema;
+  char m_owner_object_schema[COL_OBJECT_SCHEMA_SIZE];
+  uint m_owner_object_schema_length;
 
   /** Column OBJECT_OWNER_NAME. */
-  PFS_object_name m_owner_object_name;
+  char m_owner_object_name[COL_OBJECT_NAME_SIZE];
+  uint m_owner_object_name_length;
 
   /** COLUMN TIMER_PREPARE. Prepared statement prepare stat. */
   PFS_single_stat m_prepare_stat;
 
   /** COLUMN COUNT_REPREPARE. Prepared statement re-prepare stat. */
   PFS_single_stat m_reprepare_stat;
-
-  /** COLUMN EXECUTION_ENGINE. */
-  bool m_secondary;
 
   /** Prepared statement execution stat. */
   PFS_statement_stat m_execute_stat;
@@ -85,7 +83,7 @@ struct PFS_ALIGNED PFS_prepared_stmt : public PFS_instr {
 };
 
 int init_prepared_stmt(const PFS_global_param *param);
-void cleanup_prepared_stmt();
+void cleanup_prepared_stmt(void);
 
 void reset_prepared_stmt_instances();
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,10 @@
 #include <string>
 
 #include "lex_string.h"
+#include "m_ctype.h"  // CHARSET_INFO
 #include "m_string.h"
 #include "my_time.h"  // TIME_to_ulonglong_datetime
 #include "mysql/components/services/log_builtins.h"  // LogErr
-#include "mysql/strings/m_ctype.h"                   // CHARSET_INFO
 #include "mysql_com.h"                               // NAME_LEN
 #include "sql/dd/impl/bootstrap/bootstrap_ctx.h"     // DD_bootstrap_ctx
 #include "sql/dd/properties.h"                       // dd::Properties
@@ -74,7 +74,7 @@ bool unescape(String_type &dest) {
   String_type tmp_dest;
   for (String_type::iterator d = dest.begin(); d != dest.end(); d++) {
     if (*d == '\\') {
-      // An escape character preceding end is an error, it must be followed
+      // An escape character preceeding end is an error, it must be succeeded
       // by an escapable character.
       if ((d + 1) != dest.end() &&
           (*(d + 1) == '\\' || *(d + 1) == '=' || *(d + 1) == ';'))

@@ -1,7 +1,7 @@
 #ifndef SQL_COMMON_INCLUDED
 #define SQL_COMMON_INCLUDED
 
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,6 +23,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define SQL_COMMON_INCLUDED
+
 /**
   @file include/sql_common.h
 */
@@ -40,8 +42,6 @@
 #ifdef MYSQL_SERVER
 #include "mysql_com_server.h"
 #endif
-
-struct CHARSET_INFO;
 struct MEM_ROOT;
 
 #ifdef __cplusplus
@@ -95,7 +95,6 @@ struct STATE_INFO {
 */
 
 struct st_mysql_trace_info;
-struct mysql_async_connect;
 
 struct MYSQL_EXTENSION {
   struct st_mysql_trace_info *trace_data;
@@ -105,8 +104,6 @@ struct MYSQL_EXTENSION {
 #ifdef MYSQL_SERVER
   // Used by replication to pass around compression context data.
   NET_SERVER *server_extn;
-  /* used by mysql_init() api for mysql command service related information */
-  void *mcs_extn;
 #endif
   struct {
     uint n_params;
@@ -151,7 +148,7 @@ void mysql_extension_bind_free(MYSQL_EXTENSION *ext);
 inline void mysql_extension_set_server_extn(MYSQL *mysql, NET_SERVER *extn) {
   MYSQL_EXTENSION_PTR(mysql)->server_extn = extn;
 }
-#endif /* MYSQL_SERVER*/
+#endif
 
 /*
   Maximum allowed authentication plugins for a given user account.
@@ -188,15 +185,9 @@ struct st_mysql_options_extention {
   bool connection_compressed;
   char *load_data_dir;
   struct client_authentication_info client_auth_info[MAX_AUTHENTICATION_FACTOR];
-  void *ssl_session_data;   /** the session serialization to use */
-  char *tls_sni_servername; /* TLS sni server name */
 };
 
-#define MYSQL_OPTIONS_EXTENSION_PTR(H, what) \
-  ((H)->options.extension ? (H)->options.extension->what : nullptr)
-
 struct MYSQL_METHODS {
-  MYSQL *(*connect_method)(mysql_async_connect *connect_args);
   bool (*read_query_result)(MYSQL *mysql);
   bool (*advanced_command)(MYSQL *mysql, enum enum_server_command command,
                            const unsigned char *header, size_t header_length,
@@ -205,7 +196,6 @@ struct MYSQL_METHODS {
   MYSQL_DATA *(*read_rows)(MYSQL *mysql, MYSQL_FIELD *mysql_fields,
                            unsigned int fields);
   MYSQL_RES *(*use_result)(MYSQL *mysql);
-  MYSQL_ROW (*fetch_row)(MYSQL_RES *);
   void (*fetch_lengths)(unsigned long *to, MYSQL_ROW column,
                         unsigned int field_count);
   void (*flush_use_result)(MYSQL *mysql, bool flush_all_results);
@@ -265,8 +255,6 @@ MYSQL_FIELD *cli_read_metadata_ex(MYSQL *mysql, MEM_ROOT *alloc,
                                   unsigned int fields);
 MYSQL_FIELD *cli_read_metadata(MYSQL *mysql, unsigned long field_count,
                                unsigned int fields);
-MYSQL_RES *use_result(MYSQL *mysql);
-MYSQL *connect_helper(mysql_async_connect *ctx);
 void free_rows(MYSQL_DATA *cur);
 void free_old_query(MYSQL *mysql);
 void end_server(MYSQL *mysql);
@@ -285,10 +273,8 @@ unsigned long cli_safe_read_with_ok(MYSQL *mysql, bool parse_ok,
                                     bool *is_data_packet);
 void net_clear_error(NET *net);
 void set_stmt_errmsg(MYSQL_STMT *stmt, NET *net);
-void set_stmt_error(MYSQL_STMT *stmt, int errcode, const char *sqlstate);
-void set_stmt_extended_error(MYSQL_STMT *stmt, int errcode,
-                             const char *sqlstate, const char *format, ...)
-    MY_ATTRIBUTE((format(printf, 4, 5)));
+void set_stmt_error(MYSQL_STMT *stmt, int errcode, const char *sqlstate,
+                    const char *err);
 void set_mysql_error(MYSQL *mysql, int errcode, const char *sqlstate);
 void set_mysql_extended_error(MYSQL *mysql, int errcode, const char *sqlstate,
                               const char *format, ...)

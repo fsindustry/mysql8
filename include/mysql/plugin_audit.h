@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,11 +29,9 @@
 
 #include "mysql/mysql_lex_string.h"
 #include "plugin.h"
-
 #ifndef MYSQL_ABI_CHECK
 #include "m_string.h"
 #endif
-
 #include <mysql/components/services/bits/plugin_audit_connection_types.h>
 #include "my_command.h"
 #include "my_sqlcommand.h"
@@ -222,7 +220,7 @@ struct mysql_event_parse {
   /** input: the original query text */
   MYSQL_LEX_CSTRING query;
 
-  /** output: returns the null-terminated rewritten query allocated by
+  /** output: returns the null-terminated rewriten query allocated by
    * my_malloc() */
   MYSQL_LEX_CSTRING *rewritten_query;
 };

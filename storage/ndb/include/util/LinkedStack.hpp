@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,8 +61,8 @@ private:
                                              sizeof(BlockHeader));
     E* e = (E*) A::mem_calloc(allocatorContext, blockElements, sizeof(E));
 
-    h->next = nullptr;
-    h->prev = nullptr;
+    h->next = NULL;
+    h->prev = NULL;
     h->elements = e;
 
     return h;
@@ -72,8 +72,8 @@ private:
   {
     if (stackTop)
     {
-      assert(firstBlock != nullptr);
-      assert(currBlock != nullptr);
+      assert(firstBlock != NULL);
+      assert(currBlock != NULL);
       /* Check that currBlock is positioned on correct
        * block, except for block boundary case
        */
@@ -87,7 +87,7 @@ private:
     }
     else
     {
-      assert(currBlock == nullptr);
+      assert(currBlock == NULL);
     }
     return true;
   }
@@ -103,10 +103,10 @@ private:
   Uint32 blockElements;
 
 public:
-  LinkedStack(Uint32 _blockElements, void* _allocatorContext=nullptr)
+  LinkedStack(Uint32 _blockElements, void* _allocatorContext=NULL)
     : allocatorContext(_allocatorContext),
-      firstBlock(nullptr),
-      currBlock(nullptr),
+      firstBlock(NULL),
+      currBlock(NULL),
       stackTop(0),
       blockElements(_blockElements)
   {
@@ -199,7 +199,7 @@ public:
   {
     assert(valid());
     stackTop = 0;
-    currBlock = nullptr;
+    currBlock = NULL;
     assert(valid());
   }
 
@@ -215,7 +215,7 @@ public:
       h = n;
     };
     stackTop = 0;
-    firstBlock = currBlock = nullptr;
+    firstBlock = currBlock = NULL;
     assert(valid());
   }
 };

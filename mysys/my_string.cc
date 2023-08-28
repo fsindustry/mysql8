@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,13 +40,12 @@
 #include "my_sys.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysys/mysys_priv.h"
-#include "nulls.h"
 
 bool init_dynamic_string(DYNAMIC_STRING *str, const char *init_str,
                          size_t init_alloc) {
   DBUG_TRACE;
 
-  const size_t length = init_str == nullptr ? 0 : strlen(init_str);
+  size_t length = init_str == nullptr ? 0 : strlen(init_str);
   init_alloc = std::max(init_alloc, length + 1);
 
   if (!(str->str = (char *)my_malloc(key_memory_DYNAMIC_STRING, init_alloc,
@@ -119,12 +118,12 @@ bool dynstr_trunc(DYNAMIC_STRING *str, size_t n) {
 }
 
 /*
-  Concatenates any number of strings, escapes any quote in the result, then
-  surrounds the resulting string in another set of quotes which is finally
-  appended to specified DYNAMIC_STRING.  This function is especially useful when
+  Concatenates any number of strings, escapes any quote in the result then
+  surround the whole affair in another set of quotes which is finally appended
+  to specified DYNAMIC_STRING.  This function is especially useful when
   building strings to be executed with the system() function.
 
-  @param str Dynamic String which will have additional strings appended.
+  @param str Dynamic String which will have addtional strings appended.
   @param append String to be appended.
   @param ... Optional. Additional string(s) to be appended.
 

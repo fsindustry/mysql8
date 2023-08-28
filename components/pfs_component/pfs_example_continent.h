@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -86,13 +86,9 @@ class Continent_POS {
 
 class Continent_index {
  public:
-  Continent_index() : m_fields(0) {}
-
   virtual ~Continent_index() = default;
 
   virtual bool match(Continent_record *record) = 0;
-
-  unsigned int m_fields;
 };
 
 /* An index on Continent Name */
@@ -103,14 +99,8 @@ class Continent_index_by_name : public Continent_index {
   char m_name_buffer[CONTINENT_NAME_LEN];
 
   bool match(Continent_record *record) override {
-    if (m_fields >= 1) {
-      if (!pc_string_srv->match_key_string(false, record->name,
-                                           record->name_length, &m_name)) {
-        return false;
-      }
-    }
-
-    return true;
+    return mysql_service_pfs_plugin_table->match_key_string(
+        false, record->name, record->name_length, &m_name);
   }
 };
 

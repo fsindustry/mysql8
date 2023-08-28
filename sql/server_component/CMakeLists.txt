@@ -1,4 +1,4 @@
-# Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,6 @@ SET(MYSQL_SERVER_COMPONENT_SOURCES
   clone_protocol_service.cc
   component_status_var_service.cc
   component_sys_var_service.cc
-  debug_keyword_service_imp.cc
-  debug_sync_service_imp.cc
   dynamic_loader_path_filter.cc
   host_application_signal_imp.cc
   keyring_iterator_service_imp.cc
@@ -36,7 +34,6 @@ SET(MYSQL_SERVER_COMPONENT_SOURCES
   log_sink_buffer.cc
   log_sink_perfschema.cc
   log_sink_trad.cc
-  log_source_backtrace.cc
   mysql_cond_service.cc
   mysql_connection_attributes_iterator_imp.cc
   mysql_current_thread_reader_imp.cc
@@ -54,30 +51,12 @@ SET(MYSQL_SERVER_COMPONENT_SOURCES
   server_component.cc
   system_variable_source_imp.cc
   table_access_service.cc
-  thread_cleanup_register_imp.cc
   udf_metadata_imp.cc
   audit_api_connection_service_imp.cc
   mysql_query_attributes_imp.cc
   mysql_server_keyring_lockable_imp.cc
   mysql_system_variable_update_imp.cc
   mysql_thd_attributes_imp.cc
-  transaction_delegate_control_imp.cc
-  mysql_audit_print_service_longlong_data_source_imp.cc
-  mysql_audit_print_service_double_data_source_imp.cc
-  mysql_command_services_imp.cc
-  mysql_command_consumer_imp.cc
-  mysql_command_delegates.cc
-  mysql_command_backend.cc
-  mysql_status_variable_reader_imp.cc
-  storing_auto_thd.cc
-  mysql_thd_store_imp.cc
-  set_variables_helper.cc
-  mysql_thd_store_imp.cc
-  mysql_server_event_tracking_bridge_imp.cc
-  dynamic_loader_service_notification_imp.cc
-  event_tracking_information.cc
-  mysql_stored_program_imp.cc
-  mysql_simple_error_log_imp.cc
   )
 
 # This static library is used to build mysqld binary and in some unit test cases
@@ -85,6 +64,4 @@ ADD_LIBRARY(mysql_server_component_services STATIC
   ${MYSQL_SERVER_COMPONENT_SOURCES})
 TARGET_COMPILE_DEFINITIONS(mysql_server_component_services
   PRIVATE WITH_MYSQL_COMPONENTS_TEST_DRIVER)
-TARGET_LINK_LIBRARIES(mysql_server_component_services PRIVATE extra::rapidjson)
-TARGET_LINK_LIBRARIES(mysql_server_component_services PRIVATE ext::zlib)
 ADD_DEPENDENCIES(mysql_server_component_services GenError)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -35,14 +35,11 @@
 #include "my_alloc.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
-#include "my_inttypes.h"
 #include "my_sys.h"
 #include "mysql/components/services/pfs_plugin_table_service.h"
 #include "mysql/plugin.h"
 #include "mysql/status_var.h"
-#include "mysql/strings/int2str.h"
 #include "mysqld_error.h"
-#include "nulls.h"
 #include "sql/hostname_cache.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
@@ -110,7 +107,7 @@ handlerton *pfs_hton = nullptr;
 #define PFS_ENABLED() \
   (pfs_initialized && (pfs_enabled || m_table_share->m_perpetual))
 
-#define IS_NATIVE_TABLE(X) ((X)->m_st_table.open_table == NULL)
+#define IS_NATIVE_TABLE(X) ((X)->m_st_table.open_table == NULL) ? true : false
 
 static void lock_pfs_external_table_shares() {
   if (!opt_initialize) {
@@ -130,7 +127,7 @@ static handler *pfs_create_handler(handlerton *hton, TABLE_SHARE *table, bool,
 }
 
 static size_t size_of_global_error_stat_buffer() {
-  const size_t size = sizeof(PFS_error_single_stat) * max_global_server_errors;
+  size_t size = sizeof(PFS_error_single_stat) * max_global_server_errors;
   return size;
 }
 
@@ -1391,48 +1388,6 @@ static bool pfs_dict_init(dict_init_mode_t dict_init_mode,
   return false;
 }
 
-static bool pfs_sdi_set_ignored(handlerton *, const dd::Tablespace &,
-                                const dd::Table *, const sdi_key_t *,
-                                const void *, uint64) {
-  return false;
-}
-
-static bool pfs_sdi_delete_ignored(const dd::Tablespace &, const dd::Table *,
-                                   const sdi_key_t *) {
-  return false;
-}
-
-static bool pfs_sdi_get_ignored(const dd::Tablespace &, const sdi_key_t *,
-                                void *, uint64 *) {
-  return false;
-}
-
-static bool pfs_sdi_create_ignored(dd::Tablespace *) { return false; }
-
-static bool pfs_sdi_drop_ignored(dd::Tablespace *) { return false; }
-
-static bool pfs_sdi_get_keys_ignored(const dd::Tablespace &, sdi_vector_t &) {
-  return false;
-}
-
-void pfs_sdi_disable() {
-  pfs_hton->sdi_set = pfs_sdi_set_ignored;
-  pfs_hton->sdi_delete = pfs_sdi_delete_ignored;
-  pfs_hton->sdi_get = pfs_sdi_get_ignored;
-  pfs_hton->sdi_create = pfs_sdi_create_ignored;
-  pfs_hton->sdi_drop = pfs_sdi_drop_ignored;
-  pfs_hton->sdi_get_keys = pfs_sdi_get_keys_ignored;
-}
-
-void pfs_sdi_enable() {
-  pfs_hton->sdi_set = nullptr;
-  pfs_hton->sdi_delete = nullptr;
-  pfs_hton->sdi_get = nullptr;
-  pfs_hton->sdi_create = nullptr;
-  pfs_hton->sdi_drop = nullptr;
-  pfs_hton->sdi_get_keys = nullptr;
-}
-
 static int pfs_init_func(void *p) {
   DBUG_TRACE;
 
@@ -1612,7 +1567,7 @@ int ha_perfschema::open(const char *, int, uint, const dd::Table *) {
   return 0;
 }
 
-int ha_perfschema::close() {
+int ha_perfschema::close(void) {
   DBUG_TRACE;
 
   /* Only for table added by plugin/components */
@@ -1644,7 +1599,7 @@ int ha_perfschema::write_row(uchar *buf) {
   return result;
 }
 
-void ha_perfschema::use_hidden_primary_key() {
+void ha_perfschema::use_hidden_primary_key(void) {
   /*
     This is also called in case of row based replication,
     see TABLE::mark_columns_needed_for_update().
@@ -1666,8 +1621,7 @@ int ha_perfschema::update_row(const uchar *old_data, uchar *new_data) {
 
   assert(m_table);
   ha_statistic_increment(&System_status_var::ha_update_count);
-  const int result =
-      m_table->update_row(table, old_data, new_data, table->field);
+  int result = m_table->update_row(table, old_data, new_data, table->field);
   return result;
 }
 
@@ -1679,7 +1633,7 @@ int ha_perfschema::delete_row(const uchar *buf) {
 
   assert(m_table);
   ha_statistic_increment(&System_status_var::ha_delete_count);
-  const int result = m_table->delete_row(table, buf, table->field);
+  int result = m_table->delete_row(table, buf, table->field);
   return result;
 }
 
@@ -1705,7 +1659,7 @@ int ha_perfschema::rnd_init(bool scan) {
   return result;
 }
 
-int ha_perfschema::rnd_end() {
+int ha_perfschema::rnd_end(void) {
   DBUG_TRACE;
   assert(m_table);
   delete m_table;
@@ -1766,7 +1720,7 @@ int ha_perfschema::info(uint flag) {
   return 0;
 }
 
-int ha_perfschema::delete_all_rows() {
+int ha_perfschema::delete_all_rows(void) {
   int result;
 
   DBUG_TRACE;
@@ -1877,7 +1831,7 @@ ulong ha_perfschema::index_flags(uint, uint, bool) const {
     /* ha_perfschema::index_flags is const, can not save in m_table_share. */
   }
 
-  const ulong flags = HA_KEY_SCAN_NOT_ROR;
+  ulong flags = HA_KEY_SCAN_NOT_ROR;
 
   if (!tmp) {
     unlock_pfs_external_table_shares();

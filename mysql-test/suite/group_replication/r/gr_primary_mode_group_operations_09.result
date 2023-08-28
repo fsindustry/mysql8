@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 include/start_and_bootstrap_group_replication.inc
 
@@ -45,7 +45,7 @@ include/rpl_gr_wait_for_number_of_members.inc
 # 6. After action is executed we can add another member
 [connection server2]
 set session sql_log_bin=0;
-call mtr.add_suppression("A member cannot join the group while a group configuration operation 'Change to single primary mode' is running initiated by *");
+call mtr.add_suppression("A member cannot join the group while a group configuration operation is running");
 set session sql_log_bin=1;
 include/start_group_replication.inc
 
@@ -53,7 +53,7 @@ include/start_group_replication.inc
 [connection server1]
 SET @@GLOBAL.DEBUG= '-d,group_replication_block_group_action_stop';
 set session sql_log_bin=0;
-call mtr.add_suppression("A member is joining the group while a group configuration operation 'Change to single primary mode' is running*");
+call mtr.add_suppression("A member is joining the group while a group configuration operation is occurring.*");
 set session sql_log_bin=1;
 [connection server2]
 SET @@GLOBAL.DEBUG= '-d,group_replication_wait_before_leave_on_error';

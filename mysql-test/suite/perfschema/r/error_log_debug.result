@@ -28,15 +28,14 @@ FROM performance_schema.error_log;
 COUNT(*)=0
 1
 SET @@global.log_error_services=DEFAULT;
-DELETE FROM mysql.component
-WHERE component_urn='file://component_log_sink_test';
+UNINSTALL COMPONENT 'file://component_log_sink_test';
 
 # Now add a specific row to the table and show it's there
 # a) with error-log file
 # restart: --log-error=LOG_FILE
 SELECT logged INTO @startup
 FROM performance_schema.error_log
-WHERE error_code="MY-015015"
+WHERE error_code="MY-010116"
  ORDER BY logged DESC LIMIT 1;
 SET @@session.debug="+d,parser_stmt_to_error_log_with_system_prio";
 SELECT "Hello World";
@@ -51,7 +50,7 @@ COUNT(*)=1
 # restart: 
 SELECT logged INTO @startup
 FROM performance_schema.error_log
-WHERE error_code="MY-015015"
+WHERE error_code="MY-010116"
  ORDER BY logged DESC LIMIT 1;
 # Should fail, we should not see entries from the previous run's
 # error log file as we started without reading it.

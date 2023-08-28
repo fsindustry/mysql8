@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@
 #include "sql_string.h"          // String
 
 class THD;
-class Table_ref;
+struct TABLE_LIST;
 
 namespace dd {
 namespace info_schema {
@@ -42,24 +42,24 @@ namespace info_schema {
   mysql.table_stats.
 
   @param thd   Thread.
-  @param table Table_ref pointing to table info.
+  @param table TABLE_LIST pointing to table info.
 
   @returns false on success.
            true on failure.
 */
-bool update_table_stats(THD *thd, Table_ref *table);
+bool update_table_stats(THD *thd, TABLE_LIST *table);
 
 /**
   Get dynamic index statistics of a table and store them into
   mysql.index_stats.
 
   @param thd   Thread.
-  @param table Table_ref pointing to table info.
+  @param table TABLE_LIST pointing to table info.
 
   @returns false on success.
            true on failure.
 */
-bool update_index_stats(THD *thd, Table_ref *table);
+bool update_index_stats(THD *thd, TABLE_LIST *table);
 
 /**
   If the db is 'information_schema' then convert 'db' to
@@ -374,10 +374,6 @@ class Table_statistics {
 
   /// Set open table in progress.
   void set_read_stats_by_open(bool status) { m_read_stats_by_open = status; }
-
- public:
-  /// Predicate for determinig if cache is valid
-  bool is_valid() const { return !m_key.empty(); }
 
  private:
   // The cache key

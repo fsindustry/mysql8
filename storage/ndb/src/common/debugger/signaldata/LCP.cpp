@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,23 +22,17 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+
 #include <RefConvert.hpp>
 #include <signaldata/LCP.hpp>
 #include <DebuggerNames.hpp>
 
-bool printSTART_LCP_REQ(FILE *output,
-                        const Uint32 *theData,
-                        Uint32 len,
-                        Uint16 /*receiverBlockNo*/)
-{
-  if (len < StartLcpReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StartLcpReq *const sig = (const StartLcpReq *)theData;
-
+bool
+printSTART_LCP_REQ(FILE * output, const Uint32 * theData, 
+		  Uint32 len, Uint16 receiverBlockNo){
+  
+  const StartLcpReq * const sig = (StartLcpReq *) theData;
+ 
   char buf1[NdbNodeBitmask48::TextLength + 1];
   char buf2[NdbNodeBitmask48::TextLength + 1];
 
@@ -59,38 +53,24 @@ bool printSTART_LCP_REQ(FILE *output,
   return true;
 }
 
-bool printSTART_LCP_CONF(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*receiverBlockNo*/)
-{
-  if (len < StartLcpConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const StartLcpConf *const sig = (const StartLcpConf *)theData;
-
+bool
+printSTART_LCP_CONF(FILE * output, const Uint32 * theData, 
+		  Uint32 len, Uint16 receiverBlockNo){
+  
+  const StartLcpConf * const sig = (StartLcpConf *) theData;
+  
   fprintf(output, " Sender: %d LcpId: %d\n",
 	  refToNode(sig->senderRef), sig->lcpId);
   
   return true;
 }
 
-bool printLCP_FRAG_ORD(FILE *output,
-                       const Uint32 *theData,
-                       Uint32 len,
-                       Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpFragOrd::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpFragOrd *const sig = (const LcpFragOrd *)theData;
-
+bool
+printLCP_FRAG_ORD(FILE * output, const Uint32 * theData, 
+		  Uint32 len, Uint16 receiverBlockNo){
+  
+  const LcpFragOrd * const sig = (LcpFragOrd *) theData;
+  
   fprintf(output, " LcpId: %d LcpNo: %d Table: %d Fragment: %d\n",
 	  sig->lcpId, sig->lcpNo, sig->tableId, sig->fragmentId);
   
@@ -99,19 +79,12 @@ bool printLCP_FRAG_ORD(FILE *output,
   return true;
 }
 
-bool printLCP_FRAG_REP(FILE *output,
-                       const Uint32 *theData,
-                       Uint32 len,
-                       Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpFragRep::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpFragRep *const sig = (const LcpFragRep *)theData;
-
+bool
+printLCP_FRAG_REP(FILE * output, const Uint32 * theData, 
+		  Uint32 len, Uint16 receiverBlockNo){
+  
+  const LcpFragRep * const sig = (LcpFragRep *) theData;
+  
   fprintf(output, " LcpId: %d LcpNo: %d NodeId: %d Table: %d Fragment: %d\n",
 	  sig->lcpId, sig->lcpNo, sig->nodeId, sig->tableId, sig->fragId);
   fprintf(output, " Max GCI Started: %d Max GCI Completed: %d\n",
@@ -119,55 +92,32 @@ bool printLCP_FRAG_REP(FILE *output,
   return true;
 }
 
-bool printLCP_COMPLETE_REP(FILE *output,
-                           const Uint32 *theData,
-                           Uint32 len,
-                           Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpCompleteRep::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpCompleteRep *const sig = (const LcpCompleteRep *)theData;
-
+bool
+printLCP_COMPLETE_REP(FILE * output, const Uint32 * theData, 
+		      Uint32 len, Uint16 receiverBlockNo){
+  
+  const LcpCompleteRep * const sig = (LcpCompleteRep *) theData;
+  
   fprintf(output, " LcpId: %d NodeId: %d Block: %s\n",
 	  sig->lcpId, sig->nodeId, getBlockName(sig->blockNo));
   return true;
 }
 
-bool printLCP_STATUS_REQ(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpStatusReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpStatusReq *const sig = (const LcpStatusReq *)theData;
-
+bool
+printLCP_STATUS_REQ(FILE * output, const Uint32 * theData, 
+                    Uint32 len, Uint16 receiverBlockNo){
+  const LcpStatusReq* const sig = (LcpStatusReq*) theData;
+  
   fprintf(output, " SenderRef : %x SenderData : %u\n", 
           sig->senderRef, sig->senderData);
   return true;
 }
 
-bool printLCP_STATUS_CONF(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpStatusConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpStatusConf *const sig = (const LcpStatusConf *)theData;
-
+bool
+printLCP_STATUS_CONF(FILE * output, const Uint32 * theData, 
+                     Uint32 len, Uint16 receiverBlockNo){
+  const LcpStatusConf* const sig = (LcpStatusConf*) theData;
+  
   fprintf(output, " SenderRef : %x SenderData : %u LcpState : %u tableId : %u fragId : %u\n",
           sig->senderRef, sig->senderData, sig->lcpState, sig->tableId, sig->fragId);
   fprintf(output, " replica(Progress : %llu), lcpDone (Rows : %llu, Bytes : %llu)\n",
@@ -178,36 +128,23 @@ bool printLCP_STATUS_CONF(FILE *output,
   return true;
 }
 
-bool printLCP_STATUS_REF(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*receiverBlockNo*/)
-{
-  if (len < LcpStatusRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpStatusRef *const sig = (const LcpStatusRef *)theData;
-
+bool
+printLCP_STATUS_REF(FILE * output, const Uint32 * theData, 
+                    Uint32 len, Uint16 receiverBlockNo){
+  const LcpStatusRef* const sig = (LcpStatusRef*) theData;
+  
   fprintf(output, " SenderRef : %x, SenderData : %u Error : %u\n", 
           sig->senderRef, sig->senderData, sig->error);
   return true;
 }
 
-bool printLCP_PREPARE_REQ(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
+bool
+printLCP_PREPARE_REQ(FILE *output,
+                     const Uint32 *theData,
+                     Uint32 len,
+                     Uint16 receiverBlockNo)
 {
-  if (len < LcpPrepareReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpPrepareReq *const sig = (const LcpPrepareReq *)theData;
+  const LcpPrepareReq* const sig = (LcpPrepareReq*)theData;
 
   fprintf(output, "senderData: %x, senderRef: %x, lcpNo: %u, tableId: %u, "
                   "fragmentId: %u\n"
@@ -226,18 +163,13 @@ bool printLCP_PREPARE_REQ(FILE *output,
   return true;
 }
 
-bool printLCP_PREPARE_CONF(FILE *output,
-                           const Uint32 *theData,
-                           Uint32 len,
-                           Uint16 /*receiverBlockNo*/)
+bool
+printLCP_PREPARE_CONF(FILE *output,
+                      const Uint32 *theData,
+                      Uint32 len,
+                      Uint16 receiverBlockNo)
 {
-  if (len < LcpPrepareConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpPrepareConf *const sig = (const LcpPrepareConf *)theData;
+  const LcpPrepareConf* const sig = (LcpPrepareConf*)theData;
 
   fprintf(output, "senderData: %x, senderRef: %x, tableId: %u, fragmentId: %u\n",
           sig->senderData,
@@ -247,18 +179,13 @@ bool printLCP_PREPARE_CONF(FILE *output,
   return true;
 }
 
-bool printLCP_PREPARE_REF(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
+bool
+printLCP_PREPARE_REF(FILE *output,
+                     const Uint32 *theData,
+                     Uint32 len,
+                     Uint16 receiverBlockNo)
 {
-  if (len < LcpPrepareRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const LcpPrepareRef *const sig = (const LcpPrepareRef *)theData;
+  const LcpPrepareRef* const sig = (LcpPrepareRef*)theData;
 
   fprintf(output, "senderData: %x, senderRef: %x, tableId: %u, fragmentId: %u"
                   ", errorCode: %u\n",
@@ -270,18 +197,13 @@ bool printLCP_PREPARE_REF(FILE *output,
   return true;
 }
 
-bool printSYNC_PAGE_CACHE_REQ(FILE *output,
-                              const Uint32 *theData,
-                              Uint32 len,
-                              Uint16 /*receiverBlockNo*/)
+bool
+printSYNC_PAGE_CACHE_REQ(FILE *output,
+                         const Uint32 *theData,
+                         Uint32 len,
+                         Uint16 receiverBlockNo)
 {
-  if (len < SyncPageCacheReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const SyncPageCacheReq *const sig = (const SyncPageCacheReq *)theData;
+  const SyncPageCacheReq* const sig = (SyncPageCacheReq*)theData;
   fprintf(output, "senderData: %x, senderRef: %x, tableId: %u, fragmentId: %u\n",
           sig->senderData,
           sig->senderRef,
@@ -290,18 +212,13 @@ bool printSYNC_PAGE_CACHE_REQ(FILE *output,
   return true;
 }
 
-bool printSYNC_PAGE_CACHE_CONF(FILE *output,
-                               const Uint32 *theData,
-                               Uint32 len,
-                               Uint16 /*receiverBlockNo*/)
+bool
+printSYNC_PAGE_CACHE_CONF(FILE *output,
+                          const Uint32 *theData,
+                          Uint32 len,
+                          Uint16 receiverBlockNo)
 {
-  if (len < SyncPageCacheConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const SyncPageCacheConf *const sig = (const SyncPageCacheConf *)theData;
+  const SyncPageCacheConf* const sig = (SyncPageCacheConf*)theData;
   fprintf(output, "senderData: %x, senderRef: %x, tableId: %u, fragmentId: %u\n"
                   "diskDataExistFlag: %u\n",
           sig->senderData,
@@ -312,18 +229,13 @@ bool printSYNC_PAGE_CACHE_CONF(FILE *output,
   return true;
 }
 
-bool printEND_LCPREQ(FILE *output,
-                     const Uint32 *theData,
-                     Uint32 len,
-                     Uint16 /*receiverBlockNo*/)
+bool
+printEND_LCPREQ(FILE *output,
+                const Uint32 *theData,
+                Uint32 len,
+                Uint16 receiverBlockNo)
 {
-  if (len < EndLcpReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const EndLcpReq *const sig = (const EndLcpReq *)theData;
+  const EndLcpReq* const sig = (EndLcpReq*)theData;
   fprintf(output, "senderData: %x, senderRef: %x, backupPtr: %u, backupId: %u\n"
                   "proxyBlockNo: %u\n",
                   sig->senderData,
@@ -334,18 +246,13 @@ bool printEND_LCPREQ(FILE *output,
   return true;
 }
 
-bool printEND_LCPCONF(FILE *output,
-                      const Uint32 *theData,
-                      Uint32 len,
-                      Uint16 /*receiverBlockNo*/)
+bool
+printEND_LCPCONF(FILE *output,
+                 const Uint32 *theData,
+                 Uint32 len,
+                 Uint16 receiverBlockNo)
 {
-  if (len < EndLcpConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const EndLcpConf *const sig = (const EndLcpConf *)theData;
+  const EndLcpConf* const sig = (EndLcpConf*)theData;
   fprintf(output, "senderData: %x, senderRef: %x\n",
           sig->senderData,
           sig->senderRef);

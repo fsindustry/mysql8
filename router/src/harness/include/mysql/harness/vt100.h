@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,6 @@
 #include "harness_export.h"
 
 #include <array>
-#include <cstdint>
 #include <string>
 #include <tuple>
 
@@ -201,7 +200,7 @@ enum class Csi {
   CHA = 'G',
   // cursor position absolute
   CUP = 'H',
-  // cursor tab forward
+  // cursor tab foreward
   CHT = 'I',
   // erase in display
   ED = 'J',

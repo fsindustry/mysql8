@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,6 @@
 #include <limits>
 
 #include "m_string.h"
-#include "mysql/strings/int2str.h"
 #include "unittest/gunit/benchmark.h"
 
 namespace m_string_unittest {

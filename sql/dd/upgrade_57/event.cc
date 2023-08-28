@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,16 +26,17 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_base.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "my_time.h"
 #include "my_user.h"  // parse_user
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
@@ -65,7 +66,6 @@
 #include "sql/transaction.h"  // trans_commit
 #include "sql/tztime.h"       // my_tz_find
 #include "sql_string.h"
-#include "string_with_len.h"
 #include "thr_lock.h"
 
 namespace dd {
@@ -83,14 +83,14 @@ static Check_table_intact table_intact;
 const TABLE_FIELD_TYPE event_table_fields[ET_FIELD_COUNT] = {
     {{STRING_WITH_LEN("db")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("name")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("body")}, {STRING_WITH_LEN("longblob")}, {nullptr, 0}},
     {{STRING_WITH_LEN("definer")},
      {STRING_WITH_LEN("char(93)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("execute_at")},
      {STRING_WITH_LEN("datetime")},
      {nullptr, 0}},
@@ -141,20 +141,20 @@ const TABLE_FIELD_TYPE event_table_fields[ET_FIELD_COUNT] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("comment")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("originator")}, {STRING_WITH_LEN("int")}, {nullptr, 0}},
     {{STRING_WITH_LEN("time_zone")},
      {STRING_WITH_LEN("char(64)")},
      {STRING_WITH_LEN("latin1")}},
     {{STRING_WITH_LEN("character_set_client")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("collation_connection")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("db_collation")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("body_utf8")},
      {STRING_WITH_LEN("longblob")},
      {nullptr, 0}}};
@@ -169,14 +169,14 @@ static const TABLE_FIELD_DEF event_table_def = {ET_FIELD_COUNT,
 static const TABLE_FIELD_TYPE event_table_fields_old[ET_FIELD_COUNT] = {
     {{STRING_WITH_LEN("db")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("name")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("body")}, {STRING_WITH_LEN("longblob")}, {nullptr, 0}},
     {{STRING_WITH_LEN("definer")},
      {STRING_WITH_LEN("char(77)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("execute_at")},
      {STRING_WITH_LEN("datetime")},
      {nullptr, 0}},
@@ -227,20 +227,20 @@ static const TABLE_FIELD_TYPE event_table_fields_old[ET_FIELD_COUNT] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("comment")},
      {STRING_WITH_LEN("char(64)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("originator")}, {STRING_WITH_LEN("int")}, {nullptr, 0}},
     {{STRING_WITH_LEN("time_zone")},
      {STRING_WITH_LEN("char(64)")},
      {STRING_WITH_LEN("latin1")}},
     {{STRING_WITH_LEN("character_set_client")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("collation_connection")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("db_collation")},
      {STRING_WITH_LEN("char(32)")},
-     {STRING_WITH_LEN("utf8mb3")}},
+     {STRING_WITH_LEN("utf8")}},
     {{STRING_WITH_LEN("body_utf8")},
      {STRING_WITH_LEN("longblob")},
      {nullptr, 0}}};
@@ -568,7 +568,7 @@ bool migrate_events_to_dd(THD *thd) {
   MEM_ROOT records_mem_root;
   Thd_mem_root_guard root_guard(thd, &records_mem_root);
 
-  Table_ref tables("mysql", "event", TL_READ);
+  TABLE_LIST tables("mysql", "event", TL_READ);
   auto table_list = &tables;
 
   if (open_and_lock_tables(thd, table_list, flags, &prelocking_strategy)) {

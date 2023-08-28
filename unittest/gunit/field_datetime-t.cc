@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,6 @@
 #include <gtest/gtest.h>
 
 #include "sql/field.h"
-#include "string_with_len.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/field_temporal_utils.h"
 #include "unittest/gunit/test_utils.h"

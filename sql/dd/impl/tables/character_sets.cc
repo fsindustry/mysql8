@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,8 +28,9 @@
 #include <set>
 #include <vector>
 
+#include "m_ctype.h"
+
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/cache/dictionary_client.h"     // dd::cache::Dictionary_...
 #include "sql/dd/dd.h"                          // dd::create_object
 #include "sql/dd/impl/cache/storage_adapter.h"  // Storage_adapter
@@ -54,7 +55,7 @@ const Character_sets &Character_sets::instance() {
 ///////////////////////////////////////////////////////////////////////////
 
 const CHARSET_INFO *Character_sets::name_collation() {
-  return &my_charset_utf8mb3_general_ci;
+  return &my_charset_utf8_general_ci;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -66,13 +67,13 @@ Character_sets::Character_sets() {
                          "id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT");
   m_target_def.add_field(FIELD_NAME, "FIELD_NAME",
                          "name VARCHAR(64) NOT NULL COLLATE " +
-                             String_type(name_collation()->m_coll_name));
+                             String_type(name_collation()->name));
   m_target_def.add_field(FIELD_DEFAULT_COLLATION_ID,
                          "FIELD_DEFAULT_COLLATION_ID",
                          "default_collation_id BIGINT UNSIGNED NOT NULL");
   m_target_def.add_field(FIELD_COMMENT, "FIELD_COMMENT",
                          "comment VARCHAR(2048)"
-                         " COLLATE utf8mb3_general_ci NOT NULL");
+                         " COLLATE utf8_general_ci NOT NULL");
   m_target_def.add_field(FIELD_MB_MAX_LENGTH, "FIELD_MB_MAX_LENGTH",
                          "mb_max_length INT UNSIGNED NOT NULL");
   m_target_def.add_field(FIELD_OPTIONS, "FIELD_OPTIONS", "options MEDIUMTEXT");
@@ -123,7 +124,7 @@ bool Character_sets::populate(THD *thd) const {
   for (int internal_charset_id = 0;
        internal_charset_id < MY_ALL_CHARSETS_SIZE && !error;
        internal_charset_id++) {
-    const CHARSET_INFO *cs = all_charsets[internal_charset_id];
+    CHARSET_INFO *cs = all_charsets[internal_charset_id];
     if (cs && (cs->state & MY_CS_PRIMARY) && (cs->state & MY_CS_AVAILABLE) &&
         !(cs->state & MY_CS_HIDDEN)) {
       // Remove the id from the set of non-updated old ids.

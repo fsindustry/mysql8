@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,8 @@
 #include "my_compiler.h"
 
 #include "my_psi_config.h"
-#include "mysql/components/services/bits/psi_socket_bits.h"
-#include "mysql/components/services/bits/psi_statement_bits.h"
+#include "mysql/components/services/psi_socket_bits.h"
+#include "mysql/components/services/psi_statement_bits.h"
 #include "mysql/psi/mysql_idle.h"  // MYSQL_SOCKET_SET_STATE,
 #include "mysql/psi/mysql_socket.h"
 #include "mysql/psi/mysql_statement.h"
@@ -66,8 +66,6 @@ static void net_before_header_psi(NET *net [[maybe_unused]], void *user_data,
     MYSQL_SOCKET_SET_STATE(net->vio->mysql_socket, PSI_SOCKET_STATE_IDLE);
     MYSQL_START_IDLE_WAIT(thd->m_idle_psi, &thd->m_idle_state);
   }
-
-  mysql_thread_set_secondary_engine(false);
 }
 
 static void net_after_header_psi(NET *net [[maybe_unused]], void *user_data,
@@ -89,13 +87,6 @@ static void net_after_header_psi(NET *net [[maybe_unused]], void *user_data,
       and nested in the proper parent.
     */
     MYSQL_END_IDLE_WAIT(thd->m_idle_psi);
-
-#ifdef HAVE_PSI_THREAD_INTERFACE
-    PSI_thread *thread = thd_get_psi(thd);
-    if (thread != nullptr) {
-      PSI_THREAD_CALL(detect_telemetry)(thread);
-    }
-#endif
 
     if (!rc) {
       assert(thd->m_statement_psi == nullptr);
@@ -130,7 +121,6 @@ void init_net_server_extension(THD *thd) {
   thd->m_net_server_extension.m_before_header = net_before_header_psi;
   thd->m_net_server_extension.m_after_header = net_after_header_psi;
   thd->m_net_server_extension.compress_ctx.algorithm = MYSQL_UNCOMPRESSED;
-  thd->m_net_server_extension.timeout_on_full_packet = false;
   /* Activate this private extension for the mysqld server. */
   thd->get_protocol_classic()->get_net()->extension =
       &thd->m_net_server_extension;

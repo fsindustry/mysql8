@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <NDBT.hpp>
 #include <NdbApi.hpp>
 #include <NdbRestarter.hpp>
@@ -385,7 +384,7 @@ static int pause_lcp(int error)
 
   int filter[] = { 15, NDB_MGM_EVENT_CATEGORY_INFO, 0 };
 
-  socket_t fd= ndb_mgm_listen_event(g_restarter.handle, filter);
+  ndb_native_socket_t fd= ndb_mgm_listen_event(g_restarter.handle, filter);
   ndb_socket_t my_fd = ndb_socket_create_from_native(fd);
 
   require(ndb_socket_valid(my_fd));
@@ -479,9 +478,10 @@ static int continue_lcp(int error)
 {
   int filter[] = { 15, NDB_MGM_EVENT_CATEGORY_INFO, 0 };
   ndb_socket_t my_fd;
+  ndb_socket_invalidate(&my_fd);
 
   if(error){
-    socket_t fd = ndb_mgm_listen_event(g_restarter.handle, filter);
+    ndb_native_socket_t fd = ndb_mgm_listen_event(g_restarter.handle, filter);
     my_fd = ndb_socket_create_from_native(fd);
     require(ndb_socket_valid(my_fd));
   }

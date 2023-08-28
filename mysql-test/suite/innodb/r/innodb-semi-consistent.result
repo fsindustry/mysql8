@@ -1,7 +1,5 @@
 drop table if exists t1;
 set binlog_format=mixed;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set session transaction isolation level repeatable read;
 set autocommit=0;
 create table t1(a int not null) engine=innodb DEFAULT CHARSET=latin1;
@@ -10,8 +8,6 @@ select * from t1 where a=3 lock in share mode;
 a
 3
 set binlog_format=mixed;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set session transaction isolation level repeatable read;
 set autocommit=0;
 update t1 set a=10 where a=5;

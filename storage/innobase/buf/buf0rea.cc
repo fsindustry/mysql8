@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2023, Oracle and/or its affiliates.
+Copyright (c) 1995, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -49,18 +49,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h"
-#include "ut0new.h"
 
 /** There must be at least this many pages in buf_pool in the area to start
 a random read-ahead */
-inline page_no_t BUF_READ_AHEAD_RANDOM_THRESHOLD(const buf_pool_t *b) {
-  return 5 + b->read_ahead_area / 8;
-}
+#define BUF_READ_AHEAD_RANDOM_THRESHOLD(b) (5 + BUF_READ_AHEAD_AREA(b) / 8)
 
 /** If there are buf_pool->curr_size per the number below pending reads, then
 read-ahead is not done: this is to prevent flooding the buffer pool with
 i/o-fixed buffer blocks */
-static constexpr uint32_t BUF_READ_AHEAD_PEND_LIMIT = 2;
+static constexpr size_t BUF_READ_AHEAD_PEND_LIMIT = 2;
 
 ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
                         const page_id_t &page_id, const page_size_t &page_size,
@@ -91,7 +88,7 @@ ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  bpage = buf_page_init_for_read(mode, page_id, page_size, unzip);
+  bpage = buf_page_init_for_read(err, mode, page_id, page_size, unzip);
 
   ut_a(bpage == nullptr || bpage->get_space()->id == page_id.space());
 
@@ -158,7 +155,7 @@ ulint buf_read_ahead_random(const page_id_t &page_id,
   page_no_t low, high;
   dberr_t err;
   page_no_t i;
-  const page_no_t buf_read_ahead_random_area = buf_pool->read_ahead_area;
+  const page_no_t buf_read_ahead_random_area = BUF_READ_AHEAD_AREA(buf_pool);
 
   if (!srv_random_read_ahead) {
     /* Disabled by user */
@@ -212,9 +209,7 @@ ulint buf_read_ahead_random(const page_id_t &page_id,
     bpage = buf_page_hash_get_s_locked(buf_pool, page_id_t(page_id.space(), i),
                                        &hash_lock);
 
-    if (bpage != nullptr &&
-        buf_page_is_accessed(bpage) !=
-            std::chrono::steady_clock::time_point{} &&
+    if (bpage != nullptr && buf_page_is_accessed(bpage) &&
         buf_page_peek_if_young(bpage)) {
       recent_blocks++;
 
@@ -245,7 +240,7 @@ read_ahead:
 
   for (i = low; i < high; i++) {
     /* It is only sensible to do read-ahead in the non-sync aio
-    mode: hence false as the first parameter */
+    mode: hence FALSE as the first parameter */
 
     const page_id_t cur_page_id(page_id.space(), i);
 
@@ -331,7 +326,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
   buf_page_t *bpage;
   buf_frame_t *frame;
   buf_page_t *pred_bpage = nullptr;
-  std::chrono::steady_clock::time_point pred_bpage_is_accessed;
+  unsigned pred_bpage_is_accessed = 0;
   page_no_t pred_offset;
   page_no_t succ_offset;
   int asc_or_desc;
@@ -340,7 +335,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
   page_no_t low, high;
   dberr_t err;
   page_no_t i;
-  const page_no_t buf_read_ahead_linear_area = buf_pool->read_ahead_area;
+  const page_no_t buf_read_ahead_linear_area = BUF_READ_AHEAD_AREA(buf_pool);
   page_no_t threshold;
 
   /* check if readahead is disabled */
@@ -412,7 +407,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
   threshold = std::min(static_cast<page_no_t>(64 - srv_read_ahead_threshold),
-                       buf_pool->read_ahead_area);
+                       BUF_READ_AHEAD_AREA(buf_pool));
 
   fail_count = 0;
 
@@ -422,8 +417,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
     bpage = buf_page_hash_get_s_locked(buf_pool, page_id_t(page_id.space(), i),
                                        &hash_lock);
 
-    if (bpage == nullptr || buf_page_is_accessed(bpage) ==
-                                std::chrono::steady_clock::time_point{}) {
+    if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
       fail_count++;
 
@@ -436,14 +430,8 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
       the latest access times were linear.  The
       threshold (srv_read_ahead_factor) should help
       a little against this. */
-      int res = 0;
-      if (buf_page_is_accessed(bpage) == pred_bpage_is_accessed) {
-        res = 0;
-      } else if (buf_page_is_accessed(bpage) < pred_bpage_is_accessed) {
-        res = -1;
-      } else {
-        res = 1;
-      }
+      int res =
+          ut_ulint_cmp(buf_page_is_accessed(bpage), pred_bpage_is_accessed);
       /* Accesses not in the right order */
       if (res != 0 && res != asc_or_desc) {
         fail_count++;
@@ -459,8 +447,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
     }
 
     if (bpage) {
-      if (buf_page_is_accessed(bpage) !=
-          std::chrono::steady_clock::time_point{}) {
+      if (buf_page_is_accessed(bpage)) {
         pred_bpage = bpage;
         pred_bpage_is_accessed = buf_page_is_accessed(bpage);
       }
@@ -547,7 +534,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
 
   for (i = low; i < high; i++) {
     /* It is only sensible to do read-ahead in the non-sync
-    aio mode: hence false as the first parameter */
+    aio mode: hence FALSE as the first parameter */
 
     const page_id_t cur_page_id(page_id.space(), i);
 
@@ -589,34 +576,20 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
   ut_a(n_stored < UNIV_PAGE_SIZE);
 #endif /* UNIV_IBUF_DBUG */
 
-  ut::unordered_map<space_id_t, fil_space_t *> acquired_spaces;
-
   for (ulint i = 0; i < n_stored; i++) {
     const page_id_t page_id(space_ids[i], page_nos[i]);
 
     buf_pool_t *buf_pool = buf_pool_get(page_id);
 
-    fil_space_t *space = nullptr;
-    /* Acquire the space once for the pages belongs to it */
-    const auto space_itr = acquired_spaces.find(space_ids[i]);
-    if (space_itr != acquired_spaces.end()) {
-      space = space_itr->second;
-    } else {
-      /* If the space is deleted then fil_space_acquire_silent() returns
-      nullptr. Cache that information as well so that we remove the subsequent
-      ibuf entries for that space without trying to acquire it again. It is safe
-      operation to do since the space once deleted will not be available ever.*/
-      space = fil_space_acquire_silent(space_ids[i]);
-      acquired_spaces.emplace(space_ids[i], space);
-    }
+    bool found;
+    const page_size_t page_size(fil_space_get_page_size(space_ids[i], &found));
 
-    if (space == nullptr) {
-      /* The tablespace was not found, remove the entries for that page */
-      ibuf_merge_or_delete_for_page(nullptr, page_id, nullptr, false);
+    if (!found) {
+      /* The tablespace was not found, remove the
+      entries for that page */
+      ibuf_merge_or_delete_for_page(nullptr, page_id, nullptr, FALSE);
       continue;
     }
-
-    const page_size_t page_size(space->flags);
 
     os_rmb;
     while (buf_pool->n_pend_reads >
@@ -633,14 +606,7 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
     if (err == DB_TABLESPACE_DELETED) {
       /* We have deleted or are deleting the single-table
       tablespace: remove the entries for that page */
-      ibuf_merge_or_delete_for_page(nullptr, page_id, &page_size, false);
-    }
-  }
-
-  /* Release the acquired spaces */
-  for (const auto &space_entry : acquired_spaces) {
-    if (space_entry.second) {
-      fil_space_release(space_entry.second);
+      ibuf_merge_or_delete_for_page(nullptr, page_id, &page_size, FALSE);
     }
   }
 
@@ -652,8 +618,8 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
   }
 }
 
-void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
-                         ulint n_stored) {
+void buf_read_recv_pages(bool sync, space_id_t space_id,
+                         const page_no_t *page_nos, ulint n_stored) {
   ulint count;
   fil_space_t *space = fil_space_get(space_id);
 
@@ -700,8 +666,7 @@ void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
     buf_pool = buf_pool_get(cur_page_id);
     os_rmb;
 
-    while (buf_pool->n_pend_reads >=
-           recv_n_frames_for_pages_per_pool_instance / 2) {
+    while (buf_pool->n_pend_reads >= recv_n_pool_free_frames / 2) {
       os_aio_simulated_wake_handler_threads();
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
@@ -716,8 +681,13 @@ void buf_read_recv_pages(space_id_t space_id, const page_no_t *page_nos,
 
     dberr_t err;
 
-    buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
-                      cur_page_id, page_size, true);
+    if ((i + 1 == n_stored) && sync) {
+      buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, cur_page_id,
+                        page_size, true);
+    } else {
+      buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
+                        cur_page_id, page_size, true);
+    }
   }
 
   os_aio_simulated_wake_handler_threads();

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,9 +21,9 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "compression.h"
+#include "m_ctype.h"
 #include "my_dbug.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 
 /**
@@ -57,6 +57,8 @@ enum_compression_algorithm get_compression_algorithm(std::string name) {
 
   @param       name    comma separated list of compression algorithm names
   @param[out]  list    list containing algorithm names
+
+  @retval void
 */
 void parse_compression_algorithms_list(std::string name,
                                        std::vector<std::string> &list) {
@@ -114,7 +116,7 @@ bool validate_compression_attributes(std::string algorithm_names,
   if (!total_names) {
 #ifdef MYSQL_SERVER
     if (!ignore_errors) {
-      my_error(ER_CHANGE_SOURCE_WRONG_COMPRESSION_ALGORITHM_CLIENT, MYF(0),
+      my_error(ER_CHANGE_MASTER_WRONG_COMPRESSION_ALGORITHM_CLIENT, MYF(0),
                algorithm_names.c_str(), channel_name.c_str());
     }
 #endif
@@ -123,7 +125,7 @@ bool validate_compression_attributes(std::string algorithm_names,
   if (total_names > COMPRESSION_ALGORITHM_COUNT_MAX) {
 #ifdef MYSQL_SERVER
     if (!ignore_errors) {
-      my_error(ER_CHANGE_SOURCE_WRONG_COMPRESSION_ALGORITHM_LIST_CLIENT, MYF(0),
+      my_error(ER_CHANGE_MASTER_WRONG_COMPRESSION_ALGORITHM_LIST_CLIENT, MYF(0),
                algorithm_names.c_str(), channel_name.c_str());
     }
 #endif
@@ -139,7 +141,7 @@ bool validate_compression_attributes(std::string algorithm_names,
     if (method == enum_compression_algorithm::MYSQL_INVALID) {
 #ifdef MYSQL_SERVER
       if (!ignore_errors) {
-        my_error(ER_CHANGE_SOURCE_WRONG_COMPRESSION_ALGORITHM_CLIENT, MYF(0),
+        my_error(ER_CHANGE_MASTER_WRONG_COMPRESSION_ALGORITHM_CLIENT, MYF(0),
                  algorithm_name.c_str(), channel_name.c_str());
       }
 #endif

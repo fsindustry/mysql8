@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,17 +23,16 @@
 #include "sql/sql_tablespace.h"
 
 #include <string.h>
-
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "m_ctype.h"
 #include "my_base.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld.h"  // opt_table_encryption_privilege_check
 #include "mysqld_error.h"
@@ -76,10 +75,10 @@ bool validate_tspnamelen(const LEXSTR &name) {
     return true;
   }
 
-  if (name.length > NAME_LEN || system_charset_info->cset->numchars(
-                                    system_charset_info, name.str,
-                                    name.str + name.length) > NAME_CHAR_LEN) {
-    // Byte length exceeding NAME_LEN, and character length exceeding
+  if (name.length > NAME_LEN ||
+      my_numchars_mb(system_charset_info, name.str, name.str + name.length) >
+          NAME_CHAR_LEN) {
+    // Byte length exceeding NAME_LEN, and character lenght exceeding
     // NAME_CHAR_LEN not allowed
     my_error(ER_TOO_LONG_IDENT, MYF(0), name.str);
     return true;
@@ -117,7 +116,7 @@ st_alter_tablespace::st_alter_tablespace(
 
 bool validate_tablespace_name_length(const char *tablespace_name) {
   assert(tablespace_name != nullptr);
-  const LEX_CSTRING tspname = {tablespace_name, strlen(tablespace_name)};
+  LEX_CSTRING tspname = {tablespace_name, strlen(tablespace_name)};
   return validate_tspnamelen(tspname);
 }
 
@@ -376,7 +375,7 @@ bool intermediate_commit_unless_atomic_ddl(THD *thd, handlerton *hton) {
     return false;
   }
   /* purecov: begin inspected */
-  const Implicit_substatement_state_guard substatement_guard{thd};
+  Implicit_substatement_state_guard substatement_guard{thd};
   return (trans_commit_stmt(thd) || trans_commit(thd));
   /* purecov: end */
 }
@@ -493,7 +492,7 @@ bool Sql_cmd_create_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   // Check if same tablespace already exists.
   auto tsn = dd::make_string_type(m_tablespace_name);
@@ -523,18 +522,6 @@ bool Sql_cmd_create_tablespace::execute(THD *thd) {
     tablespace->options().set("encryption", encrypt_type);
   } else if (encrypt_tablespace) {
     my_error(ER_CHECK_NOT_IMPLEMENTED, MYF(0), "ENCRYPTION");
-    return true;
-  }
-
-  // Validate tablespace comment string
-  std::string invalid_sub_str;
-  if (is_invalid_string(
-          LEX_CSTRING{m_options->ts_comment.str, m_options->ts_comment.length},
-          system_charset_info, invalid_sub_str)) {
-    // Provide contextual information
-    my_error(ER_COMMENT_CONTAINS_INVALID_STRING, MYF(0), "tablespace",
-             m_tablespace_name.str, system_charset_info->csname,
-             invalid_sub_str.c_str());
     return true;
   }
 
@@ -622,7 +609,7 @@ bool Sql_cmd_create_tablespace::execute(THD *thd) {
         return true;
       }
 
-      const Implicit_substatement_state_guard substatement_guard{thd};
+      Implicit_substatement_state_guard substatement_guard{thd};
       (void)trans_commit_stmt(thd);
       (void)trans_commit(thd);
       /* purecov: end */
@@ -661,7 +648,7 @@ bool Sql_cmd_drop_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   const dd::Tablespace *old_ts_def = nullptr;
   if (dc.acquire(m_tablespace_name.str, &old_ts_def)) {
@@ -705,7 +692,7 @@ bool Sql_cmd_drop_tablespace::execute(THD *thd) {
                               nullptr,
                               *m_options};
 
-  const int ha_error =
+  int ha_error =
       hton->alter_tablespace(hton, thd, &ts_info, old_ts_def, nullptr);
   if (map_errors(ha_error, "DROP TABLEPSPACE", &ts_info)) {
     if (ha_error == HA_ERR_TABLESPACE_MISSING && !ddl_is_atomic(hton)) {
@@ -721,7 +708,7 @@ bool Sql_cmd_drop_tablespace::execute(THD *thd) {
         return true;
       }
 
-      const Implicit_substatement_state_guard substatement_guard{thd};
+      Implicit_substatement_state_guard substatement_guard{thd};
       (void)trans_commit_stmt(thd);
       (void)trans_commit(thd);
       /* purecov: end */
@@ -772,7 +759,7 @@ static bool set_table_encryption_type(THD *thd, const dd::Tablespace &ts,
                                       Table_pair_list *tpl,
                                       const LEX_STRING &requested_encryption,
                                       MDL_request_list *table_mdl_reqs) {
-  const bool is_request_to_encrypt = dd::is_encrypted(requested_encryption);
+  bool is_request_to_encrypt = dd::is_encrypted(requested_encryption);
 
   // If the source tablespace encryption type is same as request type.
   dd::String_type source_tablespace_encryption;
@@ -839,7 +826,7 @@ static bool set_table_encryption_type(THD *thd, const dd::Tablespace &ts,
     }
     // We throw warning only when creating a unencrypted table in a schema
     // which has default encryption enabled.
-    if (is_request_to_encrypt == false)
+    else if (is_request_to_encrypt == false)
       push_warning(thd, Sql_condition::SL_WARNING,
                    WARN_UNENCRYPTED_TABLE_IN_ENCRYPTED_DB,
                    ER_THD(thd, WARN_UNENCRYPTED_TABLE_IN_ENCRYPTED_DB));
@@ -881,7 +868,7 @@ static bool upgrade_lock_for_tables_in_tablespace(
   if (table_mdl_reqs->elements() == 0) return false;
 
   // Install KILL QUERY immunizer.
-  const dd::DD_kill_immunizer m_kill_immunizer(thd);
+  dd::DD_kill_immunizer m_kill_immunizer(thd);
 
   DEBUG_SYNC(thd, "upgrade_lock_for_tables_in_tablespace_kill_point");
 
@@ -926,7 +913,7 @@ bool Sql_cmd_alter_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser(&dc);
+  dd::cache::Dictionary_client::Auto_releaser releaser(&dc);
 
   auto tsmp = get_mod_pair<dd::Tablespace>(&dc, m_tablespace_name.str);
   if (tsmp.first == nullptr) {
@@ -1065,7 +1052,7 @@ bool Sql_cmd_alter_tablespace_add_datafile::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   auto tsmp = get_mod_pair<dd::Tablespace>(&dc, m_tablespace_name.str);
   if (tsmp.first == nullptr) {
@@ -1156,7 +1143,7 @@ bool Sql_cmd_alter_tablespace_drop_datafile::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   auto tsmp = get_mod_pair<dd::Tablespace>(&dc, m_tablespace_name.str);
   if (tsmp.first == nullptr) {
@@ -1242,7 +1229,7 @@ bool Sql_cmd_alter_tablespace_rename::execute(THD *thd) {
     return true;
   }
   dd::cache::Dictionary_client *dc = thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser(dc);
+  dd::cache::Dictionary_client::Auto_releaser releaser(dc);
 
   dd::String_type old_name = dd::make_string_type(m_tablespace_name);
   dd::String_type new_name = dd::make_string_type(m_new_name);
@@ -1399,7 +1386,7 @@ bool Sql_cmd_create_undo_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   // Check if same tablespace already exists.
   auto tsn = dd::make_string_type(m_undo_tablespace_name);
@@ -1480,7 +1467,7 @@ bool Sql_cmd_create_undo_tablespace::execute(THD *thd) {
         return true;
       }
 
-      const Implicit_substatement_state_guard substatement_guard{thd};
+      Implicit_substatement_state_guard substatement_guard{thd};
       (void)trans_commit_stmt(thd);
       (void)trans_commit(thd);
     }
@@ -1544,7 +1531,7 @@ bool Sql_cmd_alter_undo_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   // Get the existing dd::Tablespace for this tablespace name.
   auto tsn = dd::make_string_type(m_undo_tablespace_name);
@@ -1578,7 +1565,7 @@ bool Sql_cmd_alter_undo_tablespace::execute(THD *thd) {
       hton->alter_tablespace(hton, thd, &ts_info, tsmp.first, tsmp.second);
   if (map_errors(ha_error, "ALTER UNDO TABLEPSPACE", &ts_info)) {
     if (!ddl_is_atomic(hton)) {
-      const Implicit_substatement_state_guard substatement_guard{thd};
+      Implicit_substatement_state_guard substatement_guard{thd};
       (void)trans_commit_stmt(thd);
       (void)trans_commit(thd);
     }
@@ -1641,7 +1628,7 @@ bool Sql_cmd_drop_undo_tablespace::execute(THD *thd) {
   }
 
   auto &dc = *thd->dd_client();
-  const dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
+  dd::cache::Dictionary_client::Auto_releaser releaser{&dc};
 
   // Get the existing dd::Tablespace for this tablespace name.
   auto tsn = dd::make_string_type(m_undo_tablespace_name);
@@ -1664,7 +1651,7 @@ bool Sql_cmd_drop_undo_tablespace::execute(THD *thd) {
                               nullptr,
                               *m_options};
 
-  const int ha_error = hton->alter_tablespace(hton, thd, &ts_info, ts, nullptr);
+  int ha_error = hton->alter_tablespace(hton, thd, &ts_info, ts, nullptr);
   if (map_errors(ha_error, "DROP UNDO TABLEPSPACE", &ts_info)) {
     if (!ddl_is_atomic(hton)) {
       /*
@@ -1678,7 +1665,7 @@ bool Sql_cmd_drop_undo_tablespace::execute(THD *thd) {
         return true;
       }
 
-      const Implicit_substatement_state_guard substatement_guard{thd};
+      Implicit_substatement_state_guard substatement_guard{thd};
       (void)trans_commit_stmt(thd);
       (void)trans_commit(thd);
     }

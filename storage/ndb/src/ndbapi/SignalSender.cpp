@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,13 +45,12 @@ SimpleSignal::SimpleSignal(const SimpleSignal& src)
 
   for (Uint32 i = 0; i<NDB_ARRAY_SIZE(ptr); i++)
   {
-    ptr[i].p = nullptr;
-    if (src.ptr[i].p != nullptr)
+    ptr[i].p = 0;
+    if (src.ptr[i].p != 0)
     {
-      Uint32* p = new Uint32[src.ptr[i].sz];
-      memcpy(p, src.ptr[i].p, 4 * src.ptr[i].sz);
-      ptr[i].p = p;
+      ptr[i].p = new Uint32[src.ptr[i].sz];
       ptr[i].sz = src.ptr[i].sz;
+      memcpy(ptr[i].p, src.ptr[i].p, 4 * src.ptr[i].sz);
     }
   }
 }
@@ -64,13 +63,12 @@ SimpleSignal::operator=(const SimpleSignal& src)
   header = src.header;
   for (Uint32 i = 0; i<NDB_ARRAY_SIZE(ptr); i++)
   {
-    ptr[i].p = nullptr;
-    if (src.ptr[i].p != nullptr)
+    ptr[i].p = 0;
+    if (src.ptr[i].p != 0)
     {
-      Uint32* p = new Uint32[src.ptr[i].sz];
-      memcpy(p, src.ptr[i].p, 4 * src.ptr[i].sz);
-      ptr[i].p = p;
+      ptr[i].p = new Uint32[src.ptr[i].sz];
       ptr[i].sz = src.ptr[i].sz;
+      memcpy(ptr[i].p, src.ptr[i].p, 4 * src.ptr[i].sz);
     }
   }
   return * this;
@@ -82,7 +80,7 @@ SimpleSignal::~SimpleSignal(){
 
   for (Uint32 i = 0; i<NDB_ARRAY_SIZE(ptr); i++)
   {
-    if (ptr[i].p != nullptr)
+    if (ptr[i].p != 0)
     {
       delete [] ptr[i].p;
     }
@@ -105,7 +103,7 @@ SimpleSignal::print(FILE * out) const {
   for(Uint32 i = 0; i<header.m_noOfSections; i++){
     Uint32 len = ptr[i].sz;
     fprintf(out, " --- Section %d size=%d ---\n", i, len);
-    const Uint32* signalData = ptr[i].p;
+    Uint32 * signalData = ptr[i].p;
     while(len >= 7){
       fprintf(out, 
               " H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x H\'%.8x\n",
@@ -232,7 +230,7 @@ SignalSender::sendFragmentedSignal(Uint16 nodeId,
 SendStatus
 SignalSender::sendSignal(Uint16 nodeId, const SimpleSignal * s)
 {
-  int ret = raw_sendSignal((const NdbApiSignal*)&s->header,
+  int ret = raw_sendSignal((NdbApiSignal*)&s->header,
                            nodeId,
                            s->ptr,
                            s->header.m_noOfSections);
@@ -249,10 +247,10 @@ SimpleSignal *
 SignalSender::waitFor(Uint32 timeOutMillis, T & t)
 {
   SimpleSignal * s = t.check(m_jobBuffer);
-  if(s != nullptr){
+  if(s != 0){
     if (m_usedBuffer.push_back(s))
     {
-      return nullptr;
+      return 0;
     }
     assert(s->header.theLength > 0);
     return s;
@@ -271,10 +269,10 @@ SignalSender::waitFor(Uint32 timeOutMillis, T & t)
     do_poll(wait);
     
     SimpleSignal * s = t.check(m_jobBuffer);
-    if(s != nullptr){
+    if(s != 0){
       if (m_usedBuffer.push_back(s))
       {
-        return nullptr;
+        return 0;
       }
       assert(s->header.theLength > 0);
       return s;
@@ -286,7 +284,7 @@ SignalSender::waitFor(Uint32 timeOutMillis, T & t)
 
   } while(timeOutMillis == 0 || waited < timeOutMillis);
   
-  return nullptr;
+  return 0;
 } 
 
 class WaitForAny {
@@ -298,7 +296,7 @@ public:
       m_jobBuffer.erase(0);
       return s;
     }
-    return nullptr;
+    return 0;
   }
 };
   
@@ -335,17 +333,17 @@ SignalSender::trp_deliver_signal(const NdbApiSignal* signal,
   SimpleSignal * s = new SimpleSignal(true);
   s->header = * signal;
   for(Uint32 i = 0; i<s->header.m_noOfSections; i++){
-    Uint32* p = new Uint32[ptr[i].sz];
-    memcpy(p, ptr[i].p, 4 * ptr[i].sz);
-    s->ptr[i].p = p;
+    s->ptr[i].p = new Uint32[ptr[i].sz];
     s->ptr[i].sz = ptr[i].sz;
+    memcpy(s->ptr[i].p, ptr[i].p, 4 * ptr[i].sz);
   }
   m_jobBuffer.push_back(s);
   wakeup();
 }
 
-NodeId SignalSender::find_node(const NodeBitmask& mask,
-                               bool (*cond)(const trp_node&))
+template<class T>
+NodeId
+SignalSender::find_node(const NodeBitmask& mask, T & t)
 {
   unsigned n= 0;
   do {
@@ -356,31 +354,66 @@ NodeId SignalSender::find_node(const NodeBitmask& mask,
 
     assert(n < MAX_NODES);
 
-  } while (!cond(getNodeInfo(n)));
+  } while (!t.found_ok(*this, getNodeInfo(n)));
 
   return n;
 }
 
+
+class FindConfirmedNode {
+public:
+  bool found_ok(const SignalSender& ss, const trp_node & node){
+    return node.is_confirmed();
+  }
+};
+
+
 NodeId
 SignalSender::find_confirmed_node(const NodeBitmask& mask)
 {
-  return find_node(mask,
-                   [](const trp_node& node) { return node.is_confirmed(); });
+  FindConfirmedNode f;
+  return find_node(mask, f);
 }
+
+
+class FindConnectedNode {
+public:
+  bool found_ok(const SignalSender& ss, const trp_node & node){
+    return node.is_connected();
+  }
+};
+
 
 NodeId
 SignalSender::find_connected_node(const NodeBitmask& mask)
 {
-  return find_node(mask,
-                   [](const trp_node& node) { return node.is_connected(); });
+  FindConnectedNode f;
+  return find_node(mask, f);
 }
+
+
+class FindAliveNode {
+public:
+  bool found_ok(const SignalSender& ss, const trp_node & node){
+    return node.m_alive;
+  }
+};
+
 
 NodeId
 SignalSender::find_alive_node(const NodeBitmask& mask)
 {
-  return find_node(mask, [](const trp_node& node) { return node.m_alive; });
+  FindAliveNode f;
+  return find_node(mask, f);
 }
 
 
 template SimpleSignal* SignalSender::waitFor<WaitForAny>(unsigned, WaitForAny&);
+template NodeId SignalSender::find_node<FindConfirmedNode>(const NodeBitmask&,
+                                                           FindConfirmedNode&);
+template NodeId SignalSender::find_node<FindAliveNode>(const NodeBitmask&,
+                                                       FindAliveNode&);
+template NodeId SignalSender::find_node<FindConnectedNode>(const NodeBitmask&,
+                                                           FindConnectedNode&);
 template class Vector<SimpleSignal*>;
+  

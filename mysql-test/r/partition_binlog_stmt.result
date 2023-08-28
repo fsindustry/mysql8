@@ -1,9 +1,3 @@
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 DROP TABLE IF EXISTS t1;
 SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 #
@@ -20,5 +14,3 @@ LOAD DATA LOCAL INFILE 'MYSQLTEST_VARDIR/tmp/init_file.txt'
 INTO TABLE t1 (name);
 DROP TABLE t1;
 SET sql_mode = default;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.

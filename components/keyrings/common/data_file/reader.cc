@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,7 @@ File_reader::File_reader(const std::string &file, bool read_only,
 
     if (data.length() > 0) {
       /* Complete the operation if backup data is valid */
-      const File_writer write_from_backup(file, data, true);
+      File_writer write_from_backup(file, data, true);
       valid_ = write_from_backup.valid();
       if (!valid_) data.clear();
     } else {

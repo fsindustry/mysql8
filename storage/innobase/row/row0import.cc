@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -36,8 +36,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <memory>
 #include <vector>
 
-#include "sql/dd/types/column_type_element.h"
-
 #include "btr0pcur.h"
 #include "dict0boot.h"
 #include "dict0crea.h"
@@ -49,7 +47,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lob0impl.h"
 #include "lob0lob.h"
 #include "lob0pages.h"
-#include "log0chkp.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0import.h"
@@ -70,10 +67,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /** The size of the buffer to use for IO. Note: os_file_read() doesn't expect
 reads to fail. If you set the buffer size to be greater than a multiple of the
 file size then it will assert. TODO: Fix this limitation of the IO functions.
-@param  m       page size of the tablespace.
-@param  n       page size of the tablespace.
+@param	m	page size of the tablespace.
+@param	n	page size of the tablespace.
 @retval number of pages */
-inline size_t IO_BUFFER_SIZE(size_t m, size_t n) { return m / n; }
+#define IO_BUFFER_SIZE(m, n) ((m) / (n))
 
 /** For gathering stats on records during phase I */
 struct row_stats_t {
@@ -81,7 +78,7 @@ struct row_stats_t {
                      found in the index */
 
   ulint m_n_purged; /*!< Number of records purged
-                    optimistically */
+                    optimisatically */
 
   ulint m_n_rows; /*!< Number of rows */
 
@@ -138,10 +135,10 @@ struct row_import {
                               m_n_cols(),
                               m_n_instant_cols(0),
                               m_n_instant_nullable(0),
-                              m_cols(nullptr),
-                              m_col_names(nullptr),
+                              m_cols(),
+                              m_col_names(),
                               m_n_indexes(),
-                              m_indexes(nullptr),
+                              m_indexes(),
                               m_missing(true),
                               m_has_sdi(false),
                               m_cfp_missing(true) {}
@@ -192,16 +189,16 @@ struct row_import {
 
   /** Check if the column default values of table schema that was
   read from the .cfg file matches the in memory column definition.
-  @param[in]    thd             MySQL session variable
-  @param[in]    dd_table        dd::Table
-  @return       DB_SUCCESS or error code. */
+  @param[in]	thd		MySQL session variable
+  @param[in]	dd_table	dd::Table
+  @return	DB_SUCCESS or error code. */
   dberr_t match_col_default_values(THD *thd,
                                    const dd::Table *dd_table) UNIV_NOTHROW;
 
   /** Check if the table schema that was read from the .cfg file matches the
   in memory table definition.
-  @param[in]    thd             MySQL session variable
-  @param[in]    dd_table        dd::Table
+  @param[in]	thd		MySQL session variable
+  @param[in]	dd_table	dd::Table
   @return DB_SUCCESS or error code. */
   dberr_t match_compression_type_option(THD *thd,
                                         const dd::Table *dd_table) UNIV_NOTHROW;
@@ -214,46 +211,14 @@ struct row_import {
 
   /** Check if the table (and index) schema that was read from the
   .cfg file matches the in memory table definition.
-  @param[in]    thd             MySQL session variable
-  @param[in]    dd_table        dd::Table
+  @param[in]	thd		MySQL session variable
+  @param[in]	dd_table	dd::Table
   @return DB_SUCCESS or error code. */
   dberr_t match_schema(THD *thd, const dd::Table *dd_table) UNIV_NOTHROW;
 
-  /** Check if table being imported has INSTANT ADD/DROP columns
-  @return true if table has INSTANT ADD/DROP columns */
-  bool has_row_versions() {
-    return (m_total_column_count > m_initial_column_count ||
-            m_total_column_count > m_current_column_count);
-  }
-
  private:
   /** Set the instant ADD COLUMN information to the table */
-  dberr_t set_instant_info(THD *thd, const dd::Table *dd_table) UNIV_NOTHROW;
-
-  /** Set the instant ADD/DROP COLUMN information to the table
-  @param[in]            thd             MySQL session
-  @param[in,out]        dd_table        target table definition
-  @return DB_SUCCESS or error code. */
-  dberr_t set_instant_info_v2(THD *thd, const dd::Table *dd_table) UNIV_NOTHROW;
-
-  /** Match INSTANT metadata of CFG file and target table when both source and
-  target table has INSTANT columns.
-  @param[in]            thd             MySQL session
-  @return DB_SUCCESS or error code. */
-  dberr_t match_instant_metadata_in_target_table(THD *thd);
-
-  /** Update INSTANT metadata into target table when only source has INSTANT
-  columns.
-  @param[in]            thd             MySQL session
-  @param[in,out]        dd_table        target table definition
-  @return DB_SUCCESS or error code. */
-  dberr_t adjust_instant_metadata_in_taregt_table(THD *thd,
-                                                  const dd::Table *dd_table);
-
-  /** Add INSTANT DROP columns to target table innodb cache.
-  @param[in] target_table       target table in InnoDB cache.
-  @return DB_SUCCESS or error code. */
-  dberr_t add_instant_dropped_columns(dict_table_t *target_table);
+  dberr_t set_instant_info(THD *thd) UNIV_NOTHROW;
 
  public:
   dict_table_t *m_table; /*!< Table instance */
@@ -268,7 +233,7 @@ struct row_import {
   mem_heap_t *m_heap; /*!< Memory heap for default
                       value of instant columns */
 
-  uint64_t m_autoinc; /*!< Next autoinc value */
+  ib_uint64_t m_autoinc; /*!< Next autoinc value */
 
   page_size_t m_page_size; /*!< Tablespace page size */
 
@@ -276,13 +241,6 @@ struct row_import {
 
   ulint m_n_cols; /*!< Number of columns in the
                   meta-data file */
-
-  /* Column counts for table */
-  uint32_t m_initial_column_count{0};
-  uint32_t m_current_column_count{0};
-  uint32_t m_total_column_count{0};
-  uint32_t m_n_instant_drop_cols{0};
-  uint32_t m_current_row_version{0};
 
   uint16_t m_n_instant_cols; /*!< Number of columns before
                              first instant ADD COLUMN in
@@ -293,7 +251,7 @@ struct row_import {
   dict_col_t *m_cols; /*!< Column data */
 
   byte **m_col_names; /*!< Column names, we store the
-                      column names separately because
+                      column naems separately becuase
                       there is no field to store the
                       value in dict_col_t */
 
@@ -312,9 +270,6 @@ struct row_import {
 
   /** Compression type in the meta-data file */
   Compression::Type m_compression_type{};
-
-  /** Encryption settings */
-  Encryption_metadata m_encryption_metadata{};
 };
 
 /** Use the page cursor to iterate over records in a block. */
@@ -344,26 +299,27 @@ class RecIterator {
 
   /**
   @return true if cursor is at the end */
-  bool end() UNIV_NOTHROW { return (page_cur_is_after_last(&m_cur) == true); }
+  bool end() UNIV_NOTHROW { return (page_cur_is_after_last(&m_cur) == TRUE); }
 
   /** Remove the current record
   @return true on success */
-  bool remove(const dict_index_t *index, ulint *offsets) UNIV_NOTHROW {
+  bool remove(const dict_index_t *index, page_zip_des_t *page_zip,
+              ulint *offsets) UNIV_NOTHROW {
     /* We can't end up with an empty page unless it is root. */
     if (page_get_n_recs(m_cur.block->frame) <= 1) {
       return (false);
     }
 
-    return (page_delete_rec(index, &m_cur, offsets));
+    return (page_delete_rec(index, &m_cur, page_zip, offsets));
   }
 
  private:
   page_cur_t m_cur;
 };
 
-/** Class that purges delete marked records from indexes, both secondary
+/** Class that purges delete marked reocords from indexes, both secondary
 and cluster. It does a pessimistic delete. This should only be done if we
-couldn't purge the delete marked records during Phase I. */
+couldn't purge the delete marked reocrds during Phase I. */
 class IndexPurge {
  public:
   /** Constructor
@@ -376,7 +332,7 @@ class IndexPurge {
         << "Phase II - Purge records from index " << index->name;
   }
 
-  /** Destructor */
+  /** Descructor */
   ~IndexPurge() UNIV_NOTHROW = default;
 
   /** Purge delete marked records.
@@ -558,7 +514,7 @@ class AbstractCallback : public PageCallback {
   initialized: the pages >= this limit are, by definition, free;
   note that in a single-table tablespace where size < 64 pages,
   this number is 64, i.e., we have initialized the space about
-  the first extent, but have not physically allocated those pages
+  the first extent, but have not physically allocted those pages
   to the file. @see FSP_LIMIT. */
   page_no_t m_free_limit;
 
@@ -749,7 +705,8 @@ dberr_t FetchIndexRootPages::operator()(os_offset_t offset,
     /* Since there are SDI Indexes before normal indexes, we
     check for FIL_PAGE_INDEX type. */
     if (page_type == FIL_PAGE_INDEX) {
-      m_table_flags = fsp_flags_to_dict_tf(m_space_flags, page_is_comp(page));
+      m_table_flags = fsp_flags_to_dict_tf(m_space_flags,
+                                           page_is_comp(page) ? true : false);
 
       err = check_row_format(m_table_flags);
     }
@@ -829,21 +786,21 @@ tablespace file.
   1. Check each page for corruption.
 
   2. Update the space id and LSN on every page
-    - For the header page
+     * For the header page
        - Validate the flags
        - Update the LSN
 
   3. On Btree pages
-    - Set the index id
-    - Update the max trx id
-    - In a cluster index, update the system columns
-    - In a cluster index, update the BLOB ptr, set the space id
-    - Purge delete marked records, but only if they can be easily
+     * Set the index id
+     * Update the max trx id
+     * In a cluster index, update the system columns
+     * In a cluster index, update the BLOB ptr, set the space id
+     * Purge delete marked records, but only if they can be easily
        removed from the page
-    - Keep a counter of number of rows, ie. non-delete-marked rows
-    - Keep a counter of number of delete marked rows
-    - Keep a counter of number of purge failure
-    - If a page is stamped with an index id that isn't in the .cfg file
+     * Keep a counter of number of rows, ie. non-delete-marked rows
+     * Keep a counter of number of delete marked rows
+     * Keep a counter of number of purge failure
+     * If a page is stamped with an index id that isn't in the .cfg file
        we assume it is deleted and the page can be ignored.
 
    4. Set the page state to dirty so that it will be written to disk.
@@ -908,15 +865,15 @@ class PageConverter : public AbstractCallback {
   @return DB_SUCCESS or error code */
   dberr_t update_index_page(buf_block_t *block) UNIV_NOTHROW;
 
-  /** Update the BLOB references and write UNDO log entries for
+  /** Update the BLOB refrences and write UNDO log entries for
   rows that can't be purged optimistically.
   @param block block to update
   @retval DB_SUCCESS or error code */
   dberr_t update_records(buf_block_t *block) UNIV_NOTHROW;
 
   /** Validate the page, check for corruption.
-  @param        offset  physical offset within file.
-  @param        block   page read from file.
+  @param	offset	physical offset within file.
+  @param	block	page read from file.
   @return 0 on success, 1 if all zero, 2 if corrupted */
   import_page_status_t validate(os_offset_t offset,
                                 buf_block_t *block) UNIV_NOTHROW;
@@ -952,16 +909,19 @@ class PageConverter : public AbstractCallback {
 
   /** Purge delete-marked records, only if it is possible to do so without
   re-organising the B+tree.
+  @param offsets current row offsets.
   @return true if purge succeeded */
-  bool purge() UNIV_NOTHROW;
+  bool purge(const ulint *offsets) UNIV_NOTHROW;
 
   /** Adjust the BLOB references and sys fields for the current record.
   @param index the index being converted
   @param rec record to update
   @param offsets column offsets for the record
+  @param deleted true if row is delete marked
   @return DB_SUCCESS or error code. */
   dberr_t adjust_cluster_record(const dict_index_t *index, rec_t *rec,
-                                const ulint *offsets) UNIV_NOTHROW;
+                                const ulint *offsets,
+                                bool deleted) UNIV_NOTHROW;
 
   /** Find an index with the matching id.
   @return row_index_t* instance or 0 */
@@ -1179,8 +1139,8 @@ dberr_t row_import::match_index_columns(THD *thd, const dict_index_t *index)
 
 /** Check if the column default values of table schema that was
 read from the .cfg file matches the in memory column definition.
-@param[in]      thd             MySQL session variable
-@param[in]      dd_table        dd::Table
+@param[in]	thd		MySQL session variable
+@param[in]	dd_table	dd::Table
 @return DB_SUCCESS or error code. */
 dberr_t row_import::match_col_default_values(
     THD *thd, const dd::Table *dd_table) UNIV_NOTHROW {
@@ -1188,7 +1148,7 @@ dberr_t row_import::match_col_default_values(
 
   ut_ad(dd_table_is_partitioned(*dd_table) == dict_table_is_partition(m_table));
 
-  err = set_instant_info(thd, dd_table);
+  err = set_instant_info(thd);
 
   if (err != DB_SUCCESS) {
     return (err);
@@ -1229,8 +1189,8 @@ dberr_t row_import::match_col_default_values(
 
 /** Check if the table schema that was read from the .cfg file matches the
 in memory table definition.
-@param[in]      thd             MySQL session variable
-@param[in]      dd_table        dd::Table
+@param[in]	thd		MySQL session variable
+@param[in]	dd_table	dd::Table
 @return DB_SUCCESS or error code. */
 dberr_t row_import::match_compression_type_option(
     THD *thd, const dd::Table *dd_table) UNIV_NOTHROW {
@@ -1260,47 +1220,12 @@ in memory table definition.
 dberr_t row_import::match_table_columns(THD *thd) UNIV_NOTHROW {
   dberr_t err = DB_SUCCESS;
   const dict_col_t *col = m_table->cols;
-  uint32_t n_sys_cols = 0;
 
-  if (m_version >= IB_EXPORT_CFG_VERSION_V7 && m_table->has_row_versions()) {
-    /* Only target table has row versions, ERROR */
-    if (!has_row_versions()) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "The .cfg file indicates no INSTANT column in the source table"
-              " whereas the metadata in data dictionary says there are instant"
-              " columns in the target table");
-
-      return (DB_ERROR);
-    }
-
-    if (m_table->current_row_version != m_current_row_version) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "Table has instant column but current row version didn't match.");
-      return (DB_ERROR);
-    }
-
-    if ((m_table->initial_col_count != m_initial_column_count) ||
-        (m_table->current_col_count != m_current_column_count) ||
-        (m_table->total_col_count != m_total_column_count)) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "Table has instant column but column counts didn't match.");
-      return (DB_ERROR);
-    }
-  }
-
-  /* Following loop makes sure all the columns present in target table are
-  accounted for */
   for (ulint i = 0; i < m_table->n_cols; ++i, ++col) {
     const char *col_name;
     ulint cfg_col_index;
 
     col_name = m_table->get_col_name(dict_col_get_no(col));
-
-    if ((strcmp(col_name, "DB_ROW_ID") == 0) ||
-        (strcmp(col_name, "DB_TRX_ID") == 0) ||
-        (strcmp(col_name, "DB_ROLL_PTR") == 0)) {
-      n_sys_cols += 1;
-    }
 
     cfg_col_index = find_col(col_name);
 
@@ -1365,34 +1290,13 @@ dberr_t row_import::match_table_columns(THD *thd) UNIV_NOTHROW {
     }
   }
 
-  /* Following check makes sure all the columns present in config file are
-  accounted for */
-  if (m_version >= IB_EXPORT_CFG_VERSION_V7 && has_row_versions()) {
-    if (!(m_table->n_cols - n_sys_cols == m_current_column_count)) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "Found %u columns in destination table whereas cfg file has %u"
-              " columns.",
-              (m_table->n_cols - n_sys_cols), m_current_column_count);
-      err = DB_ERROR;
-    }
-  } else {
-    if (!(m_table->n_cols == m_n_cols)) {
-      ib_errf(
-          thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-          "Found %u columns in destination table whereas cfg file has " ULINTPF
-          " columns.",
-          (m_table->n_cols - n_sys_cols), (m_n_cols - n_sys_cols));
-      err = DB_ERROR;
-    }
-  }
-
   return (err);
 }
 
 /** Check if the table (and index) schema that was read from the .cfg file
 matches the in memory table definition.
-@param[in]      thd             MySQL session variable
-@param[in]      dd_table        dd::Table
+@param[in]	thd		MySQL session variable
+@param[in]	dd_table	dd::Table
 @return DB_SUCCESS or error code. */
 dberr_t row_import::match_schema(THD *thd,
                                  const dd::Table *dd_table) UNIV_NOTHROW {
@@ -1420,12 +1324,12 @@ dberr_t row_import::match_schema(THD *thd,
               "Table flags don't match");
     }
     return (DB_ERROR);
-  } else if (m_table->n_cols != m_n_cols - m_n_instant_drop_cols) {
+  } else if (m_table->n_cols != m_n_cols) {
     ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
             "Number of columns don't match, table has %lu"
             " columns but the tablespace meta-data file has"
             " %lu columns",
-            (ulong)m_table->n_cols, (ulong)(m_n_cols - m_n_instant_drop_cols));
+            (ulong)m_table->n_cols, (ulong)m_n_cols);
 
     return (DB_ERROR);
   } else if (UT_LIST_GET_LEN(m_table->indexes) + (m_has_sdi ? 1 : 0) !=
@@ -1635,357 +1539,9 @@ dberr_t row_import::set_root_by_heuristic() UNIV_NOTHROW {
   return (err);
 }
 
-dberr_t row_import::match_instant_metadata_in_target_table(THD *thd) {
-  if (m_table->current_row_version != m_current_row_version) {
-    /* It must have already been checked in match_table_columns */
-    ut_ad(false);
-    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "Target table also has instant column but current row version"
-            " didn't match with the configuration file.");
-    return (DB_ERROR);
-  }
-
-  if ((m_table->initial_col_count != m_initial_column_count) ||
-      (m_table->current_col_count != m_current_column_count) ||
-      (m_table->total_col_count != m_total_column_count)) {
-    /* It must have already been checked in match_table_columns */
-    ut_ad(false);
-    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "Target table also has instant columns but column counts didn't"
-            " match with the configuration file.");
-    return (DB_ERROR);
-  }
-
-  for (uint32_t i = 0; i < m_n_cols; i++) {
-    dict_col_t *cfg_col = &m_cols[i];
-    ut_ad(cfg_col != nullptr);
-
-    const char *col_name = (char *)m_col_names[i];
-
-    /* Search for this column in target table */
-    dict_col_t *target_col = m_table->get_col_by_name(col_name);
-
-    if (target_col == nullptr) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "Instant metadata didn't match for dropped column");
-      return DB_ERROR;
-    }
-
-    ut_a(target_col != nullptr);
-
-    if (!cfg_col->is_version_added_match(target_col) ||
-        !cfg_col->is_version_dropped_match(target_col) ||
-        (cfg_col->ind != target_col->ind) ||
-        (cfg_col->get_phy_pos() != target_col->get_phy_pos())) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "Instant metadata didn't match for column %s", col_name);
-      return DB_ERROR;
-    }
-
-    if (cfg_col->instant_default == nullptr &&
-        target_col->instant_default == nullptr) {
-      /* This isn't an INSTANT ADD columns or this column has been dropped. */
-      ut_ad(!cfg_col->is_instant_added() || cfg_col->is_instant_dropped());
-      continue;
-    }
-
-    if (cfg_col->instant_default == nullptr &&
-        target_col->instant_default != nullptr) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "The metadata in the data dictionary and the .cfg file contain"
-              " different default values for column %s!",
-              col_name);
-      return DB_ERROR;
-    }
-
-    if (cfg_col->instant_default != nullptr &&
-        target_col->instant_default == nullptr) {
-      /* set the value from .cfg file. */
-      target_col->set_default(cfg_col->instant_default->value,
-                              cfg_col->instant_default->len, m_table->heap);
-    }
-
-    /* If instant_default values are different, error */
-    if (*target_col->instant_default != *cfg_col->instant_default) {
-      ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "The metadata in the data dictionary and the .cfg file contain"
-              " different default values for column %s!",
-              col_name);
-      return DB_ERROR;
-    }
-  }
-
-  return DB_SUCCESS;
-}
-
-dberr_t row_import::add_instant_dropped_columns(dict_table_t *target_table) {
-  dict_index_t *index = m_table->first_index();
-  ut_ad(index->is_clustered());
-
-  /* NOTE : Generated columns can't be part of clustered index so all the
-  fields have to be pointing to cols in table->cols. */
-  uint16_t *mapping = ut::new_arr_withkey<uint16_t>(UT_NEW_THIS_FILE_PSI_KEY,
-                                                    ut::Count{index->n_fields});
-  for (size_t i = 0; i < index->n_fields; i++) {
-    mapping[i] = index->get_field(i)->col->ind;
-  }
-
-  /* Get the table->heap size in saved_heap_size */
-  size_t old_heap_size =
-      mem_heap_get_size(target_table->heap) + mem_heap_get_size(index->heap);
-
-  uint32_t n_dropped_cols = m_total_column_count - m_current_column_count;
-
-  /* Allocate memory for n_cols (table->n_cols + n_dropped_cols) */
-  {
-    dict_col_t *cols = target_table->cols;
-    uint32_t total_cols = target_table->n_cols + n_dropped_cols;
-    target_table->cols = (dict_col_t *)mem_heap_alloc(
-        target_table->heap, total_cols * sizeof(dict_col_t));
-    memcpy(target_table->cols, cols, target_table->n_cols * sizeof(dict_col_t));
-  }
-
-  /* Allocate memory for n_fields (index->n_fields + n_dropped_cols) */
-  {
-    dict_field_t *fields = index->fields;
-    uint32_t total_fields = index->n_fields + n_dropped_cols;
-    index->fields = (dict_field_t *)mem_heap_alloc(
-        index->heap, 1 + (total_fields) * sizeof(dict_field_t));
-    memcpy(index->fields, fields, 1 + index->n_fields * sizeof(dict_field_t));
-
-    /* Fix field->col pointers with the mapping created. */
-    for (size_t i = 0; i < index->n_fields; i++) {
-      index->get_field(i)->col = target_table->get_col(mapping[i]);
-    }
-  }
-  ut::delete_arr(mapping);
-
-  /* Set initial/current/total_col_count for table */
-  target_table->initial_col_count = m_initial_column_count;
-  target_table->current_col_count = m_current_column_count;
-  target_table->total_col_count = m_total_column_count;
-
-  /* Take a temp heap and add columns */
-  mem_heap_t *heap = mem_heap_create(1000, UT_LOCATION_HERE);
-  for (size_t i = 0; i < m_n_cols; i++) {
-    dict_col_t *cfg_col = &m_cols[i];
-    ut_ad(cfg_col != nullptr);
-
-    if (cfg_col->is_instant_dropped()) {
-      uint8_t v_added = cfg_col->is_instant_added()
-                            ? cfg_col->get_version_added()
-                            : UINT8_UNDEFINED;
-      uint8_t v_dropped = cfg_col->get_version_dropped();
-      uint32_t phy_pos = cfg_col->get_phy_pos();
-      std::string col_name = (char *)m_col_names[i];
-
-      dict_mem_table_add_col(m_table, heap, col_name.c_str(), cfg_col->mtype,
-                             cfg_col->prtype, cfg_col->len, false, phy_pos,
-                             v_added, v_dropped);
-    }
-  }
-  mem_heap_free(heap);
-
-  for (size_t i = 0; i < m_n_cols; i++) {
-    dict_col_t *cfg_col = &m_cols[i];
-    ut_ad(cfg_col != nullptr);
-
-    if (cfg_col->is_instant_dropped()) {
-      std::string col_name = (char *)m_col_names[i];
-      /* Add this field into clustered index fields */
-      dict_col_t *col = m_table->get_col_by_name(col_name.c_str());
-      ut_ad(col->mtype != DATA_SYS);
-      /* Physical position must have already been set */
-      ut_ad(col->get_phy_pos() != UINT32_UNDEFINED);
-
-      dict_index_add_col(index, m_table, col, 0, true);
-
-      index->n_total_fields++;
-    }
-  }
-
-  /* index->fields_array doesn't take space in index->heap. It will be updated
-  in the caller. */
-
-  /* Update the size change in dict_sys */
-  size_t new_heap_size =
-      mem_heap_get_size(target_table->heap) + mem_heap_get_size(index->heap);
-  if (new_heap_size > old_heap_size) {
-    mutex_enter(&dict_sys->mutex);
-    dict_sys->size += new_heap_size - old_heap_size;
-    mutex_exit(&dict_sys->mutex);
-  }
-
-  return DB_SUCCESS;
-}
-
-/** Set the instant ADD/DROP COLUMN information to the table.
-@return DB_SUCCESS if successful, or error code */
-dberr_t row_import::set_instant_info_v2(THD *thd, const dd::Table *dd_table)
-    UNIV_NOTHROW {
-  dberr_t err = DB_SUCCESS;
-
-  bool src_has_row_versions = has_row_versions();
-  bool dst_has_row_versions = m_table->has_row_versions();
-
-  /* None of the table has INSTANT columns. Return success. */
-  if (!src_has_row_versions && !dst_has_row_versions) {
-    return (DB_SUCCESS);
-  }
-
-  /* Only target table has INSTANT columns, ERROR */
-  /* It must have already been checked in match_table_columns */
-  ut_ad(!(!src_has_row_versions && dst_has_row_versions));
-  if (!src_has_row_versions && dst_has_row_versions) {
-    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "The .cfg file indicates no INSTANT column in the source table"
-            " whereas the metadata in data dictionary says there are instant"
-            " columns in the target table");
-
-    return (DB_ERROR);
-  }
-
-  /* Only source table has INSTANT columns. */
-  if (src_has_row_versions && !dst_has_row_versions) {
-    /* Update INSTANT metadata in target table. */
-    return (adjust_instant_metadata_in_taregt_table(thd, dd_table));
-  }
-
-  /* Both the tables have INSTANT columns. */
-  if (src_has_row_versions && dst_has_row_versions) {
-    /* INSTANT metadata must match. */
-    return (match_instant_metadata_in_target_table(thd));
-  }
-
-  return (err);
-}
-
-dberr_t row_import::adjust_instant_metadata_in_taregt_table(
-    THD *thd, const dd::Table *dd_table) {
-  dberr_t err = DB_SUCCESS;
-
-  /* It must have already been checked in match_table_columns */
-  ut_ad(m_table->get_n_user_cols() == m_current_column_count);
-  if (m_table->get_n_user_cols() != m_current_column_count) {
-    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "Source table has INSTANT columns. Target table column count"
-            " didn't match with the configuration file.");
-    return (DB_ERROR);
-  }
-
-  bool has_instant_drop_cols = m_total_column_count > m_current_column_count;
-  if (has_instant_drop_cols) {
-    /* Add dropped columns to target table definition. */
-    add_instant_dropped_columns(m_table);
-  }
-
-  size_t old_size = mem_heap_get_size(m_table->heap);
-
-  for (uint32_t i = 0; i < m_n_cols; i++) {
-    dict_col_t *cfg_col = &m_cols[i];
-    ut_ad(cfg_col != nullptr);
-
-    std::string col_name = (char *)m_col_names[i];
-
-    /* Search for this column in target table */
-    dict_col_t *target_col = m_table->get_col_by_name(col_name.c_str());
-
-    /* Normal column */
-    if (!cfg_col->is_instant_added() && !cfg_col->is_instant_dropped()) {
-      ut_ad(target_col != nullptr);
-      ut_ad(!target_col->is_instant_added() &&
-            !target_col->is_instant_dropped());
-      ut_ad(cfg_col->instant_default == nullptr);
-
-      /* We need to adjust phy_pos for column here */
-      target_col->set_phy_pos(cfg_col->get_phy_pos());
-      continue;
-    }
-
-    /* INSTANT DROP column */
-    if (cfg_col->is_instant_dropped()) {
-      ut_ad(dict_col_t::is_instant_dropped_name(col_name));
-
-      /* This columns must have already been added to table cache in
-      add_instant_dropped_columns() */
-      ut_ad(target_col != nullptr);
-      ut_ad(target_col->get_phy_pos() == cfg_col->get_phy_pos());
-      ut_ad(target_col->is_version_added_match(cfg_col));
-      ut_ad(target_col->is_instant_dropped());
-      ut_ad(target_col->is_version_dropped_match(cfg_col));
-
-      /* This column must have already been added to DD::Columns while
-      reading columns data from CFG file in row_import_read_columns(). */
-      ut_ad(nullptr != dd_find_column(dd_table, col_name.c_str()));
-
-      continue;
-    }
-
-    /* INSTANT ADD column */
-    if (cfg_col->is_instant_added()) {
-      ut_ad(!cfg_col->is_instant_dropped());
-      /* This must be present in target. */
-      ut_ad(target_col != nullptr);
-      if (target_col == nullptr) {
-        ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-                "The column %s isn't found in target table.", col_name.c_str());
-        err = DB_ERROR;
-        break;
-      }
-
-      /* Update version_added/phy_pos for column. */
-      target_col->set_version_added(cfg_col->get_version_added());
-      target_col->set_phy_pos(cfg_col->get_phy_pos());
-
-      /* Set default value from .cfg file. */
-      ut_ad(cfg_col->instant_default != nullptr);
-      target_col->set_default(cfg_col->instant_default->value,
-                              cfg_col->instant_default->len, m_table->heap);
-    }
-
-    /* Note: these info has to be updated in DD as well in
-    dd_import_instant_add_columns(). */
-  }
-
-  size_t new_size = mem_heap_get_size(m_table->heap);
-  if (new_size > old_size) {
-    mutex_enter(&dict_sys->mutex);
-    dict_sys->size += new_size - old_size;
-    mutex_exit(&dict_sys->mutex);
-  }
-
-  if (err != DB_SUCCESS) {
-    return (err);
-  }
-
-  m_table->initial_col_count = m_initial_column_count;
-  m_table->current_col_count = m_current_column_count;
-  m_table->total_col_count = m_total_column_count;
-  m_table->current_row_version = m_current_row_version;
-
-  ut_ad(m_table->has_row_versions());
-  dict_index_t &first_index = *m_table->first_index();
-  first_index.row_versions = true;
-  first_index.rec_cache.offsets = nullptr;
-  first_index.rec_cache.nullable_cols = 0;
-  /* Recreate fields array for clustered index */
-  first_index.create_fields_array();
-  first_index.create_nullables(m_table->current_row_version);
-
-  /* FIXME: Force to discard the table, in case of any rollback later. */
-  //    m_table->discard_after_ddl = true;
-
-  return (err);
-}
-
 /** Set the instant ADD COLUMN information to the table.
 @return DB_SUCCESS if all instant columns are trailing columns, or error code */
-dberr_t row_import::set_instant_info(THD *thd,
-                                     const dd::Table *dd_table) UNIV_NOTHROW {
-  if (m_version >= IB_EXPORT_CFG_VERSION_V7) {
-    return set_instant_info_v2(thd, dd_table);
-  }
-
+dberr_t row_import::set_instant_info(THD *thd) UNIV_NOTHROW {
   dberr_t error = DB_SUCCESS;
   dict_col_t *col = m_table->cols;
   uint16_t instants = 0;
@@ -2008,20 +1564,6 @@ dberr_t row_import::set_instant_info(THD *thd,
     m_table->set_instant_cols(m_table->get_n_user_cols());
     ut_ad(!m_table->has_instant_cols());
     return (DB_SUCCESS);
-  }
-
-  /* Do not allow IMPORT if target table also have INSTANT columns. As after
-  the implementation of row versions in table
-  - IMPORT allowed with INSTANT columns in target table iff metadata matches
-    exactly with source table.
-  - The source table is from earlier release so metadata can't match. */
-  if (m_table->has_row_versions()) {
-    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "Target table has INSTANT columns but the .cfg file is from earlier"
-            " release with INSTANT column in the source table. Instant metadata"
-            " can't match. Please create target table with no INSTANT column"
-            " and try IMPORT.");
-    return (DB_ERROR);
   }
 
   old_size = mem_heap_get_size(m_table->heap);
@@ -2097,15 +1639,13 @@ dberr_t row_import::set_instant_info(THD *thd,
 
   m_table->set_instant_cols(m_table->get_n_user_cols() - m_n_instant_cols);
   ut_ad(m_table->has_instant_cols());
-  m_table->set_upgraded_instant();
-
   dict_index_t &first_index = *m_table->first_index();
   first_index.instant_cols = true;
   first_index.rec_cache.offsets = nullptr;
   first_index.rec_cache.nullable_cols = 0;
-  first_index.set_instant_nullable(m_n_instant_nullable);
+  first_index.n_instant_nullable = m_n_instant_nullable;
   /* FIXME: Force to discard the table, in case of any rollback later. */
-  //    m_table->discard_after_ddl = true;
+  //	m_table->discard_after_ddl = true;
 
   return (DB_SUCCESS);
 }
@@ -2115,7 +1655,7 @@ Purge delete marked records.
 @return DB_SUCCESS or error code. */
 dberr_t IndexPurge::garbage_collect() UNIV_NOTHROW {
   dberr_t err;
-  auto comp = dict_table_is_comp(m_index->table);
+  ibool comp = dict_table_is_comp(m_index->table);
 
   /* Open the persistent cursor and start the mini-transaction. */
 
@@ -2124,8 +1664,8 @@ dberr_t IndexPurge::garbage_collect() UNIV_NOTHROW {
   m_pcur.import_ctx = &import_ctx;
 
   while ((err = next()) == DB_SUCCESS) {
-    rec_t *rec = m_pcur.get_rec();
-    auto deleted = rec_get_deleted_flag(rec, comp);
+    rec_t *rec = btr_pcur_get_rec(&m_pcur);
+    ibool deleted = rec_get_deleted_flag(rec, comp);
 
     if (!deleted) {
       ++m_n_rows;
@@ -2153,13 +1693,14 @@ void IndexPurge::open() UNIV_NOTHROW {
   mtr_start(&m_mtr);
   mtr_set_log_mode(&m_mtr, MTR_LOG_NO_REDO);
 
-  m_pcur.open_at_side(true, m_index, BTR_MODIFY_LEAF, true, 0, &m_mtr);
+  btr_pcur_open_at_index_side(true, m_index, BTR_MODIFY_LEAF, &m_pcur, true, 0,
+                              &m_mtr);
 }
 
 /**
 Close the persistent curosr and commit the mini-transaction. */
 void IndexPurge::close() UNIV_NOTHROW {
-  m_pcur.close();
+  btr_pcur_close(&m_pcur);
   mtr_commit(&m_mtr);
 }
 
@@ -2167,12 +1708,12 @@ void IndexPurge::close() UNIV_NOTHROW {
 Position the cursor on the next record.
 @return DB_SUCCESS or error code */
 dberr_t IndexPurge::next() UNIV_NOTHROW {
-  m_pcur.move_to_next_on_page();
+  btr_pcur_move_to_next_on_page(&m_pcur);
 
   /* When switching pages, commit the mini-transaction
   in order to release the latch on the old page. */
 
-  if (!m_pcur.is_after_last_on_page()) {
+  if (!btr_pcur_is_after_last_on_page(&m_pcur)) {
     return (DB_SUCCESS);
   } else if (trx_is_interrupted(m_trx)) {
     /* Check after every page because the check
@@ -2180,16 +1721,16 @@ dberr_t IndexPurge::next() UNIV_NOTHROW {
     return (DB_INTERRUPTED);
   }
 
-  m_pcur.store_position(&m_mtr);
+  btr_pcur_store_position(&m_pcur, &m_mtr);
 
   mtr_commit(&m_mtr);
 
   mtr_start(&m_mtr);
   mtr_set_log_mode(&m_mtr, MTR_LOG_NO_REDO);
 
-  m_pcur.restore_position(BTR_MODIFY_LEAF, &m_mtr, UT_LOCATION_HERE);
+  btr_pcur_restore_position(BTR_MODIFY_LEAF, &m_pcur, &m_mtr);
 
-  if (m_pcur.move_to_next_user_rec(&m_mtr) != DB_SUCCESS) {
+  if (!btr_pcur_move_to_next_user_rec(&m_pcur, &m_mtr)) {
     return (DB_END_OF_INDEX);
   }
 
@@ -2203,14 +1744,14 @@ tree structure may be changed during a pessimistic delete. */
 void IndexPurge::purge_pessimistic_delete() UNIV_NOTHROW {
   dberr_t err;
 
-  m_pcur.restore_position(BTR_MODIFY_TREE | BTR_LATCH_FOR_DELETE, &m_mtr,
-                          UT_LOCATION_HERE);
+  btr_pcur_restore_position(BTR_MODIFY_TREE | BTR_LATCH_FOR_DELETE, &m_pcur,
+                            &m_mtr);
 
-  ut_ad(rec_get_deleted_flag(m_pcur.get_rec(),
+  ut_ad(rec_get_deleted_flag(btr_pcur_get_rec(&m_pcur),
                              dict_table_is_comp(m_index->table)));
 
-  btr_cur_pessimistic_delete(&err, false, m_pcur.get_btr_cur(), 0, false, 0, 0,
-                             0, &m_mtr, &m_pcur, nullptr);
+  btr_cur_pessimistic_delete(&err, FALSE, btr_pcur_get_btr_cur(&m_pcur), 0,
+                             false, 0, 0, 0, &m_mtr, &m_pcur, nullptr);
 
   ut_a(err == DB_SUCCESS);
 
@@ -2221,14 +1762,14 @@ void IndexPurge::purge_pessimistic_delete() UNIV_NOTHROW {
 /**
 Purge delete-marked records. */
 void IndexPurge::purge() UNIV_NOTHROW {
-  m_pcur.store_position(&m_mtr);
+  btr_pcur_store_position(&m_pcur, &m_mtr);
 
   purge_pessimistic_delete();
 
   mtr_start(&m_mtr);
   mtr_set_log_mode(&m_mtr, MTR_LOG_NO_REDO);
 
-  m_pcur.restore_position(BTR_MODIFY_LEAF, &m_mtr, UT_LOCATION_HERE);
+  btr_pcur_restore_position(BTR_MODIFY_LEAF, &m_pcur, &m_mtr);
 }
 
 /** Constructor
@@ -2261,7 +1802,7 @@ dberr_t PageConverter::adjust_cluster_index_blob_column(rec_t *rec,
   ulint len;
   byte *field;
 
-  field = rec_get_nth_field(m_cluster_index, rec, offsets, i, &len);
+  field = rec_get_nth_field(rec, offsets, i, &len);
 
   DBUG_EXECUTE_IF("ib_import_trigger_corruption_2",
                   len = BTR_EXTERN_FIELD_REF_SIZE - 1;);
@@ -2307,7 +1848,7 @@ dberr_t PageConverter::adjust_cluster_index_blob_columns(
   for (ulint i = 0; i < rec_offs_n_fields(offsets); ++i) {
     /* Only if the column is stored "externally". */
 
-    if (rec_offs_nth_extern(m_cluster_index, offsets, i)) {
+    if (rec_offs_nth_extern(offsets, i)) {
       dberr_t err;
 
       err = adjust_cluster_index_blob_column(rec, offsets, i);
@@ -2341,11 +1882,15 @@ dberr_t PageConverter::adjust_cluster_index_blob_ref(
   return (DB_SUCCESS);
 }
 
-bool PageConverter::purge() UNIV_NOTHROW {
+/** Purge delete-marked records, only if it is possible to do so without
+re-organising the B+tree.
+@param offsets current row offsets.
+@return true if purge succeeded */
+bool PageConverter::purge(const ulint *offsets) UNIV_NOTHROW {
   const dict_index_t *index = m_index->m_srv_index;
 
   /* We can't have a page that is empty and not root. */
-  if (m_rec_iter.remove(index, m_offsets)) {
+  if (m_rec_iter.remove(index, m_page_zip_ptr, m_offsets)) {
     ++m_index->m_stats.m_n_purged;
 
     return (true);
@@ -2356,8 +1901,15 @@ bool PageConverter::purge() UNIV_NOTHROW {
   return (false);
 }
 
-dberr_t PageConverter::adjust_cluster_record(
-    const dict_index_t *index, rec_t *rec, const ulint *offsets) UNIV_NOTHROW {
+/** Adjust the BLOB references and sys fields for the current record.
+@param index the index being converted
+@param rec record to update
+@param offsets column offsets for the record
+@param deleted true if row is delete marked
+@return DB_SUCCESS or error code. */
+dberr_t PageConverter::adjust_cluster_record(const dict_index_t *index,
+                                             rec_t *rec, const ulint *offsets,
+                                             bool deleted) UNIV_NOTHROW {
   dberr_t err;
 
   ut_ad(index->is_clustered());
@@ -2373,12 +1925,12 @@ dberr_t PageConverter::adjust_cluster_record(
   return (err);
 }
 
-/** Update the BLOB references and write UNDO log entries for
+/** Update the BLOB refrences and write UNDO log entries for
 rows that can't be purged optimistically.
 @param block block to update
 @retval DB_SUCCESS or error code */
 dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
-  auto comp = dict_table_is_comp(m_cfg->m_table);
+  ibool comp = dict_table_is_comp(m_cfg->m_table);
   bool clust_index = (m_index->m_srv_index == m_cluster_index) ||
                      dict_index_is_sdi(m_index->m_srv_index);
 
@@ -2389,16 +1941,8 @@ dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
   while (!m_rec_iter.end()) {
     rec_t *rec = m_rec_iter.current();
 
-    auto has_version =
-        (comp ? rec_new_is_versioned(rec) : rec_old_is_versioned(rec));
+    ibool deleted = rec_get_deleted_flag(rec, comp);
 
-    /* CFG file is required to process records having version */
-
-    if (m_cfg->m_missing && has_version) {
-      return (DB_SCHEMA_MISMATCH);
-    }
-
-    auto deleted = rec_get_deleted_flag(rec, comp);
     /* For the clustered index we have to adjust the BLOB
     reference and the system fields irrespective of the
     delete marked flag. The adjustment of delete marked
@@ -2406,11 +1950,12 @@ dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
 
     if (deleted || clust_index) {
       m_offsets = rec_get_offsets(rec, m_index->m_srv_index, m_offsets,
-                                  ULINT_UNDEFINED, UT_LOCATION_HERE, &m_heap);
+                                  ULINT_UNDEFINED, &m_heap);
     }
 
     if (clust_index) {
-      dberr_t err = adjust_cluster_record(m_index->m_srv_index, rec, m_offsets);
+      dberr_t err =
+          adjust_cluster_record(m_index->m_srv_index, rec, m_offsets, deleted);
 
       if (err != DB_SUCCESS) {
         return (err);
@@ -2424,7 +1969,7 @@ dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
       /* A successful purge will move the cursor to the
       next record. */
 
-      if (!purge()) {
+      if (!purge(m_offsets)) {
         m_rec_iter.next();
       }
 
@@ -2546,7 +2091,7 @@ dberr_t PageConverter::update_page(buf_block_t *block,
       /* We need to decompress the contents into block->frame
       before we can do any thing with Btree pages. */
 
-      if (is_compressed_table() && !buf_zip_decompress(block, true)) {
+      if (is_compressed_table() && !buf_zip_decompress(block, TRUE)) {
         return (DB_CORRUPTION);
       }
 
@@ -2649,8 +2194,8 @@ dberr_t PageConverter::update_page(buf_block_t *block,
 }
 
 /** Validate the page, check for corruption.
-@param  offset  physical offset within file.
-@param  block   page read from file.
+@param	offset	physical offset within file.
+@param	block	page read from file.
 @return 0 on success, 1 if all zero, 2 if corrupted */
 PageConverter::import_page_status_t PageConverter::validate(
     os_offset_t offset, buf_block_t *block) UNIV_NOTHROW {
@@ -2770,7 +2315,7 @@ static void row_import_discard_changes(
 
   if (trx->dict_operation_lock_mode != RW_X_LATCH) {
     ut_a(trx->dict_operation_lock_mode == 0);
-    row_mysql_lock_data_dictionary(trx, UT_LOCATION_HERE);
+    row_mysql_lock_data_dictionary(trx);
   }
 
   ut_a(trx->dict_operation_lock_mode == RW_X_LATCH);
@@ -2778,17 +2323,16 @@ static void row_import_discard_changes(
   /* Since we update the index root page numbers on disk after
   we've done a successful import. The table will not be loadable.
   However, we need to ensure that the in memory root page numbers
-  are reset to "NULL". We assume these indexes were not added to AHI, otherwise
-  the btr_search_drop_page_hash_index() will fail for these indexes. */
+  are reset to "NULL". */
 
   for (auto index : table->indexes) {
     index->page = FIL_NULL;
     index->space = FIL_NULL;
   }
 
-  table->ibd_file_missing = true;
+  table->ibd_file_missing = TRUE;
 
-  err = fil_close_tablespace(table->space);
+  err = fil_close_tablespace(trx, table->space);
   ut_a(err == DB_SUCCESS || err == DB_TABLESPACE_NOT_FOUND);
 }
 
@@ -2809,6 +2353,9 @@ static void row_import_discard_changes(
   DBUG_EXECUTE_IF("ib_import_before_commit_crash", DBUG_SUICIDE(););
 
   trx_commit_for_mysql(trx);
+
+  prebuilt->table->encryption_key = nullptr;
+  prebuilt->table->encryption_iv = nullptr;
 
   row_mysql_unlock_data_dictionary(trx);
 
@@ -2846,11 +2393,13 @@ static void row_import_discard_changes(
  with the new space id. For all the table's secondary indexes.
  @return error code */
 [[nodiscard]] static dberr_t row_import_adjust_root_pages_of_secondary_indexes(
-    trx_t *trx,            /*!< in: transaction used for
-                           the import */
-    dict_table_t *table,   /*!< in: table the indexes
-                           belong to */
-    const row_import &cfg) /*!< Import context */
+    row_prebuilt_t *prebuilt, /*!< in/out: prebuilt from
+                              handler */
+    trx_t *trx,               /*!< in: transaction used for
+                              the import */
+    dict_table_t *table,      /*!< in: table the indexes
+                              belong to */
+    const row_import &cfg)    /*!< Import context */
 {
   dict_index_t *index;
   ulint n_rows_in_table;
@@ -2957,14 +2506,14 @@ static void row_import_discard_changes(
 
   mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
 
-  pcur.open_at_side(false,  // High end
-                    index, BTR_SEARCH_LEAF,
-                    true,  // Init cursor
-                    0,     // Leaf level
-                    &mtr);
+  btr_pcur_open_at_index_side(false,  // High end
+                              index, BTR_SEARCH_LEAF, &pcur,
+                              true,  // Init cursor
+                              0,     // Leaf level
+                              &mtr);
 
-  pcur.move_to_prev_on_page();
-  rec = pcur.get_rec();
+  btr_pcur_move_to_prev_on_page(&pcur);
+  rec = btr_pcur_get_rec(&pcur);
 
   /* Check for empty table. */
   if (!page_rec_is_infimum(rec)) {
@@ -2976,11 +2525,10 @@ static void row_import_discard_changes(
 
     rec_offs_init(offsets_);
 
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
 
-    field = rec_get_nth_field(index, rec, offsets,
-                              index->get_sys_col_pos(DATA_ROW_ID), &len);
+    field = rec_get_nth_field(rec, offsets, index->get_sys_col_pos(DATA_ROW_ID),
+                              &len);
 
     if (len == DATA_ROW_ID_LEN) {
       row_id = mach_read_from_6(field);
@@ -2997,7 +2545,7 @@ static void row_import_discard_changes(
     err = DB_SUCCESS;
   }
 
-  pcur.close();
+  btr_pcur_close(&pcur);
   mtr_commit(&mtr);
 
   DBUG_EXECUTE_IF("ib_import_set_max_rowid_failure", err = DB_CORRUPTION;);
@@ -3075,11 +2623,11 @@ static dberr_t row_import_cfg_read_string(
     row_import *cfg)    /*!< in/out: meta-data read */
 {
   /* v4 row will have prefix_len, fixed_len, is_ascending, name length */
-  byte row[sizeof(uint32_t) * 4];
+  byte row[sizeof(ib_uint32_t) * 4];
   size_t row_len = sizeof(row);
   if (cfg->m_version < IB_EXPORT_CFG_VERSION_V4) {
     /* v3 row will have prefix_len, fixed_len, name length */
-    row_len = sizeof(uint32_t) * 3;
+    row_len = sizeof(ib_uint32_t) * 3;
   }
 
   ulint n_fields = index->m_n_fields;
@@ -3107,21 +2655,21 @@ static dberr_t row_import_cfg_read_string(
                     (void)fseek(file, 0L, SEEK_END););
 
     if (fread(row, 1, row_len, file) != row_len) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while reading index fields.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while reading index fields.");
 
       return (DB_IO_ERROR);
     }
 
     field->prefix_len = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     field->fixed_len = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V4) {
       field->is_ascending = mach_read_from_4(ptr);
-      ptr += sizeof(uint32_t);
+      ptr += sizeof(ib_uint32_t);
     } else {
       /* Previous to CFG version 4 the DESC key was not recorded.
       Assume the index column is ascending.
@@ -3147,7 +2695,8 @@ static dberr_t row_import_cfg_read_string(
     dberr_t err = row_import_cfg_read_string(file, name, len);
 
     if (err != DB_SUCCESS) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR, "while parsing table name.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while parsing table name.");
 
       return (err);
     }
@@ -3158,15 +2707,15 @@ static dberr_t row_import_cfg_read_string(
 
 /** Read the index names and root page numbers of the indexes and set the
  values. Row format [root_page_no, len of str, str ... ]
-  @param[in] file       File to read from
-  @param[in] thd        Session handle
-  @param[in,out] cfg    Meta-data read
-  @return DB_SUCCESS or error code. */
-[[nodiscard]] static dberr_t row_import_read_index_data(FILE *file, THD *thd,
-                                                        row_import *cfg) {
+ @return DB_SUCCESS or error code. */
+[[nodiscard]] static dberr_t row_import_read_index_data(
+    FILE *file,      /*!< in: File to read from */
+    THD *thd,        /*!< in: session */
+    row_import *cfg) /*!< in/out: meta-data read */
+{
   byte *ptr;
   row_index_t *cfg_index;
-  byte row[sizeof(space_index_t) + sizeof(uint32_t) * 9];
+  byte row[sizeof(space_index_t) + sizeof(ib_uint32_t) * 9];
 
   /* FIXME: What is the max value? */
   ut_a(cfg->m_n_indexes > 0);
@@ -3193,15 +2742,25 @@ static dberr_t row_import_cfg_read_string(
                     (void)fseek(file, 0L, SEEK_END););
 
     /* Read the index data. */
-    if (const auto n_bytes = fread(row, 1, sizeof(row), file);
-        n_bytes != sizeof(row)) {
-      std::ostringstream msg;
-      msg << "while reading index meta-data, expected to read " << sizeof(row)
-          << " bytes but read only " << n_bytes << " bytes";
+    size_t n_bytes = fread(row, 1, sizeof(row), file);
 
-      ib::send_errno_error(thd, ER_IO_READ_ERROR, msg.str());
+    /* Trigger EOF */
+    DBUG_EXECUTE_IF("ib_import_io_read_error",
+                    (void)fseek(file, 0L, SEEK_END););
 
-      ib::error(ER_IB_IMPORT_INDEX_METADATA_READ_FAILED) << msg.str().c_str();
+    if (n_bytes != sizeof(row)) {
+      char msg[BUFSIZ];
+
+      snprintf(msg, sizeof(msg),
+               "while reading index meta-data, expected"
+               " to read %lu bytes but read only %lu"
+               " bytes",
+               (ulong)sizeof(row), (ulong)n_bytes);
+
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), msg);
+
+      ib::error(ER_IB_MSG_947) << "IO Error: " << msg;
 
       return (DB_IO_ERROR);
     }
@@ -3212,42 +2771,41 @@ static dberr_t row_import_cfg_read_string(
     ptr += sizeof(space_index_t);
 
     cfg_index->m_space = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_page_no = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_type = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_trx_id_offset = mach_read_from_4(ptr);
     if (cfg_index->m_trx_id_offset != mach_read_from_4(ptr)) {
-      ut_d(ut_error);
+      ut_ad(0);
       /* Overflow. Pretend that the clustered index
       has a variable-length PRIMARY KEY. */
-      ut_o(cfg_index->m_trx_id_offset = 0);
+      cfg_index->m_trx_id_offset = 0;
     }
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_n_user_defined_cols = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_n_uniq = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_n_nullable = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     cfg_index->m_n_fields = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     /* The NUL byte is included in the name length. */
     ulint len = mach_read_from_4(ptr);
 
     if (len > OS_FILE_MAX_PATH) {
       ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_INNODB_INDEX_CORRUPT,
-              "Index name length (" ULINTPF
-              ") is too long,"
+              "Index name length (%lu) is too long,"
               " the meta-data is corrupt",
               len);
 
@@ -3270,7 +2828,8 @@ static dberr_t row_import_cfg_read_string(
     err = row_import_cfg_read_string(file, cfg_index->m_name, len);
 
     if (err != DB_SUCCESS) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR, "while parsing index name.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while parsing index name.");
 
       return (err);
     }
@@ -3292,7 +2851,7 @@ static dberr_t row_import_read_indexes(
     THD *thd,        /*!< in: session */
     row_import *cfg) /*!< in/out: meta-data read */
 {
-  byte row[sizeof(uint32_t)];
+  byte row[sizeof(ib_uint32_t)];
 
   /* Trigger EOF */
   DBUG_EXECUTE_IF("ib_import_io_read_error_3",
@@ -3300,8 +2859,8 @@ static dberr_t row_import_read_indexes(
 
   /* Read the number of indexes. */
   if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading number of indexes.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading number of indexes.");
 
     return (DB_IO_ERROR);
   }
@@ -3309,16 +2868,17 @@ static dberr_t row_import_read_indexes(
   cfg->m_n_indexes = mach_read_from_4(row);
 
   if (cfg->m_n_indexes == 0) {
-    ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                ER_INNODB_IMPORT_WRONG_NUMBER_OF_INDEXES_ZERO);
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "Number of indexes in meta-data file is 0");
 
     return (DB_CORRUPTION);
 
   } else if (cfg->m_n_indexes > 1024) {
     // FIXME: What is the upper limit? */
-    ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                ER_INNODB_IMPORT_WRONG_NUMBER_OF_INDEXES_TOO_HIGH,
-                ulonglong{cfg->m_n_indexes});
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno),
+                "Number of indexes in meta-data file is too high: %lu",
+                (ulong)cfg->m_n_indexes);
     cfg->m_n_indexes = 0;
 
     return (DB_CORRUPTION);
@@ -3328,9 +2888,9 @@ static dberr_t row_import_read_indexes(
 }
 
 /** Read specified bytes from the meta data file.
-@param[in]      file    file to read from
-@param[in]      length  length of bytes to read
-@return the bytes stream, caller has to free the memory if not nullptr */
+@param[in]	file	file to read from
+@param[in]	length	length of bytes to read
+@return	the bytes stream, caller has to free the memory if not nullptr */
 [[nodiscard]] static byte *row_import_read_bytes(FILE *file, size_t length) {
   size_t read = 0;
   byte *r =
@@ -3363,10 +2923,10 @@ static dberr_t row_import_read_indexes(
 /** Read the metadata config file. Deserialise the contents of
 dict_col_t::instant_default if exists.
 Refer to row_quiesce_write_default_value() for the format details.
-@param[in]      file    file to read from
-@param[in,out]  col     column whose default value to read
+@param[in]	file	file to read from
+@param[in,out]	col	column whose default value to read
 @param[in,out]  heap    memory heap to store default value
-@param[in,out]  read    true if default value read */
+@param[in,out]	read	true if default value read */
 [[nodiscard]] static dberr_t row_import_read_default_values(FILE *file,
                                                             dict_col_t *col,
                                                             mem_heap_t **heap,
@@ -3394,7 +2954,7 @@ Refer to row_quiesce_write_default_value() for the format details.
   }
 
   if (*heap == nullptr) {
-    *heap = mem_heap_create(100, UT_LOCATION_HERE);
+    *heap = mem_heap_create(100);
   }
 
   if (str[0] == 1) {
@@ -3404,7 +2964,7 @@ Refer to row_quiesce_write_default_value() for the format details.
   } else {
     ut::delete_arr(str);
 
-    /* Length bytes */
+    /* Legnth bytes */
     if ((str = row_import_read_bytes(file, 4)) == nullptr) {
       return (DB_IO_ERROR);
     }
@@ -3427,249 +2987,20 @@ Refer to row_quiesce_write_default_value() for the format details.
   }
 }
 
-/** Read dd::Column metadata for the dropped table.
-@param[in,out]  table_def       Table definition
-@param[in]      file            file to read from
-@param[in]      thd             session
-@param[in]      col             dict_col_t
-@param[in]      col_name        name of the columns */
-static dberr_t row_import_read_dropped_col_metadata(dd::Table *table_def,
-                                                    FILE *file, THD *thd,
-                                                    dict_col_t *col,
-                                                    const char *col_name) {
-  ut_ad(col->is_instant_dropped());
-
-  /* Total metadata to be written
-    1 byte for is NULLABLE
-    1 byte for is_unsigned
-    4 bytes for char_length
-    4 bytes for column type
-    4 bytes for numeric scale
-    8 bytes for collation id */
-  constexpr size_t METADATA_SIZE = 22;
-
-  byte row[METADATA_SIZE];
-
-  /* Read column's v_added, v_dropped, phy_pos  */
-  if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading dropped column meta-data.");
-    return (DB_IO_ERROR);
-  }
-
-  byte *ptr = row;
-
-  /* 1 byte for is NULLABLE */
-  bool is_nullable = mach_read_from_1(ptr);
-  ptr += 1;
-
-  /* 1 byte for is_unsigned */
-  bool is_unsigned = mach_read_from_1(ptr);
-  ptr += 1;
-
-  /* 4 bytes for char_length */
-  uint32_t char_length = mach_read_from_4(ptr);
-  ptr += sizeof(uint32_t);
-
-  /* 4 bytes for column type */
-  uint32_t col_type = mach_read_from_4(ptr);
-  ptr += sizeof(uint32_t);
-
-  /* 4 bytes for numeric scale */
-  uint32_t numeric_scale = mach_read_from_4(ptr);
-  ptr += sizeof(uint32_t);
-
-  /* 8 bytes for collation id */
-  uint64_t collation_id = mach_read_from_8(ptr);
-  ptr += sizeof(uint64_t);
-
-  /* Read elements for enum column type.
-  [4]     bytes : number of elements
-  For each element
-    [4]     bytes : element name length (len+1)
-    [len+1] bytes : element name */
-  std::vector<dd::String_type> enum_names;
-  if ((dd::enum_column_types)col_type == dd::enum_column_types::ENUM ||
-      (dd::enum_column_types)col_type == dd::enum_column_types::SET) {
-    byte _row[4];
-
-    /* Read element count */
-    if (fread(_row, 1, sizeof(_row), file) != sizeof(_row)) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while reading dropped column meta-data.");
-      return (DB_IO_ERROR);
-    }
-    size_t n_elem = mach_read_from_4(_row);
-
-    for (size_t i = 0; i < n_elem; i++) {
-      /* Read element name length */
-      if (fread(_row, 1, sizeof(_row), file) != sizeof(_row)) {
-        ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                             "while reading dropped column meta-data.");
-        return (DB_IO_ERROR);
-      }
-
-      /* Element names' length is (len_with_null - 1) */
-      const uint32_t len_with_null = mach_read_from_4(_row);
-
-      if (len_with_null == 0) {
-        ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                    ER_INNODB_IMPORT_WRONG_DROPPED_ENUM_LENGTH,
-                    ulong{len_with_null}, col_name);
-
-        return (DB_CORRUPTION);
-      }
-
-      /* Read element name: non-ASCII, can't use string functions like strlen */
-      ut::vector<byte> elem_name(len_with_null);
-
-      if (fread(elem_name.data(), elem_name.size(), 1, file) != 1) {
-        std::ostringstream msg;
-        msg << "Error reading Enum/Set element name for column " << col_name;
-
-        ib::send_errno_error(thd, ER_IO_READ_ERROR, msg.str());
-
-        return DB_CORRUPTION;
-      } else if (elem_name.back() != '\0') {
-        ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                    ER_INNODB_IMPORT_ENUM_NULL_TERMINATOR_MISSING, col_name);
-
-        return DB_CORRUPTION;
-      }
-      enum_names.push_back(dd::String_type((const char *)elem_name.data(),
-                                           elem_name.size() - 1));
-    }
-  }
-
-  dd::Column *new_column =
-      const_cast<dd::Column *>(dd_find_column(table_def, col_name));
-  /* If the INSTANT DROP column already exists in target table DD, confirm it's
-  metadata is matching which the CFG. */
-  if (new_column != nullptr) {
-    ut_ad(new_column->is_se_hidden());
-
-    bool err = false;
-
-    {
-      /* Match version added */
-      if (col->is_instant_added() && dd_column_is_added(new_column)) {
-        uint32_t v = dd_column_get_version_added(new_column);
-        err = (v != (uint32_t)col->get_version_added());
-      } else if (col->is_instant_added() || dd_column_is_added(new_column)) {
-        err = true;
-      }
-
-      /* Match version dropped */
-      if (!err) {
-        if (dd_column_is_dropped(new_column)) {
-          uint32_t v = dd_column_get_version_dropped(new_column);
-          err = (v != (uint32_t)col->get_version_dropped());
-        } else {
-          err = true;
-        }
-      }
-
-      /* Match phy_pos */
-      if (!err) {
-        const char *s = dd_column_key_strings[DD_INSTANT_PHYSICAL_POS];
-        uint32_t v = 0;
-        new_column->se_private_data().get(s, &v);
-        err = (v != col->get_phy_pos());
-      }
-    }
-
-    auto match_enum_values = [&](dd::Column *col) {
-      if (enum_names.size() == 0) {
-        ut_ad(col->type() != dd::enum_column_types::ENUM &&
-              col->type() != dd::enum_column_types::SET);
-        return col->type() != dd::enum_column_types::ENUM &&
-               col->type() != dd::enum_column_types::SET;
-      }
-
-      const auto &elements = col->elements();
-      if (enum_names.size() != elements.size()) {
-        return false;
-      }
-
-      size_t i = 0;
-      for (const auto &elem : elements) {
-        if (i == enum_names.size() || enum_names[i++] != elem->name()) {
-          return false;
-        }
-      }
-
-      return true;
-    };
-
-    if (err || new_column->is_nullable() != is_nullable ||
-        new_column->is_unsigned() != is_unsigned ||
-        new_column->char_length() != char_length ||
-        (uint32_t)(new_column->type()) != col_type ||
-        new_column->numeric_scale() != numeric_scale ||
-        new_column->collation_id() != collation_id ||
-        !match_enum_values(new_column)) {
-      ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                  ER_INNODB_IMPORT_DROP_COL_METADATA_MISMATCH, col_name);
-      return DB_ERROR;
-    }
-
-    return DB_SUCCESS;
-  }
-
-  /* Add this column as a SE_HIDDEN column in dest table def */
-  new_column = dd_add_hidden_column(table_def, col_name, char_length,
-                                    (dd::enum_column_types)col_type);
-  ut_ad(new_column != nullptr);
-
-  /* Set SE Private data of newly added hidden column here */
-  {
-    auto set = [&](const char *s, uint32_t v) {
-      new_column->se_private_data().set(s, v);
-    };
-
-    new_column->se_private_data().clear();
-    if (col->is_instant_added()) {
-      set(dd_column_key_strings[DD_INSTANT_VERSION_ADDED],
-          (uint32_t)col->get_version_added());
-    }
-
-    set(dd_column_key_strings[DD_INSTANT_VERSION_DROPPED],
-        (uint32_t)col->get_version_dropped());
-    set(dd_column_key_strings[DD_INSTANT_PHYSICAL_POS], col->get_phy_pos());
-  }
-
-  new_column->set_nullable(is_nullable);
-  new_column->set_unsigned(is_unsigned);
-  new_column->set_char_length(char_length);
-  new_column->set_numeric_scale(numeric_scale);
-  new_column->set_collation_id(collation_id);
-  new_column->set_type((dd::enum_column_types)col_type);
-  /* Elements for enum columns */
-  if ((dd::enum_column_types)col_type == dd::enum_column_types::ENUM ||
-      (dd::enum_column_types)col_type == dd::enum_column_types::SET) {
-    for (auto &name : enum_names) {
-      auto *elem_obj = new_column->add_element();
-      elem_obj->set_name(name);
-    }
-  }
-
-  return DB_SUCCESS;
-}
-
 /** Read the meta data (table columns) config file. Deserialise the contents of
-dict_col_t structure, along with the column name.
-@param[in,out]  table_def       Table definition
-@param[in]      file            file to read from
-@param[in]      thd             session
-@param[in]      cfg             meta-data read */
-[[nodiscard]] static dberr_t row_import_read_columns(dd::Table *table_def,
-                                                     FILE *file, THD *thd,
-                                                     row_import *cfg) {
+ dict_col_t structure, along with the column name. */
+[[nodiscard]] static dberr_t row_import_read_columns(
+    FILE *file,      /*!< in: file to write to */
+    THD *thd,        /*!< in/out: session */
+    row_import *cfg) /*!< in/out: meta-data read */
+{
+  dict_col_t *col;
+  byte row[sizeof(ib_uint32_t) * 8];
+
   /* FIXME: What should the upper limit be? */
   ut_a(cfg->m_n_cols > 0);
   ut_a(cfg->m_n_cols < 1024);
 
-  /* Allocate array of columns */
   cfg->m_cols = ut::new_arr_withkey<dict_col_t>(UT_NEW_THIS_FILE_PSI_KEY,
                                                 ut::Count{cfg->m_n_cols});
 
@@ -3681,9 +3012,8 @@ dict_col_t structure, along with the column name.
     return (DB_OUT_OF_MEMORY);
   }
 
-  // memset(cfg->m_cols, 0x0, sizeof(*cfg->m_cols) * cfg->m_n_cols);
+  memset(cfg->m_cols, 0x0, sizeof(*cfg->m_cols) * cfg->m_n_cols);
 
-  /* Allocated array to store name of the columns */
   cfg->m_col_names = ut::new_arr_withkey<byte *>(UT_NEW_THIS_FILE_PSI_KEY,
                                                  ut::Count{cfg->m_n_cols});
 
@@ -3697,8 +3027,7 @@ dict_col_t structure, along with the column name.
 
   memset(cfg->m_col_names, 0x0, sizeof(cfg->m_col_names) * cfg->m_n_cols);
 
-  dict_col_t *col = cfg->m_cols;
-  byte row[sizeof(uint32_t) * 8];
+  col = cfg->m_cols;
 
   for (ulint i = 0; i < cfg->m_n_cols; ++i, ++col) {
     byte *ptr = row;
@@ -3708,32 +3037,32 @@ dict_col_t structure, along with the column name.
                     (void)fseek(file, 0L, SEEK_END););
 
     if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while reading table column meta-data.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while reading table column meta-data.");
 
       return (DB_IO_ERROR);
     }
 
     col->prtype = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->mtype = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->len = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->mbminmaxlen = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->ind = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->ord_part = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     col->max_prefix = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     /* Read in the column name as [len, byte array]. The len
     includes the NUL byte. */
@@ -3742,10 +3071,9 @@ dict_col_t structure, along with the column name.
 
     /* FIXME: What is the maximum column name length? */
     if (len == 0 || len > 128) {
-      std::ostringstream msg;
-      msg << "Column name length " << len << ", is invalid";
-
-      ib::send_errno_error(thd, ER_IO_READ_ERROR, msg.str());
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "Column name length %lu, is invalid",
+                  (ulong)len);
 
       return (DB_CORRUPTION);
     }
@@ -3766,47 +3094,10 @@ dict_col_t structure, along with the column name.
     err = row_import_cfg_read_string(file, cfg->m_col_names[i], len);
 
     if (err != DB_SUCCESS) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while parsing table column name.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while parsing table column name.");
 
       return (err);
-    }
-
-    /* Read INSTANT metadata of column */
-    if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V7) {
-      byte row[2 + sizeof(uint32_t)];
-
-      /* Read column's v_added, v_dropped, phy_pos  */
-      if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-        ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                             "while reading table column INSTANT meta-data.");
-
-        return (DB_IO_ERROR);
-      }
-
-      byte *ptr = row;
-      uint8_t v = mach_read_from_1(ptr);
-      col->set_version_added(v);
-      ptr++;
-
-      v = mach_read_from_1(ptr);
-      col->set_version_dropped(v);
-      ptr++;
-
-      col->set_phy_pos(mach_read_from_4(ptr));
-
-      if (col->is_instant_dropped()) {
-        const char *col_name = (const char *)cfg->m_col_names[i];
-        ut_ad(dict_col_t::is_instant_dropped_name(std::string(col_name)));
-
-        /* Read dropped col dd::Column metadata and add it to dd::Table */
-        dberr_t err = row_import_read_dropped_col_metadata(table_def, file, thd,
-                                                           col, col_name);
-
-        if (err != DB_SUCCESS) {
-          return err;
-        }
-      }
     }
 
     if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V3) {
@@ -3816,9 +3107,10 @@ dict_col_t structure, along with the column name.
       err = row_import_read_default_values(file, col, &cfg->m_heap, &read);
 
       if (err != DB_SUCCESS) {
-        ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                             "while reading table column default value.");
-
+        ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                    strerror(errno),
+                    "while reading table column"
+                    " default value.");
         return (err);
       }
 
@@ -3838,7 +3130,7 @@ dict_col_t structure, along with the column name.
     THD *thd,        /*!< in: session */
     row_import *cfg) /*!< out: meta data */
 {
-  byte value[sizeof(uint32_t)];
+  byte value[sizeof(ib_uint32_t)];
 
   /* Trigger EOF */
   DBUG_EXECUTE_IF("ib_import_io_read_error_5",
@@ -3846,8 +3138,9 @@ dict_col_t structure, along with the column name.
 
   /* Read the hostname where the tablespace was exported. */
   if (fread(value, 1, sizeof(value), file) != sizeof(value)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading meta-data export hostname length.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno),
+                "while reading meta-data export hostname length.");
 
     return (DB_IO_ERROR);
   }
@@ -3869,8 +3162,8 @@ dict_col_t structure, along with the column name.
   dberr_t err = row_import_cfg_read_string(file, cfg->m_hostname, len);
 
   if (err != DB_SUCCESS) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while parsing export hostname.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while parsing export hostname.");
 
     return (err);
   }
@@ -3881,8 +3174,8 @@ dict_col_t structure, along with the column name.
 
   /* Read the table name of tablespace that was exported. */
   if (fread(value, 1, sizeof(value), file) != sizeof(value)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading meta-data table name length.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading meta-data table name length.");
 
     return (DB_IO_ERROR);
   }
@@ -3904,7 +3197,8 @@ dict_col_t structure, along with the column name.
   err = row_import_cfg_read_string(file, cfg->m_table_name, len);
 
   if (err != DB_SUCCESS) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR, "while parsing table name.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while parsing table name.");
 
     return (err);
   }
@@ -3914,15 +3208,16 @@ dict_col_t structure, along with the column name.
                           << "' that was exported from host '"
                           << cfg->m_hostname << "'";
 
-  byte row[sizeof(uint32_t) * 3];
+  byte row[sizeof(ib_uint32_t) * 3];
 
   /* Trigger EOF */
   DBUG_EXECUTE_IF("ib_import_io_read_error_7",
                   (void)fseek(file, 0L, SEEK_END););
 
   /* Read the autoinc value. */
-  if (fread(row, 1, sizeof(uint64_t), file) != sizeof(uint64_t)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR, "while reading autoinc value.");
+  if (fread(row, 1, sizeof(ib_uint64_t), file) != sizeof(ib_uint64_t)) {
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading autoinc value.");
 
     return (DB_IO_ERROR);
   }
@@ -3935,8 +3230,8 @@ dict_col_t structure, along with the column name.
 
   /* Read the tablespace page size. */
   if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading meta-data header.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading meta-data header.");
 
     return (DB_IO_ERROR);
   }
@@ -3944,7 +3239,7 @@ dict_col_t structure, along with the column name.
   byte *ptr = row;
 
   const ulint logical_page_size = mach_read_from_4(ptr);
-  ptr += sizeof(uint32_t);
+  ptr += sizeof(ib_uint32_t);
 
   if (logical_page_size != univ_page_size.logical()) {
     ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
@@ -3958,13 +3253,12 @@ dict_col_t structure, along with the column name.
   }
 
   cfg->m_flags = mach_read_from_4(ptr);
-  ptr += sizeof(uint32_t);
+  ptr += sizeof(ib_uint32_t);
 
   cfg->m_page_size.copy_from(dict_tf_get_page_size(cfg->m_flags));
 
   ut_a(logical_page_size == cfg->m_page_size.logical());
 
-  /* Read Total number of columns in table */
   cfg->m_n_cols = mach_read_from_4(ptr);
 
   if (!dict_tf_is_valid(cfg->m_flags)) {
@@ -3974,10 +3268,10 @@ dict_col_t structure, along with the column name.
   if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V5) {
     /* Read the nullable field before first instant column */
     if (fread(value, 1, sizeof(value), file) != sizeof(value)) {
-      ib::send_errno_error(
-          thd, ER_IO_READ_ERROR,
-          "while reading meta-data nullable column before first "
-          "instant column.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno),
+                  "while reading meta-data nullable column"
+                  " before first instant column.");
 
       return (DB_IO_ERROR);
     }
@@ -3987,41 +3281,14 @@ dict_col_t structure, along with the column name.
     cfg->m_n_instant_nullable = 0;
   }
 
-  if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V7) {
-    byte row[sizeof(uint32_t) * 5];
-
-    /* Read column's count for the table  */
-    if (fread(row, 1, sizeof(row), file) != sizeof(row)) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while reading table column counts.");
-      return (DB_IO_ERROR);
-    }
-
-    byte *ptr = row;
-    cfg->m_initial_column_count = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
-
-    cfg->m_current_column_count = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
-
-    cfg->m_total_column_count = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
-
-    cfg->m_n_instant_drop_cols = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
-
-    cfg->m_current_row_version = mach_read_from_4(ptr);
-    ptr += sizeof(uint32_t);
-  }
-
   return (err);
 }
 
 /** Read tablespace flags and compression type info from @<tablespace@>.cfg
 file.
-@param[in]      file    File to read from
-@param[in]      thd     session
-@param[in,out]  cfg     meta data
+@param[in]	file	File to read from
+@param[in]	thd	session
+@param[in,out]	cfg	meta data
 @return DB_SUCCESS or error code. */
 [[nodiscard]] static MY_ATTRIBUTE((nonnull)) dberr_t
     row_import_read_v2(FILE *file, THD *thd, row_import *cfg) {
@@ -4029,8 +3296,8 @@ file.
 
   /* Read the tablespace flags */
   if (fread(value, 1, sizeof(value), file) != sizeof(value)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading meta-data tablespace flags.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading meta-data tablespace flags.");
 
     return DB_IO_ERROR;
   }
@@ -4042,8 +3309,8 @@ file.
   if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V6) {
     /* Read the compression type info. */
     if (fread(value, 1, sizeof(uint8_t), file) != sizeof(uint8_t)) {
-      ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                           "while reading compression type info.");
+      ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                  strerror(errno), "while reading compression type info.");
 
       return DB_IO_ERROR;
     }
@@ -4060,17 +3327,14 @@ file.
 }
 
 /** Read the contents of the @<tablespace@>.cfg file
-@param[in]      table_def Table definition
-@param[in]      file    file to read from
-@param[in]      thd     session
-@param[in,out]  cfg     meta data
+@param[in]	file	File to read from
+@param[in]	thd	session
+@param[in,out]	cfg	meta data
 @return DB_SUCCESS or error code. */
 [[nodiscard]] static MY_ATTRIBUTE((nonnull)) dberr_t
-    row_import_read_common(dd::Table *table_def, FILE *file, THD *thd,
-                           row_import *cfg) {
+    row_import_read_common(FILE *file, THD *thd, row_import *cfg) {
   dberr_t err;
-  if ((err = row_import_read_columns(table_def, file, thd, cfg)) !=
-      DB_SUCCESS) {
+  if ((err = row_import_read_columns(file, thd, cfg)) != DB_SUCCESS) {
     return (err);
 
   } else if ((err = row_import_read_indexes(file, thd, cfg)) != DB_SUCCESS) {
@@ -4083,25 +3347,22 @@ file.
 
 /**
 Read the contents of the @<tablespace@>.cfg file.
-@param[in]      table           dict table
-@param[in]      table_def       Table definition
-@param[in]      file            File to read from
-@param[in]      thd             session
-@param[out]     cfg             contents of the .cfg file
 @return DB_SUCCESS or error code. */
-[[nodiscard]] static dberr_t row_import_read_meta_data(dict_table_t *table,
-                                                       dd::Table *table_def,
-                                                       FILE *file, THD *thd,
-                                                       row_import &cfg) {
-  byte row[sizeof(uint32_t)];
+[[nodiscard]] static dberr_t row_import_read_meta_data(
+    dict_table_t *table, /*!< in: table */
+    FILE *file,          /*!< in: File to read from */
+    THD *thd,            /*!< in: session */
+    row_import &cfg)     /*!< out: contents of the .cfg file */
+{
+  byte row[sizeof(ib_uint32_t)];
 
   /* Trigger EOF */
   DBUG_EXECUTE_IF("ib_import_io_read_error_9",
                   (void)fseek(file, 0L, SEEK_END););
 
   if (fread(&row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading meta-data version.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading meta-data version.");
 
     return (DB_IO_ERROR);
   }
@@ -4114,7 +3375,7 @@ Read the contents of the @<tablespace@>.cfg file.
     case IB_EXPORT_CFG_VERSION_V1:
       err = row_import_read_v1(file, thd, &cfg);
       if (err == DB_SUCCESS) {
-        err = row_import_read_common(table_def, file, thd, &cfg);
+        err = row_import_read_common(file, thd, &cfg);
       }
       return (err);
 
@@ -4123,7 +3384,6 @@ Read the contents of the @<tablespace@>.cfg file.
     case IB_EXPORT_CFG_VERSION_V4:
     case IB_EXPORT_CFG_VERSION_V5:
     case IB_EXPORT_CFG_VERSION_V6:
-    case IB_EXPORT_CFG_VERSION_V7:
       err = row_import_read_v1(file, thd, &cfg);
 
       if (err == DB_SUCCESS) {
@@ -4131,7 +3391,7 @@ Read the contents of the @<tablespace@>.cfg file.
       }
 
       if (err == DB_SUCCESS) {
-        err = row_import_read_common(table_def, file, thd, &cfg);
+        err = row_import_read_common(file, thd, &cfg);
       }
       return (err);
     default:
@@ -4144,10 +3404,10 @@ Read the contents of the @<tablespace@>.cfg file.
 
 /**
 Read the contents of the @<tablename@>.cfg file.
-@param[in]      table           table
-@param[in]      table_def       dd table
-@param[in]      thd             session
-@param[in,out]  cfg             contents of the .cfg file
+@param[in]	table		table
+@param[in]	table_def	dd table
+@param[in]	thd		session
+@param[in,out]	cfg		contents of the .cfg file
 @return DB_SUCCESS or error code. */
 [[nodiscard]] static dberr_t row_import_read_cfg(dict_table_t *table,
                                                  dd::Table *table_def, THD *thd,
@@ -4164,12 +3424,15 @@ Read the contents of the @<tablename@>.cfg file.
   FILE *file = fopen(name, "rb");
 
   if (file == nullptr) {
-    std::ostringstream msg;
-    msg << "Error opening '" << name
-        << "', will attempt to import without schema verification";
+    char msg[BUFSIZ];
+
+    snprintf(msg, sizeof(msg),
+             "Error opening '%s', will attempt to import"
+             " without schema verification",
+             name);
 
     ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_READ_ERROR, errno,
-                strerror(errno), msg.str().c_str());
+                strerror(errno), msg);
 
     cfg.m_missing = true;
 
@@ -4177,7 +3440,7 @@ Read the contents of the @<tablename@>.cfg file.
   } else {
     cfg.m_missing = false;
 
-    err = row_import_read_meta_data(table, table_def, file, thd, cfg);
+    err = row_import_read_meta_data(table, file, thd, cfg);
     fclose(file);
   }
 
@@ -4185,13 +3448,13 @@ Read the contents of the @<tablename@>.cfg file.
 }
 
 /** Read the contents of the .cfp file.
-@param[out]     cfg             the encryption key will be stored to it
-@param[in]      file            file to read from
-@param[in]      thd             session
+@param[in]	table		table
+@param[in]	file		file to read from
+@param[in]	thd		session
 @return DB_SUCCESS or error code. */
-static dberr_t row_import_read_encryption_data(row_import &cfg, FILE *file,
+static dberr_t row_import_read_encryption_data(dict_table_t *table, FILE *file,
                                                THD *thd) {
-  byte row[sizeof(uint32_t)];
+  byte row[sizeof(ib_uint32_t)];
   ulint key_size;
   byte transfer_key[Encryption::KEY_LEN];
   byte encryption_key[Encryption::KEY_LEN];
@@ -4199,16 +3462,16 @@ static dberr_t row_import_read_encryption_data(row_import &cfg, FILE *file,
   lint elen;
 
   if (fread(&row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while reading encrypton key size.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while reading encrypton key size.");
 
     return (DB_IO_ERROR);
   }
 
   key_size = mach_read_from_4(row);
   if (key_size != Encryption::KEY_LEN) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while parsing encryption key size.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while parsing encryption key size.");
 
     return (DB_IO_ERROR);
   }
@@ -4239,37 +3502,48 @@ static dberr_t row_import_read_encryption_data(row_import &cfg, FILE *file,
 
     return (DB_IO_ERROR);
   }
+
+  lint old_size = mem_heap_get_size(table->heap);
+
+  table->encryption_key =
+      static_cast<byte *>(mem_heap_alloc(table->heap, Encryption::KEY_LEN));
+
+  table->encryption_iv =
+      static_cast<byte *>(mem_heap_alloc(table->heap, Encryption::KEY_LEN));
+
+  lint new_size = mem_heap_get_size(table->heap);
+  dict_sys->size += new_size - old_size;
+
   /* Decrypt tablespace key and iv. */
   elen = my_aes_decrypt(encryption_key, Encryption::KEY_LEN,
-                        cfg.m_encryption_metadata.m_key, transfer_key,
+                        table->encryption_key, transfer_key,
                         Encryption::KEY_LEN, my_aes_256_ecb, nullptr, false);
 
   if (elen == MY_AES_BAD_DATA) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR,
-                         "while decrypt encryption key.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while decrypt encryption key.");
 
     return (DB_IO_ERROR);
   }
 
   elen = my_aes_decrypt(encryption_iv, Encryption::KEY_LEN,
-                        cfg.m_encryption_metadata.m_iv, transfer_key,
-                        Encryption::KEY_LEN, my_aes_256_ecb, nullptr, false);
+                        table->encryption_iv, transfer_key, Encryption::KEY_LEN,
+                        my_aes_256_ecb, nullptr, false);
 
   if (elen == MY_AES_BAD_DATA) {
-    ib::send_errno_error(thd, ER_IO_READ_ERROR, "while decrypt encryption iv.");
+    ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
+                strerror(errno), "while decrypt encryption iv.");
 
     return (DB_IO_ERROR);
   }
-  cfg.m_encryption_metadata.m_type = Encryption::Type::AES;
-  cfg.m_encryption_metadata.m_key_len = Encryption::KEY_LEN;
 
   return (DB_SUCCESS);
 }
 
 /** Read the contents of the .cfp file.
-@param[in]      table           table
-@param[in]      thd             session
-@param[in,out]  import          meta data
+@param[in]	table		table
+@param[in]	thd		session
+@param[in,out]	import		meta data
 @return DB_SUCCESS or error code. */
 static dberr_t row_import_read_cfp(dict_table_t *table, THD *thd,
                                    row_import &import) {
@@ -4277,7 +3551,8 @@ static dberr_t row_import_read_cfp(dict_table_t *table, THD *thd,
   char name[OS_FILE_MAX_PATH];
 
   /* Clear table encryption information. */
-  import.m_encryption_metadata.m_type = Encryption::Type::NONE;
+  table->encryption_key = nullptr;
+  table->encryption_iv = nullptr;
 
   srv_get_encryption_data_filename(table, name, sizeof(name));
 
@@ -4287,7 +3562,7 @@ static dberr_t row_import_read_cfp(dict_table_t *table, THD *thd,
 
   if (file != nullptr) {
     import.m_cfp_missing = false;
-    err = row_import_read_encryption_data(import, file, thd);
+    err = row_import_read_encryption_data(table, file, thd);
     fclose(file);
   } else {
     /* If there's no cfp file, we assume it's not an
@@ -4301,9 +3576,9 @@ static dberr_t row_import_read_cfp(dict_table_t *table, THD *thd,
 /** Check the correctness of clustered index of imported table.
 Once there is corruption found, the IMPORT would be refused. This can
 help to detect the missing .cfg file for a table with instant added columns.
-@param[in,out]  table           InnoDB table object
-@param[in,out]  thd             MySQL session variable
-@param[in]      missing         true if .cfg file is missing
+@param[in,out]	table		InnoDB table object
+@param[in,out]	thd		MySQL session variable
+@param[in]	missing		true if .cfg file is missing
 @return DB_SUCCESS or error code. */
 dberr_t row_import_check_corruption(dict_table_t *table, THD *thd,
                                     bool missing) {
@@ -4328,19 +3603,19 @@ dberr_t row_import_check_corruption(dict_table_t *table, THD *thd,
 
 /** Imports a tablespace. The space id in the .ibd file must match the space id
 of the table in the data dictionary.
-@param[in]      table           table
-@param[in]      table_def       dd table
-@param[in]      prebuilt        prebuilt struct in MySQL
+@param[in]	table		table
+@param[in]	table_def	dd table
+@param[in]	prebuilt	prebuilt struct in MySQL
 @return error code or DB_SUCCESS */
 dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
                              row_prebuilt_t *prebuilt) {
   dberr_t err;
   trx_t *trx;
-  uint64_t autoinc = 0;
+  ib_uint64_t autoinc = 0;
   char *filepath = nullptr;
 
   /* The caller assured that this is not read_only_mode and that no
-  temporary tablespace is being imported. */
+  temorary tablespace is being imported. */
   ut_ad(!srv_read_only_mode);
   ut_ad(!table->is_temporary());
 
@@ -4350,14 +3625,14 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
 
   ibuf_delete_for_discarded_space(table->space);
 
-  trx_start_if_not_started(prebuilt->trx, true, UT_LOCATION_HERE);
+  trx_start_if_not_started(prebuilt->trx, true);
 
   trx = trx_allocate_for_mysql();
 
   /* So that the table is not DROPped during recovery. */
   trx_set_dict_operation(trx, TRX_DICT_OP_INDEX);
 
-  trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
+  trx_start_if_not_started(trx, true);
 
   /* So that we can send error messages to the user. */
   trx->mysql_thd = prebuilt->trx->mysql_thd;
@@ -4386,9 +3661,9 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   prebuilt->trx->op_info = "read meta-data file";
 
   /* Prevent DDL operations while we are checking. */
-  rw_lock_s_lock_func(dict_operation_lock, 0, UT_LOCATION_HERE);
+  rw_lock_s_lock_func(dict_operation_lock, 0, __FILE__, __LINE__);
 
-  row_import cfg{};
+  row_import cfg;
   ulint space_flags = 0;
 
   /* Read CFP file */
@@ -4412,7 +3687,8 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
       return (row_import_error(prebuilt, trx, err));
     } else {
       /* If CFP file is read, encryption_key must have been populted. */
-      ut_ad(cfg.m_encryption_metadata.can_encrypt());
+      ut_ad(table->encryption_key != nullptr &&
+            table->encryption_iv != nullptr);
     }
   }
 
@@ -4464,16 +3740,9 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
     FetchIndexRootPages fetchIndexRootPages(table, trx);
 
     err = fil_tablespace_iterate(
-        cfg.m_encryption_metadata, table,
+        table,
         IO_BUFFER_SIZE(cfg.m_page_size.physical(), cfg.m_page_size.physical()),
         cfg.m_compression_type, fetchIndexRootPages);
-
-    if (err == DB_SCHEMA_MISMATCH) {
-      ib_errf(trx->mysql_thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-              "CFG file is missing and source table is found to have row "
-              "versions. CFG file is must to IMPORT tables with row versions.");
-      return (row_import_cleanup(prebuilt, trx, err));
-    }
 
     if (err == DB_SUCCESS) {
       err = fetchIndexRootPages.build_row_import(&cfg);
@@ -4530,16 +3799,9 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   /* Set the IO buffer size in pages. */
 
   err = fil_tablespace_iterate(
-      cfg.m_encryption_metadata, table,
+      table,
       IO_BUFFER_SIZE(cfg.m_page_size.physical(), cfg.m_page_size.physical()),
       cfg.m_compression_type, converter);
-
-  if (err == DB_SCHEMA_MISMATCH) {
-    ib_errf(trx->mysql_thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-            "CFG file is missing and source table is found to have row "
-            "versions. CFG file is must to IMPORT tables with row versions.");
-    return (row_import_cleanup(prebuilt, trx, err));
-  }
 
   DBUG_EXECUTE_IF("ib_import_reset_space_and_lsn_failure",
                   err = DB_TOO_MANY_CONCURRENT_TRXS;);
@@ -4562,9 +3824,9 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
     return (row_import_cleanup(prebuilt, trx, err));
   }
 
-  row_mysql_lock_data_dictionary(trx, UT_LOCATION_HERE);
+  row_mysql_lock_data_dictionary(trx);
 
-  if (table->has_instant_cols() || table->has_row_versions()) {
+  if (table->has_instant_cols()) {
     dd_import_instant_add_columns(table, table_def);
   }
 
@@ -4596,7 +3858,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   fil_space_set_imported() to declare it a persistent tablespace. */
 
   uint32_t fsp_flags = dict_tf_to_fsp_flags(table->flags);
-  if (cfg.m_encryption_metadata.can_encrypt()) {
+  if (table->encryption_key != nullptr) {
     fsp_flags_set_encryption(fsp_flags);
   }
 
@@ -4622,10 +3884,8 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
 
   /* For encrypted tablespace, set encryption information. */
   if (FSP_FLAGS_GET_ENCRYPTION(fsp_flags)) {
-    ut_ad(cfg.m_encryption_metadata.can_encrypt());
-    err = fil_set_encryption(table->space, cfg.m_encryption_metadata.m_type,
-                             cfg.m_encryption_metadata.m_key,
-                             cfg.m_encryption_metadata.m_iv);
+    err = fil_set_encryption(table->space, Encryption::AES,
+                             table->encryption_key, table->encryption_iv);
   }
 
   const char *compression_algorithm =
@@ -4713,7 +3973,8 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   /* For secondary indexes, purge any records that couldn't be purged
   during the page conversion phase. */
 
-  err = row_import_adjust_root_pages_of_secondary_indexes(trx, table, cfg);
+  err = row_import_adjust_root_pages_of_secondary_indexes(prebuilt, trx, table,
+                                                          cfg);
 
   DBUG_EXECUTE_IF("ib_import_sec_root_adjust_failure", err = DB_CORRUPTION;);
 
@@ -4772,7 +4033,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   mtr.start();
   buf_block_t *block =
       buf_page_get(page_id_t(table->space, 0), dict_table_page_size(table),
-                   RW_SX_LATCH, UT_LOCATION_HERE, &mtr);
+                   RW_SX_LATCH, &mtr);
 
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -4818,7 +4079,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
   /* The dictionary latches will be released in in row_import_cleanup()
   after the transaction commit, for both success and error. */
 
-  row_mysql_lock_data_dictionary(trx, UT_LOCATION_HERE);
+  row_mysql_lock_data_dictionary(trx);
 
   DBUG_EXECUTE_IF("ib_import_internal_error", trx->error_state = DB_ERROR;
                   err = DB_ERROR;
@@ -4855,7 +4116,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
 
   err = row_import_check_corruption(table, trx->mysql_thd, cfg.m_missing);
 
-  row_mysql_lock_data_dictionary(trx, UT_LOCATION_HERE);
+  row_mysql_lock_data_dictionary(trx);
 
   return (row_import_cleanup(prebuilt, trx, err));
 }

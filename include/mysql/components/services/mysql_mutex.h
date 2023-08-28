@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@
 
 extern REQUIRES_MYSQL_MUTEX_SERVICE_PLACEHOLDER;
 
-#define MYSQL_MUTEX_CALL(M) SERVICE_PLACEHOLDER(mysql_mutex_v1)->M
+#define MYSQL_MUTEX_CALL(M) mysql_service_mysql_mutex_v1->M
 
 #define mysql_mutex_register(P1, P2, P3) \
   MYSQL_MUTEX_CALL(register_info)(P1, P2, P3)

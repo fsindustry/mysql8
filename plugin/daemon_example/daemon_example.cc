@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,7 +38,6 @@
 #include "my_thread.h"
 #include "mysql/psi/mysql_memory.h"
 #include "sql/sql_plugin.h"  // st_plugin_int
-#include "template_utils.h"
 
 PSI_memory_key key_memory_mysql_heartbeat_context;
 
@@ -111,7 +110,7 @@ static int daemon_example_plugin_init(void *p) {
   my_thread_attr_t attr; /* Thread attributes */
   char heartbeat_filename[FN_REFLEN];
   char buffer[HEART_STRING_BUFFER];
-  const time_t result = time(nullptr);
+  time_t result = time(nullptr);
   struct tm tm_tmp;
 
   struct st_plugin_int *plugin = (struct st_plugin_int *)p;
@@ -168,7 +167,7 @@ static int daemon_example_plugin_deinit(void *p) {
   struct st_plugin_int *plugin = (struct st_plugin_int *)p;
   struct mysql_heartbeat_context *con =
       (struct mysql_heartbeat_context *)plugin->data;
-  const time_t result = time(nullptr);
+  time_t result = time(nullptr);
   struct tm tm_tmp;
   void *dummy_retval;
 

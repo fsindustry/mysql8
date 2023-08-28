@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,10 +30,9 @@
 
 #include "client/check/mysqlcheck.h"
 #include "client/client_priv.h"
-#include "m_string.h"
+#include "m_ctype.h"
 #include "my_default.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 
 using namespace Mysql::Tools::Check;
 
@@ -270,6 +269,7 @@ static void print_result() {
   MYSQL_ROW row;
   char prev[NAME_LEN * 3 + 2];
   char prev_alter[MAX_ALTER_STR_SIZE];
+  uint i;
   size_t dot_pos;
   bool found_error = false, table_rebuild = false;
 
@@ -279,9 +279,9 @@ static void print_result() {
   prev[0] = '\0';
   prev_alter[0] = 0;
 
-  while ((row = mysql_fetch_row(res))) {
-    const int changed = strcmp(prev, row[0]);
-    const bool status = !strcmp(row[2], "status");
+  for (i = 0; (row = mysql_fetch_row(res)); i++) {
+    int changed = strcmp(prev, row[0]);
+    bool status = !strcmp(row[2], "status");
 
     if (status) {
       /*
@@ -355,18 +355,15 @@ static void print_result() {
   mysql_free_result(res);
 }
 
-namespace Mysql::Tools::Check {
-
-void mysql_check(MYSQL *connection, int what_to_do, bool opt_alldbs,
-                 bool opt_check_only_changed, bool opt_extended,
-                 bool opt_databases, bool opt_fast, bool opt_medium_check,
-                 bool opt_quick, bool opt_all_in_1, bool opt_silent,
-                 bool opt_auto_repair, bool ignore_errors, bool opt_frm,
-                 bool opt_fix_table_names, bool opt_fix_db_names,
-                 bool opt_upgrade, bool opt_write_binlog, uint verbose,
-                 std::string opt_skip_database,
-                 std::vector<std::string> arguments,
-                 void (*dberror)(MYSQL *mysql, const std::string &when)) {
+void Mysql::Tools::Check::mysql_check(
+    MYSQL *connection, int what_to_do, bool opt_alldbs,
+    bool opt_check_only_changed, bool opt_extended, bool opt_databases,
+    bool opt_fast, bool opt_medium_check, bool opt_quick, bool opt_all_in_1,
+    bool opt_silent, bool opt_auto_repair, bool ignore_errors, bool opt_frm,
+    bool opt_fix_table_names, bool opt_fix_db_names, bool opt_upgrade,
+    bool opt_write_binlog, uint verbose, std::string opt_skip_database,
+    std::vector<std::string> arguments,
+    void (*dberror)(MYSQL *mysql, const std::string &when)) {
   ::sock = connection;
   ::what_to_do = what_to_do;
   ::opt_alldbs = opt_alldbs;
@@ -422,8 +419,6 @@ void mysql_check(MYSQL *connection, int what_to_do, bool opt_alldbs,
     }
   }
 }
-
-}  // namespace Mysql::Tools::Check
 
 Program::Program()
     : m_what_to_do(0),

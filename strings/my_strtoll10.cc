@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,14 +25,14 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "mysql/strings/my_strtoll10.h"
+#include <limits.h>
+#include <sys/types.h>
 
-#include <climits>
-#include <cstdint>
-
+#include "m_string.h"  // IWYU pragma: keep
+#include "my_inttypes.h"
 #include "my_sys.h" /* Needed for MY_ERRNO_ERANGE */
 
-#define MAX_NEGATIVE_NUMBER ((unsigned long long)0x8000000000000000LL)
+#define MAX_NEGATIVE_NUMBER ((ulonglong)0x8000000000000000LL)
 #define INIT_CNT 9
 #define LFACTOR 1000000000ULL
 #define LFACTOR1 10000000000ULL
@@ -44,7 +44,7 @@ static unsigned long lfactor[9] = {
 /*
   Convert a string to an to unsigned long long integer value
 
-  SYNOPSIS
+  SYNOPSYS
     my_strtoll10()
       nptr     in       pointer to the string to be converted
       endptr   in/out   pointer to the end of the string/
@@ -64,7 +64,7 @@ static unsigned long lfactor[9] = {
     will not read characters after *endptr.
 
   RETURN VALUES
-    Value of string as a signed/unsigned long long integer
+    Value of string as a signed/unsigned longlong integer
 
     if no error and endptr != NULL, it will be set to point at the character
     after the number
@@ -83,16 +83,14 @@ static unsigned long lfactor[9] = {
     the stop character here.
 */
 
-long long my_strtoll10(const char *nptr, const char **endptr, int *error) {
+longlong my_strtoll10(const char *nptr, const char **endptr, int *error) {
   const char *s, *end, *start, *n_end, *true_end;
   const char *dummy;
-  uint8_t c = 0;
+  uchar c;
   unsigned long i, j, k;
-  unsigned long long li = 0;
+  ulonglong li;
   int negative;
-  unsigned long cutoff = 0;
-  unsigned long cutoff2 = 0;
-  unsigned long cutoff3 = 0;
+  ulong cutoff, cutoff2, cutoff3;
 
   s = nptr;
   /* If fixed length string */
@@ -177,36 +175,36 @@ long long my_strtoll10(const char *nptr, const char **endptr, int *error) {
   if (i > cutoff ||
       (i == cutoff && (j > cutoff2 || (j == cutoff2 && k > cutoff3))))
     goto overflow;
-  li = i * LFACTOR2 + (unsigned long long)j * 100 + k;
-  return (long long)li;
+  li = i * LFACTOR2 + (ulonglong)j * 100 + k;
+  return (longlong)li;
 
 overflow: /* *endptr is set here */
   *error = MY_ERRNO_ERANGE;
-  return negative ? LLONG_MIN : (long long)ULLONG_MAX;
+  return negative ? LLONG_MIN : (longlong)ULLONG_MAX;
 
 end_i:
   *endptr = s;
-  return (negative ? ((long long)-(long)i) : (long long)i);
+  return (negative ? ((longlong) - (long)i) : (longlong)i);
 
 end_i_and_j:
-  li = (unsigned long long)i * lfactor[(unsigned)(s - start)] + j;
+  li = (ulonglong)i * lfactor[(uint)(s - start)] + j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end3:
-  li = (unsigned long long)i * LFACTOR + (unsigned long long)j;
+  li = (ulonglong)i * LFACTOR + (ulonglong)j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end4:
-  li = (unsigned long long)i * LFACTOR1 + (unsigned long long)j * 10 + k;
+  li = (ulonglong)i * LFACTOR1 + (ulonglong)j * 10 + k;
   *endptr = s;
   if (negative) {
     if (li > MAX_NEGATIVE_NUMBER) goto overflow;
     if (li == MAX_NEGATIVE_NUMBER) return LLONG_MIN;
-    return -((long long)li);
+    return -((longlong)li);
   }
-  return (long long)li;
+  return (longlong)li;
 
 no_conv:
   /* There was no number to convert.  */

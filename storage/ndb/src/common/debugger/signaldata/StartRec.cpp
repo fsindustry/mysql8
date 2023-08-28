@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,16 +22,17 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+
 #include <RefConvert.hpp>
 #include <signaldata/StartRec.hpp>
 #include <signaldata/StartFragReq.hpp>
 
-bool printSTART_REC_REQ(FILE *output,
-                        const Uint32 *theData,
-                        Uint32 len,
-                        Uint16 /*recBlockNo*/)
-{
-  const StartRecReq *sig = (const StartRecReq *)theData;
+bool
+printSTART_REC_REQ(FILE * output, 
+		  const Uint32 * theData, 
+		  Uint32 len, 
+		  Uint16 recBlockNo){
+  StartRecReq * sig = (StartRecReq *) theData;
 
   if (len != StartRecReq::SignalLength)
     return false;
@@ -64,12 +65,12 @@ bool printSTART_REC_REQ(FILE *output,
   return true;
 }
 
-bool printSTART_REC_CONF(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*recBlockNo*/)
-{
-  const StartRecConf *sig = (const StartRecConf *)theData;
+bool
+printSTART_REC_CONF(FILE * output, 
+		    const Uint32 * theData, 
+		    Uint32 len, 
+		    Uint16 recBlockNo){
+  StartRecConf * sig = (StartRecConf *) theData;
 
   if (len != StartRecConf::SignalLength)
     return false;
@@ -81,12 +82,13 @@ bool printSTART_REC_CONF(FILE *output,
   return true;
 }
 
-bool printSTART_FRAG_REQ(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*recBlockNo*/)
+bool 
+printSTART_FRAG_REQ(FILE * output, 
+		    const Uint32 * theData, 
+		    Uint32 len, 
+		    Uint16 recBlockNo)
 {
-  const StartFragReq *sig = (const StartFragReq *)theData;
+  StartFragReq* sig = (StartFragReq*)theData;
 
   fprintf(output, " table: %d frag: %d lcpId: %d lcpNo: %d #nodes: %d"
                   ", reqinfo: %x \n",

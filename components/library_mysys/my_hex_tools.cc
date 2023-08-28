@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -93,14 +93,14 @@ unsigned long unhex_string(const char *first, const char *last, char *output) {
   char *output0 = output;
 
   if (length % 2) {
-    const int hex_char = lookup_unhex_low[static_cast<unsigned char>(*first++)];
+    int hex_char = lookup_unhex_low[static_cast<unsigned char>(*first++)];
     if (hex_char > 255) return 0;
     *output++ = static_cast<char>(hex_char);
   }
 
   for (const char *p = first; p != last; p += 2) {
-    const int hex_char = lookup_unhex_high[static_cast<unsigned char>(p[0])] |
-                         lookup_unhex_low[static_cast<unsigned char>(p[1])];
+    int hex_char = lookup_unhex_high[static_cast<unsigned char>(p[0])] |
+                   lookup_unhex_low[static_cast<unsigned char>(p[1])];
     if (hex_char > 255) return 0;
     *output++ = static_cast<char>(hex_char);
   }

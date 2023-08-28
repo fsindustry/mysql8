@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,8 +35,8 @@
 #include "my_base.h"
 
 #include "my_psi_config.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
-#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "sql/handler.h"
 #include "sql/sql_base.h"
@@ -363,8 +363,8 @@ bool Table_cache::add_used_table(THD *thd, TABLE *table) {
       Allocate new Table_cache_element object and add it to the cache
       and array in TABLE_SHARE.
     */
-    const std::string key(table->s->table_cache_key.str,
-                          table->s->table_cache_key.length);
+    std::string key(table->s->table_cache_key.str,
+                    table->s->table_cache_key.length);
     assert(m_cache.count(key) == 0);
 
     el = new Table_cache_element(table->s);
@@ -409,8 +409,8 @@ void Table_cache::remove_table(TABLE *table) {
   m_table_count--;
 
   if (el->used_tables.is_empty() && el->free_tables.is_empty()) {
-    const std::string key(table->s->table_cache_key.str,
-                          table->s->table_cache_key.length);
+    std::string key(table->s->table_cache_key.str,
+                    table->s->table_cache_key.length);
     m_cache.erase(key);
     /*
       Remove reference to deleted cache element from array
@@ -449,7 +449,7 @@ TABLE *Table_cache::get_table(THD *thd, const char *key, size_t key_length,
 
   *share = nullptr;
 
-  const std::string key_str(key, key_length);
+  std::string key_str(key, key_length);
   const auto el_it = m_cache.find(key_str);
   if (el_it == m_cache.end()) return nullptr;
   Table_cache_element *el = el_it->second.get();

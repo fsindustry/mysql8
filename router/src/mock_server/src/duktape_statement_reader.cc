@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -224,9 +224,8 @@ class DukHeap {
     duk_module_shim_init(context(), module_prefixes);
   }
 
-  void prepare(
-      std::string filename,
-      std::map<std::string, std::function<std::string()>> &session_data) {
+  void prepare(std::string filename,
+               const std::map<std::string, std::string> &session_data) {
     auto ctx = context();
     duk_push_global_stash(ctx);
     if (nullptr == shared_.get()) {
@@ -291,7 +290,7 @@ class DukHeap {
   }
 
   void prepare_mysqld_object(
-      const std::map<std::string, std::function<std::string()>> &session_data) {
+      const std::map<std::string, std::string> &session_data) {
     auto ctx = context();
     // mysqld = {
     //   session: {
@@ -304,9 +303,8 @@ class DukHeap {
     duk_push_object(ctx);
 
     // map of string and json-string
-    for (const auto &el : session_data) {
-      const std::string val = el.second();
-      duk_push_lstring(ctx, val.data(), val.size());
+    for (auto &el : session_data) {
+      duk_push_lstring(ctx, el.second.data(), el.second.size());
       duk_json_decode(ctx, -1);
       duk_put_prop_lstring(ctx, -2, el.first.data(), el.first.size());
     }
@@ -406,7 +404,7 @@ class DukHeapPool {
 
   std::unique_ptr<DukHeap> get(
       const std::string &filename, std::vector<std::string> module_prefixes,
-      std::map<std::string, std::function<std::string()>> session_data,
+      std::map<std::string, std::string> session_data,
       std::shared_ptr<MockServerGlobalScope> shared_globals) {
     {
       std::lock_guard<std::mutex> lock(pool_mtx_);
@@ -511,9 +509,9 @@ struct DuktapeStatementReader::Pimpl {
       throw std::runtime_error("expect an object");
     }
 
-    return {get_object_integer_value<uint32_t>(-1, "affected_rows", 0),
-            get_object_integer_value<uint32_t>(-1, "last_insert_id", 0),
-            get_object_integer_value<uint16_t>(-1, "status", 0),
+    return {0,  // affected_rows
+            get_object_integer_value<uint16_t>(-1, "last_insert_id", 0),
+            0,  // status
             get_object_integer_value<uint16_t>(-1, "warning_count", 0)};
   }
 
@@ -583,7 +581,7 @@ struct DuktapeStatementReader::Pimpl {
         duk_enum(ctx, -1, DUK_ENUM_ARRAY_INDICES_ONLY);
         while (duk_next(ctx, -1, 1)) {
           if (duk_is_null(ctx, -1)) {
-            row_values.emplace_back(std::nullopt);
+            row_values.emplace_back(stdx::make_unexpected());
           } else {
             row_values.emplace_back(duk_to_string(ctx, -1));
           }
@@ -751,47 +749,37 @@ static bool check_notices_section(duk_context *ctx) {
   return has_notices;
 }
 
-static void check_handshake_greeting_exectime(duk_context *ctx) {
-  if (duk_is_number(ctx, -1) != 0 || duk_is_undefined(ctx, -1) != 0) {
-    return;
-  }
-
-  throw std::runtime_error("exec_time must be a number, if set. Is " +
-                           duk_get_type_names(ctx, -1));
-}
-
-static void check_handshake_object(duk_context *ctx) {
-  duk_get_prop_string(ctx, -1, "greeting");
-  if (duk_is_object(ctx, -1)) {
-    duk_get_prop_string(ctx, -1, "exec_time");
-    check_handshake_greeting_exectime(ctx);
-    duk_pop(ctx);
-  } else if (duk_is_undefined(ctx, -1)) {
-    // ok
-  } else {
-    throw std::runtime_error(
-        "handshake.greeting must be an object, if set. Is " +
-        duk_get_type_names(ctx, -1));
-  }
-  duk_pop(ctx);
-}
-
 static void check_handshake_section(duk_context *ctx) {
   duk_get_prop_string(ctx, -1, "handshake");
-  if (duk_is_object(ctx, -1) != 0) {
-    check_handshake_object(ctx);
-  } else if (duk_is_callable(ctx, -1) != 0 || duk_is_undefined(ctx, -1) != 0) {
-    // ok
-  } else {
-    throw std::runtime_error("handshake must be an object, if set. Is " +
-                             duk_get_type_names(ctx, -1));
+  if (!duk_is_undefined(ctx, -1)) {
+    if (!duk_is_object(ctx, -1)) {
+      throw std::runtime_error("handshake must be an object, if set. Is " +
+                               duk_get_type_names(ctx, -1));
+    }
+    duk_get_prop_string(ctx, -1, "greeting");
+    if (!duk_is_undefined(ctx, -1)) {
+      if (!duk_is_object(ctx, -1)) {
+        throw std::runtime_error(
+            "handshake.greeting must be an object, if set. Is " +
+            duk_get_type_names(ctx, -1));
+      }
+      duk_get_prop_string(ctx, -1, "exec_time");
+      if (!duk_is_undefined(ctx, -1)) {
+        if (!duk_is_number(ctx, -1)) {
+          throw std::runtime_error("exec_time must be a number, if set. Is " +
+                                   duk_get_type_names(ctx, -1));
+        }
+      }
+      duk_pop(ctx);
+    }
+    duk_pop(ctx);
   }
   duk_pop(ctx);
 }
 
 DuktapeStatementReader::DuktapeStatementReader(
     std::string filename, std::vector<std::string> module_prefixes,
-    std::map<std::string, std::function<std::string()>> session_data,
+    std::map<std::string, std::string> session_data,
     std::shared_ptr<MockServerGlobalScope> shared_globals)
     : pimpl_{std::make_unique<Pimpl>(DukHeapPool::instance()->get(
           std::move(filename), std::move(module_prefixes), session_data,
@@ -812,7 +800,10 @@ DuktapeStatementReader::~DuktapeStatementReader() {
   DukHeapPool::instance()->release(std::move(pimpl_->heap_));
 }
 
-static classic_protocol::message::server::Greeting default_server_greeting() {
+stdx::expected<classic_protocol::message::server::Greeting, std::error_code>
+DuktapeStatementReader::server_greeting(bool with_tls) {
+  auto *ctx = pimpl_->ctx;
+
   // defaults
   std::string server_version = "8.0.23-mock";
   uint32_t connection_id = 0;
@@ -824,7 +815,7 @@ static classic_protocol::message::server::Greeting default_server_greeting() {
       classic_protocol::capabilities::no_schema |
       // compress (not yet)
       classic_protocol::capabilities::odbc |
-      classic_protocol::capabilities::local_files |
+      // local_files (never)
       // ignore_space (client only)
       classic_protocol::capabilities::protocol_41 |
       // interactive (client-only)
@@ -833,24 +824,59 @@ static classic_protocol::message::server::Greeting default_server_greeting() {
       classic_protocol::capabilities::transactions |
       classic_protocol::capabilities::secure_connection |
       // multi_statements (not yet)
-      classic_protocol::capabilities::multi_results |
-      classic_protocol::capabilities::ps_multi_results |
+      // multi_results (not yet)
+      // ps_multi_results (not yet)
       classic_protocol::capabilities::plugin_auth |
       classic_protocol::capabilities::connect_attributes |
-      classic_protocol::capabilities::client_auth_method_data_varint |
+      // client_auth_method_data_varint
       classic_protocol::capabilities::expired_passwords |
-      classic_protocol::capabilities::session_track |
+      // session_track (not yet)
       classic_protocol::capabilities::text_result_with_session_tracking
       // optional_resultset_metadata (not yet)
       // compress_zstd (not yet)
       ;
+
+  if (with_tls) {
+    server_capabilities |= classic_protocol::capabilities::ssl;
+  }
 
   uint16_t status_flags = 0;
   uint8_t character_set = 0;
   std::string auth_method = MySQLNativePassword::name;
   std::string nonce = "01234567890123456789";
 
-  return {0x0a,
+  duk_get_prop_string(ctx, -1, "handshake");
+  if (!duk_is_undefined(ctx, -1)) {
+    if (!duk_is_object(ctx, -1)) {
+      throw std::runtime_error("handshake must be an object, if set. Is " +
+                               duk_get_type_names(ctx, -1));
+    }
+    duk_get_prop_string(ctx, -1, "greeting");
+    if (!duk_is_undefined(ctx, -1)) {
+      if (!duk_is_object(ctx, -1)) {
+        throw std::runtime_error(
+            "handshake.greeting must be an object, if set. Is " +
+            duk_get_type_names(ctx, -1));
+      }
+
+      server_version =
+          pimpl_->get_object_string_value(-1, "server_version", server_version);
+      connection_id = pimpl_->get_object_integer_value<uint32_t>(
+          -1, "connection_id", connection_id);
+      status_flags = pimpl_->get_object_integer_value<uint16_t>(
+          -1, "status_flags", status_flags);
+      character_set = pimpl_->get_object_integer_value<uint8_t>(
+          -1, "character_set", character_set);
+      auth_method =
+          pimpl_->get_object_string_value(-1, "auth_method", auth_method);
+      nonce = pimpl_->get_object_string_value(-1, "nonce", nonce);
+    }
+    duk_pop(ctx);
+  }
+  duk_pop(ctx);
+
+  return {std::in_place,
+          0x0a,
           server_version,
           connection_id,
           nonce + std::string(1, '\0'),
@@ -860,106 +886,67 @@ static classic_protocol::message::server::Greeting default_server_greeting() {
           auth_method};
 }
 
-stdx::expected<classic_protocol::message::server::Greeting, std::error_code>
-DuktapeStatementReader::server_greeting() {
-  auto *ctx = pimpl_->ctx;
-
-  auto greeting = default_server_greeting();
-
-  if (duk_is_object(ctx, -1)) {
-    greeting.version(pimpl_->get_object_string_value(-1, "server_version",
-                                                     greeting.version()));
-    greeting.connection_id(pimpl_->get_object_integer_value<uint32_t>(
-        -1, "connection_id", greeting.connection_id()));
-    greeting.status_flags(pimpl_->get_object_integer_value<uint16_t>(
-        -1, "status_flags", greeting.status_flags().to_ulong()));
-    greeting.collation(pimpl_->get_object_integer_value<uint8_t>(
-        -1, "character_set", greeting.collation()));
-    greeting.capabilities(pimpl_->get_object_integer_value<uint32_t>(
-        -1, "capabilities", greeting.capabilities().to_ulong()));
-    greeting.auth_method_name(pimpl_->get_object_string_value(
-        -1, "auth_method", greeting.auth_method_name()));
-    greeting.auth_method_data(pimpl_->get_object_string_value(
-        -1, "nonce", greeting.auth_method_data()));
-  }
-
-  return greeting;
-}
-
 std::chrono::microseconds DuktapeStatementReader::server_greeting_exec_time() {
   std::chrono::microseconds exec_time{};
 
   auto *ctx = pimpl_->ctx;
 
-  if (duk_is_object(ctx, -1)) {
-    duk_get_prop_string(ctx, -1, "exec_time");
+  duk_get_prop_string(ctx, -1, "handshake");
+  if (!duk_is_undefined(ctx, -1)) {
+    if (!duk_is_object(ctx, -1)) {
+      throw std::runtime_error("handshake must be an object, if set. Is " +
+                               duk_get_type_names(ctx, -1));
+    }
+    duk_get_prop_string(ctx, -1, "greeting");
     if (!duk_is_undefined(ctx, -1)) {
-      if (!duk_is_number(ctx, -1)) {
-        throw std::runtime_error("exec_time must be a number, if set. Is " +
-                                 duk_get_type_names(ctx, -1));
-      }
-      if (duk_get_number(ctx, -1) < 0) {
-        throw std::out_of_range("exec_time must be a non-negative number");
+      if (!duk_is_object(ctx, -1)) {
+        throw std::runtime_error(
+            "handshake.greeting must be an object, if set. Is " +
+            duk_get_type_names(ctx, -1));
       }
 
-      // exec_time is written in the tracefile as microseconds
-      exec_time = std::chrono::microseconds(
-          static_cast<long>(duk_get_number(ctx, -1) * 1000));
+      duk_get_prop_string(ctx, -1, "exec_time");
+      if (!duk_is_undefined(ctx, -1)) {
+        if (!duk_is_number(ctx, -1)) {
+          throw std::runtime_error("exec_time must be a number, if set. Is " +
+                                   duk_get_type_names(ctx, -1));
+        }
+        if (duk_get_number(ctx, -1) < 0) {
+          throw std::out_of_range("exec_time must be a non-negative number");
+        }
+
+        // exec_time is written in the tracefile as microseconds
+        exec_time = std::chrono::microseconds(
+            static_cast<long>(duk_get_number(ctx, -1) * 1000));
+      }
+      duk_pop(ctx);
     }
     duk_pop(ctx);
   }
+  duk_pop(ctx);
 
   return exec_time;
 }
 
 stdx::expected<DuktapeStatementReader::handshake_data, ErrorResponse>
-DuktapeStatementReader::handshake(bool is_greeting) {
+DuktapeStatementReader::handshake() {
   auto *ctx = pimpl_->ctx;
 
-  std::optional<ErrorResponse> error;
+  stdx::expected<ErrorResponse, void> error{stdx::make_unexpected()};
 
-  std::optional<std::string> username;
-  std::optional<std::string> password;
+  stdx::expected<std::string, void> username{stdx::make_unexpected()};
+  stdx::expected<std::string, void> password{stdx::make_unexpected()};
   bool cert_required{false};
-  std::optional<std::string> cert_issuer;
-  std::optional<std::string> cert_subject;
-  stdx::expected<classic_protocol::message::server::Greeting, std::error_code>
-      server_greeting_res = default_server_greeting();
-  std::chrono::microseconds exec_time{};
+  stdx::expected<std::string, void> cert_issuer{stdx::make_unexpected()};
+  stdx::expected<std::string, void> cert_subject{stdx::make_unexpected()};
+
   std::error_code ec{};
 
   duk_get_prop_string(ctx, -1, "handshake");
-  if (duk_is_object(ctx, -1) || duk_is_callable(ctx, -1)) {
-    if (duk_is_callable(ctx, -1)) {
-      // call it.
-      duk_push_boolean(ctx, is_greeting);
-      duk_call(ctx, 1);
-
-      if (!duk_is_object(ctx, -1)) {
-        duk_pop(ctx);  // retval
-        duk_pop(ctx);  // handshake
-
-        return stdx::make_unexpected(ErrorResponse{
-            2013, "handshake-function must return an object, if set", "HY000"});
-      }
-    }
-
+  if (duk_is_object(ctx, -1)) {
     duk_get_prop_string(ctx, -1, "error");
     if (!duk_is_undefined(ctx, -1)) {
       error = pimpl_->get_error(-1);
-    }
-    duk_pop(ctx);
-
-    duk_get_prop_string(ctx, -1, "greeting");
-    if (duk_is_object(ctx, -1)) {
-      server_greeting_res = server_greeting();
-      exec_time = server_greeting_exec_time();
-    } else if (duk_is_undefined(ctx, -1)) {
-      // ok
-    } else {
-      throw std::runtime_error(
-          "handshake.greeting must be an object, if set. Is " +
-          duk_get_type_names(ctx, -1));
     }
     duk_pop(ctx);
 
@@ -1011,20 +998,12 @@ DuktapeStatementReader::handshake(bool is_greeting) {
   }
   duk_pop(ctx);
 
-  if (error) {
-    return stdx::make_unexpected(*error);
-  }
-  if (!server_greeting_res) {
-    ec = server_greeting_res.error();
-  }
-
   if (ec) {
-    return stdx::make_unexpected(ErrorResponse{2013, ec.message(), "HY000"});
+    return stdx::make_unexpected(ErrorResponse{2013, "hmm", "HY000"});
   }
 
-  return handshake_data{
-      *server_greeting_res, username,    password, cert_required,
-      cert_subject,         cert_issuer, exec_time};
+  return handshake_data{error,         username,     password,
+                        cert_required, cert_subject, cert_issuer};
 }
 
 // @pre on the stack is an object

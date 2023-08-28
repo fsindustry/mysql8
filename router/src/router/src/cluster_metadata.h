@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -24,8 +24,6 @@
 
 #ifndef ROUTER_CLUSTER_METADATA_INCLUDED
 #define ROUTER_CLUSTER_METADATA_INCLUDED
-
-#include "mysqlrouter/router_export.h"
 
 #include <stdexcept>
 
@@ -108,7 +106,8 @@ class ClusterMetadata {
       const std::string &ro_endpoint, const std::string &rw_x_endpoint,
       const std::string &ro_x_endpoint, const std::string &username) = 0;
 
-  virtual std::vector<std::string> get_routing_mode_queries() = 0;
+  virtual std::vector<std::string> get_routing_mode_queries(
+      const std::string &cluster_name) = 0;
 
   /** @brief Verify that host is a valid metadata server
    *
@@ -118,7 +117,7 @@ class ClusterMetadata {
    * @throws std::out_of_range
    * @throws std::logic_error
    *
-   * checks that the server
+   *  * checks that the server
    *
    * - has the metadata in the correct version
    * - contains metadata for the group it's in (in case of GR cluster)
@@ -139,8 +138,6 @@ class ClusterMetadata {
   virtual std::string get_cluster_type_specific_id() = 0;
 
   virtual ClusterInfo fetch_metadata_servers() = 0;
-
-  virtual InstanceType fetch_current_instance_type() = 0;
 
   virtual std::vector<std::string> get_grant_statements(
       const std::string &new_accounts) const = 0;
@@ -199,12 +196,8 @@ class ClusterMetadataGRV1 : public ClusterMetadataGR {
 
   ClusterInfo fetch_metadata_servers() override;
 
-  std::vector<std::string> get_routing_mode_queries() override;
-
-  InstanceType fetch_current_instance_type() override {
-    // V1 of the metadata only supported GR instances
-    return InstanceType::GroupMember;
-  }
+  std::vector<std::string> get_routing_mode_queries(
+      const std::string &cluster_name) override;
 
   void verify_router_id_is_ours(
       const uint32_t router_id,
@@ -242,9 +235,8 @@ class ClusterMetadataGRV2 : public ClusterMetadataGR {
 
   ClusterInfo fetch_metadata_servers() override;
 
-  std::vector<std::string> get_routing_mode_queries() override;
-
-  InstanceType fetch_current_instance_type() override;
+  std::vector<std::string> get_routing_mode_queries(
+      const std::string &cluster_name) override;
 
   void verify_router_id_is_ours(
       uint32_t router_id, const std::string &hostname_override = "") override;
@@ -330,16 +322,13 @@ class ClusterMetadataAR : public ClusterMetadata {
 
   ClusterInfo fetch_metadata_servers() override;
 
-  InstanceType fetch_current_instance_type() override {
-    return InstanceType::AsyncMember;
-  }
-
   std::string get_cluster_type_specific_id() override;
 
   uint64_t get_view_id(
       const std::string & /*cluster_type_specific_id*/) override;
 
-  std::vector<std::string> get_routing_mode_queries() override;
+  std::vector<std::string> get_routing_mode_queries(
+      const std::string &cluster_name) override;
 
   void verify_router_id_is_ours(
       uint32_t router_id, const std::string &hostname_override = "") override;
@@ -363,11 +352,13 @@ class ClusterMetadataAR : public ClusterMetadata {
   uint64_t query_cluster_count() override;
 };
 
-std::unique_ptr<ClusterMetadata> ROUTER_LIB_EXPORT
-create_metadata(const MetadataSchemaVersion &schema_version,
-                MySQLSession *mysql, const OptionsMap &options = {},
-                mysql_harness::SocketOperationsBase *sockops =
-                    mysql_harness::SocketOperations::instance());
+MetadataSchemaVersion get_metadata_schema_version(MySQLSession *mysql);
+
+std::unique_ptr<ClusterMetadata> create_metadata(
+    const MetadataSchemaVersion &schema_version, MySQLSession *mysql,
+    const OptionsMap &options = {},
+    mysql_harness::SocketOperationsBase *sockops =
+        mysql_harness::SocketOperations::instance());
 
 }  // namespace mysqlrouter
 

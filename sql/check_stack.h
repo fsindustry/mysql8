@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,7 @@
 
 class THD;
 
-bool check_stack_overrun(const THD *thd, long margin, unsigned char *dummy);
-int initialize_stack_direction();
+extern "C" bool check_stack_overrun(const THD *thd, long margin,
+                                    unsigned char *dummy);
 
 #endif /* SQL_CHECK_STACK_H_INCLUDED */

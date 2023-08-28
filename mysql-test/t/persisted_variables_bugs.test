@@ -1,5 +1,4 @@
 --source include/have_log_bin.inc
---source include/have_binlog_format_row.inc
 
 --echo #
 --echo # Bug #27016247: SET PERSIST_ONLY DOES NOT CONSIDER RUNTIME VALIDATION
@@ -331,7 +330,7 @@ disconnect con1;
 --echo #
 
 SELECT @@global.innodb_strict_mode, @@global.innodb_lock_wait_timeout;
-SELECT @@global.myisam_sort_buffer_size;
+SELECT @@global.myisam_repair_threads, @@global.myisam_sort_buffer_size;
 # enum variable type
 SELECT @@global.myisam_stats_method;
 SET PERSIST innodb_strict_mode=0;
@@ -339,6 +338,8 @@ SET GLOBAL innodb_lock_wait_timeout = 150;
 SELECT @@global.innodb_lock_wait_timeout;
 SET PERSIST innodb_lock_wait_timeout = 110;
 SELECT @@global.innodb_lock_wait_timeout;
+SET GLOBAL myisam_repair_threads=27;
+SET PERSIST myisam_repair_threads=12;
 SET GLOBAL myisam_sort_buffer_size=16777216;
 SET PERSIST myisam_sort_buffer_size=default;
 SELECT @@global.innodb_lock_wait_timeout;
@@ -347,11 +348,12 @@ SET PERSIST myisam_stats_method=nulls_equal;
 --source include/restart_mysqld.inc
 SELECT @@global.innodb_strict_mode;
 SELECT @@global.innodb_lock_wait_timeout;
+SELECT @@global.myisam_repair_threads;
 SELECT @@global.myisam_sort_buffer_size;
 SELECT @@global.myisam_stats_method;
 SELECT variable_name FROM performance_schema.variables_info WHERE variable_source='PERSISTED';
 SET GLOBAL innodb_strict_mode=default, innodb_lock_wait_timeout=default,
-  myisam_stats_method=default;
+  myisam_repair_threads=default, myisam_stats_method=default;
 RESET PERSIST;
 
 --echo #
@@ -470,100 +472,5 @@ SELECT VARIABLE_NAME, VARIABLE_SOURCE FROM performance_schema.variables_info
   WHERE variable_name LIKE 'skip_%_start' ORDER BY 1;
 RESET PERSIST;
 --source include/restart_mysqld.inc
-
---echo #
---echo # Bug #33388488: NO DEPRECATION WARNING ON SERVER RESTART IF TWO OR MORE
---echo # PERSISTED OPTIONS
---echo #
-
-SET PERSIST transaction_write_set_extraction='XXHASH64';
-SET PERSIST avoid_temporal_upgrade=TRUE;
-
---let LOG_ERR=$MYSQLTEST_VARDIR/tmp/myerror.err
---let $restart_parameters=restart:--log_error=$LOG_ERR --no-console
---replace_result $LOG_ERR LOG_ERR
---source include/restart_mysqld.inc
-
---let $assert_text= Assert that there is a warning at bootstrap when setting transaction_write_set_extraction
---let $assert_file= $LOG_ERR
---let $assert_select= '@@transaction_write_set_extraction' is deprecated and will be removed in a future release.
---let $assert_count= 1
---source include/assert_grep.inc
-
---let $assert_text= Assert that there is a warning at bootstrap when setting avoid_temporal_upgrade
---let $assert_file= $LOG_ERR
---let $assert_select= '@@avoid_temporal_upgrade' is deprecated and will be removed in a future release.
---let $assert_count= 1
---source include/assert_grep.inc
-
-RESET PERSIST;
---remove_file $LOG_ERR
-
-SET PERSIST_ONLY transaction_write_set_extraction='XXHASH64';
-SET PERSIST_ONLY avoid_temporal_upgrade=TRUE;
-
---let $restart_parameters=restart:--log_error=$LOG_ERR --no-console
---replace_result $LOG_ERR LOG_ERR
---source include/restart_mysqld.inc
-
---let $assert_text= Assert that there is a warning at bootstrap when setting transaction_write_set_extraction
---let $assert_file= $LOG_ERR
---let $assert_select= '@@transaction_write_set_extraction' is deprecated and will be removed in a future release.
---let $assert_count= 1
---source include/assert_grep.inc
-
---let $assert_text= Assert that there is a warning at bootstrap when setting avoid_temporal_upgrade
---let $assert_file= $LOG_ERR
---let $assert_select= '@@avoid_temporal_upgrade' is deprecated and will be removed in a future release.
---let $assert_count= 1
---source include/assert_grep.inc
-
-RESET PERSIST;
---remove_file $LOG_ERR
-
-# set to default
---let $restart_parameters=restart:
---source include/restart_mysqld.inc
-
-
---echo #
---echo # Bug #34751419: component system variable behaves differently from command-line and set persist
---echo #
-
-call mtr.add_suppression("Duplicate variable name 'test_component.int_sys_var'");
-INSTALL COMPONENT "file://component_test_sys_var_service";
-SET PERSIST test_component.bool_sys_var = OFF;
-SET PERSIST test_component.bool_ro_sys_var = OFF;
-SET PERSIST replica_preserve_commit_order = OFF;
---source include/restart_mysqld.inc
-UNINSTALL COMPONENT "file://component_test_sys_var_service";
-INSTALL COMPONENT "file://component_test_sys_var_service";
---echo # Test: Should be set to OFF
-SHOW VARIABLES LIKE 'test_component.bool_sys_var';
---echo # Test read only: Should be set to OFF
-SHOW VARIABLES LIKE 'test_component.bool_ro_sys_var';
-
-# Cleanup
-RESET PERSIST test_component.bool_sys_var;
-RESET PERSIST test_component.bool_ro_sys_var;
-RESET PERSIST replica_preserve_commit_order;
-SET GLOBAL replica_preserve_commit_order = DEFAULT;
-UNINSTALL COMPONENT "file://component_test_sys_var_service";
-
-
---echo #
---echo # Bug #34897517: Can't set report_host to NULL
---echo #
-
---error ER_NULL_CANT_BE_PERSISTED_FOR_READONLY
-SET PERSIST_ONLY report_host = NULL;
-
---error ER_NULL_CANT_BE_PERSISTED_FOR_READONLY
-SET PERSIST_ONLY report_host = DEFAULT;
-
-SET PERSIST ssl_crl = NULL;
-RESET PERSIST ssl_crl;
-SET GLOBAL ssl_crl = DEFAULT;
-
 
 --echo # End of the 8.0 tests

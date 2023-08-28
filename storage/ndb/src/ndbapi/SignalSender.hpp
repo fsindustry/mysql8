@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,8 +42,6 @@
 #include <signaldata/DumpStateOrd.hpp>
 #include <signaldata/BackupSignalData.hpp>
 #include <signaldata/AllocNodeId.hpp>
-
-struct trp_node;
 
 struct SimpleSignal {
 public:
@@ -116,10 +114,8 @@ private:
   TransporterFacade * theFacade;
   bool m_locked;
   bool m_deliverAll;
-
-  NodeId find_node(const NodeBitmask& mask, bool (*cond)(const trp_node&));
-
- public:
+  
+public:
   /**
    * trp_client interface
    */
@@ -131,6 +127,9 @@ private:
 
   template<class T>
   SimpleSignal * waitFor(Uint32 timeOutMillis, T & t);
+
+  template<class T>
+  NodeId find_node(const NodeBitmask& mask, T & t);
 };
 
 #endif

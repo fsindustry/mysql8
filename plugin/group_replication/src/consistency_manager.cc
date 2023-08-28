@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,17 +25,15 @@
 #include <mysql/components/services/log_builtins.h>
 #include "plugin/group_replication/include/consistency_manager.h"
 #include "plugin/group_replication/include/plugin.h"
-#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/include/plugin_messages/sync_before_execution_message.h"
 #include "plugin/group_replication/include/plugin_messages/transaction_prepared_message.h"
 #include "plugin/group_replication/include/plugin_psi.h"
-#include "string_with_len.h"
 
 Transaction_consistency_info::Transaction_consistency_info(
     my_thread_id thread_id, bool local_transaction, const rpl_sid *sid,
     rpl_sidno sidno, rpl_gno gno,
     enum_group_replication_consistency_level consistency_level,
-    Members_list *members_that_must_prepare_the_transaction)
+    std::list<Gcs_member_identifier> *members_that_must_prepare_the_transaction)
     : m_thread_id(thread_id),
       m_local_transaction(local_transaction),
       m_sid_specified(sid != nullptr ? true : false),
@@ -45,8 +43,7 @@ Transaction_consistency_info::Transaction_consistency_info(
       m_members_that_must_prepare_the_transaction(
           members_that_must_prepare_the_transaction),
       m_transaction_prepared_locally(local_transaction),
-      m_transaction_prepared_remotely(false),
-      m_begin_timestamp(Metrics_handler::get_current_time()) {
+      m_transaction_prepared_remotely(false) {
   DBUG_TRACE;
   assert(m_consistency_level >= GROUP_REPLICATION_CONSISTENCY_AFTER);
   assert(nullptr != m_members_that_must_prepare_the_transaction);
@@ -65,13 +62,6 @@ Transaction_consistency_info::Transaction_consistency_info(
   } else {
     m_sid.clear();
   }
-
-  m_members_that_must_prepare_the_transaction_lock = std::make_unique<
-      Checkable_rwlock>(
-#ifdef HAVE_PSI_INTERFACE
-      key_GR_RWLOCK_transaction_consistency_info_members_that_must_prepare_the_transaction
-#endif
-  );
 }
 
 Transaction_consistency_info::~Transaction_consistency_info() {
@@ -100,14 +90,10 @@ Transaction_consistency_info::get_consistency_level() {
 }
 
 bool Transaction_consistency_info::is_a_single_member_group() {
-  Checkable_rwlock::Guard g(*m_members_that_must_prepare_the_transaction_lock,
-                            Checkable_rwlock::READ_LOCK);
   return 0 == m_members_that_must_prepare_the_transaction->size();
 }
 
 bool Transaction_consistency_info::is_the_transaction_prepared_remotely() {
-  Checkable_rwlock::Guard g(*m_members_that_must_prepare_the_transaction_lock,
-                            Checkable_rwlock::READ_LOCK);
   return m_transaction_prepared_remotely ||
          m_members_that_must_prepare_the_transaction->empty();
 }
@@ -135,14 +121,8 @@ int Transaction_consistency_info::after_applier_prepare(
        m_consistency_level, m_transaction_prepared_locally,
        m_transaction_prepared_remotely, member_status));
 
-  m_members_that_must_prepare_the_transaction_lock->rdlock();
-  const bool needs_to_acknowledge =
-      std::find(m_members_that_must_prepare_the_transaction->begin(),
-                m_members_that_must_prepare_the_transaction->end(),
-                local_member_info->get_gcs_member_id()) !=
-      m_members_that_must_prepare_the_transaction->end();
-  m_members_that_must_prepare_the_transaction_lock->unlock();
-  if (!needs_to_acknowledge) {
+  // Only ONLINE members do acknowledge transactions prepare.
+  if (Group_member_info::MEMBER_ONLINE != member_status) {
     return 0;
   }
 
@@ -193,13 +173,9 @@ int Transaction_consistency_info::handle_remote_prepare(
        m_consistency_level, m_transaction_prepared_locally,
        m_transaction_prepared_remotely));
 
-  m_members_that_must_prepare_the_transaction_lock->wrlock();
   m_members_that_must_prepare_the_transaction->remove(gcs_member_id);
-  const bool members_that_must_prepare_the_transaction_empty =
-      m_members_that_must_prepare_the_transaction->empty();
-  m_members_that_must_prepare_the_transaction_lock->unlock();
 
-  if (members_that_must_prepare_the_transaction_empty) {
+  if (m_members_that_must_prepare_the_transaction->empty()) {
     m_transaction_prepared_remotely = true;
 
     if (m_transaction_prepared_locally) {
@@ -210,12 +186,6 @@ int Transaction_consistency_info::handle_remote_prepare(
                      m_sidno, m_gno, m_thread_id);
         return CONSISTENCY_INFO_OUTCOME_ERROR;
         /* purecov: end */
-      }
-
-      if (m_local_transaction) {
-        const auto end_timestamp = Metrics_handler::get_current_time();
-        metrics_handler->add_transaction_consistency_after_termination(
-            m_begin_timestamp, end_timestamp);
       }
 
       return CONSISTENCY_INFO_OUTCOME_COMMIT;
@@ -251,25 +221,8 @@ int Transaction_consistency_info::handle_member_leave(
   return error;
 }
 
-uint64_t Transaction_consistency_info::get_begin_timestamp() const {
-  return m_begin_timestamp;
-}
-
 Transaction_consistency_manager::Transaction_consistency_manager()
-    : m_map(
-          Malloc_allocator<std::pair<const Transaction_consistency_manager_key,
-                                     Transaction_consistency_info *>>(
-              key_consistent_transactions)),
-      m_prepared_transactions_on_my_applier(
-          Malloc_allocator<Transaction_consistency_manager_key>(
-              key_consistent_transactions_prepared)),
-      m_new_transactions_waiting(
-          Malloc_allocator<my_thread_id>(key_consistent_transactions_waiting)),
-      m_delayed_view_change_events(
-          Malloc_allocator<Transaction_consistency_manager_pevent_pair>(
-              key_consistent_transactions_delayed_view_change)),
-      m_plugin_stopping(true),
-      m_primary_election_active(false) {
+    : m_plugin_stopping(true), m_primary_election_active(false) {
   m_map_lock = new Checkable_rwlock(
 #ifdef HAVE_PSI_INTERFACE
       key_GR_RWLOCK_transaction_consistency_manager_map
@@ -324,7 +277,6 @@ int Transaction_consistency_manager::after_certification(
   int error = 0;
   Transaction_consistency_manager_key key(transaction_info->get_sidno(),
                                           transaction_info->get_gno());
-
   m_map_lock->wrlock();
 
   typename Transaction_consistency_manager_map::iterator it = m_map.find(key);
@@ -342,10 +294,6 @@ int Transaction_consistency_manager::after_certification(
   if (transaction_info->is_local_transaction() &&
       transaction_info->is_a_single_member_group()) {
     transactions_latch->releaseTicket(transaction_info->get_thread_id());
-    const auto end_timestamp = Metrics_handler::get_current_time();
-    metrics_handler->add_transaction_consistency_after_termination(
-        transaction_info->get_begin_timestamp(), end_timestamp);
-
     delete transaction_info;
     m_map_lock->unlock();
     return 0;
@@ -362,17 +310,6 @@ int Transaction_consistency_manager::after_certification(
     error = 1;
     /* purecov: end */
   }
-
-  DBUG_EXECUTE_IF("group_replication_consistency_manager_after_certification", {
-    const char act[] =
-        "now signal "
-        "signal.group_replication_consistency_manager_after_certification_"
-        "reached "
-        "wait_for "
-        "signal.group_replication_consistency_manager_after_certification_"
-        "continue";
-    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
-  };);
 
   DBUG_PRINT("info",
              ("gtid: %d:%" PRId64 "; consistency_level: %d; ",
@@ -536,13 +473,12 @@ int Transaction_consistency_manager::handle_remote_prepare(
 
   int result = transaction_info->handle_remote_prepare(gcs_member_id);
 
-  if (transaction_info->is_transaction_prepared_locally() &&
-      transaction_info->is_the_transaction_prepared_remotely()) {
+  if (transaction_info->is_transaction_prepared_locally()) {
     auto it = m_delayed_view_change_events.begin();
     while (it != m_delayed_view_change_events.end()) {
       Transaction_consistency_manager_key view_key = it->second;
       /*
-        Check if there is pending view change processing post the current
+        Check if there is pending view change procesing post the current
         transaction. If so, process all view changes which were queued post the
         current transaction.
       */
@@ -556,9 +492,7 @@ int Transaction_consistency_manager::handle_remote_prepare(
         }
         m_delayed_view_change_events.erase(it++);
         if (error) {
-          LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_FAILED_TO_LOG_VIEW_CHANGE);
-          m_map_lock->unlock();
-          return 1;
+          abort_plugin_process("unable to log the View_change_log_event");
         }
       } else {
         ++it;
@@ -635,7 +569,7 @@ int Transaction_consistency_manager::after_commit(my_thread_id, rpl_sidno sidno,
 
 int Transaction_consistency_manager::before_transaction_begin(
     my_thread_id thread_id, ulong gr_consistency_level, ulong timeout,
-    enum_rpl_channel_type rpl_channel_type, const THD *thd) {
+    enum_rpl_channel_type rpl_channel_type) {
   DBUG_TRACE;
   int error = 0;
 
@@ -660,10 +594,12 @@ int Transaction_consistency_manager::before_transaction_begin(
 
   if (GROUP_REPLICATION_CONSISTENCY_BEFORE == consistency_level ||
       GROUP_REPLICATION_CONSISTENCY_BEFORE_AND_AFTER == consistency_level) {
-    error = transaction_begin_sync_before_execution(
-        thread_id, consistency_level, timeout, thd);
+    error = transaction_begin_sync_before_execution(thread_id,
+                                                    consistency_level, timeout);
     if (error) {
+      /* purecov: begin inspected */
       return error;
+      /* purecov: end */
     }
   }
 
@@ -688,9 +624,8 @@ int Transaction_consistency_manager::before_transaction_begin(
 int Transaction_consistency_manager::transaction_begin_sync_before_execution(
     my_thread_id thread_id,
     enum_group_replication_consistency_level consistency_level [[maybe_unused]],
-    ulong timeout, const THD *thd) const {
+    ulong timeout) const {
   DBUG_TRACE;
-  int error{0};
   assert(GROUP_REPLICATION_CONSISTENCY_BEFORE == consistency_level ||
          GROUP_REPLICATION_CONSISTENCY_BEFORE_AND_AFTER == consistency_level);
   DBUG_PRINT("info", ("thread_id: %d; consistency_level: %d", thread_id,
@@ -699,8 +634,6 @@ int Transaction_consistency_manager::transaction_begin_sync_before_execution(
   if (m_plugin_stopping) {
     return ER_GRP_TRX_CONSISTENCY_BEGIN_NOT_ALLOWED;
   }
-
-  const auto begin_timestamp = Metrics_handler::get_current_time();
 
   if (transactions_latch->registerTicket(thread_id)) {
     /* purecov: begin inspected */
@@ -714,14 +647,12 @@ int Transaction_consistency_manager::transaction_begin_sync_before_execution(
 
   // send message
   Sync_before_execution_message message(thread_id);
-  if (gcs_module->send_message(message, false, thd)) {
-    // sent message failed so ticket aren't needed, it won't receive
-    // notifications
-    transactions_latch->releaseTicket(thread_id);
-    transactions_latch->waitTicket(thread_id);
+  if (gcs_module->send_message(message)) {
+    /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_SEND_TRX_SYNC_BEFORE_EXECUTION_FAILED,
                  thread_id);
     return ER_GRP_TRX_CONSISTENCY_BEFORE;
+    /* purecov: end */
   }
 
   DBUG_PRINT("info", ("waiting for Sync_before_execution_message"));
@@ -735,34 +666,18 @@ int Transaction_consistency_manager::transaction_begin_sync_before_execution(
     /* purecov: end */
   }
 
-  std::string applier_retrieved_gtids;
-  Replication_thread_api applier_channel("group_replication_applier");
-  if (applier_channel.get_retrieved_gtid_set(applier_retrieved_gtids)) {
-    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_GTID_SET_EXTRACT_ERROR);
-    return ER_GRP_TRX_CONSISTENCY_BEFORE;
-  }
+  DBUG_PRINT("info", ("waiting for channel_wait_until_apply_queue_applied()"));
 
-  DBUG_PRINT("info", ("waiting for wait_for_gtid_set_committed()"));
-
-  /*
-    We want to keep the current thd stage info of
-    "Executing hook on transaction begin.", thence we disable
-    `update_thd_status`.
-  */
-  if (wait_for_gtid_set_committed(applier_retrieved_gtids.c_str(), timeout,
-                                  false /* update_thd_status */)) {
+  if (channel_wait_until_apply_queue_applied("group_replication_applier",
+                                             timeout) < 0) {
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_TRX_WAIT_FOR_GROUP_GTID_EXECUTED,
                  thread_id);
-    error = ER_GRP_TRX_CONSISTENCY_BEFORE;
+    return ER_GRP_TRX_CONSISTENCY_BEFORE;
     /* purecov: end */
   }
 
-  const auto end_timestamp = Metrics_handler::get_current_time();
-  metrics_handler->add_transaction_consistency_before_begin(begin_timestamp,
-                                                            end_timestamp);
-
-  return error;
+  return 0;
 }
 
 int Transaction_consistency_manager::handle_sync_before_execution_message(
@@ -787,7 +702,6 @@ int Transaction_consistency_manager::
     transaction_begin_sync_prepared_transactions(my_thread_id thread_id,
                                                  ulong timeout) {
   DBUG_TRACE;
-  int error{0};
   Transaction_consistency_manager_key key(0, 0);
 
   // Take a read lock to check queue size.
@@ -813,8 +727,6 @@ int Transaction_consistency_manager::
 
   DBUG_PRINT("info", ("thread_id: %d", thread_id));
 
-  const auto begin_timestamp = Metrics_handler::get_current_time();
-
   if (transactions_latch->registerTicket(thread_id)) {
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL,
@@ -839,15 +751,11 @@ int Transaction_consistency_manager::
     remove_prepared_transaction(key);
     LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_WAIT_FOR_DEPENDENCIES_FAILED,
                  thread_id);
-    error = ER_GRP_TRX_CONSISTENCY_AFTER_ON_TRX_BEGIN;
+    return ER_GRP_TRX_CONSISTENCY_AFTER_ON_TRX_BEGIN;
     /* purecov: end */
   }
 
-  const uint64_t end_timestamp = Metrics_handler::get_current_time();
-  metrics_handler->add_transaction_consistency_after_sync(begin_timestamp,
-                                                          end_timestamp);
-
-  return error;
+  return 0;
 }
 
 bool Transaction_consistency_manager::has_local_prepared_transactions() {

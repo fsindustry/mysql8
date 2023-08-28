@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -108,9 +108,6 @@ Group_member_info::Group_member_info(Group_member_info &other)
       recovery_endpoints(other.get_recovery_endpoints()),
       m_view_change_uuid(other.get_view_change_uuid()),
       m_allow_single_leader(other.get_allow_single_leader()),
-      m_group_action_running_name(other.get_group_action_running_name()),
-      m_group_action_running_description(
-          other.get_group_action_running_description()),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
       m_skip_encode_view_change_uuid(false),
@@ -322,15 +319,6 @@ void Group_member_info::encode_payload(
   char allow_single_leader_aux = m_allow_single_leader ? '1' : '0';
   encode_payload_item_char(buffer, PIT_ALLOW_SINGLE_LEADER,
                            allow_single_leader_aux);
-
-  if (group_action_running) {
-    encode_payload_item_string(buffer, PIT_GROUP_ACTION_RUNNING_NAME,
-                               m_group_action_running_name.c_str(),
-                               m_group_action_running_name.length());
-    encode_payload_item_string(buffer, PIT_GROUP_ACTION_RUNNING_DESCRIPTION,
-                               m_group_action_running_description.c_str(),
-                               m_group_action_running_description.length());
-  }
 }
 
 void Group_member_info::decode_payload(const unsigned char *buffer,
@@ -403,6 +391,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_CONFLICT_DETECTION_ENABLE:
         if (slider + payload_item_length <= end) {
           unsigned char conflict_detection_enable_aux = *slider;
+          slider += payload_item_length;
           conflict_detection_enable =
               (conflict_detection_enable_aux == '1') ? true : false;
         }
@@ -411,6 +400,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_MEMBER_WEIGHT:
         if (slider + payload_item_length <= end) {
           uint16 member_weight_aux = uint2korr(slider);
+          slider += payload_item_length;
           member_weight = (uint)member_weight_aux;
         }
         break;
@@ -418,6 +408,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_LOWER_CASE_TABLE_NAME:
         if (slider + payload_item_length <= end) {
           uint16 lower_case_table_names_aux = uint2korr(slider);
+          slider += payload_item_length;
           lower_case_table_names =
               static_cast<uint>(lower_case_table_names_aux);
         }
@@ -426,6 +417,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_GROUP_ACTION_RUNNING:
         if (slider + payload_item_length <= end) {
           unsigned char is_action_running_aux = *slider;
+          slider += payload_item_length;
           group_action_running = (is_action_running_aux == '1') ? true : false;
         }
         break;
@@ -433,6 +425,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_PRIMARY_ELECTION_RUNNING:
         if (slider + payload_item_length <= end) {
           unsigned char is_election_running_aux = *slider;
+          slider += payload_item_length;
           primary_election_running =
               (is_election_running_aux == '1') ? true : false;
         }
@@ -447,6 +440,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_DEFAULT_TABLE_ENCRYPTION:
         if (slider + payload_item_length <= end) {
           unsigned char default_table_encryption_aux = *slider;
+          slider += payload_item_length;
           default_table_encryption =
               (default_table_encryption_aux == '1') ? true : false;
         }
@@ -455,46 +449,33 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
         if (slider + payload_item_length <= end) {
           purged_gtid_set.assign(reinterpret_cast<const char *>(slider),
                                  static_cast<size_t>(payload_item_length));
+          slider += payload_item_length;
         }
         break;
       case PIT_RECOVERY_ENDPOINTS:
         if (slider + payload_item_length <= end) {
           recovery_endpoints.assign(reinterpret_cast<const char *>(slider),
                                     static_cast<size_t>(payload_item_length));
+          slider += payload_item_length;
         }
         break;
       case PIT_VIEW_CHANGE_UUID:
         if (slider + payload_item_length <= end) {
           m_view_change_uuid.assign(reinterpret_cast<const char *>(slider),
                                     static_cast<size_t>(payload_item_length));
+          slider += payload_item_length;
         }
         break;
 
       case PIT_ALLOW_SINGLE_LEADER:
         if (slider + payload_item_length <= end) {
           unsigned char allow_single_leader_aux = *slider;
+          slider += payload_item_length;
           m_allow_single_leader =
               (allow_single_leader_aux == '1') ? true : false;
         }
         break;
-      case PIT_GROUP_ACTION_RUNNING_NAME:
-        if (slider + payload_item_length <= end) {
-          m_group_action_running_name.assign(
-              reinterpret_cast<const char *>(slider),
-              static_cast<size_t>(payload_item_length));
-        }
-        break;
-      case PIT_GROUP_ACTION_RUNNING_DESCRIPTION:
-        if (slider + payload_item_length <= end) {
-          m_group_action_running_description.assign(
-              reinterpret_cast<const char *>(slider),
-              static_cast<size_t>(payload_item_length));
-        }
-        break;
     }
-
-    // Seek to next payload item.
-    slider += payload_item_length;
   }
 }
 
@@ -696,24 +677,6 @@ void Group_member_info::set_is_group_action_running(bool is_running) {
   group_action_running = is_running;
 }
 
-const std::string &Group_member_info::get_group_action_running_name() {
-  return m_group_action_running_name;
-}
-
-void Group_member_info::set_group_action_running_name(
-    const std::string &group_action_running_name) {
-  m_group_action_running_name = group_action_running_name;
-}
-
-const std::string &Group_member_info::get_group_action_running_description() {
-  return m_group_action_running_description;
-}
-
-void Group_member_info::set_group_action_running_description(
-    const std::string &group_action_running_description) {
-  m_group_action_running_description = group_action_running_description;
-}
-
 bool Group_member_info::is_primary_election_running() {
   MUTEX_LOCK(lock, &update_lock);
   return primary_election_running;
@@ -850,11 +813,7 @@ bool Group_member_info::has_greater_weight(Group_member_info *other) {
 
 Group_member_info_manager::Group_member_info_manager(
     Group_member_info *local_member_info, PSI_mutex_key psi_mutex_key) {
-  members = new std::map<
-      std::string, Group_member_info *, std::less<std::string>,
-      Malloc_allocator<std::pair<const std::string, Group_member_info *>>>(
-      Malloc_allocator<std::pair<const std::string, Group_member_info *>>(
-          key_group_member_info));
+  members = new map<string, Group_member_info *>();
   this->local_member_info = local_member_info;
 
   mysql_mutex_init(psi_mutex_key, &update_lock, MY_MUTEX_INIT_FAST);
@@ -1015,13 +974,10 @@ Group_member_info_manager::get_group_member_status_by_member_id(
   return status;
 }
 
-Group_member_info_list *Group_member_info_manager::get_all_members() {
+vector<Group_member_info *> *Group_member_info_manager::get_all_members() {
   mysql_mutex_lock(&update_lock);
 
-  Group_member_info_list *all_members =
-      new std::vector<Group_member_info *,
-                      Malloc_allocator<Group_member_info *>>(
-          Malloc_allocator<Group_member_info *>(key_group_member_info));
+  vector<Group_member_info *> *all_members = new vector<Group_member_info *>();
   map<string, Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
     Group_member_info *member_copy = new Group_member_info(*(*it).second);
@@ -1080,12 +1036,13 @@ void Group_member_info_manager::update(Group_member_info *update_local_member) {
   mysql_mutex_unlock(&update_lock);
 }
 
-void Group_member_info_manager::update(Group_member_info_list *new_members) {
+void Group_member_info_manager::update(
+    std::vector<Group_member_info *> *new_members) {
   mysql_mutex_lock(&update_lock);
 
   this->clear_members();
 
-  Group_member_info_list_iterator new_members_it;
+  vector<Group_member_info *>::iterator new_members_it;
   for (new_members_it = new_members->begin();
        new_members_it != new_members->end(); new_members_it++) {
     // If this bears the local member to be updated
@@ -1273,9 +1230,9 @@ void Group_member_info_manager::encode(vector<uchar> *to_encode) {
   delete group_info_message;
 }
 
-Group_member_info_list *Group_member_info_manager::decode(
+vector<Group_member_info *> *Group_member_info_manager::decode(
     const uchar *to_decode, size_t length) {
-  Group_member_info_list *decoded_members = nullptr;
+  vector<Group_member_info *> *decoded_members = nullptr;
 
   Group_member_info_manager_message *group_info_message =
       new Group_member_info_manager_message();
@@ -1406,9 +1363,7 @@ std::string Group_member_info_manager::get_string_current_view_active_hosts()
 Group_member_info_manager_message::Group_member_info_manager_message()
     : Plugin_gcs_message(CT_MEMBER_INFO_MANAGER_MESSAGE) {
   DBUG_TRACE;
-  members = new std::vector<Group_member_info *,
-                            Malloc_allocator<Group_member_info *>>(
-      Malloc_allocator<Group_member_info *>(key_group_member_info));
+  members = new vector<Group_member_info *>();
 }
 
 Group_member_info_manager_message::Group_member_info_manager_message(
@@ -1422,9 +1377,7 @@ Group_member_info_manager_message::Group_member_info_manager_message(
     Group_member_info *member_info)
     : Plugin_gcs_message(CT_MEMBER_INFO_MANAGER_MESSAGE), members(nullptr) {
   DBUG_TRACE;
-  members = new std::vector<Group_member_info *,
-                            Malloc_allocator<Group_member_info *>>(
-      Malloc_allocator<Group_member_info *>(key_group_member_info));
+  members = new vector<Group_member_info *>();
   members->push_back(member_info);
 }
 
@@ -1436,21 +1389,19 @@ Group_member_info_manager_message::~Group_member_info_manager_message() {
 
 void Group_member_info_manager_message::clear_members() {
   DBUG_TRACE;
-  Group_member_info_list_iterator it;
+  std::vector<Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
     delete (*it);
   }
   members->clear();
 }
 
-Group_member_info_list *Group_member_info_manager_message::get_all_members() {
+std::vector<Group_member_info *>
+    *Group_member_info_manager_message::get_all_members() {
   DBUG_TRACE;
-  Group_member_info_list *all_members =
-      new std::vector<Group_member_info *,
-                      Malloc_allocator<Group_member_info *>>(
-          Malloc_allocator<Group_member_info *>(key_group_member_info));
+  vector<Group_member_info *> *all_members = new vector<Group_member_info *>();
 
-  Group_member_info_list_iterator it;
+  std::vector<Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
     Group_member_info *member_copy = new Group_member_info(*(*it));
     all_members->push_back(member_copy);
@@ -1466,7 +1417,7 @@ void Group_member_info_manager_message::encode_payload(
   uint16 number_of_members = (uint16)members->size();
   encode_payload_item_int2(buffer, PIT_MEMBERS_NUMBER, number_of_members);
 
-  Group_member_info_list_iterator it;
+  std::vector<Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
     std::vector<uchar> encoded_member;
     (*it)->encode(&encoded_member);
@@ -1549,10 +1500,10 @@ bool Group_member_info_manager_message::get_pit_data(
         *pit_length = payload_item_length;
         return false;
       }
+      slider += payload_item_length;
+    } else {
+      slider += payload_item_length;
     }
-
-    // Seek to next payload item.
-    slider += payload_item_length;
   }
 
   return true;

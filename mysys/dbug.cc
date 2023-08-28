@@ -58,7 +58,7 @@
  *
  *      Michael Widenius:
  *        DBUG_DUMP       - To dump a block of memory.
- *        PUSH_FLAG "O"   - To be used instead of "o" if we
+ *        PUSH_FLAG "O"   - To be used insted of "o" if we
  *                          want flushing after each write
  *        PUSH_FLAG "A"   - as 'O', but we will append to the out file instead
  *                          of creating a new one.
@@ -92,7 +92,6 @@
 
 #include <algorithm>
 
-#include "dig_vec.h"
 #include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -101,8 +100,6 @@
 #include "my_macros.h"
 #include "my_sys.h"
 #include "my_thread_local.h"
-#include "mysql/strings/int2str.h"
-#include "nulls.h"
 #include "thr_mutex.h"
 #include "thr_rwlock.h"
 
@@ -286,7 +283,7 @@ static char *DbugMalloc(size_t size);
 static const char *BaseName(const char *pathname);
 static void Indent(CODE_STATE *cs, int indent);
 static void DbugFlush(CODE_STATE *);
-[[noreturn]] static void DbugExit(const char *why);
+static void DbugExit(const char *why) MY_ATTRIBUTE((noreturn));
 static const char *DbugStrTok(const char *s);
 static void DbugVfprintf(FILE *stream, const char *format, va_list args);
 
@@ -1398,8 +1395,8 @@ void _db_dump_(uint _line_, const char *keyword, const unsigned char *memory,
         fputc('\n', cs->stack->out_file);
         pos = 3;
       }
-      fputc(dig_vec_upper[((tmp >> 4) & 15)], cs->stack->out_file);
-      fputc(dig_vec_upper[tmp & 15], cs->stack->out_file);
+      fputc(_dig_vec_upper[((tmp >> 4) & 15)], cs->stack->out_file);
+      fputc(_dig_vec_upper[tmp & 15], cs->stack->out_file);
       fputc(' ', cs->stack->out_file);
     }
     (void)fputc('\n', cs->stack->out_file);
@@ -2110,7 +2107,7 @@ static bool Writable(const char *pathname) {
 }
 
 /* flush dbug-stream, free mutex lock & wait delay */
-/* This is because some systems (MSDOS!!) don't flush the file header */
+/* This is because some systems (MSDOS!!) dosn't flush fileheader */
 /* and dbug-file isn't readable after a system crash !! */
 
 static void DbugFlush(CODE_STATE *cs) {
@@ -2132,20 +2129,14 @@ void _db_flush_() {
 #ifndef _WIN32
 
 #ifdef HAVE_GCOV
-#if defined(__GNUC__) && __GNUC__ >= 11
-extern "C" void __gcov_dump();
-static void dump_gcov_data() { __gcov_dump(); }
-#else
 extern "C" void __gcov_flush();
-static void dump_gcov_data() { __gcov_flush(); }
-#endif
 #endif
 
 void _db_flush_gcov_() {
 #ifdef HAVE_GCOV
   // Gcov will assert() if we try to flush in parallel.
   native_mutex_lock(&THR_LOCK_gcov);
-  dump_gcov_data();
+  __gcov_flush();
   native_mutex_unlock(&THR_LOCK_gcov);
 #endif
 }

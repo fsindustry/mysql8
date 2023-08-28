@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,11 +26,11 @@
 
 #include <algorithm>
 
+#include "m_ctype.h"
 #include "my_byteorder.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
-#include "mysql/strings/m_ctype.h"
 #include "storage/myisam/myisamdef.h"
 
 bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,7 +50,7 @@ public:
 
   // Public methods
 public:
- const Uint32* getData() const;
+ Uint32* getData() const;
 
 private:
   Uint32 connectPtr;
@@ -58,7 +58,12 @@ private:
   Uint32 keyData[DataLength];
 };
 
-inline const Uint32* IndxKeyInfo::getData() const { return keyData; }
+inline
+Uint32* IndxKeyInfo::getData() const
+{
+  return (Uint32*)&keyData[0];
+}
+
 
 #undef JAM_FILE_ID
 

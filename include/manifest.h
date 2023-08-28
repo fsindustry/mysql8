@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,9 +30,8 @@
 #include "scope_guard.h"
 
 #include "my_rapidjson_size_t.h"
-
-#include <rapidjson/document.h>
-#include <rapidjson/schema.h>
+#include "rapidjson/document.h"
+#include "rapidjson/schema.h"
 
 namespace manifest {
 
@@ -64,12 +63,11 @@ class Manifest_reader final {
     Expected format: JSON.
 
     @param [in] executable_path Executable location
-    @param [in] instance_path   Location of specific instance
-                                Must have separator character at the end
+    @param [in] use_cwd    Use current working directory as base location
   */
 
   explicit Manifest_reader(const std::string executable_path,
-                           const std::string instance_path,
+                           bool use_cwd = false,
                            std::string json_schema = manifest_version_1_0)
       : config_file_path_(),
         schema_(),
@@ -79,18 +77,18 @@ class Manifest_reader final {
         empty_(true),
         ro_(true) {
     std::string exe_path(executable_path);
-    const std::size_t last_separator = exe_path.find_last_of("/\\");
+    std::size_t last_separator = exe_path.find_last_of("/\\");
     std::string executable = exe_path.substr(last_separator + 1);
-    const std::string path = exe_path.erase(last_separator + 1);
+    std::string path = exe_path.erase(last_separator + 1);
 #ifdef _WIN32
-    const std::size_t ext = executable.find(".exe");
+    std::size_t ext = executable.find(".exe");
     executable = executable.substr(0, ext);
 #endif  // _WIN32
     executable.append(".my");
-    if (instance_path.length() == 0)
+    if (!use_cwd)
       config_file_path_ = path + executable;
     else
-      config_file_path_ = instance_path + executable;
+      config_file_path_ = executable;
     std::ifstream file_stream(config_file_path_,
                               std::ios::in | std::ios::ate | std::ios::binary);
     if (!file_stream.is_open()) return;
@@ -106,18 +104,17 @@ class Manifest_reader final {
     if (file_length > 0) {
       empty_ = false;
       file_stream.seekg(std::ios::beg);
-      const std::unique_ptr<char[]> read_data(
-          new (std::nothrow) char[file_length]);
+      std::unique_ptr<char[]> read_data(new (std::nothrow) char[file_length]);
       if (!read_data) return;
       if (file_stream.read(read_data.get(), file_length).fail() == true) return;
-      const std::string data(read_data.get(), file_length);
+      std::string data(read_data.get(), file_length);
       if (data_.Parse(data).HasParseError()) return;
       if (schema_.Parse(json_schema).HasParseError()) return;
       {
         rapidjson::Document document;
         if (document.Parse(data).HasParseError()) return;
 
-        const rapidjson::SchemaDocument sd(schema_);
+        rapidjson::SchemaDocument sd(schema_);
         rapidjson::SchemaValidator validator(sd);
         if (!document.Accept(validator)) return;
       }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,8 +23,6 @@
 #include <gtest/gtest.h>
 #include <limits.h>
 
-#include "strings/m_ctype_internals.h"
-
 /*
 
   ==== Purpose ====
@@ -43,9 +41,9 @@
   the overflow error when receiving a number like 18446744073709551915
 
 */
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
-#include "mysql/strings/my_strtoll10.h"
 
 TEST(StringToULLTest, OverflowedNumber) {
   unsigned long long number;

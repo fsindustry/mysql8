@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,13 +35,13 @@
 #include <cstring>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_thread_local.h"
 #include "mysql/psi/mysql_file.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
-#include "nulls.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/item.h"
 #include "sql/item_func.h"
@@ -54,10 +54,7 @@
 #include "sql/sql_error.h"
 #include "sql/sql_exchange.h"
 #include "sql/system_variables.h"
-#include "sql/visible_fields.h"
 #include "sql_string.h"
-#include "strmake.h"
-#include "strxnmov.h"
 #include "template_utils.h"  // pointer_cast
 
 using std::min;
@@ -146,9 +143,15 @@ bool sql_exchange::escaped_given(void) {
   Handling writing to file
 ************************************************************************/
 
-bool Query_result_to_file::check_supports_cursor() const {
-  my_error(ER_SP_BAD_CURSOR_SELECT, MYF(0));
-  return true;
+void Query_result_to_file::send_error(THD *, uint errcode, const char *err) {
+  my_message(errcode, err, MYF(0));
+  if (file > 0) {
+    (void)end_io_cache(&cache);
+    mysql_file_close(file, MYF(0));
+    /* Delete file on error */
+    mysql_file_delete(key_select_to_file, path, MYF(0));
+    file = -1;
+  }
 }
 
 bool Query_result_to_file::send_eof(THD *thd) {
@@ -162,7 +165,7 @@ bool Query_result_to_file::send_eof(THD *thd) {
   return error;
 }
 
-void Query_result_to_file::cleanup() {
+void Query_result_to_file::cleanup(THD *) {
   DBUG_TRACE;
   DBUG_PRINT("print_select_into_flush_stats",
              ("[select_to_file][flush_count] %03lu\n", cache.disk_writes));
@@ -195,7 +198,7 @@ void Query_result_to_file::cleanup() {
     create_file()
     thd			Thread handle
     path		File name
-    exchange		Exchange class
+    exchange		Excange class
     cache		IO cache
 
   RETURN
@@ -206,7 +209,7 @@ void Query_result_to_file::cleanup() {
 static File create_file(THD *thd, char *path, sql_exchange *exchange,
                         IO_CACHE *cache) {
   File file;
-  const uint option = MY_UNPACK_FILENAME | MY_RELATIVE_PATH;
+  uint option = MY_UNPACK_FILENAME | MY_RELATIVE_PATH;
 
   if (!dirname_length(exchange->file_name)) {
     strxnmov(path, FN_REFLEN - 1, mysql_real_data_home,
@@ -638,9 +641,9 @@ err:
   return true;
 }
 
-void Query_result_export::cleanup() {
-  current_thd->set_sent_row_count(row_count);
-  Query_result_to_file::cleanup();
+void Query_result_export::cleanup(THD *thd) {
+  thd->set_sent_row_count(row_count);
+  Query_result_to_file::cleanup(thd);
 }
 
 /***************************************************************************
@@ -701,7 +704,7 @@ bool Query_dumpvar::prepare(THD *, const mem_root_deque<Item *> &list,
   return false;
 }
 
-bool Query_dumpvar::check_supports_cursor() const {
+bool Query_dumpvar::check_simple_query_block() const {
   my_error(ER_SP_BAD_CURSOR_SELECT, MYF(0));
   return true;
 }

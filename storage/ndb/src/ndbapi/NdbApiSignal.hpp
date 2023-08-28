@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,8 +56,7 @@ public:
   			NdbApiSignal(BlockReference ref);
   			NdbApiSignal(const NdbApiSignal &);
                         NdbApiSignal(const SignalHeader &header)
-			  : SignalHeader(header), theNextSignal(nullptr), 
-                            theRealData(nullptr) {}
+			  : SignalHeader(header), theNextSignal(0), theRealData(0) {}
   			~NdbApiSignal();
 
   void                  set(Uint8  trace,
@@ -237,13 +236,17 @@ NdbApiSignal::getDataPtr() const {
   return theRealData;
 }
 
-inline Uint32* NdbApiSignal::getDataPtrSend() { return theData; }
+inline
+Uint32 *
+NdbApiSignal::getDataPtrSend(){
+  return (Uint32*)&theData[0];
+}
 
 inline
 const Uint32 *
 NdbApiSignal::getConstDataPtrSend() const
 {
-  return theData;
+  return (Uint32*)&theData[0];
 }
 
 inline

@@ -1,5 +1,5 @@
 #ifndef MYSQL_CLIENT_PLUGIN_INCLUDED
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,26 +45,28 @@
   for functions.
 */
 
+#undef MYSQL_PLUGIN_EXPORT
+
 #if defined(_MSC_VER)
-#if defined(MYSQL_DYNAMIC_CLIENT_PLUGIN)
+#if defined(MYSQL_DYNAMIC_PLUGIN)
 #ifdef __cplusplus
-#define MYSQL_CLIENT_PLUGIN_EXPORT extern "C" __declspec(dllexport)
+#define MYSQL_PLUGIN_EXPORT extern "C" __declspec(dllexport)
 #else
-#define MYSQL_CLIENT_PLUGIN_EXPORT __declspec(dllexport)
+#define MYSQL_PLUGIN_EXPORT __declspec(dllexport)
 #endif
-#else /* MYSQL_DYNAMIC_CLIENT_PLUGIN */
+#else /* MYSQL_DYNAMIC_PLUGIN */
 #ifdef __cplusplus
-#define MYSQL_CLIENT_PLUGIN_EXPORT extern "C"
+#define MYSQL_PLUGIN_EXPORT extern "C"
 #else
-#define MYSQL_CLIENT_PLUGIN_EXPORT
+#define MYSQL_PLUGIN_EXPORT
 #endif
-#endif /*MYSQL_DYNAMIC_CLIENT_PLUGIN */
+#endif /*MYSQL_DYNAMIC_PLUGIN */
 #else  /*_MSC_VER */
 
-#if defined(MYSQL_DYNAMIC_CLIENT_PLUGIN)
-#define MYSQL_CLIENT_PLUGIN_EXPORT MY_ATTRIBUTE((visibility("default")))
+#if defined(MYSQL_DYNAMIC_PLUGIN)
+#define MYSQL_PLUGIN_EXPORT MY_ATTRIBUTE((visibility("default")))
 #else
-#define MYSQL_CLIENT_PLUGIN_EXPORT
+#define MYSQL_PLUGIN_EXPORT
 #endif
 
 #endif
@@ -78,20 +80,18 @@ extern "C" {
 #define MYSQL_CLIENT_reserved2 1
 #define MYSQL_CLIENT_AUTHENTICATION_PLUGIN 2
 #define MYSQL_CLIENT_TRACE_PLUGIN 3
-#define MYSQL_CLIENT_TELEMETRY_PLUGIN 4
 
 #define MYSQL_CLIENT_AUTHENTICATION_PLUGIN_INTERFACE_VERSION 0x0200
 #define MYSQL_CLIENT_TRACE_PLUGIN_INTERFACE_VERSION 0x0200
-#define MYSQL_CLIENT_TELEMETRY_PLUGIN_INTERFACE_VERSION 0x0100
 
-#define MYSQL_CLIENT_MAX_PLUGINS 5
+#define MYSQL_CLIENT_MAX_PLUGINS 4
 
 #define MYSQL_CLIENT_PLUGIN_AUTHOR_ORACLE "Oracle Corporation"
 
-#define mysql_declare_client_plugin(X)                  \
-  MYSQL_CLIENT_PLUGIN_EXPORT st_mysql_client_plugin_##X \
-      _mysql_client_plugin_declaration_ = {             \
-          MYSQL_CLIENT_##X##_PLUGIN,                    \
+#define mysql_declare_client_plugin(X)           \
+  MYSQL_PLUGIN_EXPORT st_mysql_client_plugin_##X \
+      _mysql_client_plugin_declaration_ = {      \
+          MYSQL_CLIENT_##X##_PLUGIN,             \
           MYSQL_CLIENT_##X##_PLUGIN_INTERFACE_VERSION,
 #define mysql_end_client_plugin }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,8 +34,6 @@
 #include "storage/myisam/ftdefs.h"
 #include "storage/myisam/myisamdef.h"
 #include "template_utils.h"
-
-struct CHARSET_INFO;
 
 /* search with natural language queries */
 

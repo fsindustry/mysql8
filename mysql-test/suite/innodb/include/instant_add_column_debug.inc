@@ -13,7 +13,7 @@ SELECT * FROM t1;
 
 SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL altered WAIT_FOR dmls_done';
 
---send ALTER TABLE t1 DROP COLUMN c, algorithm=inplace
+--send ALTER TABLE t1 DROP COLUMN c;
 
 connection conn1;
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -61,9 +61,12 @@ IF(MY_COMPILER_IS_GNU)
   MY_TARGET_LINK_OPTIONS(xprotocol_plugin "-Wl,--no-as-needed -lpthread")
 ENDIF()
 
+SET(PROTOC_PLUGIN_GENERATED_HDR
+  "xprotocol_tags.h"
+)
+
 ADD_CUSTOM_COMMAND(
-  OUTPUT "${MYSQLX_GENERATE_DIR}/xprotocol_tags.h"
-         "${MYSQLX_GENERATE_DIR}/encoding_descriptors.h"
+  OUTPUT "${MYSQLX_GENERATE_DIR}/${PROTOC_PLUGIN_GENERATED_HDR}"
   COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
   ARGS --plugin=protoc-gen-yplg=$<TARGET_FILE:xprotocol_plugin>
        --yplg_out "${MYSQLX_GENERATE_DIR}"
@@ -76,14 +79,10 @@ ADD_CUSTOM_COMMAND(
   VERBATIM
 )
 
-MY_ADD_CUSTOM_TARGET(xprotocol_tags
+ADD_CUSTOM_TARGET(xprotocol_tags
   DEPENDS
   xprotocol_plugin
-  "${MYSQLX_GENERATE_DIR}/xprotocol_tags.h"
-  "${MYSQLX_GENERATE_DIR}/encoding_descriptors.h"
+  "${MYSQLX_GENERATE_DIR}/${PROTOC_PLUGIN_GENERATED_HDR}"
   SOURCES
-  "${MYSQLX_GENERATE_DIR}/xprotocol_tags.h"
-  "${MYSQLX_GENERATE_DIR}/encoding_descriptors.h"
+  "${MYSQLX_GENERATE_DIR}/${PROTOC_PLUGIN_GENERATED_HDR}"
 )
-
-ADD_DEPENDENCIES(clang_tidy_prerequisites xprotocol_tags)

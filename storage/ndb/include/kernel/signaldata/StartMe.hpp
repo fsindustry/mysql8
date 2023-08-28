@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,12 +34,12 @@
  * It also contains the Sysfile.
  * Since the Sysfile can be larger than on StartMeConf signal,
  *   there might be more than on of these signals sent before
- *   the entire sysfile is transferred
+ *   the entire sysfile is transfered
  *
  */
 class StartMeReq {
   /**
-   * Sender(s) / Receiver(s)
+   * Sender(s) / Reciver(s)
    */
   friend class Dbdih;
   

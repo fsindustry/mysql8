@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +46,6 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_networking.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_state_exchange.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_statistics_interface.h"
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_statistics_manager.h"
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_statistics_storage_impl.h"
 
 /**
  * Keep track of the most recent XCom configuration the node will deliver
@@ -444,16 +442,6 @@ class Gcs_xcom_interface : public Gcs_interface {
    Network namespace service provider
    */
   Network_namespace_manager *m_netns_manager;
-
-  /**
-   Interface for statistic storage
-   */
-  Gcs_xcom_statistics_manager_interface *m_stats_mgr;
-
-  /**
-   Interface for XCom statistic storage
-   */
-  Gcs_xcom_statistics_storage_impl *m_xcom_stats_storage;
 
  private:
   /*

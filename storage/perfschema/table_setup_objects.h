@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -52,9 +52,13 @@ struct row_setup_objects {
   /** Column OBJECT_TYPE. */
   enum_object_type m_object_type;
   /** Column SCHEMA_NAME. */
-  PFS_schema_name m_schema_name;
+  char m_schema_name[NAME_LEN];
+  /** Length in bytes of @c m_schema_name. */
+  uint m_schema_name_length;
   /** Column OBJECT_NAME. */
-  PFS_object_name m_object_name;
+  char m_object_name[NAME_LEN];
+  /** Length in bytes of @c m_object_name. */
+  uint m_object_name_length;
   /** Column ENABLED. */
   bool *m_enabled_ptr;
   /** Column TIMED. */
@@ -72,6 +76,7 @@ class PFS_index_setup_objects : public PFS_engine_index {
   ~PFS_index_setup_objects() override = default;
 
   virtual bool match(PFS_setup_object *pfs);
+  virtual bool match(row_setup_objects *row);
 
  private:
   PFS_key_object_type_enum m_key_1;
@@ -91,7 +96,7 @@ class table_setup_objects : public PFS_engine_table {
   static int delete_all_rows();
   static ha_rows get_row_count();
 
-  void reset_position() override;
+  void reset_position(void) override;
 
   int rnd_next() override;
   int rnd_pos(const void *pos) override;

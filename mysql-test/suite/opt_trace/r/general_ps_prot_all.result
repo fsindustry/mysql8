@@ -779,7 +779,7 @@ SELECT (SELECT 1 FROM t6 WHERE d = ifnull(c,null) UNION SELECT 2 FROM t6 WHERE d
     {
       "creating_tmp_table": {
         "tmp_table_info": {
-          "table": "<union temporary>",
+          "table": "intermediate_tmp_table",
           "columns": 1,
           "row_length": 9,
           "key_length": 8,
@@ -792,7 +792,7 @@ SELECT (SELECT 1 FROM t6 WHERE d = ifnull(c,null) UNION SELECT 2 FROM t6 WHERE d
     },
     {
       "join_optimization": {
-        "select#": 4,
+        "select#": "fake",
         "steps": [
           {
             "table_dependencies": [
@@ -1036,7 +1036,7 @@ SELECT * FROM t5 WHERE 5 IN (SELECT 1 FROM t6 WHERE d = ifnull(c,null) UNION SEL
                 {
                   "creating_tmp_table": {
                     "tmp_table_info": {
-                      "table": "<union temporary>",
+                      "table": "intermediate_tmp_table",
                       "columns": 1,
                       "row_length": 9,
                       "key_length": 8,
@@ -1049,7 +1049,7 @@ SELECT * FROM t5 WHERE 5 IN (SELECT 1 FROM t6 WHERE d = ifnull(c,null) UNION SEL
                 },
                 {
                   "join_optimization": {
-                    "select#": 4,
+                    "select#": "fake",
                     "steps": [
                       {
                         "table_dependencies": [
@@ -1171,7 +1171,7 @@ select (@query:=QUERY)+NULL, (@trace:=TRACE)+NULL from information_schema.OPTIMI
 NULL	NULL
 select length(@trace);
 length(@trace)
-10810
+10820
 set @max_mem_size=13307;
 set optimizer_trace_max_mem_size=@max_mem_size;
 select length(@query)+length(@trace) > @@optimizer_trace_max_mem_size;
@@ -1191,7 +1191,7 @@ select length(@trace2),
 (length(@trace2) + @missing_bytes) = length(@trace),
 @query2 = @query;
 length(@trace2)	(length(@trace2) + @missing_bytes) = length(@trace)	@query2 = @query
-10810	1	1
+10820	1	1
 select length(@query2) + length(@trace2)
 between (@@optimizer_trace_max_mem_size-200) and (@@optimizer_trace_max_mem_size+200);
 length(@query2) + length(@trace2)
@@ -1379,7 +1379,7 @@ explain SELECT c FROM t5 where c+1 in (select d+1 from t6 where d is null)	{
                       {
                         "index": "d",
                         "ranges": [
-                          "d = NULL"
+                          "NULL <= d <= NULL"
                         ] /* ranges */,
                         "index_dives_for_eq_ranges": true,
                         "rowid_ordered": true,
@@ -1402,7 +1402,7 @@ explain SELECT c FROM t5 where c+1 in (select d+1 from t6 where d is null)	{
                       "index": "d",
                       "rows": 1,
                       "ranges": [
-                        "d = NULL"
+                        "NULL <= d <= NULL"
                       ] /* ranges */
                     } /* range_access_plan */,
                     "rows_for_plan": 1,
@@ -1579,19 +1579,19 @@ explain SELECT c FROM t5 where c+1 in (select d+1 from t6 where d is null)	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select (`t6`.`d` + 1) from `t6` where (`t6`.`d` is null)"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t5`.`c` AS `c` from `t5` where <in_optimizer>((`t5`.`c` + 1),<exists>(/* select#2 */ select (`t6`.`d` + 1) from `t6` where ((`t6`.`d` is null) and (<cache>((`t5`.`c` + 1)) = (`t6`.`d` + 1)))))"
@@ -1709,17 +1709,17 @@ explain select * from t1 where s1 > any (select s2 from t1)	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select `t1`.`s2` from `t1`"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "> ALL/ANY (SELECT)",
+                    "to": "SELECT(MIN)",
+                    "chosen": true
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "> ALL/ANY (SELECT)",
-              "to": "SELECT(MIN)",
-              "chosen": true
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t1`.`s1` AS `s1`,`t1`.`s2` AS `s2` from `t1` where <nop>((`t1`.`s1` > (/* select#2 */ select min(`t1`.`s2`) from `t1`)))"
@@ -1967,17 +1967,17 @@ explain select * from t1 where s1 > any (select max(s2) from t1)	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select max(`t1`.`s2`) from `t1`"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "> ALL/ANY (SELECT)",
+                    "to": "MIN (SELECT)",
+                    "chosen": true
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "> ALL/ANY (SELECT)",
-              "to": "MIN (SELECT)",
-              "chosen": true
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t1`.`s1` AS `s1`,`t1`.`s2` AS `s2` from `t1` where <nop>((`t1`.`s1` > <min>(/* select#2 */ select max(`t1`.`s2`) from `t1`)))"
@@ -2225,19 +2225,19 @@ explain select * from t1 where s1 in (select s2 from t1)	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select `t1`.`s2` from `t1`"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t1`.`s1` AS `s1`,`t1`.`s2` AS `s2` from `t1` where <in_optimizer>(`t1`.`s1`,<exists>(/* select#2 */ select `t1`.`s2` from `t1` where (<cache>(`t1`.`s1`) = `t1`.`s2`)))"
@@ -2513,19 +2513,19 @@ explain select * from t1 where (s1,s2) in (select s2,s1 from t1)	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select `t1`.`s2`,`t1`.`s1` from `t1`"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t1`.`s1` AS `s1`,`t1`.`s2` AS `s2` from `t1` where <in_optimizer>((`t1`.`s1`,`t1`.`s2`),<exists>(/* select#2 */ select `t1`.`s2`,`t1`.`s1` from `t1` where ((<cache>(`t1`.`s1`) = `t1`.`s2`) and (<cache>(`t1`.`s2`) = `t1`.`s1`))))"
@@ -3146,19 +3146,19 @@ where a1 in (select b1 from t2_16 where b1 > '0')	{
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select `t2_16`.`b1` from `t2_16` where (`t2_16`.`b1` > '0')"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select left(`t1_16`.`a1`,7) AS `left(a1,7)`,left(`t1_16`.`a2`,7) AS `left(a2,7)` from `t1_16` where <in_optimizer>(`t1_16`.`a1`,<exists>(/* select#2 */ select `t2_16`.`b1` from `t2_16` where ((`t2_16`.`b1` > '0') and (<cache>(`t1_16`.`a1`) = `t2_16`.`b1`))))"
@@ -4099,7 +4099,7 @@ SELECT * FROM t1 WHERE c1=5 UNION SELECT * FROM t2 WHERE c2=5	{
     {
       "creating_tmp_table": {
         "tmp_table_info": {
-          "table": "<union temporary>",
+          "table": "intermediate_tmp_table",
           "columns": 1,
           "row_length": 5,
           "key_length": 5,
@@ -4112,7 +4112,7 @@ SELECT * FROM t1 WHERE c1=5 UNION SELECT * FROM t2 WHERE c2=5	{
     },
     {
       "join_optimization": {
-        "select#": 3,
+        "select#": "fake",
         "steps": [
           {
             "table_dependencies": [
@@ -4242,19 +4242,19 @@ concat(c1,'y') IN
               "steps": [
                 {
                   "expanded_query": "/* select#2 */ select left(`t2`.`c2`,8) from `t2`"
+                },
+                {
+                  "transformation": {
+                    "select#": 2,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 2,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "join_preparation": {
@@ -4262,19 +4262,19 @@ concat(c1,'y') IN
               "steps": [
                 {
                   "expanded_query": "/* select#3 */ select left(`t2`.`c2`,9) from `t2`"
+                },
+                {
+                  "transformation": {
+                    "select#": 3,
+                    "from": "IN (SELECT)",
+                    "to": "EXISTS (CORRELATED SELECT)",
+                    "chosen": true,
+                    "evaluating_constant_where_conditions": [
+                    ] /* evaluating_constant_where_conditions */
+                  } /* transformation */
                 }
               ] /* steps */
             } /* join_preparation */
-          },
-          {
-            "transformation": {
-              "select#": 3,
-              "from": "IN (SELECT)",
-              "to": "EXISTS (CORRELATED SELECT)",
-              "chosen": true,
-              "evaluating_constant_where_conditions": [
-              ] /* evaluating_constant_where_conditions */
-            } /* transformation */
           },
           {
             "expanded_query": "/* select#1 */ select `t1`.`c1` AS `c1` from `t1` where (<in_optimizer>(concat(`t1`.`c1`,'x'),<exists>(/* select#2 */ select left(`t2`.`c2`,8) from `t2` where (<cache>(concat(`t1`.`c1`,'x')) = left(`t2`.`c2`,8)))) and <in_optimizer>(concat(`t1`.`c1`,'y'),<exists>(/* select#3 */ select left(`t2`.`c2`,9) from `t2` where (<cache>(concat(`t1`.`c1`,'y')) = left(`t2`.`c2`,9)))))"
@@ -4551,7 +4551,6 @@ concat(c1,'y') IN
               "unknown_key_1": {
                 "creating_tmp_table": {
                   "tmp_table_info": {
-                    "table": "<materialized_subquery>",
                     "columns": 1,
                     "row_length": 38,
                     "key_length": 39,
@@ -4741,7 +4740,6 @@ concat(c1,'y') IN
               "unknown_key_2": {
                 "creating_tmp_table": {
                   "tmp_table_info": {
-                    "table": "<materialized_subquery>",
                     "columns": 1,
                     "row_length": 34,
                     "key_length": 35,
@@ -6782,7 +6780,6 @@ trace
                 {
                   "creating_tmp_table": {
                     "tmp_table_info": {
-                      "table": "<temporary>",
                       "in_plan_at_position": 2,
                       "columns": 2,
                       "row_length": 30,
@@ -6925,7 +6922,7 @@ update t6 set d=5 where d is NULL	{
             {
               "index": "d",
               "ranges": [
-                "d = NULL"
+                "NULL <= d <= NULL"
               ] /* ranges */,
               "index_dives_for_eq_ranges": true,
               "rowid_ordered": true,
@@ -6948,7 +6945,7 @@ update t6 set d=5 where d is NULL	{
             "index": "d",
             "rows": 1,
             "ranges": [
-              "d = NULL"
+              "NULL <= d <= NULL"
             ] /* ranges */
           } /* range_access_plan */,
           "rows_for_plan": 1,
@@ -7019,7 +7016,7 @@ delete from t6 where d=5	{
             {
               "index": "d",
               "ranges": [
-                "d = 5"
+                "5 <= d <= 5"
               ] /* ranges */,
               "index_dives_for_eq_ranges": true,
               "rowid_ordered": true,
@@ -7038,7 +7035,7 @@ delete from t6 where d=5	{
             "index": "d",
             "rows": 1,
             "ranges": [
-              "d = 5"
+              "5 <= d <= 5"
             ] /* ranges */
           } /* range_access_plan */,
           "rows_for_plan": 1,
@@ -7255,7 +7252,6 @@ insert into t6 select * from t6 where d>7	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
-                "table": "<temporary>",
                 "in_plan_at_position": 1,
                 "columns": 1,
                 "row_length": 5,
@@ -7462,6 +7458,20 @@ update t5, t6 set t6.d=t6.d+t5.c+4-t5.c-4 where d>7000	{
             ] /* finalizing_table_conditions */
           },
           {
+            "creating_tmp_table": {
+              "tmp_table_info": {
+                "table": "intermediate_tmp_table",
+                "columns": 2,
+                "row_length": 13,
+                "key_length": 9,
+                "unique_constraint": false,
+                "makes_grouped_rows": true,
+                "cannot_insert_duplicates": false,
+                "location": "TempTable"
+              } /* tmp_table_info */
+            } /* creating_tmp_table */
+          },
+          {
             "refine_plan": [
               {
                 "table": "`t6`"
@@ -7470,20 +7480,6 @@ update t5, t6 set t6.d=t6.d+t5.c+4-t5.c-4 where d>7000	{
           }
         ] /* steps */
       } /* join_optimization */
-    },
-    {
-      "creating_tmp_table": {
-        "tmp_table_info": {
-          "table": "intermediate_tmp_table",
-          "columns": 2,
-          "row_length": 13,
-          "key_length": 9,
-          "unique_constraint": false,
-          "makes_grouped_rows": true,
-          "cannot_insert_duplicates": false,
-          "location": "TempTable"
-        } /* tmp_table_info */
-      } /* creating_tmp_table */
     },
     {
       "join_execution": {
@@ -12331,7 +12327,7 @@ select TRACE into dumpfile 'MYSQLTEST_VARDIR/tmp/optimizer_trace.txt' from infor
     {
       "creating_tmp_table": {
         "tmp_table_info": {
-          "table": "<union temporary>",
+          "table": "intermediate_tmp_table",
           "columns": 1,
           "row_length": 9,
           "key_length": 8,
@@ -12344,7 +12340,7 @@ select TRACE into dumpfile 'MYSQLTEST_VARDIR/tmp/optimizer_trace.txt' from infor
     },
     {
       "join_optimization": {
-        "select#": 3,
+        "select#": "fake",
         "steps": [
           {
             "table_dependencies": [
@@ -12581,7 +12577,7 @@ SELECT a + (SELECT SUM(a) + (SELECT COUNT(a) FROM t1) FROM t1) AS cnt FROM t2	{
                 {
                   "creating_tmp_table": {
                     "tmp_table_info": {
-                      "table": "derived_2_4",
+                      "table": " `derived_2_4`",
                       "columns": 1,
                       "row_length": 16,
                       "key_length": 0,
@@ -12687,7 +12683,7 @@ SELECT a + (SELECT SUM(a) + (SELECT COUNT(a) FROM t1) FROM t1) AS cnt FROM t2	{
                 {
                   "creating_tmp_table": {
                     "tmp_table_info": {
-                      "table": "derived_2_5",
+                      "table": " `derived_2_5`",
                       "columns": 1,
                       "row_length": 9,
                       "key_length": 0,
@@ -12781,7 +12777,7 @@ SELECT a + (SELECT SUM(a) + (SELECT COUNT(a) FROM t1) FROM t1) AS cnt FROM t2	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
-                "table": "derived_1_2",
+                "table": " `derived_1_2`",
                 "columns": 1,
                 "row_length": 16,
                 "key_length": 0,

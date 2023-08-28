@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,7 +35,7 @@ class Trigger;
 struct MEM_ROOT;
 struct MY_BITMAP;
 struct TABLE;
-class Table_ref;
+struct TABLE_LIST;
 
 class Trigger_chain {
  public:
@@ -57,7 +57,7 @@ class Trigger_chain {
   bool execute_triggers(THD *thd);
 
   void add_tables_and_routines(THD *thd, Query_tables_list *prelocking_ctx,
-                               Table_ref *table_list);
+                               TABLE_LIST *table_list);
 
   void mark_fields(TABLE *subject_table);
 

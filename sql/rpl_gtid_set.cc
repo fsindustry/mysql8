@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,9 +28,9 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -46,7 +46,6 @@
 #include "my_sys.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/int2str.h"
 #include "prealloced_array.h"
 #include "sql/rpl_gtid.h"
 #include "sql/sql_const.h"
@@ -1007,7 +1006,7 @@ bool Gtid_set::is_interval_subset(Const_interval_iterator *sub,
     while (sub_iv->start > super_iv->end) {
       super->next();
       super_iv = super->get();
-      // If we reach end of super, then no interval covers sub_iv, so
+      // If we reach end of super, then no interal covers sub_iv, so
       // sub is not a subset of super.
       if (super_iv == nullptr) return false;
     }

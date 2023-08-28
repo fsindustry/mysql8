@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,8 +24,8 @@
 
 #include "my_config.h"
 
-#include "mysql/components/services/bits/psi_cond_bits.h"
-#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/psi_cond_bits.h"
+#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 
@@ -57,7 +57,7 @@ static inline int thd_partition(my_thread_id thread_id) {
 }
 
 bool Find_thd_with_id::operator()(THD *thd) {
-  if (thd->get_command() == COM_DAEMON && !m_daemon_allowed) return false;
+  if (thd->get_command() == COM_DAEMON) return false;
   return (thd->thread_id() == m_thread_id);
 }
 
@@ -307,28 +307,15 @@ void Global_THD_manager::do_for_all_thd_copy(Do_THD_Impl *func) {
 }
 
 void Global_THD_manager::do_for_all_thd(Do_THD_Impl *func) {
-  const Do_THD doit(func);
+  Do_THD doit(func);
   for (int i = 0; i < NUM_PARTITIONS; i++) {
     MUTEX_LOCK(lock, &LOCK_thd_list[i]);
     std::for_each(thd_list[i].begin(), thd_list[i].end(), doit);
   }
 }
 
-void Global_THD_manager::do_for_first_n_thd(Do_THD_Impl *func, uint n) {
-  Do_THD doit(func);
-  uint num_processed_thds = 0;
-  for (int i = 0; i < NUM_PARTITIONS; i++) {
-    MUTEX_LOCK(lock, &LOCK_thd_list[i]);
-    for (auto it = thd_list[i].begin(); it != thd_list[i].end(); it++) {
-      if (num_processed_thds == n) return;
-      doit(*it);
-      num_processed_thds++;
-    }
-  }
-}
-
 THD_ptr Global_THD_manager::find_thd(Find_THD_Impl *func) {
-  const Find_THD find_thd(func);
+  Find_THD find_thd(func);
   for (int i = 0; i < NUM_PARTITIONS; i++) {
     MUTEX_LOCK(lock, &LOCK_thd_list[i]);
     THD_array::const_iterator it =
@@ -345,7 +332,7 @@ THD_ptr Global_THD_manager::find_thd(Find_THD_Impl *func) {
 // Optimized version of the above function for when we know
 // the thread_id of the THD we are looking for.
 THD_ptr Global_THD_manager::find_thd(Find_thd_with_id *func) {
-  const Find_THD find_thd(func);
+  Find_THD find_thd(func);
   // Since we know the thread_id, we can check the correct
   // partition directly.
   const int partition = thd_partition(func->m_thread_id);

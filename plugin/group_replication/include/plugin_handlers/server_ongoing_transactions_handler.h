@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -68,8 +68,7 @@ class Server_ongoing_transactions_handler : public Group_transaction_listener {
 
   int before_transaction_begin(my_thread_id thread_id,
                                ulong gr_consistency_level, ulong hold_timeout,
-                               enum_rpl_channel_type rpl_channel_type,
-                               const THD *thd) override;
+                               enum_rpl_channel_type rpl_channel_type) override;
 
   int before_commit(
       my_thread_id thread_id,

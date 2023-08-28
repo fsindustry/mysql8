@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,22 +22,21 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include "trp_client.hpp"
 #include "TransporterFacade.hpp"
 #include <EventLogger.hpp>
 
 trp_client::trp_client()
   : m_blockNo(~Uint32(0)),
-    m_facade(nullptr),
+    m_facade(NULL),
     m_locked_for_poll(false),
     m_is_receiver_thread(false),
-    m_mutex(nullptr),
+    m_mutex(NULL),
     m_poll(),
     m_enabled_nodes_mask(),
     m_send_nodes_mask(),
     m_send_nodes_cnt(0),
-    m_send_buffers(nullptr),
+    m_send_buffers(NULL),
     m_flushed_nodes_mask()
 {
   m_mutex = NdbMutex_Create();
@@ -49,7 +48,7 @@ trp_client::~trp_client()
   close();
   NdbMutex_Destroy(m_mutex);
 
-  m_mutex = nullptr;
+  m_mutex = NULL;
   assert(m_send_nodes_cnt == 0);
   assert(m_locked_for_poll == false);
   delete [] m_send_buffers;
@@ -60,9 +59,9 @@ trp_client::PollQueue::PollQueue()
     m_locked(false),
     m_poll_owner(false),
     m_poll_queue(false),
-    m_prev(nullptr),
-    m_next(nullptr),
-    m_condition(nullptr)
+    m_prev(NULL),
+    m_next(NULL),
+    m_condition(NULL)
 {
   m_condition = NdbCondition_Create();
 }
@@ -71,15 +70,15 @@ trp_client::PollQueue::~PollQueue()
 {
   /**
    * Require that trp_client user
-   * doesn't destroy object when holding any locks.
+   * doesnt destroy object when holding any locks.
    */
   if (unlikely(
       m_waiting != PQ_IDLE ||
       m_locked == true ||
       m_poll_owner == true ||
       m_poll_queue == true ||
-      m_next != nullptr ||
-      m_prev != nullptr))
+      m_next != 0 ||
+      m_prev != 0))
   {
     g_eventLogger->info(
         "ERR: ::~PollQueue: Deleting trp_clnt in use:"
@@ -88,7 +87,7 @@ trp_client::PollQueue::~PollQueue()
     require(false);
   }
   NdbCondition_Destroy(m_condition);
-  m_condition = nullptr;
+  m_condition = NULL;
 }
 
 Uint32
@@ -96,8 +95,8 @@ trp_client::open(TransporterFacade* tf, int blockNo)
 {
   Uint32 res = 0;
   assert(m_enabled_nodes_mask.isclear());
-  assert(m_facade == nullptr);
-  if (m_facade == nullptr)
+  assert(m_facade == NULL);
+  if (m_facade == NULL)
   {
     m_facade = tf;
 
@@ -111,7 +110,7 @@ trp_client::open(TransporterFacade* tf, int blockNo)
     }
     else
     {
-      m_facade = nullptr;
+      m_facade = NULL;
     }
   }
   return res;
@@ -130,7 +129,7 @@ trp_client::close()
   {
     m_facade->close_clnt(this);
 
-    m_facade = nullptr;
+    m_facade = NULL;
     m_blockNo = ~Uint32(0);
   }
   m_enabled_nodes_mask.clear();
@@ -266,7 +265,7 @@ trp_client::do_forceSend(bool forceSend)
  * Append the private client send buffers to the
  * TransporterFacade lists of prepared send buffers.
  * The TransporterFacade may then send these whenever
- * it find convenient.
+ * it find convienient.
  *
  * Build an aggregated bitmap 'm_flushed_nodes_mask'
  * of nodes this client has flushed messages to.
@@ -357,11 +356,15 @@ trp_client::isSendEnabled(NodeId node) const
   return m_enabled_nodes_mask.get(node);
 }
 
-Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
-                                Uint32 prio [[maybe_unused]],
-                                Uint32 /*max_use*/, SendStatus* error)
+Uint32 *
+trp_client::getWritePtr(NodeId node,
+                        TrpId trp_id,
+                        Uint32 lenBytes,
+                        Uint32 prio,
+                        Uint32 max_use,
+                        SendStatus *error)
 {
-  assert(prio == 1 /* JBB */);
+  (void)trp_id;
   assert(isSendEnabled(node));
   
   TFBuffer* b = m_send_buffers+node;
@@ -370,7 +373,7 @@ Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
   if (likely(found))
   {
     TFPage * page = b->m_tail;
-    assert(page != nullptr);
+    assert(page != 0);
     if (page->m_bytes + page->m_start + lenBytes <= page->max_data_bytes())
     {
       return (Uint32 *)(page->m_data + page->m_start + page->m_bytes);
@@ -391,11 +394,11 @@ Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
   else
   {
     TFPage* page = m_facade->alloc_sb_page(node);
-    if (likely(page != nullptr))
+    if (likely(page != 0))
     {
       page->init();
 
-      if (b->m_tail == nullptr)
+      if (b->m_tail == NULL)
       {
         assert(!found);
         b->m_head = page;
@@ -404,7 +407,7 @@ Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
       else
       {
         assert(found);
-        assert(b->m_head != nullptr);
+        assert(b->m_head != NULL);
         b->m_tail->m_next = page;
         b->m_tail = page;
       }
@@ -413,7 +416,7 @@ Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
     *error = SEND_BUFFER_FULL;
   }
 
-  if (b->m_tail == nullptr)
+  if (b->m_tail == 0)
   {
     assert(!found);
     m_send_nodes_mask.clear(node);
@@ -424,18 +427,21 @@ Uint32* trp_client::getWritePtr(NodeId node, TrpId /*trp_id*/, Uint32 lenBytes,
     assert(found);
   }
 
-  return nullptr;
+  return NULL;
 }
 
-Uint32 trp_client::updateWritePtr(NodeId node, TrpId /*trp_id*/,
-                                  Uint32 lenBytes, Uint32 prio [[maybe_unused]])
+Uint32
+trp_client::updateWritePtr(NodeId node,
+                           TrpId trp_id,
+                           Uint32 lenBytes,
+                           Uint32 prio)
 {
-  assert(prio == 1 /* JBB */);
+  (void)trp_id;
   TFBuffer* b = m_send_buffers+node;
   TFBufferGuard g0(* b);
   assert(m_send_nodes_mask.get(node));
-  assert(b->m_head != nullptr);
-  assert(b->m_tail != nullptr);
+  assert(b->m_head != 0);
+  assert(b->m_tail != 0);
 
   TFPage *page = b->m_tail;
   assert(page->m_bytes + lenBytes <= page->max_data_bytes());

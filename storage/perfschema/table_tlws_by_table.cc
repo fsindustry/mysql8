@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -166,13 +166,13 @@ PFS_engine_table *table_tlws_by_table::create(PFS_engine_table_share *) {
   return new table_tlws_by_table();
 }
 
-int table_tlws_by_table::delete_all_rows() {
+int table_tlws_by_table::delete_all_rows(void) {
   reset_table_lock_waits_by_table_handle();
   reset_table_lock_waits_by_table();
   return 0;
 }
 
-ha_rows table_tlws_by_table::get_row_count() {
+ha_rows table_tlws_by_table::get_row_count(void) {
   return global_table_share_container.get_row_count();
 }
 
@@ -181,14 +181,14 @@ table_tlws_by_table::table_tlws_by_table()
   m_normalizer = time_normalizer::get_wait();
 }
 
-void table_tlws_by_table::reset_position() {
+void table_tlws_by_table::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
 int table_tlws_by_table::rnd_init(bool) { return 0; }
 
-int table_tlws_by_table::rnd_next() {
+int table_tlws_by_table::rnd_next(void) {
   PFS_table_share *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -227,7 +227,7 @@ int table_tlws_by_table::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_tlws_by_table::index_next() {
+int table_tlws_by_table::index_next(void) {
   PFS_table_share *share;
   bool has_more_share = true;
 
@@ -280,9 +280,9 @@ int table_tlws_by_table::read_row_values(TABLE *table, unsigned char *buf,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* OBJECT_TYPE */
-        case 1: /* OBJECT_SCHEMA */
+        case 1: /* SCHEMA_NAME */
         case 2: /* OBJECT_NAME */
-          m_row.m_object.set_nullable_field(f->field_index(), f);
+          m_row.m_object.set_field(f->field_index(), f);
           break;
         case 3: /* COUNT_STAR */
           set_field_ulonglong(f, m_row.m_stat.m_all.m_count);

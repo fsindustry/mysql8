@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -24,11 +24,12 @@
 
 #include "keyring/keyring_manager.h"
 
-#include <cstring>
+#include <string.h>
 #include <random>
 #include <stdexcept>
 #include <system_error>
 
+#include "common.h"
 #include "dim.h"
 #include "keyring/keyring_file.h"
 #include "keyring/master_key_file.h"
@@ -92,12 +93,9 @@ static std::pair<std::string, std::string> get_master_key(
           "' was created in an old version and needs to be recreated. Please "
           "delete and bootstrap again.");
     }
-  } catch (const std::system_error &e) {
-    if (e.code() != std::errc::no_such_file_or_directory || !create_if_needed) {
-      throw;
-    }
+  } catch (std::exception &) {
+    if (errno != ENOENT || !create_if_needed) throw;
   }
-
   std::string master_key;
   // get the key for the keyring from the master key file, decrypting it with
   // the scramble
@@ -105,11 +103,10 @@ static std::pair<std::string, std::string> get_master_key(
     try {
       // look up for the master_key for this given keyring file
       master_key = mkf.get(keyring_file_path, master_scramble);
-    } catch (const std::out_of_range &) {
+    } catch (std::out_of_range &) {
       // missing key will be handled further down
     }
   }
-
   if (master_key.empty()) {
     if (!create_if_needed)
       throw std::runtime_error("Master key for keyring at '" +
@@ -132,10 +129,11 @@ bool init_keyring(const std::string &keyring_file_path,
   std::string master_scramble;
   MasterKeyFile mkf(master_key_path);
 
+  errno = 0;
   try {
     mkf.load();
-  } catch (const std::system_error &e) {
-    if (e.code() == std::errc::no_such_file_or_directory && create_if_needed) {
+  } catch (std::exception &) {
+    if (errno == ENOENT && create_if_needed) {
       // ignore the error and proceed to create the file
     } else
       throw;
@@ -152,9 +150,9 @@ bool init_keyring(const std::string &keyring_file_path,
     flush_keyring();
     try {
       mkf.save();
-    } catch (const std::system_error &e) {
-      throw std::system_error(
-          e.code(), "Unable to save master key to " + master_key_path);
+    } catch (...) {
+      throw std::runtime_error("Unable to save master key to " +
+                               master_key_path + ": " + get_strerror(errno));
     }
   }
   return existed;

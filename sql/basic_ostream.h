@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,10 +22,8 @@
 
 #ifndef BASIC_OSTREAM_INCLUDED
 #define BASIC_OSTREAM_INCLUDED
-#include "libbinlogevents/include/compression/compressor.h"
-#include "libbinlogevents/include/nodiscard.h"
-#include "my_byteorder.h"
-#include "my_inttypes.h"
+#include <my_byteorder.h>
+#include "libbinlogevents/include/compression/base.h"
 #include "my_sys.h"
 #include "sql_string.h"
 
@@ -138,7 +136,7 @@ class IO_CACHE_ostream : public Truncatable_ostream {
 
   /**
      Syncs the file to disk. It doesn't check and flush any remaining data still
-     left in IO_CACHE's buffer. So a call to flush() is necessary in order to
+     left in IO_CACHE's bufffer. So a call to flush() is necessary in order to
      persist all data including the data in buffer.
 
      @retval false  Success
@@ -171,38 +169,16 @@ class StringBuffer_ostream : public Basic_ostream,
 
 class Compressed_ostream : public Basic_ostream {
  private:
-  using Compressor_t = binary_log::transaction::compression::Compressor;
-  using Compressor_ptr_t = std::shared_ptr<Compressor_t>;
-  using Status_t = binary_log::transaction::compression::Compress_status;
-  using Managed_buffer_sequence_t = Compressor_t::Managed_buffer_sequence_t;
-  Compressor_ptr_t m_compressor;
-  Managed_buffer_sequence_t &m_managed_buffer_sequence;
-  Status_t m_status = Status_t::success;
+  binary_log::transaction::compression::Compressor *m_compressor;
 
  public:
-  Compressed_ostream(Compressor_ptr_t compressor,
-                     Managed_buffer_sequence_t &managed_buffer_sequence)
-      : m_compressor(std::move(compressor)),
-        m_managed_buffer_sequence(managed_buffer_sequence) {}
-  ~Compressed_ostream() override = default;
-  Compressed_ostream() = delete;
+  Compressed_ostream();
+  ~Compressed_ostream() override;
   Compressed_ostream(const Compressed_ostream &) = delete;
   Compressed_ostream &operator=(const Compressed_ostream &) = delete;
-  /// Compress the given bytes into the buffer sequence.
-  ///
-  /// @note This will consume the input, but may not produce all
-  /// output; it keeps the compression frame open so that the
-  /// compressor can make use of patterns across different invocations
-  /// of the function.  The caller has to call Compressor::finish to
-  /// end the frame.
-  ///
-  /// @param buffer The input buffer
-  /// @param length The size of the input buffer
-  /// @retval false Success
-  /// @retval true Error
-  [[NODISCARD]] bool write(const unsigned char *buffer,
-                           my_off_t length) override;
-  Status_t get_status() const;
+  binary_log::transaction::compression::Compressor *get_compressor();
+  void set_compressor(binary_log::transaction::compression::Compressor *);
+  bool write(const unsigned char *buffer, my_off_t length) override;
 };
 
 #endif  // BASIC_OSTREAM_INCLUDED

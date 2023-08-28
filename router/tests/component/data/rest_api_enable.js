@@ -46,17 +46,17 @@ var nodes = function(host, port_and_state) {
   });
 };
 
-var group_replication_members_online =
+var group_replication_membership_online =
     nodes(mysqld.global.gr_node_host, mysqld.global.gr_nodes);
 
 var options = {
   cluster_type: "gr",
-  gr_id: mysqld.global.gr_id,
   innodb_cluster_name: "mycluster",
   innodb_cluster_instances: mysqld.global.innodb_cluster_instances,
   gr_id: mysqld.global.gr_id,
+  group_replication_name: mysqld.global.gr_id,
   metadata_schema_version: mysqld.global.schema_version,
-  group_replication_members: group_replication_members_online,
+  group_replication_membership: group_replication_membership_online,
 };
 
 var common_responses = common_stmts.prepare_statement_responses(
@@ -65,23 +65,19 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_set_gr_consistency_level",
       "router_select_schema_version",
       "router_select_cluster_type_v2",
-      "router_select_current_instance_attributes",
       "router_count_clusters_v2",
       "router_check_member_state",
       "router_select_members_count",
       "router_select_replication_group_name",
       "router_show_cipher_status",
-      "router_select_cluster_instances_v2_gr",
+      "router_select_cluster_instances_v2",
       "router_start_transaction",
       "router_commit",
-      "router_select_rest_accounts_credentials_gr_by_uuid",
-      "router_clusterset_present",
+      "router_select_rest_accounts_credentials",
 
       // to fail account verification in some tests this is not added on
       // purpose
       "router_select_metadata_v2_gr",
-      "router_check_member_state",
-      "router_select_members_count",
       "router_select_group_replication_primary_member",
       "router_select_group_membership_with_primary_mode",
     ],

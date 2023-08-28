@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 Setup circular replication
 The circle is setup between Primary and Secondary
@@ -46,6 +46,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Now perform multiple consecutive updates on the Secondary
 update test.t1 set b="Elephant house" where a=1;
 update test.t1 set b="Beach house" where a=1;
@@ -64,6 +67,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 --------------------------------------------
 Test 2 : Normal Insert from Secondary Master
 --------------------------------------------
@@ -92,6 +98,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -------------------------------
 Test 3 : Insert-Insert conflict
 -------------------------------
@@ -121,6 +130,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on isolated secondary Master (should be as-set)
 select * from test.t1 order by a;
 a	b
@@ -162,6 +174,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Update row on Secondary Master
 update test.t1 set b="Toast" where a=2;
 -- Examine data on Primary Master - should be unaffected
@@ -185,6 +200,9 @@ SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cau
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on secondary - should be as set
 select * from test.t1 order by a;
 a	b
@@ -234,6 +252,9 @@ ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, still missing
 select * from test.t1 order by a;
 a	b
@@ -284,6 +305,9 @@ write_row	row_does_not_exist
 update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, should be as inserted
 select * from test.t1 order by a;
 a	b
@@ -338,6 +362,9 @@ update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, no row
 select * from test.t1 order by a;
 a	b
@@ -419,6 +446,9 @@ update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ------------------------------------------------
 Test 9 : Insert, Insert-Update-Delete conflict
 ------------------------------------------------
@@ -480,6 +510,9 @@ delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master (none)
 select * from test.t1 order by a;
 a	b
@@ -558,6 +591,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on Secondary Master, as set
 select * from test.t1 order by a;
 a	b
@@ -631,6 +667,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 Conflict algorithm counter diff :
 ndb_conflict_fn_epoch
 12
@@ -679,6 +718,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 drop table test.t1;
 drop table test.t2;
 drop table test.t1$EX;
@@ -722,6 +764,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Now perform multiple consecutive updates on the Secondary
 update test.t1 set b="Elephant house" where a=1;
 update test.t1 set b="Beach house" where a=1;
@@ -740,6 +785,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 --------------------------------------------
 Test 2 : Normal Insert from Secondary Master
 --------------------------------------------
@@ -768,6 +816,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -------------------------------
 Test 3 : Insert-Insert conflict
 -------------------------------
@@ -797,6 +848,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on isolated secondary Master (should be as-set)
 select * from test.t1 order by a;
 a	b
@@ -838,6 +892,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Update row on Secondary Master
 update test.t1 set b="Toast" where a=2;
 -- Examine data on Primary Master - should be unaffected
@@ -861,6 +918,9 @@ SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cau
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on secondary - should be as set
 select * from test.t1 order by a;
 a	b
@@ -910,6 +970,9 @@ ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, still missing
 select * from test.t1 order by a;
 a	b
@@ -960,6 +1023,9 @@ write_row	row_does_not_exist
 update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, should be as inserted
 select * from test.t1 order by a;
 a	b
@@ -1014,6 +1080,9 @@ update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, no row
 select * from test.t1 order by a;
 a	b
@@ -1095,6 +1164,9 @@ update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ------------------------------------------------
 Test 9 : Insert, Insert-Update-Delete conflict
 ------------------------------------------------
@@ -1156,6 +1228,9 @@ delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master (none)
 select * from test.t1 order by a;
 a	b
@@ -1234,6 +1309,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on Secondary Master, as set
 select * from test.t1 order by a;
 a	b
@@ -1307,6 +1385,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 Conflict algorithm counter diff :
 ndb_conflict_fn_epoch
 12
@@ -1355,6 +1436,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 drop table test.t1;
 drop table test.t2;
 drop table test.t1$EX;
@@ -1398,6 +1482,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Now perform multiple consecutive updates on the Secondary
 update test.t1 set b="Elephant house" where a=1;
 update test.t1 set b="Beach house" where a=1;
@@ -1416,6 +1503,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 --------------------------------------------
 Test 2 : Normal Insert from Secondary Master
 --------------------------------------------
@@ -1444,6 +1534,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -------------------------------
 Test 3 : Insert-Insert conflict
 -------------------------------
@@ -1473,6 +1566,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on isolated secondary Master (should be as-set)
 select * from test.t1 order by a;
 a	b
@@ -1514,6 +1610,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Update row on Secondary Master
 update test.t1 set b="Toast" where a=2;
 -- Examine data on Primary Master - should be unaffected
@@ -1537,6 +1636,9 @@ SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cau
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on secondary - should be as set
 select * from test.t1 order by a;
 a	b
@@ -1586,6 +1688,9 @@ ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, still missing
 select * from test.t1 order by a;
 a	b
@@ -1636,6 +1741,9 @@ write_row	row_does_not_exist
 update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, should be as inserted
 select * from test.t1 order by a;
 a	b
@@ -1690,6 +1798,9 @@ update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, no row
 select * from test.t1 order by a;
 a	b
@@ -1771,6 +1882,9 @@ update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ------------------------------------------------
 Test 9 : Insert, Insert-Update-Delete conflict
 ------------------------------------------------
@@ -1832,6 +1946,9 @@ delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master (none)
 select * from test.t1 order by a;
 a	b
@@ -1910,6 +2027,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on Secondary Master, as set
 select * from test.t1 order by a;
 a	b
@@ -1983,6 +2103,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 Conflict algorithm counter diff :
 ndb_conflict_fn_epoch
 12
@@ -2031,6 +2154,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 drop table test.t1;
 drop table test.t2;
 drop table test.t1$EX;
@@ -2074,6 +2200,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Now perform multiple consecutive updates on the Secondary
 update test.t1 set b="Elephant house" where a=1;
 update test.t1 set b="Beach house" where a=1;
@@ -2092,6 +2221,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 --------------------------------------------
 Test 2 : Normal Insert from Secondary Master
 --------------------------------------------
@@ -2120,6 +2252,9 @@ SELECT * FROM `t1$EX` ORDER BY ndb$count;
 ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	ndb$op_type	ndb$cft_cause	ndb$orig_transid
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -------------------------------
 Test 3 : Insert-Insert conflict
 -------------------------------
@@ -2149,6 +2284,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on isolated secondary Master (should be as-set)
 select * from test.t1 order by a;
 a	b
@@ -2190,6 +2328,9 @@ ndb$server_id	ndb$master_server_id	ndb$master_epoch	ndb$count	a	b$old	b$new	d	nd
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Update row on Secondary Master
 update test.t1 set b="Toast" where a=2;
 -- Examine data on Primary Master - should be unaffected
@@ -2213,6 +2354,9 @@ SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cau
 ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on secondary - should be as set
 select * from test.t1 order by a;
 a	b
@@ -2262,6 +2406,9 @@ ndb$op_type	ndb$cft_cause
 write_row	row_does_not_exist
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, still missing
 select * from test.t1 order by a;
 a	b
@@ -2312,6 +2459,9 @@ write_row	row_does_not_exist
 update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, should be as inserted
 select * from test.t1 order by a;
 a	b
@@ -2366,6 +2516,9 @@ update_row	row_already_exists
 update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master before slave restart, no row
 select * from test.t1 order by a;
 a	b
@@ -2447,6 +2600,9 @@ update_row	data_in_conflict
 delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 ------------------------------------------------
 Test 9 : Insert, Insert-Update-Delete conflict
 ------------------------------------------------
@@ -2508,6 +2664,9 @@ delete_row	row_already_exists
 delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Examine data on Secondary Master (none)
 select * from test.t1 order by a;
 a	b
@@ -2586,6 +2745,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 -- Check data on Secondary Master, as set
 select * from test.t1 order by a;
 a	b
@@ -2659,6 +2821,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 Conflict algorithm counter diff :
 ndb_conflict_fn_epoch
 12
@@ -2707,6 +2872,9 @@ delete_row	row_already_exists
 delete_row	data_in_conflict
 delete_row	data_in_conflict
 delete_row	data_in_conflict
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 drop table test.t1;
 drop table test.t2;
 drop table test.t1$EX;
@@ -2752,6 +2920,9 @@ Exception table contents
 SELECT ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count, a, b$old, b$new, d FROM `t1$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
 SELECT * FROM `t1$EX` ORDER BY ndb$count;
 SELECT ndb$op_type, ndb$cft_cause FROM `t1$EX` ORDER BY ndb$op_type, ndb$cft_cause;
+SELECT * FROM `t2$EX` ORDER BY ndb$server_id, ndb$master_server_id, ndb$master_epoch, ndb$count;
+SELECT * FROM `t2$EX` ORDER BY ndb$count;
+SELECT ndb$op_type, ndb$cft_cause FROM `t2$EX` ORDER BY ndb$op_type, ndb$cft_cause;
 start slave;
 Warnings:
 Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
@@ -2793,7 +2964,9 @@ COMMIT;
 end%
 call test.doit(200);
 -- Restart slave on Primary Cluster
-start replica;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 -- Show data on Primary Cluster (should have row inserted on Secondary)
 select * from test.t1 where a=1;
 a	b	c
@@ -2845,6 +3018,10 @@ flush logs;
 flush logs;
 drop table mysql.ndb_replication;
 -- Attempt to get system back in pre-test state
-stop replica;
-reset replica;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
+reset slave;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 include/rpl_end.inc

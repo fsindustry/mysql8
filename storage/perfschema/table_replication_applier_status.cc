@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -106,7 +106,7 @@ table_replication_applier_status::table_replication_applier_status()
 
 table_replication_applier_status::~table_replication_applier_status() = default;
 
-void table_replication_applier_status::reset_position() {
+void table_replication_applier_status::reset_position(void) {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -115,7 +115,7 @@ ha_rows table_replication_applier_status::get_row_count() {
   return channel_map.get_max_channels();
 }
 
-int table_replication_applier_status::rnd_next() {
+int table_replication_applier_status::rnd_next(void) {
   Master_info *mi;
   channel_map.rdlock();
 
@@ -143,8 +143,7 @@ int table_replication_applier_status::rnd_pos(const void *pos) {
 
   channel_map.rdlock();
 
-  mi = channel_map.get_mi_at_pos(m_pos.m_index);
-  if (mi) {
+  if ((mi = channel_map.get_mi_at_pos(m_pos.m_index))) {
     res = make_row(mi);
   }
 
@@ -163,7 +162,7 @@ int table_replication_applier_status::index_init(uint idx [[maybe_unused]],
   return 0;
 }
 
-int table_replication_applier_status::index_next() {
+int table_replication_applier_status::index_next(void) {
   int res = HA_ERR_END_OF_FILE;
 
   Master_info *mi;
@@ -215,8 +214,7 @@ int table_replication_applier_status::make_row(Master_info *mi) {
 
   m_row.remaining_delay = 0;
   if (slave_sql_running_state == stage_sql_thd_waiting_until_delay.m_name) {
-    const time_t t = time(nullptr),
-                 sql_delay_end = mi->rli->get_sql_delay_end();
+    time_t t = my_time(0), sql_delay_end = mi->rli->get_sql_delay_end();
     m_row.remaining_delay = (uint)(t < sql_delay_end ? sql_delay_end - t : 0);
     m_row.remaining_delay_is_set = true;
   } else {
@@ -244,8 +242,7 @@ int table_replication_applier_status::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /**channel_name*/
-          set_field_char_utf8mb4(f, m_row.channel_name,
-                                 m_row.channel_name_length);
+          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
           break;
         case 1: /* service_state */
           set_field_enum(f, m_row.service_state);

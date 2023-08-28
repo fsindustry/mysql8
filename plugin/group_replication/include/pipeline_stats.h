@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -86,11 +86,8 @@ class Pipeline_stats_member_message : public Plugin_gcs_message {
     // Length of the payload item: 1 byte
     PIT_TRANSACTION_GTIDS_PRESENT = 12,
 
-    // Length of the payload item: 8 bytes
-    PIT_SENT_TIMESTAMP = 13,
-
     // No valid type codes can appear after this one.
-    PIT_MAX = 14
+    PIT_MAX = 13
   };
 
   /**
@@ -175,14 +172,14 @@ class Pipeline_stats_member_message : public Plugin_gcs_message {
   int64 get_transactions_applied();
 
   /**
-    Get local transactions that member tried to commit.
+    Get local transactions that member tried to commmit.
 
     @return the counter value
   */
   int64 get_transactions_local();
 
   /**
-    Get negatively certified transaction by member.
+    Get negatively certfied transaction by member.
 
     @return the counter value
   */
@@ -230,18 +227,6 @@ class Pipeline_stats_member_message : public Plugin_gcs_message {
     @return the mode value
   */
   Flow_control_mode get_flow_control_mode();
-
-  /**
-    Return the time at which the message contained in the buffer was sent.
-    @see Metrics_handler::get_current_time()
-
-    @param[in] buffer            the buffer to decode from.
-    @param[in] length            the buffer length
-
-    @return the time on which the message was sent.
-  */
-  static uint64_t get_sent_timestamp(const unsigned char *buffer,
-                                     size_t length);
 
  protected:
   /**
@@ -301,11 +286,6 @@ class Pipeline_stats_member_collector {
     Decrement transactions waiting apply counter value.
   */
   void decrement_transactions_waiting_apply();
-
-  /**
-    Set transactions waiting apply counter to 0.
-  */
-  void clear_transactions_waiting_apply();
 
   /**
     Increment transactions certified counter value.
@@ -549,7 +529,7 @@ class Pipeline_member_stats {
   int64 get_delta_transactions_applied();
 
   /**
-    Get local transactions that member tried to commit
+    Get local transactions that member tried to commmit
     since last stats message.
 
     @return the counter value

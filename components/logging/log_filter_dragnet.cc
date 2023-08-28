@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -116,7 +116,7 @@ static SHOW_VAR show_var_filter_rules_decompile[] = {
 /*
   STRING_WITH_LEN
 */
-#include <string_with_len.h>
+#include <m_string.h>
 
 static bool inited = false;
 static int opened = 0;
@@ -352,11 +352,10 @@ static int log_filter_xlate_by_opcode(uint opcode, uint flags) {
   @param str      NTBS to append to that buffer
 */
 static void log_filter_append(char *out_buf, size_t out_siz, const char *str) {
-  const size_t out_used = log_bs->length(out_buf);
-  const size_t out_left = out_siz - out_used;
+  size_t out_used = log_bs->length(out_buf);
+  size_t out_left = out_siz - out_used;
   char *out_writepos = out_buf + out_used;
-  const size_t out_needed =
-      log_bs->substitute(out_writepos, out_left, "%s", str);
+  size_t out_needed = log_bs->substitute(out_writepos, out_left, "%s", str);
 
   if (out_needed >= out_left)    /* buffer exhausted. '\0' terminate */
     out_buf[out_siz - 1] = '\0'; /* purecov: inspected */
@@ -373,7 +372,7 @@ static void log_filter_append(char *out_buf, size_t out_siz, const char *str) {
 static void log_filter_append_item_value(char *out_buf, size_t out_siz,
                                          log_item *li) {
   size_t len = log_bs->length(out_buf);  // used bytes
-  const size_t out_left = out_siz - len;
+  size_t out_left = out_siz - len;
   char *out_writepos = out_buf + len;
 
   if (li->item_class == LOG_FLOAT)
@@ -447,7 +446,7 @@ static void log_filter_append_item_value(char *out_buf, size_t out_siz,
 static log_filter_result log_filter_rule_dump(log_filter_rule *rule,
                                               log_filter_result state,
                                               char *out_buf, size_t out_size) {
-  const log_filter_result ret = LOG_FILTER_LANGUAGE_OK;
+  log_filter_result ret = LOG_FILTER_LANGUAGE_OK;
   int cond;
   int verb;
   const log_filter_xlate_key *token;
@@ -718,7 +717,7 @@ static int log_filter_get_token(const char **inp_readpos, const char **token,
 */
 static int log_filter_make_field(const char **name, const size_t *len,
                                  log_item *li) {
-  const int wellknown = log_bi->wellknown_by_name(*name, *len);
+  int wellknown = log_bi->wellknown_by_name(*name, *len);
   log_item_type item_type;
   char *key = nullptr;
 
@@ -1261,7 +1260,7 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
       if ((log_filter_xlate_keys[c].item == LOG_FILTER_ITEM_DEL) &&
           (*inp_readpos == '.'))  // end of statement reached, unset had no arg.
       {
-        int local_c;
+        int c;
         char *n;
         size_t key_len;
 
@@ -1273,11 +1272,11 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
         }
 
         // see whether it's a well-known type
-        local_c = log_bi->wellknown_by_name(
+        c = log_bi->wellknown_by_name(
             delete_item->key, (key_len = log_bs->length(rule->match.key)));
 
         // for ad-hoc names, copy the key; otherwise use well-known record.
-        if (local_c != LOG_ITEM_TYPE_NOT_FOUND)
+        if (c != LOG_ITEM_TYPE_NOT_FOUND)
           n = nullptr;
         else if ((n = log_bs->strndup(rule->match.key, key_len)) == nullptr) {
           rr = -2; /* purecov: inspected */
@@ -1322,7 +1321,7 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
       }
 
       {
-        const int auxval_success =
+        int auxval_success =
             log_filter_set_arg(&token, &len, &rule->aux, state);
 
         if ((rule->verb == LOG_FILTER_THROTTLE) &&
@@ -1389,7 +1388,7 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
       flow_new = LOG_FILTER_WORD_NONE;
 
       {  // add relative jumps to the end of all blocks in THEN/ELSEIF
-        const int flow_last = tmp_filter_rules->count;
+        int flow_last = tmp_filter_rules->count;
         for (c = flow_first; c <= flow_last; c++) {
           if (tmp_filter_rules->rule[c].jump != 0)
             tmp_filter_rules->rule[c].jump = flow_last - c + 1;
@@ -1561,7 +1560,7 @@ DEFINE_METHOD(int, log_service_imp::run,
                      the server/logging framework. It must be released
                      on close.
 
-  @returns  LOG_SERVICE_SUCCESS        Success, returned handle is valid
+  @returns  LOG_SERVICE_SUCCESS        Success, returned hande is valid
   @returns  otherwise                  A new instance could not be created
 */
 DEFINE_METHOD(log_service_error, log_service_imp::open,
@@ -1681,8 +1680,7 @@ mysql_service_status_t log_filter_init() {
             log_bf->filter_ruleset_new(&rule_tag_dragnet, 0)) == nullptr) ||
       mysql_service_component_sys_variable_register->register_variable(
           LOG_FILTER_LANGUAGE_NAME, LOG_FILTER_SYSVAR_NAME,
-          PLUGIN_VAR_STR | PLUGIN_VAR_MEMALLOC |
-              PLUGIN_VAR_PERSIST_AS_READ_ONLY,
+          PLUGIN_VAR_STR | PLUGIN_VAR_MEMALLOC,
           "Error log filter rules (for the dragnet filter "
           "configuration language)",
           check_var_filter_rules, update_var_filter_rules,

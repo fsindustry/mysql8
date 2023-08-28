@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,7 +56,7 @@ Log log_error(std::cerr, "ERROR");
 
 class Migration_setup {
  public:
-  explicit Migration_setup(char *progname) {
+  Migration_setup(char *progname) {
     MY_INIT(progname);
     init_components_subsystem();
     init_connection_basic();
@@ -72,10 +72,10 @@ class Migration_setup {
 
 int main(int argc, char **argv) {
   /* Initialization */
-  const Migration_setup migration_setup(argv[0]);
+  Migration_setup migration_setup(argv[0]);
   DBUG_TRACE;
   DBUG_PROCESS(argv[0]);
-  const int exit_status = EXIT_FAILURE;
+  int exit_status = EXIT_FAILURE;
 
   int exit_code;
   if (process_options(&argc, &argv, exit_code) == false) {

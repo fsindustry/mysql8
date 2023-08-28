@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -55,11 +55,7 @@ connection_descriptor *Gcs_xcom_proxy_impl::xcom_client_open_connection(
 
 bool Gcs_xcom_proxy_impl::xcom_client_add_node(connection_descriptor *fd,
                                                node_list *nl, uint32_t gid) {
-  MYSQL_GCS_LOG_INFO("Sending add_node request to a peer XCom node");
   bool const successful = (::xcom_client_add_node(fd, nl, gid) == 1);
-  if (!successful) {
-    MYSQL_GCS_LOG_INFO("Failed to send add_node request to a peer XCom node.");
-  }
   return successful;
 }
 
@@ -633,11 +629,6 @@ void Gcs_xcom_app_cfg::set_xcom_cache_size(uint64_t size) {
 void Gcs_xcom_app_cfg::set_network_namespace_manager(
     Network_namespace_manager *ns_mgr) {
   if (the_app_xcom_cfg) the_app_xcom_cfg->network_ns_manager = ns_mgr;
-}
-
-void Gcs_xcom_app_cfg::set_statists_storage_implementation(
-    Xcom_statistics_storage_interface *stats_storage) {
-  if (the_app_xcom_cfg) the_app_xcom_cfg->statistics_storage = stats_storage;
 }
 
 bool Gcs_xcom_app_cfg::set_identity(node_address *identity) {

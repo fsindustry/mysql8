@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -62,32 +62,6 @@ class Gcs_operations {
     ALREADY_LEFT,
     /* There was an error when trying to leave */
     ERROR_WHEN_LEAVING
-  };
-
-  /**
-    @enum enum_force_members_state
-
-    This enumeration describes the return value when forces a new group
-    membership
-  */
-  enum enum_force_members_state {
-    /* OK. The forced new group membership is successful */
-    FORCE_MEMBERS_OK,
-    /* Error. The member is not ONLINE */
-    FORCE_MEMBERS_ER_MEMBER_NOT_ONLINE,
-    /*
-      Error. The member is not ONLINE and majority of the members are
-      unreachable.
-    */
-    FORCE_MEMBERS_ER_NOT_ONLINE_AND_MAJORITY_UNREACHABLE,
-    /* Error. The member is leaving the group */
-    FORCE_MEMBERS_ER_MEMBERS_WHEN_LEAVING,
-    /* Timeout on wait for view after setting group_replication_force_members */
-    FORCE_MEMBERS_ER_TIMEOUT_ON_WAIT_FOR_VIEW,
-    /* Error setting group_replication_force_members value */
-    FORCE_MEMBERS_ER_VALUE_SET_ERROR,
-    /* Internal Error while setting group_replication_force_members */
-    FORCE_MEMBERS_ER_INTERNAL_ERROR
   };
 
   /**
@@ -246,15 +220,13 @@ class Gcs_operations {
     @param[in] skip_if_not_initialized If true, the message will not be sent
                                        and no errors will returned when the
                                        GCS interface is not initialized
-    @param[in] thd       Server thd represent client connection
 
     @return the operation status
       @retval 0      OK
       @retval !=0    Error
   */
   enum enum_gcs_error send_message(const Plugin_gcs_message &message,
-                                   bool skip_if_not_initialized = false,
-                                   const THD *thd = nullptr);
+                                   bool skip_if_not_initialized = false);
 
   /**
     Send a transaction message to the group.
@@ -274,33 +246,12 @@ class Gcs_operations {
 
     @param members  The list of members, comma
                     separated. E.g., host1:port1,host2:port2
-    @param view_notifier  A view change notifier to know the response
 
     @return Operation status
-      @retval FORCE_MEMBERS_OK   The forced new group membership is
-                                 successful.
-      @retval FORCE_MEMBERS_ER_MEMBER_NOT_ONLINE
-                                        An error as member is not ONLINE,
-                                        when forcing a new group membership.
-      @retval FORCE_MEMBERS_NOT_ONLINE_AND_MAJORITY_UNREACHABLE
-                                        An error as member is not ONLINE and
-                                        majority of the members are
-                                        unreachable.
-      @retval FORCE_MEMBERS_ER_MEMBERS_WHEN_LEAVING
-                                        An error as member leaving group,
-                                        when forcing new group membership.
-      @retval FORCE_MEMBERS_ER_TIMEOUT_ON_WAIT_FOR_VIEW
-                                        A timeout happened when waiting for
-                                        view after setting
-                                        group_replication_force_members.
-      @retval FORCE_MEMBERS_VALUE_SET_ERROR
-                                        Error setting
-                                        group_replication_force_members value.
-      @retval FORCE_MEMBERS_INTERNAL_ERROR   Internal error.
+      @retval 0      OK
+      @retval !=0    Error
   */
-  enum enum_force_members_state force_members(
-      const char *members,
-      Plugin_gcs_view_modification_notifier *view_notifier);
+  int force_members(const char *members);
 
   /**
     Retrieves the minimum supported "write concurrency" value.
@@ -454,8 +405,8 @@ class Gcs_operations {
 
  private:
   /**
-    Internal function that configures the debug options that shall be used
-    by GCS.
+    Internal function that configures the debug options that shall be used by
+    GCS.
   */
   enum enum_gcs_error do_set_debug_options(std::string &debug_options) const;
   Gcs_group_management_interface *get_gcs_group_manager() const;
@@ -488,125 +439,6 @@ class Gcs_operations {
   Checkable_rwlock *gcs_operations_lock;
   /** Lock for the list of waiters on a view change */
   Checkable_rwlock *view_observers_lock;
-
-  /*
-    Metrics concurrency control and cached values to be provided
-    when the member does not belong to a group.
-  */
- public:
-  /**
-    @see Gcs_statistics_interface::get_all_sucessful_proposal_rounds()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_all_consensus_proposals_count();
-
-  /**
-    @see Gcs_statistics_interface::get_all_empty_proposal_rounds()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_empty_consensus_proposals_count();
-
-  /**
-    @see Gcs_statistics_interface::get_all_bytes_sent()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_consensus_bytes_sent_sum();
-
-  /**
-    @see Gcs_statistics_interface::get_all_message_bytes_received()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_consensus_bytes_received_sum();
-
-  /**
-    @see Gcs_statistics_interface::get_cumulative_proposal_time()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_all_consensus_time_sum();
-
-  /**
-    @see Gcs_statistics_interface::get_all_full_proposal_count()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_extended_consensus_count();
-
-  /**
-    @see Gcs_statistics_interface::get_all_messages_sent()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_total_messages_sent_count();
-
-  /**
-    @see Gcs_statistics_interface::get_last_proposal_round_time()
-
-    @details This method will try to acquire a read lock so that a
-    recent value is returned. If the lock acquire is not possible,
-    case on which there is a exclusive operation ongoing, a cached
-    value is returned.
-  */
-  uint64_t get_last_consensus_end_timestamp();
-
-  /**
-   * @see Gcs_statistics_interface::get_suspicious_count()
-   */
-  void get_suspicious_count(std::list<Gcs_node_suspicious> &node_suspicious);
-
- private:
-  /**
-    Helper method that retrieves the binding implementation of the
-    Statistics interface.
-
-    @return A valid reference to a gcs_statistics_interface implementation.
-            nullptr, in case of error or GCS interface not initialized.
-  */
-  Gcs_statistics_interface *get_statistics_interface();
-
-  /**
-    Reset the metrics cache.
-  */
-  void metrics_cache_reset();
-
-  /**
-    Update the metrics cache with the current GCS values.
-  */
-  void metrics_cache_update();
-
-  std::atomic<uint64_t> m_all_consensus_proposals_count{0};
-  std::atomic<uint64_t> m_empty_consensus_proposals_count{0};
-  std::atomic<uint64_t> m_consensus_bytes_sent_sum{0};
-  std::atomic<uint64_t> m_consensus_bytes_received_sum{0};
-  std::atomic<uint64_t> m_all_consensus_time_sum{0};
-  std::atomic<uint64_t> m_extended_consensus_count{0};
-  std::atomic<uint64_t> m_total_messages_sent_count{0};
-  std::atomic<uint64_t> m_last_consensus_end_timestamp{0};
 };
 
 #endif /* GCS_OPERATIONS_INCLUDE */

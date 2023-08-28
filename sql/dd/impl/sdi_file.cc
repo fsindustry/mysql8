@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 #include <ostream>
 #include <string>
 
-#include "mysql/components/services/bits/psi_file_bits.h"
+#include "mysql/components/services/psi_file_bits.h"
 #include "mysql/udf_registration_types.h"
 
 #ifdef HAVE_UNISTD_H
@@ -42,6 +42,7 @@
 #endif
 
 #include "lex_string.h"
+#include "m_ctype.h"
 
 #include "my_dir.h"
 #include "my_inttypes.h"
@@ -49,7 +50,6 @@
 #include "my_sys.h"
 #include "my_thread_local.h"
 #include "mysql/psi/mysql_file.h"  // mysql_file_create
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/dd/impl/sdi.h"        // dd::Sdi_type
 #include "sql/dd/impl/sdi_utils.h"  // dd::sdi_util::checked_return

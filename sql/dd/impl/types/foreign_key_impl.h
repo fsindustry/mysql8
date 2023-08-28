@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,8 @@
 #include <sys/types.h>
 #include <new>
 
+#include "m_ctype.h"  // my_strcasecmp
 #include "my_sharedlib.h"
-#include "mysql/strings/m_ctype.h"                 // my_strcasecmp
 #include "sql/dd/impl/types/entity_object_impl.h"  // dd::Entity_object_impl
 #include "sql/dd/impl/types/weak_object_impl.h"
 #include "sql/dd/object_id.h"
@@ -35,7 +35,6 @@
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/foreign_key.h"          // dd::Foreign_key
 #include "sql/dd/types/foreign_key_element.h"  // IWYU pragma: keep
-#include "sql/mysqld_cs.h"
 
 namespace dd {
 

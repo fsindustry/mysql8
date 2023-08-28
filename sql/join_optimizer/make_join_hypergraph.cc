@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,6 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
-#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,16 +46,13 @@
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/bit_utils.h"
 #include "sql/join_optimizer/common_subexpression_elimination.h"
-#include "sql/join_optimizer/cost_model.h"
 #include "sql/join_optimizer/estimate_selectivity.h"
-#include "sql/join_optimizer/find_contained_subqueries.h"
 #include "sql/join_optimizer/hypergraph.h"
 #include "sql/join_optimizer/print_utils.h"
 #include "sql/join_optimizer/relational_expression.h"
 #include "sql/join_optimizer/subgraph_enumeration.h"
 #include "sql/nested_join.h"
 #include "sql/sql_class.h"
-#include "sql/sql_const.h"
 #include "sql/sql_executor.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_optimizer.h"
@@ -76,89 +72,12 @@ using std::vector;
 namespace {
 
 RelationalExpression *MakeRelationalExpressionFromJoinList(
-    THD *thd, const mem_root_deque<Table_ref *> &join_list);
-bool EarlyNormalizeConditions(THD *thd, RelationalExpression *join,
-                              Mem_root_array<Item *> *conditions,
-                              bool *always_false);
+    THD *thd, const mem_root_deque<TABLE_LIST *> &join_list);
+bool EarlyNormalizeConditions(THD *thd, Mem_root_array<Item *> *conditions);
 
 inline bool IsMultipleEquals(Item *cond) {
   return cond->type() == Item::FUNC_ITEM &&
          down_cast<Item_func *>(cond)->functype() == Item_func::MULT_EQUAL_FUNC;
-}
-
-Item_func_eq *MakeEqItem(Item *a, Item *b,
-                         Item_equal *source_multiple_equality) {
-  Item_func_eq *eq_item = new Item_func_eq(a, b);
-  eq_item->set_cmp_func();
-  eq_item->update_used_tables();
-  eq_item->quick_fix_field();
-  eq_item->source_multiple_equality = source_multiple_equality;
-  return eq_item;
-}
-
-/**
-  Helper function for ReorderConditions(), which counts how many tables are
-  referenced by an equijoin condition. This enables ReorderConditions() to sort
-  the conditions on their complexity (referencing more tables == more complex).
-  Multiple equalities are considered simple, referencing two tables, regardless
-  of how many tables are actually referenced by them. This is because multiple
-  equalities will be split into one or more single equalities later, referencing
-  no more than two tables each.
- */
-int CountTablesInEquiJoinCondition(Item *cond) {
-  assert(cond->type() == Item::FUNC_ITEM &&
-         down_cast<Item_func *>(cond)->contains_only_equi_join_condition());
-  if (IsMultipleEquals(cond)) {
-    // It's not a join condition if it has a constant argument.
-    assert(down_cast<Item_equal *>(cond)->const_arg() == nullptr);
-    return 2;
-  } else {
-    return PopulationCount(cond->used_tables());
-  }
-}
-
-/**
-  Reorders the predicates in such a way that equalities are placed ahead
-  of other types of predicates. These will be followed by predicates having
-  subqueries and the expensive predicates at the end.
-  This is used in the early stage of optimization. Predicates are not ordered
-  based on their selectivity yet. The call to optimize_cond() would have put
-  all the equalities at the end (because it tries to create multiple
-  equalities out of them). It is always better to see the equalties ahead of
-  other types of conditions when pushing join conditions down.
-  E.g:
-   (t1.f1 != t2.f1) and (t1.f2 = t3.f2 OR t4.f1 = t5.f3) and (3 = select #2) and
-   (t1.f3 = t3.f3) and multi_equal(t1.f2,t2.f3,t3.f4)
-  will be split in this order
-   (t1.f3 = t3.f3) and
-   multi_equal(t1.f2,t2.f3,t3.f4) and
-   (t1.f1 != t2.f1) and
-   (t1.f2 = t3.f2 OR t4.f1 = t5.f3) and
-   (3 = select #2)
-
-   Simple equijoin conditions (like t1.x=t2.x) are placed ahead of more complex
-   ones (like t1.x=t2.x+t3.x), so that we prefer making simple edges and avoid
-   hyperedges when we can.
-*/
-void ReorderConditions(Mem_root_array<Item *> *condition_parts) {
-  // First equijoin conditions, followed by other conditions, then
-  // subqueries (which can be expensive), then stored procedures
-  // (which are unknown, so potentially _very_ expensive).
-  const auto equi_cond_end = std::stable_partition(
-      condition_parts->begin(), condition_parts->end(), [](Item *item) {
-        return item->type() == Item::FUNC_ITEM &&
-               down_cast<Item_func *>(item)
-                   ->contains_only_equi_join_condition();
-      });
-  std::stable_sort(condition_parts->begin(), equi_cond_end,
-                   [](Item *a, Item *b) {
-                     return CountTablesInEquiJoinCondition(a) <
-                            CountTablesInEquiJoinCondition(b);
-                   });
-  std::stable_partition(condition_parts->begin(), condition_parts->end(),
-                        [](Item *item) { return !item->has_subquery(); });
-  std::stable_partition(condition_parts->begin(), condition_parts->end(),
-                        [](Item *item) { return !item->is_expensive(); });
 }
 
 /**
@@ -168,18 +87,20 @@ void ReorderConditions(Mem_root_array<Item *> *condition_parts) {
   stages can ignore such duplicates, and also that we can push these parts
   independently of the multiple equality as a whole.
  */
-void ExpandSameTableFromMultipleEquals(Item_equal *equal,
-                                       table_map tables_in_subtree,
-                                       List<Item> *eq_items) {
+Item *ExpandSameTableFromMultipleEquals(Item_equal *equal) {
+  List<Item> eq_items;
+
   // Look for pairs of items that touch the same table.
   for (auto it1 = equal->get_fields().begin(); it1 != equal->get_fields().end();
        ++it1) {
-    if (!Overlaps(it1->used_tables(), tables_in_subtree)) {
-      continue;
-    }
     for (auto it2 = std::next(it1); it2 != equal->get_fields().end(); ++it2) {
       if (it1->field->table == it2->field->table) {
-        eq_items->push_back(MakeEqItem(&*it1, &*it2, equal));
+        Item_func_eq *eq_item = new Item_func_eq(&*it1, &*it2);
+        eq_item->set_cmp_func();
+        eq_item->update_used_tables();
+        eq_item->quick_fix_field();
+        eq_item->source_multiple_equality = equal;
+        eq_items.push_back(eq_item);
 
         // If there are more, i.e., *it2 = *it3, they will be dealt with
         // in a future iteration of the outer loop; so stop now to avoid
@@ -188,11 +109,20 @@ void ExpandSameTableFromMultipleEquals(Item_equal *equal,
       }
     }
   }
+  if (eq_items.is_empty()) {
+    return equal;
+  } else {
+    eq_items.push_back(equal);
+    Item_cond_and *item_and = new Item_cond_and(eq_items);
+    item_and->update_used_tables();
+    item_and->quick_fix_field();
+    return item_and;
+  }
 }
 
 /**
   Expand multiple equalities that can (and should) be expanded before join
-  pushdown. These are the ones that touch at most two tables, or that
+  pushdown. These are the ones that only touch less than three tables, or that
   are against a constant. They can be expanded unambiguously; no matter the join
   order, they will be the same. Fields on tables not in “tables_in_subtree” are
   assumed to be irrelevant to the equality and ignored (see the comment on
@@ -211,79 +141,46 @@ Item *EarlyExpandMultipleEquals(Item *condition, table_map tables_in_subtree) {
           return item;
         }
         Item_equal *equal = down_cast<Item_equal *>(item);
-
-        List<Item> eq_items;
-        // If this condition is a constant, do the evaluation
-        // and add a "false" condition if needed.
-        // This cannot be skipped as optimize_cond() expects
-        // the value stored in "cond_false" to be checked for
-        // Item_equal before creating equalities from it.
-        // We do not need to check for the const item evaluating
-        // to be "true", as that could happen only when const table
-        // optimization is used (It is currently not done for
-        // hypergraph).
-        if (equal->const_item() && !equal->val_int()) {
-          eq_items.push_back(new Item_func_false);
-        } else if (equal->const_arg() != nullptr) {
-          // If there is a constant element, do a simple expansion.
-          for (Item_field &field : equal->get_fields()) {
-            if (IsSubset(field.used_tables(), tables_in_subtree)) {
-              eq_items.push_back(MakeEqItem(&field, equal->const_arg(), equal));
-            }
-          }
-        } else if (my_count_bits(equal->used_tables() & tables_in_subtree) >
-                   2) {
+        if (equal->get_const() == nullptr &&
+            my_count_bits(equal->used_tables() & tables_in_subtree) > 2) {
           // Only look at partial expansion.
-          ExpandSameTableFromMultipleEquals(equal, tables_in_subtree,
-                                            &eq_items);
-          eq_items.push_back(equal);
-        } else {
-          // Prioritize expanding equalities from the same table if possible;
-          // e.g., if we have t1.a = t2.a = t2.b, we want to have t2.a = t2.b
-          // included (ie., not t1.a = t2.a AND t1.a = t2.b). The primary reason
-          // for this is that such single-table equalities will be pushable
-          // as table filters, and not left on the joins. This means we avoid an
-          // issue where we have a hypergraph cycle where the edge we do not
-          // follow (and thus ignore) has more join conditions than we skip,
-          // causing us to wrongly “forget” constraining one degree of freedom.
-          //
-          // Thus, we first pick out every equality that touches only one table,
-          // and then link one equality from each table into an arbitrary one.
-          //
-          // It's not given that this will always give us the fastest possible
-          // plan; e.g. if there's a composite index on (t1.a, t1.b), it could
-          // be faster to use it for lookups against (t2.a, t2.b) instead of
-          // pushing t1.a = t1.b. But it doesn't seem worth it to try to keep
-          // multiple such variations around.
-          ExpandSameTableFromMultipleEquals(equal, tables_in_subtree,
-                                            &eq_items);
-
-          table_map included_tables = 0;
-          Item_field *base_item = nullptr;
-          for (Item_field &field : equal->get_fields()) {
-            assert(IsSingleBitSet(field.used_tables()));
-            if (!IsSubset(field.used_tables(), tables_in_subtree) ||
-                Overlaps(field.used_tables(), included_tables)) {
-              continue;
-            }
-            included_tables |= field.used_tables();
-            if (base_item == nullptr) {
-              base_item = &field;
-              continue;
-            }
-
-            eq_items.push_back(MakeEqItem(base_item, &field, equal));
-
-            // Since we have at most two tables, we can have only one link.
-            break;
+          return ExpandSameTableFromMultipleEquals(equal);
+        }
+        List<Item> eq_items;
+        Item *base_item = equal->get_const();
+        for (Item_field &field : equal->get_fields()) {
+          if (!IsSubset(field.used_tables(), tables_in_subtree)) {
+            continue;
           }
+          if (base_item == nullptr) {
+            base_item = &field;
+            continue;
+          }
+
+          // Aesthetically, we want <field> = <const>, but keep
+          // <field1> = <field2> the way the user wrote it.
+          Item_func_eq *eq_item = equal->get_const() != nullptr
+                                      ? new Item_func_eq(&field, base_item)
+                                      : new Item_func_eq(base_item, &field);
+          eq_item->set_cmp_func();
+          eq_item->update_used_tables();
+          eq_item->quick_fix_field();
+          eq_item->source_multiple_equality = equal;
+          eq_items.push_back(eq_item);
         }
         assert(!eq_items.is_empty());
-        return CreateConjunction(&eq_items);
+        if (eq_items.size() == 1) {
+          return eq_items.head();
+        } else {
+          Item_cond_and *item_and = new Item_cond_and(eq_items);
+          item_and->update_used_tables();
+          item_and->quick_fix_field();
+          return item_and;
+        }
       });
 }
 
-RelationalExpression *MakeRelationalExpression(THD *thd, const Table_ref *tl) {
+RelationalExpression *MakeRelationalExpression(THD *thd, const TABLE_LIST *tl) {
   if (tl->nested_join == nullptr) {
     // A single table.
     RelationalExpression *ret = new (thd->mem_root) RelationalExpression(thd);
@@ -294,7 +191,8 @@ RelationalExpression *MakeRelationalExpression(THD *thd, const Table_ref *tl) {
     return ret;
   } else {
     // A join or multijoin.
-    return MakeRelationalExpressionFromJoinList(thd, tl->nested_join->m_tables);
+    return MakeRelationalExpressionFromJoinList(thd,
+                                                tl->nested_join->join_list);
   }
 }
 
@@ -303,12 +201,12 @@ RelationalExpression *MakeRelationalExpression(THD *thd, const Table_ref *tl) {
   ie., a join tree with tables at the leaves.
  */
 RelationalExpression *MakeRelationalExpressionFromJoinList(
-    THD *thd, const mem_root_deque<Table_ref *> &join_list) {
+    THD *thd, const mem_root_deque<TABLE_LIST *> &join_list) {
   assert(!join_list.empty());
   RelationalExpression *ret = nullptr;
   for (auto it = join_list.rbegin(); it != join_list.rend();
        ++it) {  // The list goes backwards.
-    const Table_ref *tl = *it;
+    const TABLE_LIST *tl = *it;
     if (ret == nullptr) {
       // The first table in the list.
       ret = MakeRelationalExpression(thd, tl);
@@ -319,7 +217,7 @@ RelationalExpression *MakeRelationalExpressionFromJoinList(
     join->left = ret;
     if (tl->is_sj_or_aj_nest()) {
       join->right =
-          MakeRelationalExpressionFromJoinList(thd, tl->nested_join->m_tables);
+          MakeRelationalExpressionFromJoinList(thd, tl->nested_join->join_list);
       join->type = tl->is_sj_nest() ? RelationalExpression::SEMIJOIN
                                     : RelationalExpression::ANTIJOIN;
     } else {
@@ -335,20 +233,59 @@ RelationalExpression *MakeRelationalExpressionFromJoinList(
     join->tables_in_subtree =
         join->left->tables_in_subtree | join->right->tables_in_subtree;
     if (tl->is_aj_nest()) {
-      assert(tl->join_cond_optim() != nullptr);
+      assert(tl->join_cond() != nullptr);
     }
-    if (tl->join_cond_optim() != nullptr) {
-      Item *join_cond = EarlyExpandMultipleEquals(tl->join_cond_optim(),
-                                                  join->tables_in_subtree);
+    if (tl->join_cond() != nullptr) {
+      Item *join_cond =
+          EarlyExpandMultipleEquals(tl->join_cond(), join->tables_in_subtree);
       ExtractConditions(join_cond, &join->join_conditions);
-      bool always_false = false;
-      EarlyNormalizeConditions(thd, join, &join->join_conditions,
-                               &always_false);
-      ReorderConditions(&join->join_conditions);
+      EarlyNormalizeConditions(thd, &join->join_conditions);
     }
     ret = join;
   }
   return ret;
+}
+
+void ComputeCompanionSets(RelationalExpression *expr, int current_set,
+                          int *num_companion_sets,
+                          int table_num_to_companion_set[MAX_TABLES]) {
+  switch (expr->type) {
+    case RelationalExpression::TABLE:
+      expr->companion_set = current_set;
+      table_num_to_companion_set[expr->table->tableno()] = current_set;
+      return;
+    case RelationalExpression::STRAIGHT_INNER_JOIN:
+    case RelationalExpression::FULL_OUTER_JOIN:
+      ComputeCompanionSets(expr->left, /*current_set=*/-1, num_companion_sets,
+                           table_num_to_companion_set);
+      ComputeCompanionSets(expr->right, /*current_set=*/-1, num_companion_sets,
+                           table_num_to_companion_set);
+      break;
+    case RelationalExpression::INNER_JOIN:
+      if (current_set == -1) {
+        // Start a new set.
+        current_set = (*num_companion_sets)++;
+      }
+      ComputeCompanionSets(expr->left, current_set, num_companion_sets,
+                           table_num_to_companion_set);
+      ComputeCompanionSets(expr->right, current_set, num_companion_sets,
+                           table_num_to_companion_set);
+      break;
+    case RelationalExpression::LEFT_JOIN:
+    case RelationalExpression::SEMIJOIN:
+    case RelationalExpression::ANTIJOIN:
+      if (current_set == -1) {
+        // Start a new set.
+        current_set = (*num_companion_sets)++;
+      }
+      ComputeCompanionSets(expr->left, current_set, num_companion_sets,
+                           table_num_to_companion_set);
+      ComputeCompanionSets(expr->right, /*current_set=*/-1, num_companion_sets,
+                           table_num_to_companion_set);
+      break;
+    case RelationalExpression::MULTI_INNER_JOIN:
+      assert(false);
+  }
 }
 
 /**
@@ -546,8 +483,8 @@ string PrintRelationalExpression(RelationalExpression *expr, int level) {
 
   switch (expr->type) {
     case RelationalExpression::TABLE:
-      if (expr->companion_set != nullptr) {
-        result += StringPrintf("* %s [companion set %p]\n", expr->table->alias,
+      if (expr->companion_set != -1) {
+        result += StringPrintf("* %s [companion set %d]\n", expr->table->alias,
                                expr->companion_set);
       } else {
         result += StringPrintf("* %s\n", expr->table->alias);
@@ -573,9 +510,6 @@ string PrintRelationalExpression(RelationalExpression *expr, int level) {
     case RelationalExpression::FULL_OUTER_JOIN:
       result += "* Full outer join";
       break;
-  }
-  if (expr->companion_set != nullptr) {
-    result += StringPrintf(" [companion set %p]", expr->companion_set);
   }
   if (expr->type == RelationalExpression::MULTI_INNER_JOIN) {
     // Should only exist before pushdown.
@@ -711,15 +645,6 @@ bool OperatorsAreAssociative(const RelationalExpression &a,
            IsNullRejecting(b, b.left->tables_in_subtree);
   }
 
-  // Secondary engine does not want us to treat STRAIGHT_JOINs as
-  // associative.
-  if ((current_thd->secondary_engine_optimization() ==
-       Secondary_engine_optimization::SECONDARY) &&
-      (a.type == RelationalExpression::STRAIGHT_INNER_JOIN ||
-       b.type == RelationalExpression::STRAIGHT_INNER_JOIN)) {
-    return false;
-  }
-
   // For the operations we support, it can be collapsed into this simple
   // condition. (Cartesian products and inner joins are treated the same.)
   return IsInnerJoin(a.type) && b.type != RelationalExpression::FULL_OUTER_JOIN;
@@ -830,8 +755,8 @@ table_map CertainlyUsedTablesForCondition(const RelationalExpression &expr) {
   for (Item *cond : expr.join_conditions) {
     table_map this_used_tables = cond->used_tables();
     if (IsMultipleEquals(cond)) {
-      table_map left_bits = this_used_tables & GetVisibleTables(expr.left);
-      table_map right_bits = this_used_tables & GetVisibleTables(expr.right);
+      table_map left_bits = this_used_tables & expr.left->tables_in_subtree;
+      table_map right_bits = this_used_tables & expr.right->tables_in_subtree;
       if (IsSingleBitSet(left_bits)) {
         used_tables |= left_bits;
       }
@@ -846,12 +771,41 @@ table_map CertainlyUsedTablesForCondition(const RelationalExpression &expr) {
 }
 
 /**
+  For a given set of tables, find the companion set they are part of (see
+  RelationalExpression::companion_set for an explanation of companion sets).
+  Returns -1 if the tables are in different (ie., incompatible) companion sets;
+  if so, a condition using this set of tables can _not_ induce a new (cycle)
+  edge in the hypergraph, as there are non-inner joins in the way.
+ */
+int CompanionSetUsedByCondition(
+    table_map tables, const int table_num_to_companion_set[MAX_TABLES]) {
+  assert(tables != 0);
+
+  int ret = -1;
+  for (int table_num : BitsSetIn(tables)) {
+    if (table_num >= int{MAX_TABLES} ||
+        table_num_to_companion_set[table_num] == -1) {
+      // This table is not part of a companion set.
+      return -1;
+    }
+    if (ret == -1) {
+      // First table.
+      ret = table_num_to_companion_set[table_num];
+    } else if (ret != table_num_to_companion_set[table_num]) {
+      // Incompatible sets.
+      return -1;
+    }
+  }
+  return ret;
+}
+
+/**
   Check whether we are allowed to make an extra join edge with the given
   condition, instead of pushing the condition onto the given point in the
   join tree (which we have presumably found out that we don't want).
  */
 bool IsCandidateForCycle(RelationalExpression *expr, Item *cond,
-                         const CompanionSetCollection &companion_collection) {
+                         const int table_num_to_companion_set[MAX_TABLES]) {
   if (cond->type() != Item::FUNC_ITEM) {
     return false;
   }
@@ -879,18 +833,20 @@ bool IsCandidateForCycle(RelationalExpression *expr, Item *cond,
   for (Item *other_cond : expr->join_conditions) {
     used_tables |= other_cond->used_tables();
   }
-  return companion_collection.Find(used_tables & expr->tables_in_subtree) !=
-         nullptr;
+  return CompanionSetUsedByCondition(used_tables & expr->tables_in_subtree,
+                                     table_num_to_companion_set) != -1;
 }
 
 bool ComesFromMultipleEquality(Item *item, Item_equal *equal) {
-  return is_function_of_type(item, Item_func::EQ_FUNC) &&
+  return item->type() == Item::FUNC_ITEM &&
+         down_cast<Item_func *>(item)->functype() == Item_func::EQ_FUNC &&
          down_cast<Item_func_eq *>(item)->source_multiple_equality == equal;
 }
 
 int FindSourceMultipleEquality(Item *item,
                                const Mem_root_array<Item_equal *> &equals) {
-  if (!is_function_of_type(item, Item_func::EQ_FUNC)) {
+  if (item->type() != Item::FUNC_ITEM ||
+      down_cast<Item_func *>(item)->functype() != Item_func::EQ_FUNC) {
     return -1;
   }
   Item_func_eq *eq = down_cast<Item_func_eq *>(item);
@@ -911,7 +867,7 @@ bool MultipleEqualityAlreadyExistsOnJoin(Item_equal *equal,
       return true;
     }
   }
-  for (Item_eq_base *item : expr.equijoin_conditions) {
+  for (Item_func_eq *item : expr.equijoin_conditions) {
     if (item->source_multiple_equality == equal) {
       return true;
     }
@@ -922,40 +878,11 @@ bool MultipleEqualityAlreadyExistsOnJoin(Item_equal *equal,
 bool AlreadyExistsOnJoin(Item *cond, const RelationalExpression &expr) {
   assert(expr.equijoin_conditions
              .empty());  // MakeHashJoinConditions() has not run yet.
-  constexpr bool binary_cmp = true;
   for (Item *item : expr.join_conditions) {
-    if (cond->eq(item, binary_cmp)) {
+    if (cond->eq(item, /*binary_eq=*/true)) {
       return true;
     }
   }
-
-  // If "cond" is an equality created from a multiple equality, it might already
-  // be present on the join in a slightly different shape, because it can be a
-  // bit arbitrary exactly which single equalities a multiple equality is
-  // expanded to.
-  //
-  // For example, a=b and b=a should be considered the same. Also, if we have a
-  // multiple equality t1.x=t2.x=t2.y, we should consider t1.x=t2.x as present
-  // on the join if t1.x=t2.y is already there. We can do this because we know
-  // the t2.x=t2.y predicate will be pushed down as a table predicate (see
-  // EarlyExpandMultipleEquals() and ExpandSameTableFromMultipleEquals()), and
-  // t1.x=t2.x is implied by t1.x=t2.y and t2.x=t2.y.
-  //
-  // Similarly, if we have a hyperedge {t1,t2,t3}-{t4} and we already have
-  // t1.x=t4.x, we shouldn't add t2.x=t4.x if it comes from the same multiple
-  // equality, as in this case we know t1.x=t2.x will already have been applied
-  // on the {t1,t2,t3} subplan, and t2.x=t4.x is therefore implied by t1.x=t4.x.
-  //
-  // This means we only need to check if the join condition already has another
-  // equality that comes from the same multiple equality.
-  if (is_function_of_type(cond, Item_func::EQ_FUNC)) {
-    if (Item_equal *equal =
-            down_cast<Item_func_eq *>(cond)->source_multiple_equality;
-        equal != nullptr && MultipleEqualityAlreadyExistsOnJoin(equal, expr)) {
-      return true;
-    }
-  }
-
   return false;
 }
 
@@ -1103,48 +1030,29 @@ Item_func_eq *ConcretizeMultipleEquals(Item_equal *cond,
   // This is fairly arbitrary (we will add cycles later), but if there is
   // already a condition present, we prefer to pick one that refers to an
   // already-used table.
-  // Try to find a candidate from visible tables for this join.
-  // It is correct indeed and also that HeatWave does not support
-  // seeing inner tables of a semijoin from outside the semijoin.
   for (Item_field &item_field : cond->get_fields()) {
-    if (Overlaps(item_field.used_tables(), GetVisibleTables(expr.left))) {
+    if (Overlaps(item_field.used_tables(), expr.left->tables_in_subtree)) {
       if (left == nullptr ||
           !Overlaps(left->used_tables(), already_used_tables)) {
         left = &item_field;
       }
     } else if (Overlaps(item_field.used_tables(),
-                        GetVisibleTables(expr.right))) {
+                        expr.right->tables_in_subtree)) {
       if (right == nullptr ||
           !Overlaps(right->used_tables(), already_used_tables)) {
         right = &item_field;
       }
     }
   }
-  // If a candidate was not found from the visible tables, try with
-  // all tables in the join. For certain cases, query transformations
-  // could have placed a semijoin condition outside of the semijoin
-  // or even as part of a WHERE condition. It might succeed here for
-  // such conditions. Such queries are not offloaded to HeatWave.
-  if (left == nullptr || right == nullptr) {
-    for (Item_field &item_field : cond->get_fields()) {
-      if (Overlaps(item_field.used_tables(), expr.left->tables_in_subtree)) {
-        if (left == nullptr ||
-            !Overlaps(left->used_tables(), already_used_tables)) {
-          left = &item_field;
-        }
-      } else if (Overlaps(item_field.used_tables(),
-                          expr.right->tables_in_subtree)) {
-        if (right == nullptr ||
-            !Overlaps(right->used_tables(), already_used_tables)) {
-          right = &item_field;
-        }
-      }
-    }
-  }
   assert(left != nullptr);
   assert(right != nullptr);
 
-  return MakeEqItem(left, right, cond);
+  Item_func_eq *eq_item = new Item_func_eq(left, right);
+  eq_item->set_cmp_func();
+  eq_item->update_used_tables();
+  eq_item->quick_fix_field();
+  eq_item->source_multiple_equality = cond;
+  return eq_item;
 }
 
 /**
@@ -1172,7 +1080,12 @@ static void FullyConcretizeMultipleEquals(Item_equal *cond,
       continue;
     }
     if (last_field != nullptr) {
-      result->push_back(MakeEqItem(last_field, &field, cond));
+      Item_func_eq *eq_item = new Item_func_eq(last_field, &field);
+      eq_item->set_cmp_func();
+      eq_item->update_used_tables();
+      eq_item->quick_fix_field();
+      eq_item->source_multiple_equality = cond;
+      result->push_back(eq_item);
     }
     last_field = &field;
     seen_tables |= field.used_tables();
@@ -1181,13 +1094,12 @@ static void FullyConcretizeMultipleEquals(Item_equal *cond,
 
 /**
   Finalize a condition (join condition or WHERE predicate); resolve any
-  remaining multiple equalities.
+  remaining multiple equalities, and add casts to comparisons where needed.
   Caches around constant arguments are not added here but during finalize,
   since we might plan two times, and the caches from the first time may confuse
   remove_eq_cond() in the second.
  */
-Item *CanonicalizeCondition(Item *condition, table_map visible_tables,
-                            table_map all_tables) {
+Item *CanonicalizeCondition(Item *condition, table_map allowed_tables) {
   // Convert any remaining (unpushed) multiple equals to a series of equijoins.
   // Note this is a last-ditch resort, and should almost never happen;
   // thus, it's fine just to fully expand the multi-equality, even though it
@@ -1196,58 +1108,55 @@ Item *CanonicalizeCondition(Item *condition, table_map visible_tables,
   // within OR conjunctions or the likes.
   condition = CompileItem(
       condition, [](Item *) { return true; },
-      [visible_tables, all_tables](Item *item) -> Item * {
+      [allowed_tables](Item *item) -> Item * {
         if (!IsMultipleEquals(item)) {
           return item;
         }
         Item_equal *equal = down_cast<Item_equal *>(item);
-        assert(equal->const_arg() == nullptr);
+        assert(equal->get_const() == nullptr);
         List<Item> eq_items;
-        FullyConcretizeMultipleEquals(equal, visible_tables, &eq_items);
-        if (eq_items.is_empty()) {
-          // It is possible that for some semijoin conditions, we might
-          // not find replacements in only visible tables. So we try again
-          // with all tables which includes the non-visible tables as well.
-          FullyConcretizeMultipleEquals(equal, all_tables, &eq_items);
-        }
+        FullyConcretizeMultipleEquals(equal, allowed_tables, &eq_items);
         assert(!eq_items.is_empty());
-        return CreateConjunction(&eq_items);
+        if (eq_items.size() == 1) {
+          return eq_items.head();
+        } else {
+          Item_cond_and *item_and = new Item_cond_and(eq_items);
+          item_and->update_used_tables();
+          item_and->quick_fix_field();
+          return item_and;
+        }
       });
 
   // Account for tables not in allowed_tables having been removed.
   condition->update_used_tables();
+
+  condition->walk(&Item::cast_incompatible_args, enum_walk::POSTFIX, nullptr);
   return condition;
 }
 
-// Split any conditions that have been transformed into a conjunction (typically
-// by expansion of multiple equalities or removal of constant subconditions).
-Mem_root_array<Item *> ResplitConditions(
-    THD *thd, const Mem_root_array<Item *> &conditions) {
-  Mem_root_array<Item *> new_conditions(thd->mem_root);
-  for (Item *condition : conditions) {
-    ExtractConditions(condition, &new_conditions);
-  }
-  return new_conditions;
-}
-
 // Calls CanonicalizeCondition() for each condition in the given array.
-bool CanonicalizeConditions(THD *thd, table_map visible_tables,
-                            table_map all_tables,
+bool CanonicalizeConditions(THD *thd, table_map tables_in_subtree,
                             Mem_root_array<Item *> *conditions) {
   bool need_resplit = false;
   for (Item *&condition : *conditions) {
-    condition = CanonicalizeCondition(condition, visible_tables, all_tables);
+    condition = CanonicalizeCondition(condition, tables_in_subtree);
     if (condition == nullptr) {
       return true;
     }
-    if (IsAnd(condition)) {
+    if (condition->type() == Item::COND_ITEM &&
+        down_cast<Item_cond *>(condition)->functype() ==
+            Item_func::COND_AND_FUNC) {
       // Canonicalization converted something (probably an Item_equal) to a
       // conjunction, which we need to split back to new conditions again.
       need_resplit = true;
     }
   }
   if (need_resplit) {
-    *conditions = ResplitConditions(thd, *conditions);
+    Mem_root_array<Item *> new_join_conditions(thd->mem_root);
+    for (Item *condition : *conditions) {
+      ExtractConditions(condition, &new_join_conditions);
+    }
+    *conditions = std::move(new_join_conditions);
   }
   return false;
 }
@@ -1455,26 +1364,18 @@ bool AddJoinConditionPossiblyWithRewrite(RelationalExpression *expr, Item *cond,
  */
 void PushDownCondition(Item *cond, RelationalExpression *expr,
                        bool is_join_condition_for_expr,
-                       const CompanionSetCollection &companion_collection,
+                       const int table_num_to_companion_set[MAX_TABLES],
                        Mem_root_array<Item *> *table_filters,
                        Mem_root_array<Item *> *cycle_inducing_edges,
                        Mem_root_array<Item *> *remaining_parts, string *trace) {
   if (expr->type == RelationalExpression::TABLE) {
     assert(!IsMultipleEquals(cond));
     table_filters->push_back(cond);
+    if (remaining_parts != nullptr) {
+      remaining_parts->push_back(cond);
+    }
     return;
   }
-
-  // Conditions are usually not attempted pushed down if they reference tables
-  // outside of the subtree, so check that here. We do however allow multiple
-  // equalities, as they are easily concretized into single equalities
-  // referencing only the subtree. We also allow non-deterministic predicates to
-  // be attempted pushed, but only in order to check if a partial pushdown of
-  // non-deterministic parts is possible. The non-determinstic predicate itself
-  // will be kept in the WHERE clause, even if parts of it is pushed down.
-  assert(IsMultipleEquals(cond) ||
-         IsSubset(cond->used_tables() & ~PSEUDO_TABLE_BITS,
-                  expr->tables_in_subtree));
   const table_map used_tables =
       cond->used_tables() & (expr->tables_in_subtree | RAND_TABLE_BIT);
 
@@ -1484,7 +1385,7 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
       if (IsSubset(used_tables, child->tables_in_subtree)) {
         PushDownCondition(cond, child,
                           /*is_join_condition_for_expr=*/false,
-                          companion_collection, table_filters,
+                          table_num_to_companion_set, table_filters,
                           cycle_inducing_edges, remaining_parts, trace);
         return;
       }
@@ -1522,8 +1423,8 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
     }
     PushDownCondition(cond, expr->left,
                       /*is_join_condition_for_expr=*/false,
-                      companion_collection, table_filters, cycle_inducing_edges,
-                      remaining_parts, trace);
+                      table_num_to_companion_set, table_filters,
+                      cycle_inducing_edges, remaining_parts, trace);
     return;
   }
 
@@ -1538,7 +1439,7 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
   // rewriting causes conditions to appear higher up in the tree that we
   // _must_ push back down and through them for correctness. Thus, we have
   // no choice but to just trust that these conditions are pushable.
-  // (The user cannot specify semijoins directly, so all such conditions
+  // (The user cannot cannot specify semijoins directly, so all such conditions
   // come from ourselves.)
   const bool can_push_into_right =
       (IsInnerJoin(expr->type) ||
@@ -1553,8 +1454,8 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
     }
     PushDownCondition(cond, expr->right,
                       /*is_join_condition_for_expr=*/false,
-                      companion_collection, table_filters, cycle_inducing_edges,
-                      remaining_parts, trace);
+                      table_num_to_companion_set, table_filters,
+                      cycle_inducing_edges, remaining_parts, trace);
     return;
   }
 
@@ -1584,9 +1485,9 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
     if (partial_cond != nullptr) {
       PushDownCondition(partial_cond, expr->left,
                         /*is_join_condition_for_expr=*/false,
-                        companion_collection, table_filters,
-                        cycle_inducing_edges,
-                        /*remaining_parts=*/nullptr, trace);
+                        table_num_to_companion_set, table_filters,
+                        cycle_inducing_edges, /*remaining_parts=*/nullptr,
+                        trace);
     }
   }
 
@@ -1599,9 +1500,9 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
     if (partial_cond != nullptr) {
       PushDownCondition(partial_cond, expr->right,
                         /*is_join_condition_for_expr=*/false,
-                        companion_collection, table_filters,
-                        cycle_inducing_edges,
-                        /*remaining_parts=*/nullptr, trace);
+                        table_num_to_companion_set, table_filters,
+                        cycle_inducing_edges, /*remaining_parts=*/nullptr,
+                        trace);
     }
   }
 
@@ -1622,13 +1523,13 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
     if (my_count_bits(left_tables) >= 2 && can_push_into_left) {
       PushDownCondition(cond, expr->left,
                         /*is_join_condition_for_expr=*/false,
-                        companion_collection, table_filters,
+                        table_num_to_companion_set, table_filters,
                         cycle_inducing_edges, remaining_parts, trace);
     }
     if (my_count_bits(right_tables) >= 2 && can_push_into_right) {
       PushDownCondition(cond, expr->right,
                         /*is_join_condition_for_expr=*/false,
-                        companion_collection, table_filters,
+                        table_num_to_companion_set, table_filters,
                         cycle_inducing_edges, remaining_parts, trace);
     }
   }
@@ -1688,7 +1589,7 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
           expr, cond, AssociativeRewritesAllowed::ANY,
           /*used_commutativity=*/false, &need_flatten, trace)) {
     if (expr->type == RelationalExpression::INNER_JOIN &&
-        IsCandidateForCycle(expr, cond, companion_collection)) {
+        IsCandidateForCycle(expr, cond, table_num_to_companion_set)) {
       // We couldn't push the condition to this join without broadening its
       // hyperedge, but we could add a simple edge (or multiple simple edges,
       // in the case of multiple equalities -- we defer the meshing of those
@@ -1709,7 +1610,7 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
         for (Item *sub_cond : possible_cycle_edges) {
           PushDownCondition(sub_cond, expr,
                             /*is_join_condition_for_expr=*/false,
-                            companion_collection, table_filters,
+                            table_num_to_companion_set, table_filters,
                             cycle_inducing_edges, remaining_parts, trace);
         }
       } else {
@@ -1717,8 +1618,8 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
           *trace += StringPrintf("- condition %s induces a hypergraph cycle\n",
                                  ItemToString(cond).c_str());
         }
-        cycle_inducing_edges->push_back(CanonicalizeCondition(
-            cond, expr->tables_in_subtree, expr->tables_in_subtree));
+        cycle_inducing_edges->push_back(
+            CanonicalizeCondition(cond, expr->tables_in_subtree));
       }
       if (need_flatten) {
         FlattenInnerJoins(expr);
@@ -1736,12 +1637,8 @@ void PushDownCondition(Item *cond, RelationalExpression *expr,
                                       down_cast<Item_equal *>(cond), *expr)) {
       expr->join_conditions.push_back(
           ConcretizeMultipleEquals(down_cast<Item_equal *>(cond), *expr));
-    } else if (IsSubset(used_tables, expr->tables_in_subtree)) {
-      expr->join_conditions.push_back(cond);
     } else {
-      if (remaining_parts != nullptr) {
-        remaining_parts->push_back(cond);
-      }
+      expr->join_conditions.push_back(cond);
     }
   }
   if (need_flatten) {
@@ -1772,10 +1669,7 @@ void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
     if (cond->has_subquery()) {
       return;
     }
-    if (!IsSubset(cond->used_tables() & ~PSEUDO_TABLE_BITS,
-                  expr->tables_in_subtree)) {
-      expr->join_conditions_pushable_to_this.push_back(cond);
-    }
+    expr->join_conditions_pushable_to_this.push_back(cond);
     return;
   }
 
@@ -1821,24 +1715,17 @@ void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
 Mem_root_array<Item *> PushDownAsMuchAsPossible(
     THD *thd, Mem_root_array<Item *> conditions, RelationalExpression *expr,
     bool is_join_condition_for_expr,
-    const CompanionSetCollection &companion_collection,
+    const int table_num_to_companion_set[MAX_TABLES],
     Mem_root_array<Item *> *table_filters,
     Mem_root_array<Item *> *cycle_inducing_edges, string *trace) {
   Mem_root_array<Item *> remaining_parts(thd->mem_root);
   for (Item *item : conditions) {
-    if (!AreMultipleBitsSet(item->used_tables() & ~PSEUDO_TABLE_BITS) &&
-        !is_join_condition_for_expr) {
-      // Simple filters will stay in WHERE; we go through them with
-      // AddPredicate() (in MakeJoinHypergraph()) and convert them into
-      // table filters, then handle them separately in FoundSingleNode()
-      // and FoundSubgraphPair().
-      //
-      // Note that filters that were part of a join condition
-      // (e.g. an outer join) won't go through that path, so they will
-      // be sent through PushDownCondition() below, and possibly end up
-      // in table_filters.
+    if (IsSingleBitSet(item->used_tables() & ~PSEUDO_TABLE_BITS)) {
+      // Only push down join conditions, not filters; they will stay in WHERE,
+      // as we handle them separately in FoundSingleNode() and
+      // FoundSubgraphPair().
       remaining_parts.push_back(item);
-    } else if (is_join_condition_for_expr && !IsMultipleEquals(item) &&
+    } else if (is_join_condition_for_expr &&
                !IsSubset(item->used_tables() & ~PSEUDO_TABLE_BITS,
                          expr->tables_in_subtree)) {
       // Condition refers to tables outside this subtree, so it can not be
@@ -1846,7 +1733,7 @@ Mem_root_array<Item *> PushDownAsMuchAsPossible(
       remaining_parts.push_back(item);
     } else {
       PushDownCondition(item, expr, is_join_condition_for_expr,
-                        companion_collection, table_filters,
+                        table_num_to_companion_set, table_filters,
                         cycle_inducing_edges, &remaining_parts, trace);
     }
   }
@@ -1875,7 +1762,7 @@ Mem_root_array<Item *> PushDownAsMuchAsPossible(
   join condition down again.
  */
 void PushDownJoinConditions(THD *thd, RelationalExpression *expr,
-                            const CompanionSetCollection &companion_collection,
+                            const int table_num_to_companion_set[MAX_TABLES],
                             Mem_root_array<Item *> *table_filters,
                             Mem_root_array<Item *> *cycle_inducing_edges,
                             string *trace) {
@@ -1887,18 +1774,18 @@ void PushDownJoinConditions(THD *thd, RelationalExpression *expr,
   if (!expr->join_conditions.empty()) {
     expr->join_conditions = PushDownAsMuchAsPossible(
         thd, std::move(expr->join_conditions), expr,
-        /*is_join_condition_for_expr=*/true, companion_collection,
+        /*is_join_condition_for_expr=*/true, table_num_to_companion_set,
         table_filters, cycle_inducing_edges, trace);
   }
   if (expr->type == RelationalExpression::MULTI_INNER_JOIN) {
     for (RelationalExpression *child : expr->multi_children) {
-      PushDownJoinConditions(thd, child, companion_collection, table_filters,
-                             cycle_inducing_edges, trace);
+      PushDownJoinConditions(thd, child, table_num_to_companion_set,
+                             table_filters, cycle_inducing_edges, trace);
     }
   } else {
-    PushDownJoinConditions(thd, expr->left, companion_collection, table_filters,
-                           cycle_inducing_edges, trace);
-    PushDownJoinConditions(thd, expr->right, companion_collection,
+    PushDownJoinConditions(thd, expr->left, table_num_to_companion_set,
+                           table_filters, cycle_inducing_edges, trace);
+    PushDownJoinConditions(thd, expr->right, table_num_to_companion_set,
                            table_filters, cycle_inducing_edges, trace);
   }
 }
@@ -1923,7 +1810,7 @@ void PushDownJoinConditionsForSargable(THD *thd, RelationalExpression *expr) {
     // These are the same conditions as PushDownAsMuchAsPossible();
     // not filters (which shouldn't be here anyway), and not tables
     // outside the subtree.
-    if (AreMultipleBitsSet(item->used_tables() & ~PSEUDO_TABLE_BITS) &&
+    if (!IsSingleBitSet(item->used_tables() & ~PSEUDO_TABLE_BITS) &&
         IsSubset(item->used_tables() & ~PSEUDO_TABLE_BITS,
                  expr->tables_in_subtree)) {
       PushDownToSargableCondition(item, expr,
@@ -2038,12 +1925,12 @@ void ClearImpossibleJoinConditions(RelationalExpression *expr) {
   could have created a mesh of the three first ones, but we don't currently.
  */
 bool ShouldCompleteMeshForCondition(
-    Item_equal *item_equal,
-    const CompanionSetCollection &companion_collection) {
-  if (companion_collection.Find(item_equal->used_tables()) == nullptr) {
+    Item_equal *item_equal, const int table_num_to_companion_set[MAX_TABLES]) {
+  if (CompanionSetUsedByCondition(item_equal->used_tables(),
+                                  table_num_to_companion_set) == -1) {
     return false;
   }
-  if (item_equal->const_arg() != nullptr) {
+  if (item_equal->get_const() != nullptr) {
     return false;
   }
   return true;
@@ -2053,15 +1940,16 @@ bool ShouldCompleteMeshForCondition(
 // See ShouldCompleteMeshForCondition().
 void ExtractCycleMultipleEqualities(
     const Mem_root_array<Item *> &conditions,
-    const CompanionSetCollection &companion_collection,
+    const int table_num_to_companion_set[MAX_TABLES],
     Mem_root_array<Item_equal *> *multiple_equalities) {
   for (Item *item : conditions) {
     assert(!IsMultipleEquals(item));  // Should have been canonicalized earlier.
-    if (is_function_of_type(item, Item_func::EQ_FUNC)) {
+    if (item->type() == Item::FUNC_ITEM &&
+        down_cast<Item_func *>(item)->functype() == Item_func::EQ_FUNC) {
       Item_func_eq *eq_item = down_cast<Item_func_eq *>(item);
       if (eq_item->source_multiple_equality != nullptr &&
           ShouldCompleteMeshForCondition(eq_item->source_multiple_equality,
-                                         companion_collection)) {
+                                         table_num_to_companion_set)) {
         multiple_equalities->push_back(eq_item->source_multiple_equality);
       }
     }
@@ -2072,28 +1960,30 @@ void ExtractCycleMultipleEqualities(
 // See ShouldCompleteMeshForCondition().
 void ExtractCycleMultipleEqualitiesFromJoinConditions(
     const RelationalExpression *expr,
-    const CompanionSetCollection &companion_collection,
+    const int table_num_to_companion_set[MAX_TABLES],
     Mem_root_array<Item_equal *> *multiple_equalities) {
   if (expr->type == RelationalExpression::TABLE) {
     return;
   }
-  for (Item_eq_base *eq_item : expr->equijoin_conditions) {
+  for (Item_func_eq *eq_item : expr->equijoin_conditions) {
     if (eq_item->source_multiple_equality != nullptr &&
         ShouldCompleteMeshForCondition(eq_item->source_multiple_equality,
-                                       companion_collection)) {
+                                       table_num_to_companion_set)) {
       multiple_equalities->push_back(eq_item->source_multiple_equality);
     }
   }
   ExtractCycleMultipleEqualitiesFromJoinConditions(
-      expr->left, companion_collection, multiple_equalities);
+      expr->left, table_num_to_companion_set, multiple_equalities);
   ExtractCycleMultipleEqualitiesFromJoinConditions(
-      expr->right, companion_collection, multiple_equalities);
+      expr->right, table_num_to_companion_set, multiple_equalities);
 }
 
 /**
+  Find constant expressions in join conditions, and add caches around them.
+  Also add cast nodes if there are incompatible arguments in comparisons.
+
   Similar to work done in JOIN::finalize_table_conditions() in the old
-  optimizer. Non-join predicates are done near the start in
-  MakeJoinHypergraph().
+  optimizer. Non-join predicates are done near the end in MakeJoinHypergraph().
  */
 bool CanonicalizeJoinConditions(THD *thd, RelationalExpression *expr) {
   if (expr->type == RelationalExpression::TABLE) {
@@ -2101,9 +1991,8 @@ bool CanonicalizeJoinConditions(THD *thd, RelationalExpression *expr) {
   }
   assert(expr->equijoin_conditions
              .empty());  // MakeHashJoinConditions() has not run yet.
-  if (CanonicalizeConditions(
-          thd, GetVisibleTables(expr->left) | GetVisibleTables(expr->right),
-          expr->tables_in_subtree, &expr->join_conditions)) {
+  if (CanonicalizeConditions(thd, expr->tables_in_subtree,
+                             &expr->join_conditions)) {
     return true;
   }
 
@@ -2154,14 +2043,25 @@ void MakeHashJoinConditions(THD *thd, RelationalExpression *expr) {
 
     for (Item *item : expr->join_conditions) {
       // See if this is a (non-degenerate) equijoin condition.
-      if (item->type() == Item::FUNC_ITEM) {
+      if ((item->used_tables() & expr->left->tables_in_subtree) &&
+          (item->used_tables() & expr->right->tables_in_subtree) &&
+          (item->type() == Item::FUNC_ITEM ||
+           item->type() == Item::COND_ITEM)) {
         Item_func *func_item = down_cast<Item_func *>(item);
         if (func_item->contains_only_equi_join_condition()) {
-          Item_eq_base *join_condition = down_cast<Item_eq_base *>(func_item);
-          if (IsHashEquijoinCondition(join_condition,
-                                      expr->left->tables_in_subtree,
-                                      expr->right->tables_in_subtree)) {
-            expr->equijoin_conditions.push_back(join_condition);
+          Item_func_eq *join_condition = down_cast<Item_func_eq *>(func_item);
+          // Join conditions with items that returns row values (subqueries or
+          // row value expression) are set up with multiple child comparators,
+          // one for each column in the row. As long as the row contains only
+          // one column, use it as a join condition. If it has more than one
+          // column, attach it as an extra condition. Note that join
+          // conditions that does not return row values are not set up with
+          // any child comparators, meaning that get_child_comparator_count()
+          // will return 0.
+          if (join_condition->get_comparator()->get_child_comparator_count() <
+              2) {
+            expr->equijoin_conditions.push_back(
+                down_cast<Item_func_eq *>(func_item));
             continue;
           }
         }
@@ -2169,6 +2069,7 @@ void MakeHashJoinConditions(THD *thd, RelationalExpression *expr) {
       // It was not.
       extra_conditions.push_back(item);
     }
+
     expr->join_conditions = std::move(extra_conditions);
   }
   MakeHashJoinConditions(thd, expr->left);
@@ -2197,131 +2098,65 @@ void CSEConditions(THD *thd, Mem_root_array<Item *> *conditions) {
     }
   }
   if (need_resplit) {
-    *conditions = ResplitConditions(thd, *conditions);
+    Mem_root_array<Item *> new_join_conditions(thd->mem_root);
+    for (Item *condition : *conditions) {
+      ExtractConditions(condition, &new_join_conditions);
+    }
+    *conditions = std::move(new_join_conditions);
   }
 }
 
 /**
-  Do some equality and constant propagation, conversion/folding work needed
-  for correctness and performance.
+  Do some constant conversion/folding work needed for correctness.
+  We also move more expensive functions last in the conjunction,
+  as a heuristic so that they are less likely to be evaluated.
  */
-bool EarlyNormalizeConditions(THD *thd, RelationalExpression *join,
-                              Mem_root_array<Item *> *conditions,
-                              bool *always_false) {
+bool EarlyNormalizeConditions(THD *thd, Mem_root_array<Item *> *conditions) {
   CSEConditions(thd, conditions);
-  bool need_resplit = false;
   for (auto it = conditions->begin(); it != conditions->end();) {
-    /**
-      For simple filters, propagate constants if there are any
-      established through multiple equalities. Note that most of the
-      propagation is already done in optimize_cond(). This is to handle
-      only the corner cases where equality propagation in optimize_cond()
-      would have been rejected (which is done in old optimizer at a later
-      point).
-      For join conditions which are not part of multiple equalities, try
-      to substitute fields with the fields from available tables in the
-      join. It's possible only if there are multiple equalities for the
-      fields in the join condition.
-      E.g.
-      1. t1.a = t2.a and t1.a <> t2.a would be multi-equal(t1.a, t2.a)
-      and t1.a <> t2.a post optimize_cond(). We could transform this
-      condition into multi-equal(t1.a, t2.a) and t1.a <> t1.a.
-      2. t1.a = t2.a + t3.a could be converted to t1.a = t2.a + t2.a
-      if there is multiple equality (t2.a, t3.a). This makes it an
-      equi-join condition rather than an extra predicate for the join.
-    */
-    const bool is_filter =
-        !AreMultipleBitsSet((*it)->used_tables() & ~PSEUDO_TABLE_BITS);
-    if (is_filter || !is_function_of_type(*it, Item_func::MULT_EQUAL_FUNC)) {
-      table_map tables_in_subtree = TablesBetween(0, MAX_TABLES);
-      // If this is a degenerate join condition i.e. all fields in the
-      // join condition come from the same side of the join, we need to
-      // find replacements if any from the same side so that the condition
-      // continues to be pushable to that side.
-      if (join != nullptr) {
-        tables_in_subtree =
-            IsSubset((*it)->used_tables(), join->left->tables_in_subtree)
-                ? join->left->tables_in_subtree
-                : (IsSubset((*it)->used_tables(),
-                            join->right->tables_in_subtree)
-                       ? join->right->tables_in_subtree
-                       : join->tables_in_subtree);
-      }
-      *it = CompileItem(
-          *it, [](Item *) { return true; },
-          [tables_in_subtree, is_filter](Item *item) -> Item * {
-            if (item->type() == Item::FIELD_ITEM) {
-              Item_equal *item_equal =
-                  down_cast<Item_field *>(item)->item_equal;
-              if (item_equal) {
-                Item *const_item = item_equal->const_arg();
-                if (is_filter && const_item != nullptr &&
-                    item->has_compatible_context(const_item)) {
-                  return const_item;
-                } else if (!is_filter && const_item == nullptr) {
-                  for (Item_field &field : item_equal->get_fields()) {
-                    if (IsSubset(field.used_tables(), tables_in_subtree))
-                      return &field;
-                  }
-                }
-              }
-            }
-            return item;
-          });
-    }
-
-    const Item *const old_item = *it;
     Item::cond_result res;
     if (remove_eq_conds(thd, *it, &*it, &res)) {
       return true;
     }
 
     if (res == Item::COND_TRUE) {
-      // Remove always true conditions from the conjunction.
       it = conditions->erase(it);
     } else if (res == Item::COND_FALSE) {
-      // One always false condition makes the entire conjunction always false.
       conditions->clear();
-      conditions->push_back(new Item_func_false);
-      *always_false = true;
+      conditions->push_back(new Item_int(0));
       return false;
     } else {
-      assert(*it != nullptr);
-      // If the condition was replaced by a conjunction, we need to split it and
-      // add its children to conditions, so that its individual elements can be
-      // considered for condition pushdown later.
-      if (*it != old_item && IsAnd(*it)) {
-        need_resplit = true;
-      }
-
-      (*it)->update_used_tables();
       ++it;
     }
   }
 
-  if (need_resplit) {
-    *conditions = ResplitConditions(thd, *conditions);
-  }
+  // Put potentially expensive functions last: First everything normal,
+  // then subqueries (which can be expensive), then stored procedures
+  // (which are unknown, so potentially _very_ expensive).
+  std::stable_partition(conditions->begin(), conditions->end(),
+                        [](Item *item) { return !item->has_subquery(); });
+  std::stable_partition(conditions->begin(), conditions->end(),
+                        [](Item *item) { return !item->is_expensive(); });
 
   return false;
 }
 
-string PrintJoinList(const mem_root_deque<Table_ref *> &join_list, int level) {
+string PrintJoinList(const mem_root_deque<TABLE_LIST *> &join_list, int level) {
   string str;
   const char *join_types[] = {"inner", "left", "right"};
-  std::vector<Table_ref *> list(join_list.begin(), join_list.end());
-  for (Table_ref *tbl : list) {
+  std::vector<TABLE_LIST *> list(join_list.begin(), join_list.end());
+  for (TABLE_LIST *tbl : list) {
     for (int i = 0; i < level * 2; ++i) str += ' ';
-    if (tbl->join_cond_optim() != nullptr) {
+    if (tbl->join_cond() != nullptr) {
       str += StringPrintf("* %s %s  join_type=%s\n", tbl->alias,
-                          ItemToString(tbl->join_cond_optim()).c_str(),
+                          ItemToString(tbl->join_cond()).c_str(),
                           join_types[tbl->outer_join]);
     } else {
       str += StringPrintf("* %s  join_type=%s\n", tbl->alias,
                           join_types[tbl->outer_join]);
     }
     if (tbl->nested_join != nullptr) {
-      str += PrintJoinList(tbl->nested_join->m_tables, level + 1);
+      str += PrintJoinList(tbl->nested_join->join_list, level + 1);
     }
   }
   return str;
@@ -2398,8 +2233,6 @@ table_map FindTESForCondition(table_map used_tables,
   }
 }
 
-}  // namespace
-
 /**
   For the given hypergraph, make a textual representation in the form
   of a dotty graph. You can save this to a file and then use Graphviz
@@ -2436,8 +2269,6 @@ string PrintDottyHypergraph(const JoinHypergraph &graph) {
     const Hyperedge &e = graph.graph.edges[edge_idx];
     const RelationalExpression *expr = graph.edges[edge_idx / 2].expr;
     string label = GenerateExpressionLabel(expr);
-
-    label += StringPrintf(" (%.3g)", graph.edges[edge_idx / 2].selectivity);
 
     // Add conflict rules to the label.
     for (const ConflictRule &rule : expr->conflict_rules) {
@@ -2510,33 +2341,12 @@ string PrintDottyHypergraph(const JoinHypergraph &graph) {
   return digraph;
 }
 
-size_t EstimateHashJoinKeyWidth(const RelationalExpression *expr) {
-  size_t ret = 0;
-  for (Item_eq_base *join_condition : expr->equijoin_conditions) {
-    // We heuristically limit our estimate of blobs to 4 kB.
-    // Otherwise, the mere presence of a LONGBLOB field would mean
-    // we'd estimate essentially infinite row width for a join.
-    //
-    // TODO(sgunders): Do as we do in the old optimizer,
-    // where we only store hashes for strings.
-    const Item *left = join_condition->get_arg(0);
-    const Item *right = join_condition->get_arg(1);
-    ret += min<size_t>(
-        max<size_t>(left->max_char_length(), right->max_char_length()),
-        kMaxItemLengthEstimate);
-  }
-  return ret;
-}
-
-namespace {
-
-table_map IntersectIfNotDegenerate(table_map used_tables,
-                                   table_map available_tables) {
-  if (!Overlaps(used_tables, available_tables)) {
+NodeMap IntersectIfNotDegenerate(NodeMap used_nodes, NodeMap available_nodes) {
+  if (!Overlaps(used_nodes, available_nodes)) {
     // Degenerate case.
-    return available_tables;
+    return available_nodes;
   } else {
-    return used_tables & available_tables;
+    return used_nodes & available_nodes;
   }
 }
 
@@ -2659,57 +2469,48 @@ NodeMap AbsorbConflictRulesIntoTES(
   the presence of such cases.
  */
 Hyperedge FindHyperedgeAndJoinConflicts(THD *thd, NodeMap used_nodes,
-                                        RelationalExpression *expr,
-                                        const JoinHypergraph *graph) {
+                                        RelationalExpression *expr) {
   assert(expr->type != RelationalExpression::TABLE);
 
   Mem_root_array<ConflictRule> conflict_rules(thd->mem_root);
   ForEachJoinOperator(
-      expr->left, [expr, graph, &conflict_rules](RelationalExpression *child) {
+      expr->left, [expr, &conflict_rules](RelationalExpression *child) {
         if (!OperatorsAreAssociative(*child, *expr)) {
           // Prevent associative rewriting; we cannot apply this operator
           // (rule kicks in as soon as _any_ table from the right side
           // is seen) until we have all nodes mentioned on the left side of
           // the join condition.
-          const table_map left = IntersectIfNotDegenerate(
-              child->conditions_used_tables, child->left->tables_in_subtree);
-          conflict_rules.emplace_back(ConflictRule{
-              child->right->nodes_in_subtree,
-              GetNodeMapFromTableMap(left & ~PSEUDO_TABLE_BITS,
-                                     graph->table_num_to_node_num)});
+          const NodeMap left = IntersectIfNotDegenerate(
+              child->conditions_used_tables, child->left->nodes_in_subtree);
+          conflict_rules.push_back(
+              ConflictRule{child->right->nodes_in_subtree, left});
         }
         if (!OperatorsAreLeftAsscom(*child, *expr)) {
           // Prevent l-asscom rewriting; we cannot apply this operator
           // (rule kicks in as soon as _any_ table from the left side
           // is seen) until we have all nodes mentioned on the right side of
           // the join condition.
-          const table_map right = IntersectIfNotDegenerate(
-              child->conditions_used_tables, child->right->tables_in_subtree);
-          conflict_rules.emplace_back(ConflictRule{
-              child->left->nodes_in_subtree,
-              GetNodeMapFromTableMap(right & ~PSEUDO_TABLE_BITS,
-                                     graph->table_num_to_node_num)});
+          const NodeMap right = IntersectIfNotDegenerate(
+              child->conditions_used_tables, child->right->nodes_in_subtree);
+          conflict_rules.push_back(
+              ConflictRule{child->left->nodes_in_subtree, right});
         }
       });
 
   // Exactly the same as the previous, just mirrored left/right.
   ForEachJoinOperator(
-      expr->right, [expr, graph, &conflict_rules](RelationalExpression *child) {
+      expr->right, [expr, &conflict_rules](RelationalExpression *child) {
         if (!OperatorsAreAssociative(*expr, *child)) {
-          const table_map right = IntersectIfNotDegenerate(
-              child->conditions_used_tables, child->right->tables_in_subtree);
-          conflict_rules.emplace_back(ConflictRule{
-              child->left->nodes_in_subtree,
-              GetNodeMapFromTableMap(right & ~PSEUDO_TABLE_BITS,
-                                     graph->table_num_to_node_num)});
+          const NodeMap right = IntersectIfNotDegenerate(
+              child->conditions_used_tables, child->right->nodes_in_subtree);
+          conflict_rules.push_back(
+              ConflictRule{child->left->nodes_in_subtree, right});
         }
         if (!OperatorsAreRightAsscom(*expr, *child)) {
-          const table_map left = IntersectIfNotDegenerate(
-              child->conditions_used_tables, child->left->tables_in_subtree);
-          conflict_rules.emplace_back(ConflictRule{
-              child->right->nodes_in_subtree,
-              GetNodeMapFromTableMap(left & ~PSEUDO_TABLE_BITS,
-                                     graph->table_num_to_node_num)});
+          const NodeMap left = IntersectIfNotDegenerate(
+              child->conditions_used_tables, child->left->nodes_in_subtree);
+          conflict_rules.push_back(
+              ConflictRule{child->right->nodes_in_subtree, left});
         }
       });
 
@@ -2739,10 +2540,23 @@ Hyperedge FindHyperedgeAndJoinConflicts(THD *thd, NodeMap used_nodes,
   return {left, right};
 }
 
-size_t EstimateRowWidthForJoin(const JoinHypergraph &graph,
-                               const RelationalExpression *expr) {
+size_t EstimateRowWidth(const JoinHypergraph &graph,
+                        const RelationalExpression *expr) {
+  size_t ret = 0;
+
   // Estimate size of the join keys.
-  size_t ret = EstimateHashJoinKeyWidth(expr);
+  for (Item_func_eq *join_condition : expr->equijoin_conditions) {
+    // We heuristically limit our estimate of blobs to 4 kB.
+    // Otherwise, the mere presence of a LONGBLOB field would mean
+    // we'd estimate essentially infinite row width for a join.
+    //
+    // TODO(sgunders): Do as we do in the old optimizer,
+    // where we only store hashes for strings.
+    const Item *left = join_condition->get_arg(0);
+    const Item *right = join_condition->get_arg(1);
+    ret += min<size_t>(
+        max<size_t>(left->max_char_length(), right->max_char_length()), 4096);
+  }
 
   // Estimate size of the values.
   for (int node_idx : BitsSetIn(expr->nodes_in_subtree)) {
@@ -2752,7 +2566,7 @@ size_t EstimateRowWidthForJoin(const JoinHypergraph &graph,
         Field *field = table->field[i];
 
         // See above.
-        ret += min<size_t>(field->max_data_length(), kMaxItemLengthEstimate);
+        ret += min<size_t>(field->max_data_length(), 4096);
       }
     }
   }
@@ -2763,33 +2577,6 @@ size_t EstimateRowWidthForJoin(const JoinHypergraph &graph,
   ret += 20;
 
   return ret;
-}
-
-/**
-  Sorts the given range of predicates so that the most selective and least
-  expensive predicates come first, and the less selective and more expensive
-  ones come last.
- */
-void SortPredicates(Predicate *begin, Predicate *end) {
-  if (std::distance(begin, end) <= 1) return;  // Nothing to sort.
-
-  // Move the most selective predicates first.
-  std::stable_sort(begin, end, [](const Predicate &p1, const Predicate &p2) {
-    return p1.selectivity < p2.selectivity;
-  });
-
-  // If the predicates contain subqueries, move them towards the end, regardless
-  // of their selectivity, since they could be expensive to evaluate. We could
-  // refine this by looking at the estimated cost of the contained subqueries.
-  std::stable_partition(begin, end, [](const Predicate &pred) {
-    return !pred.condition->has_subquery();
-  });
-
-  // UDFs and stored procedures have unknown and potentially very high cost.
-  // Move them last.
-  std::stable_partition(begin, end, [](const Predicate &pred) {
-    return !pred.condition->is_expensive();
-  });
 }
 
 /**
@@ -2821,27 +2608,17 @@ int AddPredicate(THD *thd, Item *condition, bool was_join_condition,
   }
   pred.total_eligibility_set = GetNodeMapFromTableMap(
       total_eligibility_set, graph->table_num_to_node_num);
-  pred.selectivity =
-      EstimateSelectivity(thd, condition, *root->companion_set, trace);
+  pred.selectivity = EstimateSelectivity(thd, condition, trace);
   pred.was_join_condition = was_join_condition;
   pred.source_multiple_equality_idx = source_multiple_equality_idx;
   pred.functional_dependencies_idx.init(thd->mem_root);
-
-  // Cache information about which subqueries are contained in this
-  // predicate, if any.
-  pred.contained_subqueries.init(thd->mem_root);
-  FindContainedSubqueries(condition, graph->query_block(),
-                          [&pred](const ContainedSubquery &subquery) {
-                            pred.contained_subqueries.push_back(subquery);
-                          });
-
   graph->predicates.push_back(std::move(pred));
 
   if (trace != nullptr) {
     *trace += StringPrintf("Total eligibility set for %s: {",
                            ItemToString(condition).c_str());
     bool first = true;
-    for (Table_ref *tl = graph->query_block()->leaf_tables; tl != nullptr;
+    for (TABLE_LIST *tl = graph->query_block()->leaf_tables; tl != nullptr;
          tl = tl->next_leaf) {
       if (tl->map() & total_eligibility_set) {
         if (!first) *trace += ',';
@@ -2936,84 +2713,35 @@ bool IsPartOfCycle(const JoinHypergraph *graph, int edge_idx) {
   hypergraph.
  */
 void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
-                   CompanionSetCollection &companion_collection,
                    JoinHypergraph *graph, string *trace) {
   for (Item *cond : cycle_inducing_edges) {
     const NodeMap used_nodes = GetNodeMapFromTableMap(
         cond->used_tables(), graph->table_num_to_node_num);
-    RelationalExpression *expr = nullptr;
-    JoinPredicate *pred = nullptr;
-
     const NodeMap left = IsolateLowestBit(used_nodes);  // Arbitrary.
     const NodeMap right = used_nodes & ~left;
+    graph->graph.AddEdge(left, right);
 
-    // See if we already have a suitable edge.
-    for (size_t edge_idx = 0; edge_idx < graph->edges.size(); ++edge_idx) {
-      Hyperedge edge = graph->graph.edges[edge_idx * 2];
-      if ((edge.left | edge.right) == used_nodes &&
-          graph->edges[edge_idx].expr->type ==
-              RelationalExpression::INNER_JOIN) {
-        pred = &graph->edges[edge_idx];
-        expr = pred->expr;
-        break;
-      }
-    }
-
-    if (expr == nullptr) {
-      graph->graph.AddEdge(left, right);
-
-      expr = new (thd->mem_root) RelationalExpression(thd);
-      expr->type = RelationalExpression::INNER_JOIN;
-
-      // TODO(sgunders): This does not really make much sense, but
-      // estimated_bytes_per_row doesn't make that much sense to begin with; it
-      // will depend on the join order. See if we can replace it with a
-      // per-table width calculation that we can sum up in the join optimizer.
-      expr->tables_in_subtree = cond->used_tables();
-      expr->nodes_in_subtree =
-          GetNodeMapFromTableMap(cond->used_tables() & ~PSEUDO_TABLE_BITS,
-                                 graph->table_num_to_node_num);
-
-      expr->companion_set = companion_collection.Find(expr->tables_in_subtree);
-
-      double selectivity =
-          EstimateSelectivity(thd, cond, *expr->companion_set, trace);
-      const size_t estimated_bytes_per_row =
-          EstimateRowWidthForJoin(*graph, expr);
-      graph->edges.push_back(JoinPredicate{
-          expr, selectivity, estimated_bytes_per_row,
-          /*functional_dependencies=*/0, /*functional_dependencies_idx=*/{}});
-    } else {
-      // Skip this item if it is a duplicate (this can
-      // happen with multiple equalities in particular).
-      bool dup = false;
-      for (Item *other_cond : expr->equijoin_conditions) {
-        if (other_cond->eq(cond, /*binary_cmp=*/true)) {
-          dup = true;
-          break;
-        }
-      }
-      if (dup) {
-        continue;
-      }
-      for (Item *other_cond : expr->join_conditions) {
-        if (other_cond->eq(cond, /*binary_cmp=*/true)) {
-          dup = true;
-          break;
-        }
-      }
-      if (dup) {
-        continue;
-      }
-      pred->selectivity *=
-          EstimateSelectivity(thd, cond, *expr->companion_set, trace);
-    }
+    RelationalExpression *expr = new (thd->mem_root) RelationalExpression(thd);
+    expr->type = RelationalExpression::INNER_JOIN;
     if (cond->type() == Item::FUNC_ITEM &&
-        down_cast<Item_func *>(cond)->contains_only_equi_join_condition()) {
-      expr->equijoin_conditions.push_back(down_cast<Item_eq_base *>(cond));
+        down_cast<Item_func *>(cond)->functype() == Item_func::EQ_FUNC) {
+      expr->equijoin_conditions.push_back(down_cast<Item_func_eq *>(cond));
     } else {
       expr->join_conditions.push_back(cond);
     }
+
+    // TODO(sgunders): This does not really make much sense, but
+    // estimated_bytes_per_row doesn't make that much sense to begin with; it
+    // will depend on the join order. See if we can replace it with a per-table
+    // width calculation that we can sum up in the join optimizer.
+    expr->tables_in_subtree = cond->used_tables();
+    expr->nodes_in_subtree = GetNodeMapFromTableMap(
+        cond->used_tables() & ~PSEUDO_TABLE_BITS, graph->table_num_to_node_num);
+    double selectivity = EstimateSelectivity(thd, cond, trace);
+    const size_t estimated_bytes_per_row = EstimateRowWidth(*graph, expr);
+    graph->edges.push_back(JoinPredicate{
+        expr, selectivity, estimated_bytes_per_row,
+        /*functional_dependencies=*/0, /*functional_dependencies_idx=*/{}});
 
     // Make this predicate potentially sargable (cycle edges are always
     // simple equalities).
@@ -3072,8 +2800,6 @@ void PromoteCycleJoinPredicates(
                    root, graph, trace);
     }
     expr->join_predicate_last = graph->predicates.size();
-    SortPredicates(graph->predicates.begin() + expr->join_predicate_first,
-                   graph->predicates.begin() + expr->join_predicate_last);
   }
 }
 
@@ -3097,7 +2823,7 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
         expr->table->table,
         Mem_root_array<Item *>{thd->mem_root,
                                expr->join_conditions_pushable_to_this},
-        Mem_root_array<SargablePredicate>{thd->mem_root}, expr->companion_set});
+        Mem_root_array<SargablePredicate>{thd->mem_root}});
     assert(expr->table->tableno() < MAX_TABLES);
     graph->table_num_to_node_num[expr->table->tableno()] =
         graph->graph.nodes.size() - 1;
@@ -3120,29 +2846,8 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
   const NodeMap used_nodes = GetNodeMapFromTableMap(
       used_tables & ~PSEUDO_TABLE_BITS, graph->table_num_to_node_num);
 
-  const Hyperedge edge =
-      FindHyperedgeAndJoinConflicts(thd, used_nodes, expr, graph);
+  const Hyperedge edge = FindHyperedgeAndJoinConflicts(thd, used_nodes, expr);
   graph->graph.AddEdge(edge.left, edge.right);
-
-  // Figure out whether we have two left joins that are associatively
-  // reorderable, which can trigger a bug in our row count estimation. See the
-  // definition of has_reordered_left_joins for more information.
-  if (!graph->has_reordered_left_joins &&
-      expr->type == RelationalExpression::LEFT_JOIN) {
-    ForEachJoinOperator(expr->left, [expr, graph](RelationalExpression *child) {
-      if (child->type == RelationalExpression::LEFT_JOIN &&
-          OperatorsAreAssociative(*child, *expr)) {
-        graph->has_reordered_left_joins = true;
-      }
-    });
-    ForEachJoinOperator(expr->right,
-                        [expr, graph](RelationalExpression *child) {
-                          if (child->type == RelationalExpression::LEFT_JOIN &&
-                              OperatorsAreAssociative(*expr, *child)) {
-                            graph->has_reordered_left_joins = true;
-                          }
-                        });
-  }
 
   if (trace != nullptr) {
     *trace += StringPrintf("Selectivity of join %s:\n",
@@ -3150,19 +2855,17 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
   }
   double selectivity = 1.0;
   for (Item *item : expr->equijoin_conditions) {
-    selectivity *=
-        EstimateSelectivity(current_thd, item, *expr->companion_set, trace);
+    selectivity *= EstimateSelectivity(current_thd, item, trace);
   }
   for (Item *item : expr->join_conditions) {
-    selectivity *=
-        EstimateSelectivity(current_thd, item, CompanionSet(), trace);
+    selectivity *= EstimateSelectivity(current_thd, item, trace);
   }
   if (trace != nullptr &&
       expr->equijoin_conditions.size() + expr->join_conditions.size() > 1) {
-    *trace += StringPrintf("  - total: %.g\n", selectivity);
+    *trace += StringPrintf("  - total: %.3f\n", selectivity);
   }
 
-  const size_t estimated_bytes_per_row = EstimateRowWidthForJoin(*graph, expr);
+  const size_t estimated_bytes_per_row = EstimateRowWidth(*graph, expr);
   graph->edges.push_back(JoinPredicate{
       expr, selectivity, estimated_bytes_per_row,
       /*functional_dependencies=*/0, /*functional_dependencies_idx=*/{}});
@@ -3183,23 +2886,17 @@ NodeMap GetNodeMapFromTableMap(
   return ret;
 }
 
-namespace {
-
-void AddMultipleEqualityPredicate(THD *thd,
-                                  CompanionSetCollection &companion_collection,
-                                  Item_equal *item_equal,
+void AddMultipleEqualityPredicate(THD *thd, Item_equal *item_equal,
                                   Item_field *left_field, int left_table_idx,
                                   Item_field *right_field, int right_table_idx,
                                   double selectivity, JoinHypergraph *graph) {
   const int left_node_idx = graph->table_num_to_node_num[left_table_idx];
   const int right_node_idx = graph->table_num_to_node_num[right_table_idx];
 
-  // See if there is already an edge between these two tables. Since the tables
-  // are in the same companion set, they are not outerjoined to each other, so
-  // it's enough to check the simple neighborhood. They could already be
-  // connected through complex edges due to hyperpredicates, but in this case we
-  // still want to add a simple edge, as it could in some cases be advantageous
-  // to join along the simple edge before applying the hyperpredicate.
+  // See if there is already an edge between these two tables.
+  // Since the tables are in the same companion set, they are not
+  // outerjoined to each other, so it's enough to check the simple
+  // neighborhood.
   RelationalExpression *expr = nullptr;
   if (IsSubset(TableBitmap(right_node_idx),
                graph->graph.nodes[left_node_idx].simple_neighborhood)) {
@@ -3230,18 +2927,18 @@ void AddMultipleEqualityPredicate(THD *thd,
         TableBitmap(left_table_idx) | TableBitmap(right_table_idx);
     expr->nodes_in_subtree =
         TableBitmap(left_node_idx) | TableBitmap(right_node_idx);
-
-    expr->companion_set = companion_collection.Find(expr->tables_in_subtree);
-
-    const size_t estimated_bytes_per_row =
-        EstimateRowWidthForJoin(*graph, expr);
+    const size_t estimated_bytes_per_row = EstimateRowWidth(*graph, expr);
     graph->edges.push_back(JoinPredicate{expr, selectivity,
                                          estimated_bytes_per_row,
                                          /*functional_dependencies=*/0,
                                          /*functional_dependencies_idx=*/{}});
   }
 
-  Item_func_eq *eq_item = MakeEqItem(left_field, right_field, item_equal);
+  Item_func_eq *eq_item = new Item_func_eq(left_field, right_field);
+  eq_item->source_multiple_equality = item_equal;
+  eq_item->set_cmp_func();
+  eq_item->update_used_tables();
+  eq_item->quick_fix_field();
   expr->equijoin_conditions.push_back(
       eq_item);  // NOTE: We run after MakeHashJoinConditions().
 
@@ -3262,13 +2959,9 @@ void AddMultipleEqualityPredicate(THD *thd,
  */
 void CompleteFullMeshForMultipleEqualities(
     THD *thd, const Mem_root_array<Item_equal *> &multiple_equalities,
-    CompanionSetCollection &companion_collection, JoinHypergraph *graph,
-    string *trace) {
+    JoinHypergraph *graph, string *trace) {
   for (Item_equal *item_equal : multiple_equalities) {
-    double selectivity = EstimateSelectivity(
-        thd, item_equal, *companion_collection.Find(item_equal->used_tables()),
-        trace);
-
+    double selectivity = EstimateSelectivity(thd, item_equal, trace);
     for (Item_field &left_field : item_equal->get_fields()) {
       const int left_table_idx =
           left_field.field->table->pos_in_table_list->tableno();
@@ -3279,196 +2972,37 @@ void CompleteFullMeshForMultipleEqualities(
           continue;
         }
 
-        AddMultipleEqualityPredicate(thd, companion_collection, item_equal,
-                                     &left_field, left_table_idx, &right_field,
+        AddMultipleEqualityPredicate(thd, item_equal, &left_field,
+                                     left_table_idx, &right_field,
                                      right_table_idx, selectivity, graph);
       }
     }
   }
 }
 
-/**
-  Returns a map of all tables that are on the inner side of some outer join or
-  antijoin.
- */
-table_map GetTablesInnerToOuterJoinOrAntiJoin(
-    const RelationalExpression *expr) {
-  switch (expr->type) {
-    case RelationalExpression::INNER_JOIN:
-    case RelationalExpression::SEMIJOIN:
-    case RelationalExpression::STRAIGHT_INNER_JOIN:
-      return GetTablesInnerToOuterJoinOrAntiJoin(expr->left) |
-             GetTablesInnerToOuterJoinOrAntiJoin(expr->right);
-    case RelationalExpression::LEFT_JOIN:
-    case RelationalExpression::ANTIJOIN:
-      return GetTablesInnerToOuterJoinOrAntiJoin(expr->left) |
-             expr->right->tables_in_subtree;
-    case RelationalExpression::FULL_OUTER_JOIN:
-      return expr->tables_in_subtree;
-    case RelationalExpression::MULTI_INNER_JOIN:
-      assert(false);  // Should have been unflattened by now.
-      return 0;
-    case RelationalExpression::TABLE:
-      return 0;
-  }
-  assert(false);
-  return 0;
-}
-
-/**
-  Fully expand a multiple equality for a single table as simple equalities and
-  append each equality to the array of conditions. Only expected to be called on
-  multiple equalities that do not have an already known value, as such
-  equalities should be eliminated by constant folding instead of being expanded.
- */
-bool ExpandMultipleEqualsForSingleTable(Item_equal *equal,
-                                        Mem_root_array<Item *> *conditions) {
-  assert(!equal->const_item());
-  assert(IsSingleBitSet(equal->used_tables() & ~PSEUDO_TABLE_BITS));
-  Item *const_arg = equal->const_arg();
-  if (const_arg != nullptr) {
-    for (Item_field &field : equal->get_fields()) {
-      if (conditions->push_back(MakeEqItem(&field, const_arg, equal))) {
-        return true;
-      }
-    }
-  } else {
-    Item_field *prev = nullptr;
-    for (Item_field &field : equal->get_fields()) {
-      if (prev != nullptr) {
-        if (conditions->push_back(MakeEqItem(prev, &field, equal))) {
-          return true;
-        }
-      }
-      prev = &field;
-    }
-  }
-  return false;
-}
-
-/**
-  Extract all WHERE conditions in a single-table query. Multiple equalities are
-  fully expanded unconditionally, since there is only one way to expand them
-  when there is only a single table (no need to consider that they should be
-  pushable to joins). Normalization will also be performed if necessary.
- */
-bool ExtractWhereConditionsForSingleTable(THD *thd, Item *condition,
-                                          Mem_root_array<Item *> *conditions,
-                                          bool *where_is_always_false) {
-  bool need_normalization = false;
-  if (WalkConjunction(condition, [conditions, &need_normalization](Item *cond) {
-        if (IsMultipleEquals(cond)) {
-          Item_equal *equal = down_cast<Item_equal *>(cond);
-          if (equal->const_item()) {
-            // This equality is known to evaluate to a constant value. Don't
-            // expand it, but rather let constant folding remove it. Flag that
-            // normalization is needed, so that constant folding kicks in.
-            need_normalization = true;
-            return conditions->push_back(equal);
-          } else {
-            // Expand the multiple equality. Normalization does not do anything
-            // useful if all conditions are multiple equalities.
-            return ExpandMultipleEqualsForSingleTable(equal, conditions);
-          }
-        } else {
-          // Some other kind of condition. We might be able to simplify it in
-          // normalization, so flag that we need normalization.
-          need_normalization = true;
-          return ExtractConditions(
-              EarlyExpandMultipleEquals(cond, TablesBetween(0, MAX_TABLES)),
-              conditions);
-        }
-      })) {
-    return true;
-  }
-
-  if (need_normalization) {
-    if (EarlyNormalizeConditions(thd, /*join=*/nullptr, conditions,
-                                 where_is_always_false)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/// Fast path for MakeJoinHypergraph() when the query accesses a single table.
-bool MakeSingleTableHypergraph(THD *thd, const Query_block *query_block,
-                               string *trace, JoinHypergraph *graph,
-                               bool *where_is_always_false) {
-  Table_ref *const table_ref = query_block->leaf_tables;
-  if (const int error = table_ref->fetch_number_of_rows(kRowEstimateFallback);
-      error) {
-    table_ref->table->file->print_error(error, MYF(0));
-    return true;
-  }
-
-  RelationalExpression *root = MakeRelationalExpression(thd, table_ref);
-  CompanionSetCollection companion_collection(thd, root);
-  MakeJoinGraphFromRelationalExpression(thd, root, trace, graph);
-
-  if (Item *const where_cond = query_block->join->where_cond;
-      where_cond != nullptr) {
-    Mem_root_array<Item *> where_conditions(thd->mem_root);
-    if (ExtractWhereConditionsForSingleTable(thd, where_cond, &where_conditions,
-                                             where_is_always_false)) {
-      return true;
-    }
-
-    for (Item *item : where_conditions) {
-      AddPredicate(thd, item, /*was_join_condition=*/false,
-                   /*source_multiple_equality_idx=*/-1, root, graph, trace);
-    }
-    graph->num_where_predicates = graph->predicates.size();
-
-    SortPredicates(graph->predicates.begin(), graph->predicates.end());
-  }
-
-  if (trace != nullptr) {
-    *trace += "\nConstructed hypergraph:\n";
-    *trace += PrintDottyHypergraph(*graph);
-  }
-
-  return false;
-}
-
-}  // namespace
-
 const JOIN *JoinHypergraph::join() const { return m_query_block->join; }
 
-bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
-                        bool *where_is_always_false) {
+bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph) {
   const Query_block *query_block = graph->query_block();
+  const JOIN *join = graph->join();
 
   if (trace != nullptr) {
     // TODO(sgunders): Do we want to keep this in the trace indefinitely?
     // It's only useful for debugging, not as much for understanding what's
     // going on.
     *trace += "Join list after simplification:\n";
-    *trace += PrintJoinList(query_block->m_table_nest, /*level=*/0);
+    *trace += PrintJoinList(query_block->top_join_list, /*level=*/0);
     *trace += "\n";
   }
 
-  const size_t num_tables = query_block->leaf_table_count;
-  if (graph->nodes.reserve(num_tables) ||
-      graph->graph.nodes.reserve(num_tables)) {
-    return true;
-  }
-
-  // Fast path for single-table queries. We can skip all the logic that analyzes
-  // join conditions, as there is no join.
-  if (num_tables == 1) {
-    return MakeSingleTableHypergraph(thd, query_block, trace, graph,
-                                     where_is_always_false);
-  }
-
   RelationalExpression *root =
-      MakeRelationalExpressionFromJoinList(thd, query_block->m_table_nest);
-
-  CompanionSetCollection companion_collection(thd, root);
+      MakeRelationalExpressionFromJoinList(thd, query_block->top_join_list);
+  int num_companion_sets = 0;
+  int table_num_to_companion_set[MAX_TABLES];
+  ComputeCompanionSets(root, /*current_set=*/-1, &num_companion_sets,
+                       table_num_to_companion_set);
   FlattenInnerJoins(root);
 
-  const JOIN *join = query_block->join;
   if (trace != nullptr) {
     // TODO(sgunders): Same question as above; perhaps the version after
     // pushdown is sufficient.
@@ -3485,7 +3019,7 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
 
   Mem_root_array<Item *> table_filters(thd->mem_root);
   Mem_root_array<Item *> cycle_inducing_edges(thd->mem_root);
-  PushDownJoinConditions(thd, root, companion_collection, &table_filters,
+  PushDownJoinConditions(thd, root, table_num_to_companion_set, &table_filters,
                          &cycle_inducing_edges, trace);
 
   // Split up WHERE conditions, and push them down into the tree as much as
@@ -3498,33 +3032,29 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
   if (join->where_cond != nullptr) {
     Item *where_cond = EarlyExpandMultipleEquals(join->where_cond,
                                                  /*tables_in_subtree=*/~0);
-    if (ExtractConditions(where_cond, &where_conditions)) {
+    ExtractConditions(where_cond, &where_conditions);
+    if (EarlyNormalizeConditions(thd, &where_conditions)) {
       return true;
     }
-    if (EarlyNormalizeConditions(thd, /*join=*/nullptr, &where_conditions,
-                                 where_is_always_false)) {
-      return true;
-    }
-    ReorderConditions(&where_conditions);
     where_conditions = PushDownAsMuchAsPossible(
         thd, std::move(where_conditions), root,
-        /*is_join_condition_for_expr=*/false, companion_collection,
+        /*is_join_condition_for_expr=*/false, table_num_to_companion_set,
         &table_filters, &cycle_inducing_edges, trace);
 
     // We're done pushing, so unflatten so that the rest of the algorithms
     // don't need to worry about it.
     UnflattenInnerJoins(root);
 
-    if (CanonicalizeConditions(thd, GetVisibleTables(root),
-                               TablesBetween(0, MAX_TABLES),
+    if (CanonicalizeConditions(thd, /*tables_in_subtree=*/~0,
                                &where_conditions)) {
       return true;
     }
 
-    // NOTE: Any remaining WHERE conditions, whether single-table or multi-table
-    // (join conditions), are left up here for a reason (i.e., they are
-    // nondeterministic and/or blocked by outer joins), so they should not be
-    // attempted pushed as sargable predicates.
+    // See if we can push remaining WHERE conditions to sargable predicates.
+    for (Item *item : where_conditions) {
+      PushDownToSargableCondition(item, root,
+                                  /*is_join_condition_for_expr=*/false);
+    }
   } else {
     // We're done pushing, so unflatten so that the rest of the algorithms
     // don't need to worry about it.
@@ -3556,43 +3086,6 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
     *trace += '\n';
   }
 
-  // Ask the storage engine to update stats.records, if needed.
-  // We need to do this before MakeJoinGraphFromRelationalExpression(),
-  // which determines selectivities that are in part based on it.
-  // NOTE: ha_archive breaks without this call! (That is probably a bug in
-  // ha_archive, though.)
-  for (Table_ref *tl = graph->query_block()->leaf_tables; tl != nullptr;
-       tl = tl->next_leaf) {
-    if (const int error = tl->fetch_number_of_rows(kRowEstimateFallback);
-        error) {
-      tl->table->file->print_error(error, MYF(0));
-      return true;
-    }
-  }
-
-  // Build sets of equal fields in each CompanionSet.
-  ForEachOperator(root, [&](RelationalExpression *expr) {
-    if (expr->type == RelationalExpression::TABLE) {
-      for (const Item *condition : expr->join_conditions_pushable_to_this) {
-        if (is_function_of_type(condition, Item_func::EQ_FUNC)) {
-          expr->companion_set->AddEquijoinCondition(
-              thd, down_cast<const Item_func_eq &>(*condition));
-        }
-      }
-    } else {
-      for (const Item_eq_base *condition : expr->equijoin_conditions) {
-        if (condition->functype() == Item_func::EQ_FUNC) {
-          expr->companion_set->AddEquijoinCondition(
-              thd, down_cast<const Item_func_eq &>(*condition));
-        }
-      }
-    }
-  });
-
-  if (trace != nullptr) {
-    *trace += companion_collection.ToString();
-  }
-
   // Construct the hypergraph from the relational expression.
 #ifndef NDEBUG
   std::fill(begin(graph->table_num_to_node_num),
@@ -3604,23 +3097,19 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
   // to remove impossible conditions.
   ClearImpossibleJoinConditions(root);
 
-  graph->tables_inner_to_outer_or_anti =
-      GetTablesInnerToOuterJoinOrAntiJoin(root);
-
   // Add cycles.
   size_t old_graph_edges = graph->graph.edges.size();
   if (!cycle_inducing_edges.empty()) {
-    AddCycleEdges(thd, cycle_inducing_edges, companion_collection, graph,
-                  trace);
+    AddCycleEdges(thd, cycle_inducing_edges, graph, trace);
   }
   // Now that all trivial conditions have been removed and all equijoin
   // conditions extracted, go ahead and extract all the multiple
   // equalities that are in actual use, and present as part of the base
   // conjunctions (ie., not OR-ed with anything).
   Mem_root_array<Item_equal *> multiple_equalities(thd->mem_root);
-  ExtractCycleMultipleEqualitiesFromJoinConditions(root, companion_collection,
-                                                   &multiple_equalities);
-  ExtractCycleMultipleEqualities(where_conditions, companion_collection,
+  ExtractCycleMultipleEqualitiesFromJoinConditions(
+      root, table_num_to_companion_set, &multiple_equalities);
+  ExtractCycleMultipleEqualities(where_conditions, table_num_to_companion_set,
                                  &multiple_equalities);
   if (multiple_equalities.size() > 64) {
     multiple_equalities.resize(64);
@@ -3629,8 +3118,7 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
   multiple_equalities.erase(
       std::unique(multiple_equalities.begin(), multiple_equalities.end()),
       multiple_equalities.end());
-  CompleteFullMeshForMultipleEqualities(thd, multiple_equalities,
-                                        companion_collection, graph, trace);
+  CompleteFullMeshForMultipleEqualities(thd, multiple_equalities, graph, trace);
   if (graph->graph.edges.size() != old_graph_edges) {
     // We added at least one cycle-inducing edge.
     PromoteCycleJoinPredicates(thd, root, multiple_equalities, graph, trace);
@@ -3652,26 +3140,6 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
     *trace += "\n";
   }
 
-#ifndef NDEBUG
-  {
-    // Verify we have no duplicate edges.
-    const Mem_root_array<Hyperedge> &edges = graph->graph.edges;
-    for (size_t edge1_idx = 0; edge1_idx < edges.size(); ++edge1_idx) {
-      for (size_t edge2_idx = edge1_idx + 1; edge2_idx < edges.size();
-           ++edge2_idx) {
-        const Hyperedge &e1 = edges[edge1_idx];
-        const Hyperedge &e2 = edges[edge2_idx];
-        assert(e1.left != e2.left || e1.right != e2.right);
-      }
-    }
-  }
-
-#endif
-
-  // The predicates added so far are join conditions that have been promoted to
-  // WHERE predicates by PromoteCycleJoinPredicates().
-  const size_t num_cycle_predicates = graph->predicates.size();
-
   // Find TES and selectivity for each WHERE predicate that was not pushed
   // down earlier.
   for (Item *condition : where_conditions) {
@@ -3687,52 +3155,22 @@ bool MakeJoinHypergraph(THD *thd, string *trace, JoinHypergraph *graph,
         condition->used_tables() & ~(INNER_TABLE_BIT | OUTER_REF_TABLE_BIT),
         graph->table_num_to_node_num);
     assert(IsSingleBitSet(pred.total_eligibility_set));
-    pred.selectivity = EstimateSelectivity(
-        thd, condition, *companion_collection.Find(condition->used_tables()),
-        trace);
+    pred.selectivity = EstimateSelectivity(thd, condition, trace);
     pred.functional_dependencies_idx.init(thd->mem_root);
     graph->predicates.push_back(std::move(pred));
   }
 
-  // Sort the predicates so that filters created from them later automatically
-  // evaluate the most selective and least expensive predicates first. Don't
-  // touch the join (cycle) predicates at the beginning, as they are already
-  // sorted, and reordering them would make the join_predicate_first and
-  // join_predicate_last pointers in the corresponding RelationalExpression
-  // incorrect.
-  SortPredicates(graph->predicates.begin() + num_cycle_predicates,
-                 graph->predicates.end());
+  // Cache constant expressions in predicates, and add cast nodes if there are
+  // incompatible arguments in comparisons. (We did join conditions earlier.)
+  for (Predicate &predicate : graph->predicates) {
+    predicate.condition =
+        CanonicalizeCondition(predicate.condition, /*allowed_tables=*/~0);
+    if (predicate.condition == nullptr) {
+      return true;
+    }
+  }
 
   graph->num_where_predicates = graph->predicates.size();
 
   return false;
-}
-
-// Returns the tables in this subtree that are visible higher up in
-// the join tree. This includes all tables in this subtree, except
-// those that are on the inner side of a semijoin or an antijoin.
-table_map GetVisibleTables(const RelationalExpression *expr) {
-  switch (expr->type) {
-    case RelationalExpression::TABLE:
-      return expr->tables_in_subtree;
-    case RelationalExpression::SEMIJOIN:
-    case RelationalExpression::ANTIJOIN:
-      // Inner side of a semijoin or an antijoin should not
-      // be visible outside of the join.
-      return GetVisibleTables(expr->left);
-    case RelationalExpression::INNER_JOIN:
-    case RelationalExpression::STRAIGHT_INNER_JOIN:
-    case RelationalExpression::LEFT_JOIN:
-    case RelationalExpression::FULL_OUTER_JOIN:
-      return GetVisibleTables(expr->left) | GetVisibleTables(expr->right);
-    case RelationalExpression::MULTI_INNER_JOIN:
-      return std::accumulate(
-          expr->multi_children.begin(), expr->multi_children.end(),
-          table_map{0},
-          [](table_map tables, const RelationalExpression *child) {
-            return tables | GetVisibleTables(child);
-          });
-  }
-  assert(false);
-  return 0;
 }

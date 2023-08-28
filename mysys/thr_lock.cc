@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,7 @@
 
 /**
   @file mysys/thr_lock.cc
-Read and write locks for Posix threads. Every thread must acquire
+Read and write locks for Posix threads. All tread must acquire
 all locks it needs through thr_multi_lock() to avoid dead-locks.
 A lock consists of a master lock (THR_LOCK), and lock instances
 (THR_LOCK_DATA).
@@ -91,7 +91,6 @@ lock at the same time as multiple read locks.
 #include <unistd.h>
 #endif
 
-#include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -367,8 +366,8 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     One can use this to signal when a thread is going to wait for a lock.
     See debug_sync.cc.
 
-    Beware of waiting for a signal here. The lock has acquired its mutex.
-    While waiting on a signal here, the locking thread could not acquire
+    Beware of waiting for a signal here. The lock has aquired its mutex.
+    While waiting on a signal here, the locking thread could not aquire
     the mutex to release the lock. One could lock up the table
     completely.
 
@@ -377,8 +376,8 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     if not, it calls wait_for_lock(). Here it unlocks the table lock
     while waiting on a condition. The sync point is located before this
     wait for condition. If we have a waiting action here, we hold the
-    table locks mutex all the time. Any attempt to look at the table
-    lock from another thread blocks it immediately on lock->mutex. This
+    the table locks mutex all the time. Any attempt to look at the table
+    lock by another thread blocks it immediately on lock->mutex. This
     can easily become an unexpected and unobvious blockage. So be
     warned: Do not request a WAIT_FOR action for the 'wait_for_lock'
     sync point unless you really know what you do.
@@ -415,7 +414,7 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
 
   set_timespec(&wait_timeout, lock_wait_timeout);
   while (!is_killed_hook(nullptr) || in_wait_list) {
-    const int rc =
+    int rc =
         mysql_cond_timedwait(data->cond, &data->lock->mutex, &wait_timeout);
     /*
       We must break the wait if one of the following occurs:
@@ -517,8 +516,8 @@ enum enum_thr_lock_result thr_lock(THR_LOCK_DATA *data, THR_LOCK_INFO *owner,
            |\  = READ_WITH_SHARED_LOCKS
            \   = READ
 
-        + = Request can be satisfied.
-        - = Request cannot be satisfied.
+        + = Request can be satisified.
+        - = Request cannot be satisified.
 
         READ_NO_INSERT and WRITE_ALLOW_WRITE should in principle
         be incompatible. Before this could have caused starvation of
@@ -732,7 +731,7 @@ static inline void free_all_read_locks(THR_LOCK *lock,
 
 void thr_unlock(THR_LOCK_DATA *data) {
   THR_LOCK *lock = data->lock;
-  const enum thr_lock_type lock_type = data->type;
+  enum thr_lock_type lock_type = data->type;
   DBUG_TRACE;
   DBUG_PRINT("lock", ("data: %p  thread: 0x%x  lock: %p", data,
                       data->owner->thread_id, lock));
@@ -869,7 +868,7 @@ end:
 
 /*
 ** Get all locks in a specific order to avoid dead-locks
-** Sort according to lock position and put write_locks before read_locks if
+** Sort acording to lock position and put write_locks before read_locks if
 ** lock on same lock.
 */
 
@@ -903,7 +902,7 @@ enum enum_thr_lock_result thr_multi_lock(THR_LOCK_DATA **data, uint count,
   if (count > 1) sort_locks(data, count);
   /* lock everything */
   for (pos = data, end = data + count; pos < end; pos++) {
-    const enum enum_thr_lock_result result =
+    enum enum_thr_lock_result result =
         thr_lock(*pos, owner, (*pos)->type, lock_wait_timeout);
     if (result != THR_LOCK_SUCCESS) { /* Aborted */
       thr_multi_unlock(data, (uint)(pos - data));

@@ -1,28 +1,21 @@
 var common_stmts = require("common_statements");
 
 if (mysqld.global.innodb_cluster_instances === undefined) {
-  mysqld.global.innodb_cluster_instances = [
-    ["5500", "localhost", 5500], ["5510", "localhost", 5510],
-    ["5520", "localhost", 5520]
-  ];
+  mysqld.global.innodb_cluster_instances =
+      [["localhost", 5500], ["localhost", 5510], ["localhost", 5520]];
 }
 
 if (mysqld.global.cluster_name == undefined) {
   mysqld.global.cluster_name = "mycluster";
 }
 
-if (mysqld.global.metadata_schema_version === undefined) {
-  mysqld.global.metadata_schema_version = [2, 0, 3];
-}
-
-if (mysqld.global.gr_id === undefined) {
-  mysqld.global.gr_id = "cluster-specific-id";
+if (mysqld.global.metadata_version === undefined) {
+  mysqld.global.metadata_version = [2, 0, 3];
 }
 
 var options = {
-  metadata_schema_version: mysqld.global.metadata_schema_version,
+  metadata_schema_version: mysqld.global.metadata_version,
   cluster_type: "gr",
-  gr_id: mysqld.global.gr_id,
   clusterset_present: 0,
   innodb_cluster_name: mysqld.global.cluster_name,
   innodb_cluster_instances: mysqld.global.innodb_cluster_instances,
@@ -34,18 +27,17 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_set_gr_consistency_level",
       "router_select_schema_version",
       "router_select_cluster_type_v2",
-      "router_select_current_instance_attributes",
       "router_count_clusters_v2",
       "router_check_member_state",
       "router_select_members_count",
       "router_select_replication_group_name",
       "router_show_cipher_status",
-      "router_select_cluster_instances_v2_gr",
+      "router_select_cluster_instances_v2",
       "router_start_transaction",
       "router_commit",
 
       // account verification
-      "router_select_metadata_v2_gr_account_verification",
+      "router_select_metadata_v2_gr",
       "router_select_group_replication_primary_member",
       "router_select_group_membership_with_primary_mode",
     ],
@@ -84,8 +76,8 @@ var common_responses_regex = common_stmts.prepare_statement_responses_regex(
     }
     // metadata ver 2.1+
     else if (
-        (mysqld.global.metadata_schema_version[0] >= 2 &&
-         mysqld.global.metadata_schema_version[1] >= 1) &&
+        (mysqld.global.metadata_version[0] >= 2 &&
+         mysqld.global.metadata_version[1] >= 1) &&
         common_responses_v2_1.hasOwnProperty(stmt)) {
       return common_responses_v2_1[stmt];
     } else if (

@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -57,7 +57,7 @@ ENDIF()
 # Change uppercase first letter of Ubuntu/Debian
 string(TOLOWER "${DEB_ID}" DEB_ID)
 
-IF (WITH_NDB)
+IF (WITH_NDBCLUSTER)
   SET (DEB_BASE_PRODUCT "cluster-")
   SET (DEB_BASE_PRODUCTC "Cluster ")
   SET (DEB_BASE_VERSION ${MYSQL_CLUSTER_VERSION})
@@ -107,25 +107,9 @@ usr/lib/mysql/plugin/keyring_oci.so
 usr/lib/mysql/plugin/openssl_udf.so
 usr/lib/mysql/plugin/thread_pool.so
 usr/lib/mysql/plugin/firewall.so
+usr/lib/mysql/plugin/component_test_page_track_component.so
 usr/lib/mysql/plugin/authentication_fido.so
 usr/lib/mysql/plugin/component_keyring_encrypted_file.so
-usr/lib/mysql/plugin/component_keyring_oci.so
-usr/lib/mysql/plugin/component_enterprise_encryption.so
-usr/lib/mysql/plugin/component_masking.so
-usr/lib/mysql/plugin/component_masking_functions.so
-usr/lib/mysql/plugin/component_scheduler.so
-usr/lib/mysql/plugin/component_telemetry.so
-")
-
-   SET (DEB_INSTALL_TEST_PLUGINS
-"
-usr/lib/mysql/plugin/component_test_global_priv_registration.so
-usr/lib/mysql/plugin/component_test_page_track_component.so
-")
-
-  SET (DEB_INSTALL_CLIENT_PLUGINS
-"
-usr/lib/mysql/plugin/telemetry_client.so
 ")
 
   IF (DEB_AWS_SDK)
@@ -171,15 +155,15 @@ override_dh_strip:
 	dh_strip -pmysql-server
 	dh_strip -pmysql-client
 	dh_strip -pmysql-testsuite
-	dh_strip -plibmysqlclient22 --dbg-package=libmysqlclient22-dbgsym
+	dh_strip -plibmysqlclient21 --dbg-package=libmysqlclient21-dbgsym
 	dh_strip -plibmysqlclient-dev
 ")
 SET (DEB_CONTROL_DBGSYM_DEFAULT
 "
-Package: libmysqlclient22-dbgsym
+Package: libmysqlclient21-dbgsym
 Architecture: any
 Section: debug
-Depends: libmysqlclient22 (=\${binary:Version}), \${misc:Depends}
+Depends: libmysqlclient21 (=\${binary:Version}), \${misc:Depends}
 Description: Debugging symbols for client library
 
 Package: mysql-${DEB_PRODUCTNAME}-test-dbgsym
@@ -274,7 +258,7 @@ ENDIF()
 IF (NOT DEFINED DEB_NOROUTER)
   INCLUDE(deb_router.cmake)
 ENDIF()
-IF (WITH_NDB)
+IF (WITH_NDBCLUSTER)
   INCLUDE(deb_ndb.cmake)
 ENDIF()
 if (DEFINED DEB_WITH_DEBUG)

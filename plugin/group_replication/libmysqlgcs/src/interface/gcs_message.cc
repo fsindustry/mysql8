@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 #include <stdlib.h>
 
 #include "my_compiler.h"
-
-#include "mysql/psi/mysql_memory.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_logging_system.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_message.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/xplatform/byteorder.h"
@@ -58,12 +56,11 @@ Gcs_message_data::Gcs_message_data(const uint32_t header_capacity,
       m_payload_slider(nullptr),
       m_payload_len(0),
       m_payload_capacity(payload_capacity),
+      m_buffer(nullptr),
       m_buffer_len(0),
       m_owner(true) {
   m_buffer_len = header_capacity + payload_capacity + get_encode_header_size();
-  size_t buf_tmp_len = sizeof(uchar) * m_buffer_len;
-  m_buffer = static_cast<uchar *>(malloc(buf_tmp_len));
-  Gcs_message_data::report_allocate_memory(buf_tmp_len);
+  m_buffer = static_cast<uchar *>(malloc(sizeof(uchar) * m_buffer_len));
   m_header = m_header_slider = m_buffer + get_encode_header_size();
   m_payload = m_payload_slider =
       m_buffer + get_encode_header_size() + header_capacity;
@@ -81,34 +78,11 @@ Gcs_message_data::Gcs_message_data(const uint64_t data_len)
       m_buffer(nullptr),
       m_buffer_len(data_len),
       m_owner(true) {
-  size_t buf_tmp_len = sizeof(uchar) * m_buffer_len;
-  m_buffer = static_cast<uchar *>(malloc(buf_tmp_len));
-  Gcs_message_data::report_allocate_memory(buf_tmp_len);
+  m_buffer = static_cast<uchar *>(malloc(sizeof(uchar) * m_buffer_len));
 }
 
 Gcs_message_data::~Gcs_message_data() {
-  if (m_owner) {
-    free(m_buffer);
-    Gcs_message_data::report_deallocate_memory(sizeof(uchar) * m_buffer_len);
-  }
-}
-
-bool Gcs_message_data::report_allocate_memory(size_t size [[maybe_unused]]) {
-#ifdef HAVE_PSI_MEMORY_INTERFACE
-  PSI_thread *owner = nullptr;
-  if (PSI_MEMORY_CALL(memory_alloc)(key_MEM_Gcs_message_data_m_buffer, size,
-                                    &owner) == PSI_NOT_INSTRUMENTED) {
-    return true;
-  }
-#endif /* HAVE_PSI_MEMORY_INTERFACE */
-  return false;
-}
-
-void Gcs_message_data::report_deallocate_memory(size_t size [[maybe_unused]]) {
-#ifdef HAVE_PSI_MEMORY_INTERFACE
-  PSI_MEMORY_CALL(memory_free)
-  (key_MEM_Gcs_message_data_m_buffer, size, nullptr);
-#endif /* HAVE_PSI_MEMORY_INTERFACE */
+  if (m_owner) free(m_buffer);
 }
 
 const uchar *Gcs_message_data::get_header() const { return m_header; }

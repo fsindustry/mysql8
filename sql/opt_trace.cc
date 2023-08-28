@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,16 +30,14 @@
 #include <stdio.h>
 #include <new>
 
-#include "dig_vec.h"
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"  // _dig_vec_lower
 #include "my_dbug.h"
 #include "my_pointer_arithmetic.h"
 #include "my_sys.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
-#include "nulls.h"
 #include "prealloced_array.h"
 #include "sql/current_thd.h"
 #include "sql/enum_query_type.h"
@@ -47,7 +45,6 @@
 #include "sql/item.h"  // Item
 #include "sql/table.h"
 #include "sql_string.h"  // String
-#include "string_with_len.h"
 
 namespace {
 /**
@@ -181,6 +178,9 @@ class Opt_trace_stmt {
 
   /// Fills user-level information @sa Opt_trace_iterator
   void fill_info(Opt_trace_info *info) const;
+
+  /// @returns 'size' last bytes of the trace buffer
+  const char *trace_buffer_tail(size_t size);
 
   /// @returns total memory used by this trace
   size_t alloced_length() const {
@@ -367,7 +367,7 @@ Opt_trace_struct &Opt_trace_struct::do_add(const char *key,
   return do_add(key, value.total_cost());
 }
 
-Opt_trace_struct &Opt_trace_struct::do_add_utf8_table(const Table_ref *tl) {
+Opt_trace_struct &Opt_trace_struct::do_add_utf8_table(const TABLE_LIST *tl) {
   if (tl != nullptr) {
     StringBuffer<32> str;
     tl->print(current_thd, &str,
@@ -414,7 +414,7 @@ Opt_trace_stmt::Opt_trace_stmt(Opt_trace_context *ctx_arg)
       unknown_key_count(0) {
   // Trace is always in UTF8. This is the only charset which JSON accepts.
   trace_buffer.set_charset(system_charset_info);
-  assert(system_charset_info == &my_charset_utf8mb3_general_ci);
+  assert(system_charset_info == &my_charset_utf8_general_ci);
 }
 
 void Opt_trace_stmt::end() {
@@ -460,7 +460,7 @@ void Opt_trace_stmt::set_query(const char *query, size_t length,
     return;
   }
   // We are taking a bit of space from 'trace_buffer'.
-  const size_t available =
+  size_t available =
       (trace_buffer.alloced_length() >= trace_buffer.get_allowed_mem_size())
           ? 0
           : (trace_buffer.get_allowed_mem_size() -
@@ -614,6 +614,13 @@ void Opt_trace_stmt::fill_info(Opt_trace_info *info) const {
   }
 }
 
+const char *Opt_trace_stmt::trace_buffer_tail(size_t size) {
+  size_t buffer_len = trace_buffer.length();
+  const char *ptr = trace_buffer.c_ptr_safe();
+  if (buffer_len > size) ptr += buffer_len - size;
+  return ptr;
+}
+
 void Opt_trace_stmt::missing_privilege() {
   if (!missing_priv) {
     DBUG_PRINT("opt", ("trace denied"));
@@ -694,7 +701,7 @@ void Buffer::append_escaped(const char *str, size_t length) {
           *pbuf++ = '1';
           ascii_code -= 16;
         }
-        *pbuf++ = dig_vec_lower[ascii_code];
+        *pbuf++ = _dig_vec_lower[ascii_code];
       } else
         *pbuf++ = c;  // Normal character, no escaping needed.
     }
@@ -749,7 +756,7 @@ void Buffer::prealloc() {
       We jump from 0 to first_increment and then multiply by 1.5. Unlike
       addition of a constant length, multiplying is expected to give amortized
       constant reallocation time; 1.5 is a commonly seen factor in the
-      literature.
+      litterature.
     */
     size_t new_size = (alloced == 0) ? first_increment : (alloced * 15 / 10);
     size_t max_size = allowed_mem_size;
@@ -1088,7 +1095,7 @@ size_t Opt_trace_context::allowed_mem_size_for_current_stmt() const {
   }
   /* The current statement is in exactly one of the two lists above */
   mem_size -= pimpl->current_stmt_in_gen->alloced_length();
-  const size_t rc =
+  size_t rc =
       (mem_size <= pimpl->max_mem_size) ? (pimpl->max_mem_size - mem_size) : 0;
   DBUG_PRINT("opt", ("rc %llu max_mem_size %llu", (ulonglong)rc,
                      (ulonglong)pimpl->max_mem_size));
@@ -1123,8 +1130,8 @@ void Opt_trace_context::missing_privilege() {
     disabled.
     Storing in Opt_trace_context would require an external memory (probably a
     RAII object), which would not be possible in
-    Table_ref::prepare_security(), where I_S must be disabled even after
-    the end of that function - so RAII would not work.
+    TABLE_LIST::prepare_security(), where I_S must be disabled even after the
+    end of that function - so RAII would not work.
 
     Which is why this function needs an existing current_stmt_in_gen.
   */

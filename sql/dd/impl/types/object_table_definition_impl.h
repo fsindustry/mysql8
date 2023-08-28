@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,8 +28,6 @@
 #include <memory>
 #include <vector>
 
-#include "m_string.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/string_type.h"                    // dd::String_type
 #include "sql/dd/types/object_table_definition.h"  // dd::Object_table_definition
 #include "sql/mysqld.h"                            // lower_case_table_names
@@ -160,8 +158,8 @@ class Object_table_definition_impl : public Object_table_definition {
    */
 
   static const CHARSET_INFO *fs_name_collation() {
-    if (lower_case_table_names == 0) return &my_charset_utf8mb3_bin;
-    return &my_charset_utf8mb3_tolower_ci;
+    if (lower_case_table_names == 0) return &my_charset_utf8_bin;
+    return &my_charset_utf8_tolower_ci;
   }
 
   /**
@@ -177,9 +175,7 @@ class Object_table_definition_impl : public Object_table_definition {
 
     @return Pointer to CHARSET_INFO.
   */
-  static const CHARSET_INFO *name_collation() {
-    return &my_charset_utf8mb3_bin;
-  }
+  static const CHARSET_INFO *name_collation() { return &my_charset_utf8_bin; }
 
   /**
     Convert to lowercase if lower_case_table_names == 2. This is needed

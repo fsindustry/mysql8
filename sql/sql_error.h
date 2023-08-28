@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,12 +29,12 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
 
 #include "my_inttypes.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h" /* MYSQL_ERRMSG_SIZE */
 #include "sql/sql_list.h"
 #include "sql/sql_plist.h" /* I_P_List */
@@ -43,9 +43,6 @@
 class THD;
 class my_decimal;
 struct MYSQL_TIME;
-struct MYSQL_TIME_STATUS;
-
-constexpr const size_t WARN_ALLOC_BLOCK_SIZE{2048};
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -590,7 +587,7 @@ class Diagnostics_area {
   Diagnostics_area *m_stacked_da;
 
   /** A memory root to allocate conditions */
-  MEM_ROOT m_condition_root{PSI_INSTRUMENT_ME, WARN_ALLOC_BLOCK_SIZE};
+  MEM_ROOT m_condition_root;
 
   /** List of conditions of all severities. */
   Sql_condition_list m_conditions_list;
@@ -825,6 +822,4 @@ void warn_on_deprecated_charset(THD *thd, const CHARSET_INFO *cs,
 void warn_on_deprecated_collation(THD *thd, const CHARSET_INFO *collation,
                                   const char *option = nullptr);
 
-void check_deprecated_datetime_format(THD *thd, const CHARSET_INFO *cs,
-                                      MYSQL_TIME_STATUS &status);
 #endif  // SQL_ERROR_H

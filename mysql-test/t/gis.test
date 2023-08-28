@@ -600,7 +600,7 @@ SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS mbrwithin    FROM t1 a1 JOIN t1
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS MBRcontains     FROM t1 a1 JOIN t1 a2 ON MBRContains(      a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS MBRdisjoint     FROM t1 a1 JOIN t1 a2 ON MBRDisjoint(      a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS MBRequals       FROM t1 a1 JOIN t1 a2 ON MBREquals(        a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
-SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS `intersect`    FROM t1 a1 JOIN t1 a2 ON MBRIntersects(    a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
+SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS intersect    FROM t1 a1 JOIN t1 a2 ON MBRIntersects(    a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS MBRoverlaps     FROM t1 a1 JOIN t1 a2 ON MBROverlaps(      a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS ST_touches      FROM t1 a1 JOIN t1 a2 ON ST_Touches(       a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
 SELECT GROUP_CONCAT(a2.name ORDER BY a2.name) AS MBRwithin       FROM t1 a1 JOIN t1 a2 ON MBRWithin(        a1.square, a2.square) WHERE a1.name = "center" GROUP BY a1.name;
@@ -2390,8 +2390,8 @@ SELECT ST_GeomFromText('POINT(0 0)') IN (SELECT b FROM t) AS result;
 SELECT ST_AsWKB(ST_GeomFromText('POINT(0 0)')) IN (SELECT b FROM t) AS result;
 --error ER_WRONG_ARGUMENTS
 SELECT ST_GeomFromText('POINT(0 0)') > (SELECT b FROM t) AS result;
-#--error ER_WRONG_VALUE
-#SELECT ST_AsWKB(ST_GeomFromText('POINT(0 0)')) > (SELECT b FROM t) AS result;
+--error ER_WRONG_VALUE
+SELECT ST_AsWKB(ST_GeomFromText('POINT(0 0)')) > (SELECT b FROM t) AS result;
 DROP TABLE t;
 
 CREATE TABLE t1(a BLOB NOT NULL, b INT NOT NULL) ENGINE=Innodb;
@@ -2614,7 +2614,7 @@ ALTER TABLE t1 MODIFY COLUMN b GEOMETRY NOT NULL;
 SET SESSION sql_mode=@save_sql_mode;
 SET SESSION innodb_strict_mode=@save_innodb_strict_mode;
 SHOW CREATE TABLE t1;
-SELECT HEX(b) FROM t1;
+SELECT * FROM t1;
 DROP TABLE t1;
 
 --echo # Convert a POINT column without rows to POLYGON
@@ -4206,49 +4206,3 @@ is_uuid(
 );
 
 DROP TABLE t;
-
---echo #
---echo # Bug #32975221 5.7.29+ REGRESSION, SPATIAL INDEX NOT USED ANYMORE FOR MBRCONTAINS
---echo #
-
-CREATE TABLE t (
-  c1 VARCHAR(8) NOT NULL,
-  c2 VARCHAR(16) NOT NULL,
-  geom POINT NOT NULL SRID 0,
-  PRIMARY KEY (c2,c1),
-  SPATIAL KEY coord (geom)
-) ENGINE=INNODB DEFAULT CHARSET=UTF8;
-
-INSERT INTO t VALUES (1, 2, POINT(1, 2));
-
---replace_column 10 ## 11 ##
-EXPLAIN SELECT COUNT(*) FROM t WHERE MBRCONTAINS(ST_GEOMFROMTEXT('POLYGON((1 2, 2 2, 2 3, 1 2))'), geom) AND c1 <> '10';
-DROP TABLE t;
-
---echo # Test DEFAULT for GEOMETRY columns with no default defined.
-CREATE TABLE t1 (geom POINT SRID 0 NOT NULL);
---error ER_NO_DEFAULT_FOR_FIELD
-INSERT INTO t1 VALUES();
---error ER_NO_DEFAULT_FOR_FIELD
-INSERT IGNORE INTO t1 VALUES();
---error ER_CANT_CREATE_GEOMETRY_OBJECT
-INSERT IGNORE INTO t1 VALUES(DEFAULT);
---error ER_CANT_CREATE_GEOMETRY_OBJECT
-INSERT INTO t1 VALUES(DEFAULT);
-
-INSERT INTO t1 VALUES(ST_GeomFromText('POINT(0 0)', 0));
---error ER_CANT_CREATE_GEOMETRY_OBJECT
-UPDATE t1 SET geom = DEFAULT;
-
-SET @orig_sql_mode = @@sql_mode;
-SET sql_mode = '';
---error ER_NO_DEFAULT_FOR_FIELD
-INSERT INTO t1 VALUES();
---error ER_CANT_CREATE_GEOMETRY_OBJECT
-INSERT INTO t1 VALUES(DEFAULT);
-
---error ER_CANT_CREATE_GEOMETRY_OBJECT
-UPDATE t1 SET geom = DEFAULT;
-
-SET sql_mode= @orig_sql_mode;
-DROP TABLE t1;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,16 +56,15 @@ void invoke_pre_parse_rewrite_plugins(THD *thd) {
 
   Diagnostics_area *da = thd->get_parser_da();
   thd->push_diagnostics_area(plugin_da, false);
-  mysql_event_tracking_parse_rewrite_plugin_flag flags =
-      EVENT_TRACKING_PARSE_REWRITE_NONE;
-  mysql_cstring_with_length rewritten_query = {nullptr, 0};
-  mysql_event_tracking_parse_notify(thd,
-                                    AUDIT_EVENT(EVENT_TRACKING_PARSE_PREPARSE),
-                                    &flags, &rewritten_query);
+  mysql_event_parse_rewrite_plugin_flag flags =
+      MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_NONE;
+  LEX_CSTRING rewritten_query = {nullptr, 0};
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_PARSE_PREPARSE), &flags,
+                     &rewritten_query);
 
   /* Do not continue when the plugin set the error state. */
   if (!plugin_da->is_error() &&
-      flags & EVENT_TRACKING_PARSE_REWRITE_QUERY_REWRITTEN) {
+      flags & MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_QUERY_REWRITTEN) {
     // It is a rewrite fulltext plugin and we need a rewrite we must have
     // generated a new query then.
     assert(rewritten_query.str != nullptr && rewritten_query.length > 0);
@@ -121,15 +120,15 @@ bool invoke_post_parse_rewrite_plugins(THD *thd, bool is_prepared) {
     assert(dummy == 1);
   }
 
-  mysql_event_tracking_parse_rewrite_plugin_flag flags =
-      is_prepared ? EVENT_TRACKING_PARSE_REWRITE_IS_PREPARED_STATEMENT
-                  : EVENT_TRACKING_PARSE_REWRITE_NONE;
+  mysql_event_parse_rewrite_plugin_flag flags =
+      is_prepared ? MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_IS_PREPARED_STATEMENT
+                  : MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_NONE;
   bool err = false;
   const char *original_query = thd->query().str;
-  mysql_event_tracking_parse_notify(
-      thd, AUDIT_EVENT(EVENT_TRACKING_PARSE_POSTPARSE), &flags, nullptr);
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_PARSE_POSTPARSE), &flags,
+                     nullptr);
 
-  if (flags & EVENT_TRACKING_PARSE_REWRITE_QUERY_REWRITTEN) {
+  if (flags & MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_QUERY_REWRITTEN) {
     raise_query_rewritten_note(thd, original_query, thd->query().str);
     thd->lex->safe_to_cache_query = false;
   }
@@ -143,7 +142,7 @@ bool invoke_post_parse_rewrite_plugins(THD *thd, bool is_prepared) {
       diagnostics statement, in which case we keep everything: conditions from
       previous statements, parser conditions and plugin conditions. If this is
       not a diagnostics statement, parse_sql() has already cleared the
-      statement DA, copied the parser conditions to the statement DA and set
+      statement DA, copied the parser condtitions to the statement DA and set
       DA_KEEP_PARSE_ERROR. So we arrive at the below condition for telling us
       when to clear the statement DA.
     */

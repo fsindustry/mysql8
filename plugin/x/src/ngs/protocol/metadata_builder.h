@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "mysql/strings/m_ctype.h"  // NOLINT(build/include_subdir)
+#include "m_ctype.h"  // NOLINT(build/include_subdir)
 
 #include "plugin/x/src/ngs/protocol/column_info_builder.h"
 

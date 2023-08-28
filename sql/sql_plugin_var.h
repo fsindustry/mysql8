@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -141,7 +141,6 @@ void update_func_str(THD *, SYS_VAR *, void *tgt, const void *save);
 void update_func_double(THD *, SYS_VAR *, void *tgt, const void *save);
 
 SHOW_TYPE pluginvar_show_type(SYS_VAR *plugin_var);
-const void *pluginvar_default_value(SYS_VAR *plugin_var);
 
 int item_value_type(st_mysql_value *value);
 const char *item_val_str(st_mysql_value *value, char *buffer, int *length);
@@ -198,7 +197,7 @@ class sys_var_pluginvar : public sys_var {
 
  public:
   bool is_plugin;
-  st_plugin_int *plugin{nullptr};
+  st_plugin_int *plugin;
   SYS_VAR *plugin_var;
   /**
     variable name from whatever is hard-coded in the plugin source
@@ -239,8 +238,7 @@ class sys_var_pluginvar : public sys_var {
                 (plugin_var_arg->flags & PLUGIN_VAR_INVISIBLE ? INVISIBLE : 0) |
                 (plugin_var_arg->flags & PLUGIN_VAR_PERSIST_AS_READ_ONLY
                      ? PERSIST_AS_READ_ONLY
-                     : 0) |
-                (plugin_var_arg->flags & PLUGIN_VAR_SENSITIVE ? SENSITIVE : 0),
+                     : 0),
             0, (plugin_var_arg->flags & PLUGIN_VAR_NOCMDOPT) ? -1 : 0,
             (plugin_var_arg->flags & PLUGIN_VAR_NOCMDARG
                  ? NO_ARG
@@ -249,8 +247,7 @@ class sys_var_pluginvar : public sys_var {
                         : (plugin_var_arg->flags & PLUGIN_VAR_RQCMDARG
                                ? REQUIRED_ARG
                                : REQUIRED_ARG))),
-            pluginvar_show_type(plugin_var_arg),
-            (intptr)pluginvar_default_value(plugin_var_arg), nullptr,
+            pluginvar_show_type(plugin_var_arg), 0, nullptr,
             VARIABLE_NOT_IN_BINLOG,
             (plugin_var_arg->flags & PLUGIN_VAR_NODEFAULT) ? on_check_pluginvar
                                                            : nullptr,
@@ -266,18 +263,16 @@ class sys_var_pluginvar : public sys_var {
   uchar *real_value_ptr(THD *thd, enum_var_type type);
   TYPELIB *plugin_var_typelib(void);
   uchar *do_value_ptr(THD *running_thd, THD *target_thd, enum_var_type type,
-                      std::string_view keycache_name);
-  uchar *do_value_ptr(THD *thd, enum_var_type type,
-                      std::string_view keycache_name) {
-    return do_value_ptr(thd, thd, type, keycache_name);
+                      LEX_STRING *base);
+  uchar *do_value_ptr(THD *thd, enum_var_type type, LEX_STRING *base) {
+    return do_value_ptr(thd, thd, type, base);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 std::string_view keycache_name) override {
-    return do_value_ptr(running_thd, target_thd, OPT_SESSION, keycache_name);
+                                 LEX_STRING *base) override {
+    return do_value_ptr(running_thd, target_thd, OPT_SESSION, base);
   }
-  const uchar *global_value_ptr(THD *thd,
-                                std::string_view keycache_name) override {
-    return do_value_ptr(thd, OPT_GLOBAL, keycache_name);
+  const uchar *global_value_ptr(THD *thd, LEX_STRING *base) override {
+    return do_value_ptr(thd, OPT_GLOBAL, base);
   }
   bool do_check(THD *thd, set_var *var) override;
   void session_save_default(THD *, set_var *) override {}

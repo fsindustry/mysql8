@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -87,7 +87,7 @@ bool get_group_replication_view_change_uuid(std::string &uuid);
 bool is_group_replication_member_secondary();
 
 // Callback definition for socket donation
-typedef int (*gr_incoming_connection_cb)(THD *thd, int fd, SSL *ssl_ctx);
+typedef void (*gr_incoming_connection_cb)(THD *thd, int fd, SSL *ssl_ctx);
 void set_gr_incoming_connection(gr_incoming_connection_cb x);
 
 #endif /* RPL_GROUP_REPLICATION_INCLUDED */

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 #include <NdbRestarts.hpp>
 #include <NDBT.hpp>
@@ -55,7 +54,7 @@ int getRandomNodeId(NdbRestarter& _restarter);
 /**
  * Define list of restarts
  *  - name of restart
- *  - function performing the restart
+ *  - function perfoming the restart
  *  - required number of nodes
  *  - required number of node groups
  *  - ...
@@ -107,7 +106,7 @@ const NdbRestarts::NdbRestart NdbRestarts::m_restarts[] = {
 	     2,
 	     1),
   /**
-   * Restart a randomly selected node without file system
+   * Restart a randomly selected node without fileystem
    *
    */ 
   NdbRestart("RestartRandomNodeInitial",
@@ -289,7 +288,7 @@ int NdbRestarts::executeRestart(NDBT_Context* ctx,
   }
 
   if (restarter.waitClusterStarted(120) != 0){
-    // If cluster is not started when we shall perform restart
+    // If cluster is not started when we shall peform restart
     // the restart can not be executed and the test fails
     g_err << "Wait cluster start 120 secs failed" << endl;
     return NDBT_FAILED;

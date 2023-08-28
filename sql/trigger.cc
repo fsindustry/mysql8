@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,17 +25,17 @@
 
 #include <assert.h>
 #include <stdio.h>
-
 #include <atomic>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
+
 #include "my_psi_config.h"
-#include "mysql/components/services/bits/psi_statement_bits.h"
+#include "mysql/components/services/psi_statement_bits.h"
 #include "mysql/psi/mysql_sp.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"          // EE_OUTOFMEMORY
-#include "nulls.h"              // NullS
 #include "sql/derror.h"         // ER_THD
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/sp.h"             // sp_add_used_routine
@@ -51,8 +51,6 @@
 #include "sql/system_variables.h"
 #include "sql/trigger_creation_ctx.h"  // Trigger_creation_ctx
 #include "sql_string.h"
-#include "string_with_len.h"
-#include "strxmov.h"
 
 class sp_rcontext;
 struct MEM_ROOT;
@@ -117,14 +115,50 @@ static bool construct_definer_value(MEM_ROOT *mem_root, LEX_CSTRING *definer,
                                     const LEX_CSTRING &definer_user,
                                     const LEX_CSTRING &definer_host) {
   char definer_buf[USER_HOST_BUFF_SIZE];
-  const size_t definer_len =
+  size_t definer_len =
       strxmov(definer_buf, definer_user.str, "@", definer_host.str, NullS) -
       definer_buf;
 
   return lex_string_strmake(mem_root, definer, definer_buf, definer_len);
 }
 
-bool Trigger::construct_create_trigger_stmt_with_definer(
+/**
+  Constructs CREATE TRIGGER statement taking into account a value of
+  the DEFINER clause.
+
+  The point of this method is to create canonical forms of CREATE TRIGGER
+  statement for writing into the binlog.
+
+  @note
+  A statement for the binlog form must preserve FOLLOWS/PRECEDES clause
+  if it was in the original statement. The reason for that difference is this:
+
+    - the Data Dictionary preserves the trigger execution order (action_order),
+      thus FOLLOWS/PRECEDES clause is not needed.
+
+    - moreover, FOLLOWS/PRECEDES clause usually makes problem in mysqldump,
+      because CREATE TRIGGER statement will have a reference to non-yet-existing
+      trigger (which is about to be created right after this one).
+
+    - thus, FOLLOWS/PRECEDES must not be stored in the Data Dictionary.
+
+    - on the other hand, the binlog contains statements in the user order (as
+      the user executes them). Thus, it is important to preserve
+      FOLLOWS/PRECEDES clause if the user has specified it so that the trigger
+      execution order on master and slave will be the same.
+
+  @param thd                thread context
+  @param[out] binlog_query  well-formed CREATE TRIGGER statement for putting
+                            into binlog (after successful execution)
+  @param def_user           user part of a definer value
+  @param def_host           host part of a definer value
+
+  @return Operation status.
+    @retval false Success
+    @retval true  Failure
+*/
+
+static bool construct_create_trigger_stmt_with_definer(
     THD *thd, String *binlog_query, const LEX_CSTRING &def_user,
     const LEX_CSTRING &def_host) {
   LEX *lex = thd->lex;
@@ -206,13 +240,11 @@ Trigger *Trigger::create_from_parser(THD *thd, TABLE *subject_table,
   if (lex_string_strmake(&subject_table->mem_root, &client_cs_name,
                          thd->charset()->csname,
                          strlen(thd->charset()->csname)) ||
-      lex_string_strmake(
-          &subject_table->mem_root, &connection_cl_name,
-          thd->variables.collation_connection->m_coll_name,
-          strlen(thd->variables.collation_connection->m_coll_name)) ||
+      lex_string_strmake(&subject_table->mem_root, &connection_cl_name,
+                         thd->variables.collation_connection->name,
+                         strlen(thd->variables.collation_connection->name)) ||
       lex_string_strmake(&subject_table->mem_root, &db_cl_name,
-                         default_db_cl->m_coll_name,
-                         strlen(default_db_cl->m_coll_name)))
+                         default_db_cl->name, strlen(default_db_cl->name)))
     return nullptr;
 
   // Copy trigger name into the proper mem-root.
@@ -252,7 +284,7 @@ Trigger *Trigger::create_from_parser(THD *thd, TABLE *subject_table,
 
   // Create a new Trigger instance.
 
-  const my_timeval created_timestamp_not_set = {0, 0};
+  timeval created_timestamp_not_set = {0, 0};
   Trigger *t = new (&subject_table->mem_root) Trigger(
       trigger_name, &subject_table->mem_root, subject_table->s->db,
       subject_table->s->table_name, definition, definition_utf8,
@@ -311,7 +343,7 @@ Trigger *Trigger::create_from_dd(
     const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
     enum_trigger_event_type trg_event_type,
     enum_trigger_action_time_type trg_time_type, uint action_order,
-    my_timeval created_timestamp) {
+    timeval created_timestamp) {
   return new (mem_root)
       Trigger(trigger_name, mem_root, db_name, subject_table_name, definition,
               definition_utf8, sql_mode, definer_user, definer_host,
@@ -331,7 +363,7 @@ Trigger::Trigger(
     const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
     enum_trigger_event_type event_type,
     enum_trigger_action_time_type action_time, uint action_order,
-    my_timeval created_timestamp)
+    timeval created_timestamp)
     : m_mem_root(mem_root),
       m_db_name(db_name),
       m_subject_table_name(subject_table_name),
@@ -345,11 +377,12 @@ Trigger::Trigger(
       m_db_cl_name(db_cl_name),
       m_event(event_type),
       m_action_time(action_time),
-      m_created_timestamp(created_timestamp),
       m_action_order(action_order),
       m_trigger_name(trigger_name),
       m_sp(nullptr),
       m_has_parse_error(false) {
+  m_created_timestamp = created_timestamp;
+
   m_parse_error_message[0] = 0;
 
   construct_definer_value(mem_root, &m_definer, definer_user, definer_host);
@@ -431,7 +464,7 @@ bool Trigger::create_full_trigger_definition(
 */
 
 bool Trigger::parse(THD *thd, bool is_upgrade) {
-  const sql_mode_t sql_mode_saved = thd->variables.sql_mode;
+  sql_mode_t sql_mode_saved = thd->variables.sql_mode;
   thd->variables.sql_mode = m_sql_mode;
 
   Parser_state parser_state;
@@ -470,7 +503,7 @@ bool Trigger::parse(THD *thd, bool is_upgrade) {
   thd->lex = &lex;
   lex_start(thd);
 
-  const LEX_CSTRING current_db_name_saved = thd->db();
+  LEX_CSTRING current_db_name_saved = thd->db();
   thd->reset_db(m_db_name);
 
   Deprecated_trigger_syntax_handler error_handler;
@@ -618,12 +651,12 @@ cleanup:
 
   @param [in]     thd               thread handle
   @param [in,out] prelocking_ctx    prelocking context of the statement
-  @param [in]     table_list        Table_ref for the table
+  @param [in]     table_list        TABLE_LIST for the table
 */
 
 void Trigger::add_tables_and_routines(THD *thd,
                                       Query_tables_list *prelocking_ctx,
-                                      Table_ref *table_list) {
+                                      TABLE_LIST *table_list) {
   if (has_parse_error()) return;
 
   if (sp_add_used_routine(prelocking_ctx, thd->stmt_arena,

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -69,8 +69,8 @@ void Abstract_program::run(int argc, char **argv) {
                              Message_type_error));
   my_getopt_use_args_separator = false;
 
-  const int ho_error = handle_options(&argc, &argv, this->get_options_array(),
-                                      Abstract_program::callback_option_parsed);
+  int ho_error = handle_options(&argc, &argv, this->get_options_array(),
+                                Abstract_program::callback_option_parsed);
   if (ho_error != 0) {
     this->error(Message_data(ho_error, "Error during handling options",
                              Message_type_error));

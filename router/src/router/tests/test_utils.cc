@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,22 +26,35 @@
 #include <stdexcept>
 #include <vector>
 
+// ignore GMock warnings
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
+#endif
+
 #include <gmock/gmock.h>
-#include <gtest/gtest-param-test.h>
-#include <gtest/gtest.h>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include "mysql/harness/filesystem.h"
 #include "mysql/harness/string_utils.h"
-#include "mysqlrouter/utils.h"  // get_tcp_port
+#include "mysqlrouter/utils.h"
 
+using mysql_harness::split_string;
+using mysqlrouter::get_tcp_port;
+using mysqlrouter::hexdump;
+using std::string;
 using ::testing::ContainerEq;
 using ::testing::Pair;
 
-class GetTCPPortTest : public ::testing::Test {};
+class GetTCPPortTest : public ::testing::Test {
+ protected:
+  void SetUp() override {}
+};
 
 TEST_F(GetTCPPortTest, GetTCPPort) {
-  using mysqlrouter::get_tcp_port;
-
   ASSERT_EQ(get_tcp_port("3306"), static_cast<uint16_t>(3306));
   ASSERT_EQ(get_tcp_port("0"), static_cast<uint16_t>(0));
   ASSERT_EQ(get_tcp_port(""), static_cast<uint16_t>(0));
@@ -49,8 +62,6 @@ TEST_F(GetTCPPortTest, GetTCPPort) {
 }
 
 TEST_F(GetTCPPortTest, GetTCPPortFail) {
-  using mysqlrouter::get_tcp_port;
-
   ASSERT_THROW(get_tcp_port("65536"), std::runtime_error);
   ASSERT_THROW(get_tcp_port("33 06"), std::runtime_error);
   ASSERT_THROW(get_tcp_port(":3306"), std::runtime_error);
@@ -58,7 +69,48 @@ TEST_F(GetTCPPortTest, GetTCPPortFail) {
   ASSERT_THROW(get_tcp_port("abcdef"), std::runtime_error);
 }
 
-class UtilsTests : public ::testing::Test {};
+class HexDumpTest : public ::testing::Test {};
+
+TEST_F(HexDumpTest, UsingCharArray) {
+  const unsigned char buffer[4] = "abc";
+  EXPECT_EQ("61 62 63 \n", hexdump(buffer, 3, 0));
+}
+
+TEST_F(HexDumpTest, UsingVector) {
+  std::vector<uint8_t> buffer = {'a', 'b', 'c'};
+  EXPECT_EQ("61 62 63 \n", hexdump(&buffer[0], 3, 0));
+}
+
+TEST_F(HexDumpTest, Literals) {
+  const unsigned char buffer[4] = "abc";
+  EXPECT_EQ(" a  b  c \n", hexdump(buffer, 3, 0, true));
+  EXPECT_EQ("61 62 63 \n", hexdump(buffer, 3, 0, false));
+}
+
+TEST_F(HexDumpTest, Count) {
+  const unsigned char buffer[7] = "abcdef";
+  EXPECT_EQ(" a  b  c  d  e  f \n", hexdump(buffer, 6, 0, true));
+  EXPECT_EQ(" a  b  c \n", hexdump(buffer, 3, 0, true));
+}
+
+TEST_F(HexDumpTest, Start) {
+  const unsigned char buffer[7] = "abcdef";
+  EXPECT_EQ(" a  b  c  d  e  f \n", hexdump(buffer, 6, 0, true));
+  EXPECT_EQ(" d  e  f \n", hexdump(buffer, 3, 3, true));
+}
+
+TEST_F(HexDumpTest, MultiLine) {
+  const unsigned char buffer[33] = "abcdefgh12345678ABCDEFGH12345678";
+  EXPECT_EQ(
+      " a  b  c  d  e  f  g  h 31 32 33 34 35 36 37 38\n A  B  C  D  E  F  G  "
+      "H 31 32 33 34 35 36 37 38\n",
+      hexdump(buffer, 32, 0, true));
+}
+
+class UtilsTests : public ::testing::Test {
+ protected:
+  void SetUp() override {}
+};
 
 static bool files_equal(const std::string &f1, const std::string &f2) {
   std::ifstream if1(f1);
@@ -214,7 +266,7 @@ TEST_F(UtilsTests, uint64_conversion) {
   const uint64_t kDefault{66};
 
   EXPECT_EQ(kDefault, strtoull_checked(nullptr, kDefault));
-  EXPECT_EQ(kDefault, strtoull_checked(nullptr, kDefault));
+  EXPECT_EQ(kDefault, strtoull_checked(0, kDefault));
   EXPECT_EQ(kDefault, strtoull_checked("18446744073709551617", kDefault));
 
   EXPECT_EQ(static_cast<uint64_t>(0), strtoull_checked("0", kDefault));

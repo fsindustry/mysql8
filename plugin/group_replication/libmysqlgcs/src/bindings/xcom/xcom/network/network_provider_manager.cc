@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,8 +34,6 @@
 
 #include "xcom/network/network_provider_manager.h"
 
-#include "my_compiler.h"
-
 static const char *ssl_mode_options[] = {"DISABLED", "PREFERRED", "REQUIRED",
                                          "VERIFY_CA", "VERIFY_IDENTITY"};
 
@@ -59,7 +57,7 @@ bool Network_provider_manager::finalize() {
   this->cleanup_secure_connections_context();
   this->finalize_secure_connections_context();
 
-  // Remove the default provider, which is XCom
+  // Remove the defaul provider, which is XCom
   this->remove_network_provider(XCOM_PROTOCOL);
 
   return false;
@@ -93,20 +91,27 @@ void Network_provider_manager::remove_all_network_provider() {
   m_network_providers.clear();
 }
 
+bool Network_provider_manager::start_all_network_providers() {
+  bool retval = false;
+
+  for (auto &&provider : m_network_providers) {
+    retval &= provider.second->start();
+  }
+
+  return retval;
+}
+
 bool Network_provider_manager::start_network_provider(
     enum_transport_protocol provider_key) {
   auto net_provider = this->get_provider(provider_key);
 
-  return net_provider ? net_provider->start().first : true;
+  return net_provider ? net_provider->start() : true;
 }
 
 bool Network_provider_manager::stop_all_network_providers() {
   bool retval = false;
   for (auto &&i : m_network_providers) {
-    // Logical Sum of all stop() operations. If any of the operations fail,
-    // it will report the whole operation as botched, but it will stop all
-    // providers
-    retval |= i.second->stop().first;
+    retval &= i.second->stop();
   }
 
   set_incoming_connections_protocol(get_running_protocol());
@@ -118,7 +123,7 @@ bool Network_provider_manager::stop_network_provider(
     enum_transport_protocol provider_key) {
   auto net_provider = this->get_provider(provider_key);
 
-  return net_provider ? net_provider->stop().first : true;
+  return net_provider ? net_provider->stop() : true;
 }
 
 const std::shared_ptr<Network_provider>
@@ -140,14 +145,11 @@ bool Network_provider_manager::start_active_network_provider() {
 
   bool config_ok = net_provider->configure(m_active_provider_configuration);
 
-  m_ssl_data_context_cleaner =
-      net_provider->get_secure_connections_context_cleaner();
-
   G_MESSAGE("Using %s as Communication Stack for XCom",
             Communication_stack_to_string::to_string(
                 net_provider->get_communication_stack()))
 
-  return config_ok ? net_provider->start().first : true;
+  return config_ok ? net_provider->start() : true;
 }
 
 bool Network_provider_manager::stop_active_network_provider() {
@@ -157,10 +159,7 @@ bool Network_provider_manager::stop_active_network_provider() {
 
   set_incoming_connections_protocol(get_running_protocol());
 
-  m_ssl_data_context_cleaner =
-      net_provider->get_secure_connections_context_cleaner();
-
-  return net_provider ? net_provider->stop().first : true;
+  return net_provider ? net_provider->stop() : true;
 }
 
 bool Network_provider_manager::configure_active_provider(
@@ -347,12 +346,6 @@ int Network_provider_manager::xcom_set_ssl_mode(int mode) {
 }
 
 int Network_provider_manager::xcom_get_ssl_mode() { return m_ssl_mode; }
-
-void Network_provider_manager::delayed_cleanup_secure_connections_context() {
-  if (!Network_provider_manager::getInstance().is_xcom_using_ssl()) return;
-
-  if (m_ssl_data_context_cleaner) std::invoke(m_ssl_data_context_cleaner);
-}
 
 void Network_provider_manager::cleanup_secure_connections_context() {
   if (!Network_provider_manager::getInstance().is_xcom_using_ssl()) return;

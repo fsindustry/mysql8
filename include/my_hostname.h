@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -48,10 +48,9 @@ static constexpr int HOSTNAME_LENGTH = 255;
 static constexpr int PORTNUMBER_LENGTH = 5;
 
 /**
-  Length of "hostname:portnumber".
-  This does not include the trailing '\0'.
+  Number of bytes required to hold "hostname:portnumber"
 */
 static constexpr int HOST_AND_PORT_LENGTH =
-    (HOSTNAME_LENGTH + 1 + PORTNUMBER_LENGTH);
+    (HOSTNAME_LENGTH + 1 + PORTNUMBER_LENGTH + 1);
 
 #endif /* MY_HOSTNAME_INCLUDED */

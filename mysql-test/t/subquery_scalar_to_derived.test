@@ -1,11 +1,5 @@
 # Enable transformations for InnoDB for ease of testing
 SET optimizer_switch='subquery_to_derived=on';
-
-# This performance schema table is queried further down. Clear it now,
-# so that we start with a clean state, regardless of what earlier
-# tests have written to it.
-TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
-
 --echo #
 --echo # Tests for WL#12885 Add ability to transform scalar subqueries to inner
 --echo # derived table
@@ -115,57 +109,6 @@ let $query = SELECT * FROM t1
 eval $query;
 eval explain $query;
 
---echo # Should work, {2} \ {1} == {2}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 EXCEPT SELECT 1);
-eval $query;
-eval explain $query;
-
---echo # Should fail, {2} U {3} \ {1} == {2, 3}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 UNION SELECT 3 EXCEPT SELECT 1);
---error ER_SUBQUERY_NO_1_ROW
-eval $query;
-eval explain $query;
-
---echo # Should return no rows, since the intersection is the empty set
---echo # {2} ∩ {1} == {}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 INTERSECT SELECT 1);
-eval $query;
-eval explain $query;
-
---echo # Should return no rows, since the result is the empty set
---echo # {2} \ {2} == {}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 EXCEPT SELECT 2);
-eval $query;
-eval explain $query;
-
---echo # This should give one row: {2} ∩ {2} == {2}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 INTERSECT SELECT 2);
-eval $query;
-eval explain $query;
-
---echo # This should give one row: {2} ∩ {2} == {2}
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 INTERSECT ALL SELECT 2);
-eval $query;
-eval explain $query;
-
---echo # This should remove the duplicate: {1, 1} ∩ALL {1} == {1}, so ok
-let $query = SELECT * FROM t1
-             WHERE t1.a > ((SELECT COUNT(a) AS cnt FROM t2 GROUP BY a LIMIT 2) INTERSECT ALL SELECT 1);
-eval $query;
-eval explain $query;
-
---echo # ditto
-let $query = SELECT * FROM t1
-             WHERE t1.a > (SELECT COUNT(a) AS cnt FROM t2 GROUP BY a  INTERSECT ALL SELECT 1);
-eval $query;
-eval explain $query;
-
 --echo # Empty scalar subquery
 let $query = SELECT * FROM t1
              WHERE t1.a > (SELECT a from t1 WHERE false);
@@ -262,7 +205,6 @@ let query = SELECT t1.a, t2.a
             FROM t1
                  JOIN t2
                  ON t1.a+t2.a = (SELECT COUNT(*) FROM t1);
---sorted_result
 eval $query;
 eval explain $query;
 
@@ -826,84 +768,6 @@ WHERE pedcompralote IN (SELECT cod FROM t2 WHERE ped=1779);
 
 DROP TABLE t1, t2;
 
---echo # outer query has DEFAULT: verify it is handled correctly
-CREATE TABLE t(i INT DEFAULT 5);
-INSERT INTO t VALUES (4);
-ANALYZE TABLE t;
-
-let $query =
-SELECT DEFAULT(i) AS def,
-       5 + DEFAULT(i) AS def2,
-       i AS any_v,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-eval $query;
-
-SET SQL_MODE='';
-
-eval $query;
-eval EXPLAIN $query;
-
-SET SQL_MODE=default;
-
---echo # Bug#35150438 Unwarranted error message for ANY_VALUE with
---echo #              scalar subquery transform
-let $query =
-SELECT ANY_VALUE(i) AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-eval $query;
-eval EXPLAIN $query;
-
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-SELECT i + ANY_VALUE(i) AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-SELECT ANY_VALUE(i) + i AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-let $query =
-SELECT ANY_VALUE(ANY_VALUE(i) + i) AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-eval $query;
-eval EXPLAIN $query;
-
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-SELECT ANY_VALUE(i) AS i1, i as i2,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-SELECT i as i2, ANY_VALUE(i) AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-let $query =
-SELECT ANY_VALUE(i) as i2, ANY_VALUE(i) AS i1,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-eval $query;
-eval EXPLAIN $query;
-
-DROP TABLE t;
-
 --echo #
 --echo # 6.  S U B Q U E R Y   I N   H A V I N G   C L A U S E
 --echo #
@@ -1165,10 +1029,6 @@ CREATE TEMPORARY TABLE tmp_digests (
   sum_sort_scan BIGINT UNSIGNED NOT NULL,
   sum_no_index_used BIGINT UNSIGNED NOT NULL,
   sum_no_good_index_used BIGINT UNSIGNED NOT NULL,
-  sum_cpu_time BIGINT UNSIGNED NOT NULL,
-  max_controlled_memory BIGINT UNSIGNED NOT NULL,
-  max_total_memory BIGINT UNSIGNED NOT NULL,
-  count_secondary BIGINT UNSIGNED NOT NULL,
   first_seen TIMESTAMP NULL DEFAULT NULL,
   last_seen TIMESTAMP NULL DEFAULT NULL,
   quantile_95 BIGINT UNSIGNED NOT NULL,
@@ -1274,7 +1134,6 @@ WHERE (field1, ( SELECT COUNT( col_int_key ) FROM t1 )) IN (
        ON table2.col_int_key = table1.col_int_key
 );
 
---sorted_result
 eval $query;
 eval EXPLAIN $query;
 
@@ -2412,84 +2271,22 @@ DROP TABLE t1;
 --echo #
 
 CREATE TABLE t1 (f1 INTEGER);
-
-let $query1=
-SELECT SUM(f1), ROW_NUMBER() OVER (PARTITION BY f1), (SELECT MIN(f1) FROM t1) FROM t1;
-let $query2=
-SELECT SUM(f1), ROW_NUMBER() OVER (), (SELECT MIN(f1) FROM t1) FROM t1 ORDER BY f1;
-let $query3=
-SELECT SUM(f1), SUM(f1) OVER (), f1, (SELECT MIN(f1) FROM t1) sq FROM t1 ORDER BY f1;
-
 SET optimizer_switch='subquery_to_derived=default';
 # This will throw error
 --error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-eval $query1;
+SELECT SUM(f1), ROW_NUMBER() OVER (PARTITION BY f1), (SELECT MIN(f1) FROM t1) FROM t1;
 # This should throw error. But does not because before the full group by verification
 # happens, order by elements are removed (not correct for this case).
-eval $query2;
---error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-eval $query3;
-
+SELECT SUM(f1), ROW_NUMBER() OVER (), (SELECT MIN(f1) FROM t1) FROM t1 ORDER BY f1;
 SET optimizer_switch='subquery_to_derived=on';
 # This will throw error (not as precise as when the transformation is off)
 --error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-eval $query1;
-# This should throw error. But does not because before the full group by verification
-# happens, order by elements are removed (not correct for this case).
-eval $query2;
+SELECT SUM(f1), ROW_NUMBER() OVER (PARTITION BY f1), (SELECT MIN(f1) FROM t1) FROM t1;
+# This will throw error. Since the order by field is now visible in the derived
+# table.
 --error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-eval $query3;
-
+SELECT SUM(f1), ROW_NUMBER() OVER (), (SELECT MIN(f1) FROM t1) FROM t1 ORDER BY f1;
+--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
+SELECT SUM(f1), SUM(f1) OVER (), f1, (SELECT MIN(f1) FROM t1) sq FROM t1 ORDER BY f1;
 DROP TABLE t1;
-
---echo #
---echo # Bug#33910786 Scalar subquery transformation combined with
---echo # WHERE clause optimization lead to reject_multiple_rows being
---echo # ineffective
---echo #
-CREATE TABLE t(i INT);
-INSERT INTO t VALUES (1);
-ANALYZE TABLE t;
-
-let $query = SELECT 1 AS one FROM t WHERE 1=(SELECT 1 UNION SELECT 2);
---error ER_SUBQUERY_NO_1_ROW
-eval $query;
---skip_if_hypergraph  # Depends on the query plan.
-eval EXPLAIN FORMAT=tree $query;
-DROP TABLE t;
-
---echo #
---echo # Bug#34998721 Mysqld crash - Assertion `table_num_to_node_num[table_num] != -1' failed.
---echo #              Only seen with hypergraph optimizer enabled.
---echo #
-CREATE TABLE t(x INT);
-SET SQL_MODE='';
-
-SELECT COUNT(*), (SELECT 1 FROM t)
-FROM t AS t1,
-     (SELECT 1 FROM t) AS t2,
-     t AS t3
-ORDER BY ROW_NUMBER() OVER (ORDER BY -t3.x);
-
-SET SQL_MODE=default;
-DROP TABLE t;
-
---echo #
---echo # Bug#35150085 Wrong item name in result set after transform
---echo #
-
-SET SQL_MODE='';
-
-CREATE TABLE t(i INT);
-INSERT INTO t VALUES (4);
-
-SELECT i AS i1,  # used to get renamed to i2
-       i AS i2,
-       (SELECT i FROM t) AS subquery,
-       SUM(i) AS summ
-FROM t;
-
-SET SQL_MODE=default;
-DROP TABLE t;
-
 SET optimizer_switch='subquery_to_derived=default';

@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 #include "mysql/components/services/log_builtins.h"  // LogErr
 #include "mysqld.h"                                  // opt_noacl
 #include "mysqld_error.h"               // ER_SPECIFIC_ACCESS_DENIED_ERROR
-#include "nulls.h"                      // NullS
 #include "sql/auth/auth_acls.h"         // SHUTDOWN_ACL
 #include "sql/auth/sql_security_ctx.h"  // Security_context
 #include "sql/sql_class.h"              // THD

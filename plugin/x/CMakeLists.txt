@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,6 @@ SET(MYSQLX_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 SET(MYSQLX_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 SET(MYSQLX_PLUGIN_NAME "mysqlx")
 
-MSVC_CPPCHECK_DISABLE()
-
 IF(WIN32)
   # Activate necessary dllexport/dllimport declarations.
   ADD_DEFINITIONS(-DPROTOBUF_USE_DLLS)
@@ -55,19 +53,17 @@ IF(WITH_MYSQLX)
   ADD_SUBDIRECTORY(tests)
 ENDIF()
 
-OPTION(WITH_MYSQLX_USE_PROTOBUF_FULL
-  "Link mysqlx plugin with agains full version of \
-protobuf/mysqlxmessages/mysqlxclient for better debugging"
+OPTION(DISABLE_MYSQLX_PROTOBUF_LITE
+  "Link mysqlx plugin with agains full version of protobuf/mysqlxmessages/mysqlxclient"
   OFF
 )
 
-IF(NOT WITH_MYSQLX_USE_PROTOBUF_FULL AND NOT PROTOBUF_LITE_LIBRARY)
-  SET(WITH_MYSQLX_USE_PROTOBUF_FULL ON)
-  MESSAGE(WARNING "No protobuf-lite found, using full protobuf \
-library for mysqlx plugin.")
+IF(NOT DISABLE_MYSQLX_PROTOBUF_LITE AND NOT PROTOBUF_LITE_LIBRARY)
+  SET(DISABLE_MYSQLX_PROTOBUF_LITE ON)
+  MESSAGE(WARNING "Disabling protobuf lite for mysqlx plugin.")
 ENDIF()
 
-IF(WITH_MYSQLX_USE_PROTOBUF_FULL)
+IF(DISABLE_MYSQLX_PROTOBUF_LITE)
   SET(MYSQLX_PROTOBUF_LIB ${PROTOBUF_LIBRARY})
   SET(MYSQLX_PROTOCOL_LIB ${MYSQLX_PROTOCOL_FULL_LIB})
   SET(MYSQLX_CLIENT_LIB ${MYSQLX_CLIENT_FULL_LIB})
@@ -83,6 +79,9 @@ INCLUDE_DIRECTORIES(
   ${MYSQLX_CLIENT_INCLUDE_DIR}
 )
 
+MY_INCLUDE_SYSTEM_DIRECTORIES(LIBEVENT)
+MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
+
 ADD_COMPILE_FLAGS(${XPLUGIN_SRC}
   COMPILE_FLAGS "${MYSQLX_PROTOCOL_FLAGS}"
 )
@@ -95,14 +94,11 @@ IF(WITH_MYSQLX)
     DEPENDENCIES xprotocol_tags
     LINK_LIBRARIES
     ${MYSQLX_PROTBUF_AND_PROTOCOL_LIB}
-    ext::libevent
-    ext::icu
+    ${LIBEVENT_LIBRARIES}
+    ${ICU_LIBRARIES}
+    ${LZ4_LIBRARY}
     ${MYSQLX_PROTOCOL_LIB}
     ${MYSQLX_PROTOBUF_LIB}
-    extra::rapidjson
-    ext::lz4
-    ext::zstd
-    ext::zlib
     )
 ENDIF()
 
@@ -115,3 +111,14 @@ IF(XPLUGIN_LOG_DEBUG OR WITH_DEBUG)
   MESSAGE(STATUS "MYSQLX - Enabled debug traces")
   ADD_DEFINITIONS(-DXPLUGIN_LOG_DEBUG)
 ENDIF()
+
+IF(DISABLE_MYSQLX_PROTOBUF_LITE)
+  MESSAGE(STATUS "MYSQLX - Using protobuf instead protobuf-lite")
+  ADD_DEFINITIONS(-DUSE_MYSQLX_FULL_PROTO)
+ENDIF()
+
+# ICU headers for WIN32 need extra info about their libs state
+IF(WIN32)
+  ADD_DEFINITIONS(-DU_STATIC_IMPLEMENTATION)
+ENDIF()
+

@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -94,7 +94,7 @@ bool Clone_handler::get_donor_error(Srv_session *session, int &error,
 
   /* Parse and find out donor error and message. */
   size_t err_pos = 0;
-  const std::string msg_string(message);
+  std::string msg_string(message);
 
   while (!std::isdigit(message[err_pos])) {
     /* Find position of next ":". */
@@ -162,12 +162,12 @@ int Clone_handler::clone_remote_client(THD *thd, const char *remote_host,
   for provisioning this node. We never set it back to false only in case
   of error otherwise the server would shutdown or restart at the end of
   operation. */
-  const bool provisioning = (data_dir == nullptr);
+  bool provisioning = (data_dir == nullptr);
   if (provisioning) {
     ++s_provision_in_progress;
   }
 
-  const int mode = static_cast<int>(ssl_mode);
+  int mode = static_cast<int>(ssl_mode);
 
   error = m_plugin_handle->clone_client(
       thd, remote_host, remote_port, remote_user, remote_passwd, dir_ptr, mode);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,21 +29,20 @@
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/component_sys_var_service.h>
 #include <mysql/components/services/group_replication_status_service.h>
-#include "libbinlogevents/include/binlog_event.h"  // binary_log::max_log_event_size
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
-#include "my_systime.h"
-#include "my_time.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/plugin.h"
 #include "mysql/plugin_group_replication.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysqld_error.h"       // ER_*
 #include "sql/clone_handler.h"  // is_data_dropped
 #include "sql/log.h"
+#include "sql/log_event.h"           // MAX_MAX_ALLOWED_PACKET
 #include "sql/mysqld.h"              // mysqld_port
 #include "sql/mysqld_thd_manager.h"  // Global_THD_manager
 #include "sql/replication.h"         // Trans_context_info
@@ -57,8 +56,6 @@
 #include "sql/sql_plugin_ref.h"
 #include "sql/ssl_init_callback.h"
 #include "sql/system_variables.h"  // System_variables
-#include "sql/tztime.h"            // my_tz_UTC
-#include "string_with_len.h"
 
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
@@ -169,7 +166,7 @@ int group_replication_start(char **error_message, THD *thd) {
         (st_mysql_group_replication *)plugin_decl(plugin)->info;
     /*
       is_running check is required below before storing credentials.
-      Check makes sure running instance of START GR is not impacted by
+      Check makes sure runing instance of START GR is not impacted by
       temporary storage of credentials or if storing credential failed
       message is meaningful.
       e.g. of credential conflict blocked by below check
@@ -428,8 +425,7 @@ void get_server_main_ssl_parameters(
       version;
 
   server_main_callback.read_parameters(&ca, &capath, &version, &cert, &cipher,
-                                       &ciphersuites, &key, &crl, &crlpath,
-                                       nullptr, nullptr);
+                                       &ciphersuites, &key, &crl, &crlpath);
 
   server_ssl_variables->ssl_ca = my_strdup_nullable(ca);
   server_ssl_variables->ssl_capath = my_strdup_nullable(capath);
@@ -451,8 +447,7 @@ void get_server_admin_ssl_parameters(
       version;
 
   server_admin_callback.read_parameters(&ca, &capath, &version, &cert, &cipher,
-                                        &ciphersuites, &key, &crl, &crlpath,
-                                        nullptr, nullptr);
+                                        &ciphersuites, &key, &crl, &crlpath);
 
   server_ssl_variables->ssl_ca = my_strdup_nullable(ca);
   server_ssl_variables->ssl_capath = my_strdup_nullable(capath);
@@ -556,45 +551,12 @@ bool is_gtid_committed(const Gtid &gtid) {
   return result;
 }
 
-bool wait_for_gtid_set_committed(const char *gtid_set_text, double timeout,
-                                 bool update_thd_status) {
-  THD *thd = current_thd;
-  Gtid_set wait_for_gtid_set(global_sid_map, nullptr);
-
-  global_sid_lock->rdlock();
-
-  if (wait_for_gtid_set.add_gtid_text(gtid_set_text) != RETURN_STATUS_OK) {
-    global_sid_lock->unlock();
-    return true;
-  }
-
-  /*
-    If the current session owns a GTID that is part of the waiting
-    set then that GTID will not reach GTID_EXECUTED while the session
-    is waiting.
-  */
-  if (thd->owned_gtid.sidno > 0 &&
-      wait_for_gtid_set.contains_gtid(thd->owned_gtid)) {
-    global_sid_lock->unlock();
-    return true;
-  }
-
-  gtid_state->begin_gtid_wait();
-  bool result = gtid_state->wait_for_gtid_set(thd, &wait_for_gtid_set, timeout,
-                                              update_thd_status);
-  gtid_state->end_gtid_wait();
-
-  global_sid_lock->unlock();
-
-  return result;
-}
-
 unsigned long get_replica_max_allowed_packet() {
   return replica_max_allowed_packet;
 }
 
 unsigned long get_max_replica_max_allowed_packet() {
-  return binary_log::max_log_event_size;
+  return MAX_MAX_ALLOWED_PACKET;
 }
 
 bool is_server_restarting_after_clone() { return clone_startup; }
@@ -637,10 +599,7 @@ bool get_group_replication_view_change_uuid(std::string &uuid) {
                         &component_sys_variable_register_service_handler);
 
   char *var_value = nullptr;
-  // uuid length + sizeof('\0')
-  constexpr size_t var_buffer_capacity = UUID_LENGTH + 1;
-  size_t var_len = var_buffer_capacity;
-
+  size_t var_len = 36;  // uuid length
   bool error = false;
 
   if (nullptr == component_sys_variable_register_service_handler) {
@@ -652,23 +611,17 @@ bool get_group_replication_view_change_uuid(std::string &uuid) {
       reinterpret_cast<SERVICE_TYPE(component_sys_variable_register) *>(
           component_sys_variable_register_service_handler);
 
-  if ((var_value = new char[var_len]) == nullptr) {
+  if ((var_value = new char[var_len + 1]) == nullptr) {
     error = true; /* purecov: inspected */
     goto end;     /* purecov: inspected */
   }
 
+  // The variable may not exist, thence we use its default value.
+  uuid.assign("AUTOMATIC");
   if (!component_sys_variable_register_service->get_variable(
           "mysql_server", "group_replication_view_change_uuid",
           reinterpret_cast<void **>(&var_value), &var_len)) {
     uuid.assign(var_value, var_len);
-  } else if (var_len != var_buffer_capacity) {
-    // Should never happen: no enough space for UUID in the buffer
-    assert(false);
-    error = true;
-    goto end;
-  } else {
-    // The variable does not exist, thence we use its default value.
-    uuid.assign("AUTOMATIC");
   }
 
 end:
@@ -697,14 +650,4 @@ bool is_group_replication_member_secondary() {
 
   srv_registry->release(gr_status_service_handler);
   return is_a_secondary;
-}
-
-void microseconds_to_datetime_str(uint64_t microseconds_since_epoch,
-                                  char *datetime_str, uint decimal_precision) {
-  my_timeval time_value;
-  my_micro_time_to_timeval(microseconds_since_epoch, &time_value);
-
-  MYSQL_TIME mysql_time;
-  my_tz_UTC->gmt_sec_to_TIME(&mysql_time, time_value);
-  my_datetime_to_str(mysql_time, datetime_str, decimal_precision);
 }

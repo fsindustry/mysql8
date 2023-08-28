@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -30,8 +30,6 @@
 #include <string>
 #include <vector>
 
-#include "mysqlrouter/router_export.h"
-
 namespace mysqlrouter {
 
 /**
@@ -58,7 +56,7 @@ namespace mysqlrouter {
  * action will not be affected). Adding a revert file action may fail if initial
  * or backup files could not be opened.
  */
-class ROUTER_LIB_EXPORT AutoCleaner {
+class AutoCleaner {
  public:
   void add_file_delete(const std::string &file);
   void add_directory_delete(const std::string &d, bool recursive = false);

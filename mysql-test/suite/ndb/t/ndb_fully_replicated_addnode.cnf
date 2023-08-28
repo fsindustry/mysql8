@@ -2,7 +2,7 @@
 !include include/default_ndbd.cnf
 
 [cluster_config.1]
-ThreadConfig=main,rep,recv,ldm={count=4}
+ThreadConfig=ldm={count=4}
 NoOfReplicas=                  2
 ndbd=,,,,,,,
 ndb_mgmd=
@@ -17,6 +17,9 @@ ndb-wait-connected=20
 ndb-wait-setup=60
 ndb-cluster-connection-pool=3
 ndb-extra-logging=99
+# Set error log verbosity to max, otherwise info messages
+# are filtered away
+log-error-verbosity=3
 
 [cluster_config.mysqld.1.1]
 NodeId=49

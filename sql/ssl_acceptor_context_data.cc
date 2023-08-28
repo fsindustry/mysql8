@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,181 +33,24 @@
 #include "mysql/components/services/log_builtins.h" /* LogErr */
 #include "mysqld_error.h"                           /* Error/Warning macros */
 
+#include "sql/current_thd.h"
+#include "sql/sql_error.h"
 #include "sql/ssl_acceptor_context_data.h"
 
 /* Helpers */
-/* Function to report SSL library errors
- */
-static void report_errors() {
-  unsigned long l;
-  const char *file;
-  const char *data;
-  int line, flags;
+static const char *verify_store_cert(SSL_CTX *ctx, SSL *ssl) {
+  const char *result = nullptr;
+  X509 *cert = SSL_get_certificate(ssl);
+  X509_STORE_CTX *sctx = X509_STORE_CTX_new();
 
-  DBUG_TRACE;
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  while ((l = ERR_get_error_all(&file, &line, nullptr, &data, &flags))) {
-#else          /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-  while ((l = ERR_get_error_line_data(&file, &line, &data, &flags)) > 0) {
-#endif         /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#ifndef NDEBUG /* Avoid warning */
-    char buf[512];
-    LogErr(ERROR_LEVEL, ER_WARN_FAILED_TO_SETUP_TLS, ERR_error_string(l, buf),
-           file, line, (flags & ERR_TXT_STRING) ? data : "");
-#endif
+  if (nullptr != sctx &&
+      0 != X509_STORE_CTX_init(sctx, SSL_CTX_get_cert_store(ctx), cert,
+                               nullptr) &&
+      !X509_verify_cert(sctx)) {
+    result = X509_verify_cert_error_string(X509_STORE_CTX_get_error(sctx));
   }
-}
-
-static bool verify_individual_certificate(const char *ssl_cert,
-                                          const char *ssl_ca,
-                                          const char *ssl_capath,
-                                          const char *crl,
-                                          const char *crl_path) {
-  if (!ssl_cert || my_access(ssl_cert, F_OK) == -1) {
-    /* Cert not present */
-    return false;
-  }
-  using raii_bio = std::unique_ptr<BIO, decltype(&BIO_free)>;
-  using raii_server_cert = std::unique_ptr<X509, decltype(&X509_free)>;
-  using raii_store = std::unique_ptr<X509_STORE, decltype(&X509_STORE_free)>;
-  using raii_store_ctx =
-      std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)>;
-  auto deleter = [&](FILE *ptr) { my_fclose(ptr, MYF(0)); };
-  std::unique_ptr<FILE, decltype(deleter)> fp(
-      my_fopen(ssl_cert, O_RDONLY | MY_FOPEN_BINARY, MYF(MY_WME)), deleter);
-
-  if (!fp) {
-    LogErr(ERROR_LEVEL, ER_WARN_CANT_OPEN_CERTIFICATE, ssl_cert);
-    return true;
-  }
-
-  raii_bio bio(BIO_new(BIO_s_file()), &BIO_free);
-  if (!bio) {
-    /* purecov: begin inspected */
-    LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-    report_errors();
-    return true;
-    /* purecov: end */
-  }
-
-  BIO_set_fp(bio.get(), fp.get(), BIO_NOCLOSE);
-  raii_server_cert server_cert(
-      PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free);
-  if (!server_cert) {
-    /* We are not interested in anything other than X509 certificates */
-    return false;
-  }
-
-  raii_store store(X509_STORE_new(), &X509_STORE_free);
-  if (!store) {
-    /* purecov: begin inspected */
-    LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-    report_errors();
-    return true;
-    /* purecov: end */
-  }
-
-  if (ssl_ca || ssl_capath) {
-    if (!X509_STORE_load_locations(store.get(), ssl_ca, ssl_capath)) {
-      LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-      report_errors();
-      return true;
-    }
-  }
-
-  if (crl || crl_path) {
-    if (X509_STORE_load_locations(store.get(), crl, crl_path) == 0 ||
-        X509_STORE_set_flags(store.get(), X509_V_FLAG_CRL_CHECK |
-                                              X509_V_FLAG_CRL_CHECK_ALL) == 0) {
-      LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-      report_errors();
-      return true;
-    }
-  }
-
-  raii_store_ctx store_ctx(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
-  if (!store_ctx) {
-    /* purecov: begin inspected */
-    LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-    report_errors();
-    return true;
-    /* purecov: end */
-  }
-
-  if (!X509_STORE_CTX_init(store_ctx.get(), store.get(), server_cert.get(),
-                           NULL)) {
-    /* purecov: begin inspected */
-    LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-    report_errors();
-    return true;
-    /* purecov: end */
-  }
-
-  if (X509_STORE_add_cert(store.get(), server_cert.get()) <= 0) {
-    /* purecov: begin inspected */
-    LogErr(WARNING_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
-    report_errors();
-    return true;
-    /* purecov: end */
-  }
-  if (!X509_verify_cert(store_ctx.get())) {
-    const char *result = X509_verify_cert_error_string(
-        X509_STORE_CTX_get_error(store_ctx.get()));
-    LogErr(WARNING_LEVEL, ER_WARN_CERTIFICATE_ERROR_STRING, ssl_cert, result);
-    return true;
-  }
-  return false;
-}
-
-/*
- *   Function to Validate CA Certificate/Certificates.
- */
-
-static bool verify_ca_certificates(const char *ssl_ca, const char *ssl_capath,
-                                   const char *ssl_crl,
-                                   const char *ssl_crl_path) {
-  bool r_value = false;
-  if (ssl_ca && ssl_ca[0]) {
-    if (verify_individual_certificate(ssl_ca, NULL, NULL, ssl_crl,
-                                      ssl_crl_path))
-      r_value = true;
-  }
-  if (ssl_capath && ssl_capath[0]) {
-    /* We have ssl-capath. So search all files in the dir */
-    MY_DIR *ca_dir;
-    uint file_count;
-    DYNAMIC_STRING file_path;
-    char dir_separator[FN_REFLEN];
-    size_t dir_path_length;
-
-    init_dynamic_string(&file_path, ssl_capath, FN_REFLEN);
-    dir_separator[0] = FN_LIBCHAR;
-    dir_separator[1] = 0;
-    dynstr_append(&file_path, dir_separator);
-    dir_path_length = file_path.length;
-
-    if (!(ca_dir = my_dir(ssl_capath, MY_WANT_STAT | MY_DONT_SORT | MY_WME))) {
-      LogErr(ERROR_LEVEL, ER_CANT_ACCESS_CAPATH);
-      return true;
-    }
-
-    for (file_count = 0; file_count < ca_dir->number_off_files; file_count++) {
-      if (!MY_S_ISDIR(ca_dir->dir_entry[file_count].mystat->st_mode)) {
-        file_path.length = dir_path_length;
-        dynstr_append(&file_path, ca_dir->dir_entry[file_count].name);
-        if ((r_value = verify_individual_certificate(file_path.str, NULL, NULL,
-                                                     ssl_crl, ssl_crl_path)))
-          r_value = true;
-      }
-    }
-    my_dirend(ca_dir);
-    dynstr_free(&file_path);
-
-    ca_dir = nullptr;
-    memset(&file_path, 0, sizeof(file_path));
-  }
-  return r_value;
+  if (sctx != nullptr) X509_STORE_CTX_free(sctx);
+  return result;
 }
 
 static char *my_asn1_time_to_string(ASN1_TIME *time, char *buf, int len) {
@@ -260,7 +103,6 @@ static std::string Ssl_acceptor_context_propert_type_names[] = {
     "Ssl_session_cache_size",
     "Ssl_session_cache_timeouts",
     "Ssl_used_session_cache_entries",
-    "Ssl_session_cache_timeout",
     ""};
 
 std::string Ssl_ctx_property_name(
@@ -279,49 +121,48 @@ Ssl_acceptor_context_property_type &operator++(
   return property_type;
 }
 
+static void push_deprecated_tls_option_no_replacement(THD *thd,
+                                                      const char *tls_version,
+                                                      const char *channel) {
+  if (thd != nullptr)
+    push_warning_printf(
+        thd, Sql_condition::SL_WARNING,
+        ER_WARN_DEPRECATED_TLS_VERSION_FOR_CHANNEL_CLI,
+        ER_THD(thd, ER_WARN_DEPRECATED_TLS_VERSION_FOR_CHANNEL_CLI),
+        tls_version, channel);
+  else
+    LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_TLS_VERSION_FOR_CHANNEL,
+           tls_version, channel);
+}
+
 Ssl_acceptor_context_data::Ssl_acceptor_context_data(
     std::string channel, bool use_ssl_arg, Ssl_init_callback *callbacks,
-    bool report_ssl_error /* = true */, enum enum_ssl_init_error *out_error)
+    bool report_ssl_error /* = true */,
+    enum enum_ssl_init_error *out_error /* = nullptr */)
     : channel_(channel), ssl_acceptor_fd_(nullptr), acceptor_(nullptr) {
   enum enum_ssl_init_error error_num = SSL_INITERR_NOERROR;
   {
-    callbacks->read_parameters(
-        &current_ca_, &current_capath_, &current_version_, &current_cert_,
-        &current_cipher_, &current_ciphersuites_, &current_key_, &current_crl_,
-        &current_crlpath_, &current_tls_session_cache_mode_,
-        &current_tls_session_cache_timeout_);
+    callbacks->read_parameters(&current_ca_, &current_capath_,
+                               &current_version_, &current_cert_,
+                               &current_cipher_, &current_ciphersuites_,
+                               &current_key_, &current_crl_, &current_crlpath_);
   }
 
   if (use_ssl_arg) {
-    /* Verify server certificate */
-    if (verify_individual_certificate(
-            current_cert_.c_str(), current_ca_.c_str(), current_capath_.c_str(),
-            current_crl_.c_str(), current_crlpath_.c_str())) {
-      LogErr(WARNING_LEVEL, ER_SERVER_CERT_VERIFY_FAILED,
-             current_cert_.c_str());
-      /* Verify possible issues in CA certificates*/
-      if (verify_ca_certificates(current_ca_.c_str(), current_capath_.c_str(),
-                                 current_crl_.c_str(),
-                                 current_crlpath_.c_str())) {
-        LogErr(WARNING_LEVEL, ER_WARN_CA_CERT_VERIFY_FAILED);
-      }
-      error_num = SSL_INITERR_INVALID_CERTIFICATES;
-      if (opt_tls_certificates_enforced_validation) {
-        if (out_error) *out_error = error_num;
-        assert(ssl_acceptor_fd_ == nullptr);
-        return;
-      }
-    }
-    long ssl_flags = process_tls_version(current_version_.c_str());
+    long tls_version = process_tls_version(current_version_.c_str());
 
-    /* Turn off server's ticket sending for TLS 1.2 if requested */
-    if (!current_tls_session_cache_mode_) ssl_flags |= SSL_OP_NO_TICKET;
+    if (!(tls_version & SSL_OP_NO_TLSv1))
+      push_deprecated_tls_option_no_replacement(current_thd, "TLSv1",
+                                                channel_.c_str());
+    if (!(tls_version & SSL_OP_NO_TLSv1_1))
+      push_deprecated_tls_option_no_replacement(current_thd, "TLSv1.1",
+                                                channel_.c_str());
 
     ssl_acceptor_fd_ = new_VioSSLAcceptorFd(
         current_key_.c_str(), current_cert_.c_str(), current_ca_.c_str(),
         current_capath_.c_str(), current_cipher_.c_str(),
         current_ciphersuites_.c_str(), &error_num, current_crl_.c_str(),
-        current_crlpath_.c_str(), ssl_flags);
+        current_crlpath_.c_str(), tls_version);
 
     if (!ssl_acceptor_fd_ && report_ssl_error) {
       LogErr(WARNING_LEVEL, ER_WARN_TLS_CHANNEL_INITIALIZATION_ERROR,
@@ -332,17 +173,11 @@ Ssl_acceptor_context_data::Ssl_acceptor_context_data(
     if (ssl_acceptor_fd_) acceptor_ = SSL_new(ssl_acceptor_fd_->ssl_context);
 
     if (ssl_acceptor_fd_ && acceptor_) {
-      SSL_CTX_set_session_cache_mode(ssl_acceptor_fd_->ssl_context,
-                                     current_tls_session_cache_mode_
-                                         ? SSL_SESS_CACHE_SERVER
-                                         : SSL_SESS_CACHE_OFF);
-      SSL_CTX_set_timeout(ssl_acceptor_fd_->ssl_context,
-                          current_tls_session_cache_timeout_);
-#ifdef HAVE_TLSv13
-      /* Turn off server's ticket sending for TLS 1.3 if requested */
-      if (!current_tls_session_cache_mode_ && !(ssl_flags & SSL_OP_NO_TLSv1_3))
-        SSL_CTX_set_num_tickets(ssl_acceptor_fd_->ssl_context, 0);
-#endif
+      const char *error =
+          verify_store_cert(ssl_acceptor_fd_->ssl_context, acceptor_);
+
+      if (error && report_ssl_error)
+        LogErr(WARNING_LEVEL, ER_SSL_SERVER_CERT_VERIFY_FAILED, error);
     }
   }
   if (out_error) *out_error = error_num;
@@ -522,10 +357,6 @@ std::string Ssl_acceptor_context_data::show_property(
     }
     case Ssl_acceptor_context_property_type::used_session_cache_entries: {
       output += std::to_string(c == nullptr ? 0 : SSL_CTX_sess_number(c));
-      break;
-    }
-    case Ssl_acceptor_context_property_type::session_cache_timeout: {
-      output += std::to_string(c == nullptr ? 0 : SSL_CTX_get_timeout(c));
       break;
     }
     case Ssl_acceptor_context_property_type::last:

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,10 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/item.h"
 #include "sql/sp_rcontext.h"  // sp_rcontext
@@ -95,7 +95,7 @@ bool Sql_cmd_get_diagnostics::execute(THD *thd) {
   }
 
   /* Statement failed, retrieve the error information for propagation. */
-  const uint sql_errno = new_stmt_da.mysql_errno();
+  uint sql_errno = new_stmt_da.mysql_errno();
   const char *message = new_stmt_da.message_text();
   const char *sqlstate = new_stmt_da.returned_sqlstate();
 
@@ -190,7 +190,7 @@ Item *Statement_information_item::get_value(THD *thd,
       the number of errors and warnings within the Diagnostics Area.
     */
     case NUMBER: {
-      const ulong count = da->cond_count();
+      ulong count = da->cond_count();
       value = new (thd->mem_root) Item_uint(count);
       break;
     }
@@ -272,8 +272,8 @@ bool Condition_information::aggregate(THD *thd, const Diagnostics_area *da) {
 
 Item *Condition_information_item::make_utf8_string_item(THD *thd,
                                                         const String *str) {
-  /* Default is utf8mb3 character set and utf8mb3_general_ci collation. */
-  const CHARSET_INFO *to_cs = &my_charset_utf8mb3_general_ci;
+  /* Default is utf8 character set and utf8_general_ci collation. */
+  const CHARSET_INFO *to_cs = &my_charset_utf8_general_ci;
   /* If a charset was not set, assume that no conversion is needed. */
   const CHARSET_INFO *from_cs = str->charset() ? str->charset() : to_cs;
   Item_string *item = new Item_string(str->ptr(), str->length(), from_cs);

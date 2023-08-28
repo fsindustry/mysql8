@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,7 @@
 #include <optional>
 
 #include "field_types.h"
+#include "m_ctype.h"
 #include "my_byteorder.h"
 #include "my_compare.h"
 #include "my_compiler.h"
@@ -39,7 +40,6 @@
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "my_time.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
@@ -293,7 +293,7 @@ static void do_copy_blob(Copy_field *, const Field *from_field,
                          Field *to_field) {
   const Field_blob *from_blob = down_cast<const Field_blob *>(from_field);
   Field_blob *to_blob = down_cast<Field_blob *>(to_field);
-  const uint32 from_length = from_blob->get_length();
+  uint32 from_length = from_blob->get_length();
   to_blob->set_ptr(std::min(from_length, to_field->max_data_length()),
                    from_blob->get_blob_data());
   if (to_blob->get_length() < from_length) {
@@ -336,15 +336,15 @@ static void do_field_varbinary_pre50(Copy_field *copy, const Field *from_field,
   from_field->val_str(&copy->tmp);
 
   /* Use the same function as in 4.1 to trim trailing spaces */
-  const size_t length = my_charset_latin1.cset->lengthsp(
-      &my_charset_latin1, copy->tmp.c_ptr_quick(), from_field->field_length);
+  size_t length = my_lengthsp_8bit(&my_charset_bin, copy->tmp.c_ptr_quick(),
+                                   from_field->field_length);
 
   to_field->store(copy->tmp.c_ptr_quick(), length, copy->tmp.charset());
 }
 
 static void do_field_int(Copy_field *, const Field *from_field,
                          Field *to_field) {
-  const longlong value = from_field->val_int();
+  longlong value = from_field->val_int();
   to_field->store(value, from_field->is_flag_set(UNSIGNED_FLAG));
 }
 
@@ -561,7 +561,7 @@ Copy_field::Copy_func *Copy_field::get_copy_func() {
   THD *thd = current_thd;
   if (m_to_field->is_array() && m_from_field->is_array()) return do_copy_blob;
 
-  const bool compatible_db_low_byte_first =
+  bool compatible_db_low_byte_first =
       (m_to_field->table->s->db_low_byte_first ==
        m_from_field->table->s->db_low_byte_first);
   if (m_to_field->type() == MYSQL_TYPE_GEOMETRY) {
@@ -574,8 +574,8 @@ Copy_field::Copy_func *Copy_field::get_copy_func() {
     const Field_geom *from_geom = down_cast<const Field_geom *>(m_from_field);
 
     // If changing the SRID property of the field, we must do a full conversion.
-    if (to_geom->get_srid().has_value() &&
-        to_geom->get_srid() != from_geom->get_srid())
+    if (to_geom->get_srid() != from_geom->get_srid() &&
+        to_geom->get_srid().has_value())
       return do_conv_blob;
 
     // to is same as or a wider type than from
@@ -730,7 +730,7 @@ bool fields_are_memcpyable(const Field *to, const Field *from) {
   if (to->pack_length() != from->pack_length()) {
     return false;
   }
-  if (to->is_flag_set(UNSIGNED_FLAG) != from->is_flag_set(UNSIGNED_FLAG)) {
+  if (to->is_flag_set(UNSIGNED_FLAG) && !from->is_flag_set(UNSIGNED_FLAG)) {
     return false;
   }
   if (to->table->s->db_low_byte_first != from->table->s->db_low_byte_first) {
@@ -861,7 +861,7 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
       the `to` field, so in case conversion errors are ignored we can read zeros
       instead of garbage.
     */
-    const type_conversion_status store_res = to->store_time(&ltime);
+    type_conversion_status store_res = to->store_time(&ltime);
     return res ? TYPE_ERR_BAD_VALUE : store_res;
   } else if ((from->result_type() == STRING_RESULT &&
               (to->result_type() == STRING_RESULT ||

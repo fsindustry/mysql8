@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,10 +34,11 @@
 #include <cstdio>
 #include <cstdlib>  // abs
 
+#include "m_ctype.h"
+
 #include "my_psi_config.h"
 #include "my_sys.h"
-#include "mysql/components/services/bits/psi_thread_bits.h"
-#include "mysql/strings/m_ctype.h"
+#include "mysql/components/services/psi_thread_bits.h"
 #include "mysqld_error.h"
 #include "pfs_thread_provider.h"
 #include "sql/field.h"
@@ -50,10 +51,9 @@ extern bool pfs_enabled;
 
 /** ps_current_thread_id() */
 
-bool Item_func_pfs_current_thread_id::do_itemize(Parse_context *pc,
-                                                 Item **res) {
+bool Item_func_pfs_current_thread_id::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::do_itemize(pc, res)) return true;
+  if (super::itemize(pc, res)) return true;
   pc->thd->lex->safe_to_cache_query = false; /* result can vary */
   return false;
 }
@@ -92,9 +92,9 @@ longlong Item_func_pfs_current_thread_id::val_int() {
 
 /** ps_thread_id() */
 
-bool Item_func_pfs_thread_id::do_itemize(Parse_context *pc, Item **res) {
+bool Item_func_pfs_thread_id::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::do_itemize(pc, res)) return true;
+  if (super::itemize(pc, res)) return true;
   pc->thd->lex->safe_to_cache_query = false; /* result can vary */
   return false;
 }
@@ -117,7 +117,7 @@ longlong Item_func_pfs_thread_id::val_int() {
   }
 
   /* Evaluate the function argument. */
-  const longlong processlist_id = args[0]->val_int();
+  longlong processlist_id = args[0]->val_int();
 
   /* Verify argument type. */
   if (!is_integer_type(args[0]->data_type())) {
@@ -154,13 +154,13 @@ longlong Item_func_pfs_thread_id::val_int() {
 
 bool Item_func_pfs_format_bytes::resolve_type(THD *) {
   /* Format is 'AAAA.BB UUU' = 11 characters or 'AAAA bytes' = 10 characters. */
-  set_data_type_string(11U, &my_charset_utf8mb3_general_ci);
+  set_data_type_string(11U, &my_charset_utf8_general_ci);
   return false;
 }
 
 String *Item_func_pfs_format_bytes::val_str(String *) {
   /* Evaluate argument value. */
-  const double bytes = args[0]->val_real();
+  double bytes = args[0]->val_real();
 
   /* If input is null, return null. */
   null_value = args[0]->null_value;
@@ -208,7 +208,7 @@ String *Item_func_pfs_format_bytes::val_str(String *) {
   if (divisor == 1) {
     len = sprintf(m_value_buffer, "%4d %s", (int)bytes, unit);
   } else {
-    const double value = bytes / divisor;
+    double value = bytes / divisor;
     if (std::abs(value) >= 100000.0) {
       len = sprintf(m_value_buffer, "%4.2e %s", value, unit);
     } else {
@@ -216,7 +216,7 @@ String *Item_func_pfs_format_bytes::val_str(String *) {
     }
   }
 
-  m_value.set(m_value_buffer, len, &my_charset_utf8mb3_general_ci);
+  m_value.set(m_value_buffer, len, &my_charset_utf8_general_ci);
   return &m_value;
 }
 
@@ -225,13 +225,13 @@ String *Item_func_pfs_format_bytes::val_str(String *) {
 bool Item_func_pfs_format_pico_time::resolve_type(THD *) {
   set_nullable(true);
   /* Format is 'AAAA.BB UUU' = 11 characters or 'AAA ps' = 6 characters. */
-  set_data_type_string(11U, &my_charset_utf8mb3_general_ci);
+  set_data_type_string(11U, &my_charset_utf8_general_ci);
   return false;
 }
 
 String *Item_func_pfs_format_pico_time::val_str(String *) {
   /* Evaluate the argument */
-  const double time_val = args[0]->val_real();
+  double time_val = args[0]->val_real();
 
   /* If argument is null, return null. */
   null_value = args[0]->null_value;
@@ -284,7 +284,7 @@ String *Item_func_pfs_format_pico_time::val_str(String *) {
   if (divisor == 1) {
     len = sprintf(m_value_buffer, "%3d %s", (int)time_val, unit);
   } else {
-    const double value = time_val / divisor;
+    double value = time_val / divisor;
     if (std::abs(value) >= 100000.0) {
       len = sprintf(m_value_buffer, "%4.2e %s", value, unit);
     } else {
@@ -292,6 +292,6 @@ String *Item_func_pfs_format_pico_time::val_str(String *) {
     }
   }
 
-  m_value.set(m_value_buffer, len, &my_charset_utf8mb3_general_ci);
+  m_value.set(m_value_buffer, len, &my_charset_utf8_general_ci);
   return &m_value;
 }

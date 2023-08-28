@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -48,19 +48,19 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "my_psi_config.h"
 #include "my_thread_local.h"
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
-#include "mysql/components/services/bits/mysql_rwlock_bits.h"
-#include "mysql/components/services/bits/psi_file_bits.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
+#include "mysql/components/services/mysql_rwlock_bits.h"
+#include "mysql/components/services/psi_file_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql_com.h"
 #include "sql/auth/sql_security_ctx.h"  // Security_context
 
 class THD;
 struct CHARSET_INFO;
-class Table_ref;
+struct TABLE_LIST;
 
 ////////////////////////////////////////////////////////////
 //
@@ -174,6 +174,8 @@ class Log_event_handler {
                                is a query or an administrator command
      @param sql_text           The query or administrator in textual form
      @param sql_text_len       The length of sql_text string
+     @param query_start_status Pointer to a snapshot of thd->status_var taken
+                               at the start of execution
 
      @return true if error, false otherwise.
   */
@@ -181,7 +183,8 @@ class Log_event_handler {
                         ulonglong query_start_arg, const char *user_host,
                         size_t user_host_len, ulonglong query_utime,
                         ulonglong lock_utime, bool is_command,
-                        const char *sql_text, size_t sql_text_len) = 0;
+                        const char *sql_text, size_t sql_text_len,
+                        struct System_status_var *query_start_status) = 0;
 
   /**
      Log command to the general log.
@@ -226,7 +229,8 @@ class Log_to_csv_event_handler : public Log_event_handler {
   bool log_slow(THD *thd, ulonglong current_utime, ulonglong query_start_arg,
                 const char *user_host, size_t user_host_len,
                 ulonglong query_utime, ulonglong lock_utime, bool is_command,
-                const char *sql_text, size_t sql_text_len) override;
+                const char *sql_text, size_t sql_text_len,
+                struct System_status_var *query_start_status) override;
 
   /** @see Log_event_handler::log_general(). */
   bool log_general(THD *thd, ulonglong event_utime, const char *user_host,
@@ -328,16 +332,13 @@ class Query_logger {
      @param thd                 THD of the statement being logged.
      @param query               The query string being logged.
      @param query_length        The length of the query string.
-     @param aggregate           True if writing log throttle record
-     @param lock_usec           Lock time, in microseconds.
-                                Only used when aggregate is true.
-     @param exec_usec           Execution time, in microseconds.
-                                Only used when aggregate is true.
+     @param query_start_status  Pointer to a snapshot of thd->status_var taken
+                                at the start of execution
 
      @return true if error, false otherwise.
   */
   bool slow_log_write(THD *thd, const char *query, size_t query_length,
-                      bool aggregate, ulonglong lock_usec, ulonglong exec_usec);
+                      struct System_status_var *query_start_status);
 
   /**
      Write printf style message to general query log.
@@ -411,16 +412,16 @@ class Query_logger {
   bool set_log_file(enum_log_table_type log_type);
 
   /**
-     Check if given Table_ref has a query log table name and
+     Check if given TABLE_LIST has a query log table name and
      optionally check if the query log is currently enabled.
 
-     @param table_list       Table_ref representing the table to check
+     @param table_list       TABLE_LIST representing the table to check
      @param check_if_opened  Always return QUERY_LOG_NONE unless the
                              query log table is enabled.
 
      @retval QUERY_LOG_NONE, QUERY_LOG_SLOW or QUERY_LOG_GENERAL
   */
-  enum_log_table_type check_if_log_table(Table_ref *table_list,
+  enum_log_table_type check_if_log_table(TABLE_LIST *table_list,
                                          bool check_if_opened) const;
 };
 
@@ -467,8 +468,10 @@ bool log_slow_applicable(THD *thd);
   exists) to the slow query log.
 
   @param thd                 thread handle
+  @param query_start_status  Pointer to a snapshot of thd->status_var taken
+                             at the start of execution
 */
-void log_slow_do(THD *thd);
+void log_slow_do(THD *thd, struct System_status_var *query_start_status);
 
 /**
   Check whether we need to write the current statement to the slow query
@@ -481,8 +484,10 @@ void log_slow_do(THD *thd);
   statement.
 
   @param thd                 thread handle
+  @param query_start_status  Pointer to a snapshot of thd->status_var taken
+                             at the start of execution
 */
-void log_slow_statement(THD *thd);
+void log_slow_statement(THD *thd, struct System_status_var *query_start_status);
 
 /**
   @class Log_throttle
@@ -526,7 +531,7 @@ class Log_throttle {
 
     @param rate  Limit on records to be logged during the throttling window.
 
-    @retval true -  log rate limit is exceeded, so record should be suppressed.
+    @retval true -  log rate limit is exceeded, so record should be supressed.
     @retval false - log rate limit is not exceeded, record should be logged.
   */
   bool inc_log_count(ulong rate) { return (++count > rate); }
@@ -568,10 +573,6 @@ class Log_throttle {
   static const ulong LOG_THROTTLE_WINDOW_SIZE = 60000000;
 };
 
-typedef bool (*log_summary_t)(THD *thd, const char *query, size_t query_length,
-                              bool aggregate, ulonglong lock_usec,
-                              ulonglong exec_usec);
-
 /**
   @class Slow_log_throttle
   @brief Used for rate-limiting the slow query log.
@@ -606,9 +607,10 @@ class Slow_log_throttle : public Log_throttle {
   ulong *rate;
 
   /**
-    The routine we call to actually log a line (our summary).
+    The routine we call to actually log a line (i.e. our summary).
+    The signature miraculously coincides with slow_log_print().
   */
-  log_summary_t log_summary;
+  bool (*log_summary)(THD *, const char *, size_t, struct System_status_var *);
 
   /**
     Slow_log_throttle is shared between THDs.
@@ -635,7 +637,9 @@ class Slow_log_throttle : public Log_throttle {
     @param msg           use this template containing %lu as only non-literal
   */
   Slow_log_throttle(ulong *threshold, mysql_mutex_t *lock, ulong window_usecs,
-                    log_summary_t logger, const char *msg);
+                    bool (*logger)(THD *, const char *, size_t,
+                                   struct System_status_var *),
+                    const char *msg);
 
   /**
     Prepare and print a summary of suppressed lines to log.
@@ -647,8 +651,8 @@ class Slow_log_throttle : public Log_throttle {
     locking/unlocking.
 
     @param thd                 The THD that tries to log the statement.
-    @retval false              Logging was not suppressed, no summary needed.
-    @retval true               Logging was suppressed; a summary was printed.
+    @retval false              Logging was not supressed, no summary needed.
+    @retval true               Logging was supressed; a summary was printed.
   */
   bool flush(THD *thd);
 
@@ -656,8 +660,8 @@ class Slow_log_throttle : public Log_throttle {
     Top-level function.
     @param thd                 The THD that tries to log the statement.
     @param eligible            Is the statement of the type we might suppress?
-    @retval true               Logging should be suppressed.
-    @retval false              Logging should not be suppressed.
+    @retval true               Logging should be supressed.
+    @retval false              Logging should not be supressed.
   */
   bool log(THD *thd, bool eligible);
 };
@@ -1112,6 +1116,9 @@ log_line *log_line_init();
 
 /**
   Release a log_line allocated with log_line_init.
+
+  @retval nullptr  could not set up buffer (too small?)
+  @retval other    address of the newly initialized log_line
 */
 void log_line_exit(log_line *ll);
 
@@ -1581,7 +1588,8 @@ int log_builtins_error_stack_flush();
   @retval -2  couldn't initialize built-in default filter
   @retval -3  couldn't set up service hash
   @retval -4  couldn't initialize syseventlog lock
-  @retval -5  couldn't initialize buffered logging lock
+  @retval -5  couldn't set service pipeline
+  @retval -6  couldn't initialize buffered logging lock
 */
 int log_builtins_init();
 

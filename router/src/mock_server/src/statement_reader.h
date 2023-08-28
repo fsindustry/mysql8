@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,15 +25,14 @@
 #ifndef MYSQLD_MOCK_STATEMENT_READER_INCLUDED
 #define MYSQLD_MOCK_STATEMENT_READER_INCLUDED
 
+#include <openssl/bio.h>
 #include <chrono>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <openssl/bio.h>
-
+#include "my_compiler.h"
 #include "mysql/harness/net_ts/buffer.h"
 #include "mysql/harness/net_ts/executor.h"
 #include "mysql/harness/net_ts/io_context.h"
@@ -54,7 +53,7 @@ namespace server_mock {
 /** @brief Vector for keeping has_value|string representation of the values
  *         of the single row (ordered by column)
  **/
-using RowValueType = std::vector<std::optional<std::string>>;
+using RowValueType = std::vector<stdx::expected<std::string, void>>;
 
 /** @brief Keeps result data for single SQL statement that returns
  *         resultset.
@@ -147,18 +146,16 @@ class ProtocolBase {
               async_send(std::move(compl_handler));
             });
       } else {
-        net::defer(client_socket_.get_executor(),
-                   [compl_handler = std::move(init.completion_handler),
+        net::defer([compl_handler = std::move(init.completion_handler),
                     ec = write_res.error()]() { compl_handler(ec, {}); });
       }
     } else {
       net::dynamic_buffer(send_buffer_).consume(write_res.value());
 
-      net::defer(client_socket_.get_executor(),
-                 [compl_handler = std::move(init.completion_handler),
+      net::defer([compl_handler = std::move(init.completion_handler),
                   transferred = write_res.value()]() {
-                   compl_handler({}, transferred);
-                 });
+        compl_handler({}, transferred);
+      });
     }
 
     return init.result.get();
@@ -347,26 +344,14 @@ class ProtocolBase {
 class StatementReaderBase {
  public:
   struct handshake_data {
-    classic_protocol::message::server::Greeting greeting;
+    stdx::expected<ErrorResponse, void> error;
 
-    std::optional<std::string> username;
-    std::optional<std::string> password;
+    stdx::expected<std::string, void> username;
+    stdx::expected<std::string, void> password;
     bool cert_required{false};
-    std::optional<std::string> cert_subject;
-    std::optional<std::string> cert_issuer;
-
-    std::chrono::microseconds exec_time;
+    stdx::expected<std::string, void> cert_subject;
+    stdx::expected<std::string, void> cert_issuer;
   };
-
-  StatementReaderBase() = default;
-
-  StatementReaderBase(const StatementReaderBase &) = default;
-  StatementReaderBase(StatementReaderBase &&) = default;
-
-  StatementReaderBase &operator=(const StatementReaderBase &) = default;
-  StatementReaderBase &operator=(StatementReaderBase &&) = default;
-
-  virtual ~StatementReaderBase() = default;
 
   /** @brief Returns the data about the next statement from the
    *         json file. If there is no more statements it returns
@@ -383,10 +368,20 @@ class StatementReaderBase {
 
   virtual std::vector<AsyncNotice> get_async_notices() = 0;
 
-  virtual stdx::expected<handshake_data, ErrorResponse> handshake(
-      bool is_greeting) = 0;
+  virtual stdx::expected<classic_protocol::message::server::Greeting,
+                         std::error_code>
+  server_greeting(bool with_tls) = 0;
+
+  virtual stdx::expected<handshake_data, ErrorResponse> handshake() = 0;
+
+  virtual std::chrono::microseconds server_greeting_exec_time() = 0;
 
   virtual void set_session_ssl_info(const SSL *ssl) = 0;
+
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE("-Wdeprecated")
+  virtual ~StatementReaderBase() = default;
+  MY_COMPILER_DIAGNOSTIC_POP()
 };
 
 }  // namespace server_mock

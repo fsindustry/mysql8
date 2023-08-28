@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,16 +22,17 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+
+
+
 /*****************************************************************************
 Name:          Ndb.cpp
 ******************************************************************************/
 
-#include "util/require.h"
 #include <ndb_global.h>
 
 #include "API.hpp"
 #include <md5_hash.hpp>
-#include "my_config.h"
 #include <NdbSleep.h>
 #include <NdbOut.hpp>
 #include <ndb_limits.h>
@@ -165,15 +166,15 @@ Ndb::NDB_connect(Uint32 tNode, Uint32 instance)
   }
 
   NdbTransaction * tConArray = theConnectionArray[tNode];
-  if (instance != 0 && tConArray != nullptr)
+  if (instance != 0 && tConArray != 0)
   {
-    NdbTransaction* prev = nullptr;
+    NdbTransaction* prev = 0;
     NdbTransaction* curr = tConArray;
     while (curr)
     {
       if (refToInstance(curr->m_tcRef) == instance)
       {
-        if (prev != nullptr)
+        if (prev != 0)
         {
           prev->theNext = curr->theNext;
           if (!curr->theNext)
@@ -191,17 +192,17 @@ Ndb::NDB_connect(Uint32 tNode, Uint32 instance)
       curr = curr->theNext;
     }
   }
-  else if (tConArray != nullptr)
+  else if (tConArray != NULL)
   {
     DBUG_RETURN(2);
   }
 
   NdbTransaction * tNdbCon = getNdbCon();	// Get free connection object.
-  if (tNdbCon == nullptr) {
+  if (tNdbCon == NULL) {
     DBUG_RETURN(4);
   }//if
   NdbApiSignal*	tSignal = getSignal();		// Get signal object
-  if (tSignal == nullptr) {
+  if (tSignal == NULL) {
     releaseNdbCon(tNdbCon);
     DBUG_RETURN(4);
   }//if
@@ -266,12 +267,12 @@ Ndb::getConnectedNdbTransaction(Uint32 nodeId, Uint32 instance){
   NdbTransaction* next = theConnectionArray[nodeId];
   if (instance != 0)
   {
-    NdbTransaction * prev = nullptr;
+    NdbTransaction * prev = 0;
     while (next)
     {
       if (refToInstance(next->m_tcRef) == instance)
       {
-        if (prev != nullptr)
+        if (prev != 0)
         {
           assert(false); // Should have been moved in NDB_connect
           prev->theNext = next->theNext;
@@ -289,12 +290,12 @@ Ndb::getConnectedNdbTransaction(Uint32 nodeId, Uint32 instance){
       next = next->theNext;
     }
     assert(false); // !!
-    return nullptr;
+    return 0;
   }
 found_first:
   removeConnectionArray(next, nodeId);
 found_middle:
-  next->theNext = nullptr;
+  next->theNext = NULL;
 
   return next;
 }//Ndb::getConnectedNdbTransaction()
@@ -320,7 +321,7 @@ Ndb::doDisconnect()
    * theTransactionList.
    */
   tNdbCon = theTransactionList;
-  while (tNdbCon != nullptr) {
+  while (tNdbCon != NULL) {
     tNdbCon->releaseOperations();
     tNdbCon->releaseLockHandles();
     tNdbCon = tNdbCon->theNext;
@@ -331,7 +332,7 @@ Ndb::doDisconnect()
    * the now cleaned up, theTransactionList.
    */
   tNdbCon = theTransactionList;
-  while (tNdbCon != nullptr) {
+  while (tNdbCon != NULL) {
     NdbTransaction* tmpNdbCon = tNdbCon;
     tNdbCon = tNdbCon->theNext;
     releaseConnectToNdb(tmpNdbCon);
@@ -348,7 +349,7 @@ Ndb::doDisconnect()
   for (i = 0; i < tNoOfDbNodes; i++) {
     Uint32 tNode = theDBnodes[i];
     tNdbCon = theConnectionArray[tNode];
-    while (tNdbCon != nullptr) {
+    while (tNdbCon != NULL) {
       NdbTransaction* tmpNdbCon = tNdbCon;
       tNdbCon = tNdbCon->theNext;
       releaseConnectToNdb(tmpNdbCon);
@@ -413,7 +414,7 @@ NdbTransaction* computeHash()
 
 Return Value:   Returns 0 for success, NDBAPI error code otherwise
 Remark:         Computes the distribution hash value for a row with the
-                supplied distribution key values.
+                supplied distribtion key values.
                 Only relevant for natively partitioned tables.
 *****************************************************************************/ 
 int
@@ -428,7 +429,7 @@ Ndb::computeHash(Uint32 *retval,
   const NdbColumnImpl* const * cols = impl->m_columns.getBase();
   Uint32 len;
   unsigned char *pos, *bufEnd;
-  void* malloced_buf = nullptr;
+  void* malloced_buf = NULL;
 
   Uint32 colcnt = impl->m_columns.size();
   Uint32 parts = impl->m_noOfDistributionKeys;
@@ -448,11 +449,11 @@ Ndb::computeHash(Uint32 *retval,
 
   for (Uint32 i = 0; i<parts; i++)
   {
-    if (unlikely(keyData[i].ptr == nullptr))
+    if (unlikely(keyData[i].ptr == 0))
       goto enullptr;
   }
 
-  if (unlikely(keyData[parts].ptr != nullptr))
+  if (unlikely(keyData[parts].ptr != 0))
     goto emissingnullptr;
 
   const NdbColumnImpl* partcols[NDB_MAX_NO_OF_ATTRIBUTES_IN_KEY];
@@ -484,29 +485,35 @@ Ndb::computeHash(Uint32 *retval,
     if (unlikely(lb == 0 && keyData[i].len != maxlen))
       goto emalformedkey;
     
-    if (partcols[i]->m_cs != nullptr)
+    if (partcols[i]->m_cs != NULL)
       len = NdbSqlUtil::strnxfrm_hash_len(partcols[i]->m_cs, (maxlen - lb));
 
     len = (lb + len + 3) & ~(Uint32)3;
     sumlen += len;
   }
 
-  while (true)
+  if (!buf)
   {
-    if (buf == nullptr)
-    {
-      bufLen = sumlen;
-      buf = malloc(bufLen);
-      if (unlikely(buf == nullptr))
-        return 4000;
-      malloced_buf = buf; /* Remember to free */
-    }
-    assert(bufLen != 0);
+    bufLen = sumlen;
+    bufLen += sizeof(Uint64); /* add space for potential alignment */
+    buf = malloc(bufLen);
+    if (unlikely(buf == 0))
+      return 4000;
+    malloced_buf = buf; /* Remember to free */
+    assert(bufLen > sumlen);
+  }
 
-    if (likely(sumlen <= bufLen))
-      break;
-    require(malloced_buf == nullptr);
-    buf = nullptr;
+  {
+    /* Get 64-bit aligned ptr required for hashing */
+    assert(bufLen != 0);
+    UintPtr org = UintPtr(buf);
+    UintPtr use = (org + 7) & ~(UintPtr)7;
+
+    buf = (void*)use;
+    bufLen -= Uint32(use - org);
+
+    if (unlikely(sumlen > bufLen))
+      goto ebuftosmall;
   }
 
   pos= (unsigned char*) buf;
@@ -521,13 +528,9 @@ Ndb::computeHash(Uint32 *retval,
     if ((cs = partcols[i]->m_cs))
     {
       const Uint32 maxlen = (partcols[i]->m_attrSize * partcols[i]->m_arraySize) - lb;
-      int n = NdbSqlUtil::strnxfrm_hash(cs,
-                                        partcols[i]->m_type,
-                                        pos,
-                                        bufEnd - pos,
-                                        ((const uchar*)keyData[i].ptr) + lb,
-                                        len,
-                                        maxlen);
+      int n = NdbSqlUtil::strnxfrm_hash(cs, partcols[i]->m_type,
+                                   pos, bufEnd-pos, 
+                                   ((uchar*)keyData[i].ptr)+lb, len, maxlen);
 
       if (unlikely(n == -1))
 	goto emalformedstring;
@@ -551,10 +554,9 @@ Ndb::computeHash(Uint32 *retval,
   }
   len = Uint32(UintPtr(pos) - UintPtr(buf));
   assert((len & 3) == 0);
-  require(len <= bufLen);
 
   Uint32 values[4];
-  md5_hash(values, (const char*)buf, len);
+  md5_hash(values, (const Uint64*)buf, len >> 2);
   
   if (retval)
   {
@@ -578,6 +580,9 @@ emissingnullptr:
 elentosmall:
   return 4277;
 
+ebuftosmall:
+  return 4278;
+
 emalformedstring:
   if (malloced_buf)
     free(malloced_buf);
@@ -588,8 +593,6 @@ emalformedkey:
   return 4280;
 }
 
-static inline Uint32 pad4(Uint32 len) { return (len + 3)/4*4; }
-
 int
 Ndb::computeHash(Uint32 *retval,
                  const NdbRecord *keyRec,
@@ -598,7 +601,7 @@ Ndb::computeHash(Uint32 *retval,
 {
   Uint32 len;
   unsigned char *pos, *bufEnd;
-  void* malloced_buf = nullptr;
+  void* malloced_buf = NULL;
 
   Uint32 parts = keyRec->distkey_index_length;
 
@@ -617,12 +620,22 @@ Ndb::computeHash(Uint32 *retval,
      * the Distr key.
      */
     bufLen = keyRec->m_keyLenInWords << 2;
+    bufLen += sizeof(Uint64); /* add space for potential alignment */
     buf = malloc(bufLen);
-    if (unlikely(buf == nullptr))
+    if (unlikely(buf == 0))
       return 4000;
     malloced_buf = buf; /* Remember to free */
   }
-  assert(bufLen != 0);
+
+  {
+    /* Get 64-bit aligned address as required for hashing */
+    assert(bufLen != 0);
+    UintPtr org = UintPtr(buf);
+    UintPtr use = (org + 7) & ~(UintPtr)7;
+
+    buf = (void*)use;
+    bufLen -= Uint32(use - org);
+  }
 
   pos= (unsigned char*) buf;
   bufEnd = pos + bufLen;
@@ -634,7 +647,7 @@ Ndb::computeHash(Uint32 *retval,
 
     Uint32 len;
     Uint32 maxlen = keyAttr.maxSize;
-    const unsigned char* src = (const unsigned char*)keyData + keyAttr.offset;
+    unsigned char *src= (unsigned char*)keyData + keyAttr.offset;
 
     if (keyAttr.flags & NdbRecord::IsVar1ByteLen)
     {
@@ -676,21 +689,13 @@ Ndb::computeHash(Uint32 *retval,
                                          pos, bufEnd-pos,
                                          src, len, maxlen);
       if (unlikely(n == -1))
-      {
-        if (NdbSqlUtil::strnxfrm_hash_len(cs, maxlen) > bufEnd - pos)
-          goto ebuftosmall;
         goto emalformedstring;
-      }
       len = n;
-      if (unlikely(pad4(len) > bufEnd - pos))
-        goto ebuftosmall;
     }
     else
     {
       if (keyAttr.flags & NdbRecord::IsVar1ByteLen)
       {
-        if (unlikely(pad4(len + 1) > bufEnd - pos))
-          goto ebuftosmall;
         *pos= (unsigned char)len;
         memcpy(pos+1, src, len);
         len += 1;
@@ -698,16 +703,10 @@ Ndb::computeHash(Uint32 *retval,
       else if (keyAttr.flags & NdbRecord::IsVar2ByteLen)
       {
         len += 2;
-        if (unlikely(pad4(len) > bufEnd - pos))
-          goto ebuftosmall;
         memcpy(pos, src-2, len);
       }
       else
-      {
-        if (unlikely(pad4(len) > bufEnd - pos))
-          goto ebuftosmall;
         memcpy(pos, src, len);
-      }
     }
     while (len & 3)
     {
@@ -717,10 +716,9 @@ Ndb::computeHash(Uint32 *retval,
   }
   len = Uint32(UintPtr(pos) - UintPtr(buf));
   assert((len & 3) == 0);
-  require(len <= bufLen);
 
   Uint32 values[4];
-  md5_hash(values, (const char*)buf, len);
+  md5_hash(values, (const Uint64*)buf, len >> 2);
   
   if (retval)
   {
@@ -735,9 +733,7 @@ Ndb::computeHash(Uint32 *retval,
 euserdeftable:
   return 4544;
 
-ebuftosmall:
-  return 4278;
-
+  
 emalformedstring:
   if (malloced_buf)
     free(malloced_buf);
@@ -756,7 +752,7 @@ Ndb::startTransaction(const NdbRecord *keyRec, const char *keyData,
     return startTransaction(keyRec->table, keyRec->table->getPartitionId(hash));
   }
   theError.code = ret;
-  return nullptr;
+  return 0;
 }
 
 NdbTransaction* 
@@ -772,7 +768,7 @@ Ndb::startTransaction(const NdbDictionary::Table *table,
   }
 
   theError.code = ret;
-  return nullptr;
+  return 0;
 }
 
 Uint32
@@ -780,7 +776,7 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
                      const Uint16 *nodes,
                      Uint32 cnt)
 {
-  if (table_impl == nullptr)
+  if (table_impl == NULL)
   {
     return m_ndb_cluster_connection.select_any(this);
   }
@@ -800,7 +796,7 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
      * The reason is that the transaction could be large and involve
      * many more operations not necessarily using the same partition
      * key. The jump to the primary is to a different location domain,
-     * so we keeping the TC local to this domain always seems preferable
+     * so we keeping the TC local to this domain always seems preferrable
      * to picking the perfect path for this operation.
      */
     if (m_optimized_node_selection)
@@ -914,17 +910,35 @@ Ndb::startTransaction(const NdbDictionary::Table *table,
     Uint32 nodeId = 0;
     
     /**
-     * Make this unlikely...assume new interface(s) are preferred
+     * Make this unlikely...assume new interface(s) are prefered
      */
-    if(unlikely(table != nullptr && keyData != nullptr))
+    if(unlikely(table != 0 && keyData != 0))
     {
       NdbTableImpl* impl = &NdbTableImpl::getImpl(*table);
       Uint32 hashValue;
       {
-        Uint32 values[4];
-        md5_hash(values, keyData, keyLen);
-        hashValue= values[1];
+	Uint32 buf[4];
+        const Uint32 MaxKeySizeInLongWords= (NDB_MAX_KEY_SIZE + 7) / 8;
+        Uint64 tmp[ MaxKeySizeInLongWords ];
+
+        if (keyLen >= sizeof(tmp))
+        {
+          theError.code = 4207;
+          DBUG_RETURN(NULL);
+        }
+	if((UintPtr(keyData) & 7) == 0 && (keyLen & 3) == 0)
+	{
+	  md5_hash(buf, (const Uint64*)keyData, keyLen >> 2);
+	}
+	else
+	{
+          tmp[keyLen/8] = 0;    // Zero out any 64-bit padding
+	  memcpy(tmp, keyData, keyLen);
+	  md5_hash(buf, tmp, (keyLen+3) >> 2);	  
+	}
+	hashValue= buf[1];
       }
+      
       const Uint16 *nodes;
       Uint32 cnt= impl->get_nodes(table->getPartitionId(hashValue),  &nodes);
       nodeId = theImpl->select_node(impl, nodes, cnt);
@@ -932,12 +946,12 @@ Ndb::startTransaction(const NdbDictionary::Table *table,
     else
     {
       /* No hint available, calling select_node with zero count */
-      NdbTableImpl* impl = nullptr;
-      if (table != nullptr)
+      NdbTableImpl* impl = NULL;
+      if (table != NULL)
       {
         impl = &NdbTableImpl::getImpl(*table);
       }
-      nodeId = theImpl->select_node(impl, nullptr, 0);
+      nodeId = theImpl->select_node(impl, NULL, 0);
     }
 
     /* TODO : Should call method above rather than duplicate call to
@@ -973,7 +987,7 @@ Ndb::hupp(NdbTransaction* pBuddyTrans)
   DBUG_PRINT("enter", ("trans: %p", pBuddyTrans));
 
   Uint32 aPriority = 0;
-  if (pBuddyTrans == nullptr){
+  if (pBuddyTrans == NULL){
     DBUG_RETURN(startTransaction());
   }
 
@@ -985,7 +999,7 @@ Ndb::hupp(NdbTransaction* pBuddyTrans)
     NdbTransaction* pCon =
       startTransactionLocal(aPriority, nodeId,
                             refToInstance(pBuddyTrans->m_tcRef));
-    if(pCon == nullptr)
+    if(pCon == NULL)
       DBUG_RETURN(NULL);
 
     if (pCon->getConnectedNodeId() != nodeId){
@@ -1041,7 +1055,7 @@ Ndb::startTransactionLocal(Uint32 aPriority, Uint32 nodeId, Uint32 instance)
   NdbTransaction* tConnection;
   Uint64 tFirstTransId = theFirstTransId;
   tConnection = doConnect(nodeId, instance);
-  if (tConnection == nullptr) {
+  if (tConnection == NULL) {
     DBUG_RETURN(NULL);
   }//if
 
@@ -1086,7 +1100,7 @@ Ndb::appendConnectionArray(NdbTransaction *aCon, Uint32 nodeId)
   {
     theConnectionArray[nodeId] = aCon;
   }
-  aCon->theNext = nullptr;
+  aCon->theNext = NULL;
   theConnectionArrayLast[nodeId] = aCon;
 }
 
@@ -1108,7 +1122,7 @@ Ndb::removeConnectionArray(NdbTransaction *first, Uint32 nodeId)
   NdbTransaction *next = first->theNext;
   if (!next)
   {
-    theConnectionArray[nodeId] = theConnectionArrayLast[nodeId] = nullptr;
+    theConnectionArray[nodeId] = theConnectionArrayLast[nodeId] = NULL;
   }
   else
   {
@@ -1129,7 +1143,7 @@ Ndb::closeTransaction(NdbTransaction* aConnection)
   NdbTransaction* tCon;
   NdbTransaction* tPreviousCon = nullptr;
 
-  if (aConnection == nullptr) {
+  if (aConnection == NULL) {
 //-----------------------------------------------------
 // closeTransaction called on NULL pointer, destructive
 // application behaviour.
@@ -1160,7 +1174,7 @@ Ndb::closeTransaction(NdbTransaction* aConnection)
     theTransactionList = tCon->next();	// from the transaction list.
   } else { 
     while (aConnection != tCon) {
-      if (tCon == nullptr) {
+      if (tCon == NULL) {
 //-----------------------------------------------------
 // closeTransaction called on non-existing transaction
 //-----------------------------------------------------
@@ -1271,7 +1285,7 @@ Parameters:     aTableName (IN) : The table name.
                 step       (IN) : Specifies the step between the 
                                   autoincrement values.
                 start      (IN) : Start value for first value
-Returns:        0 if successful, -1 if error encountered
+Returns:        0 if succesful, -1 if error encountered
 Remark:		Returns a new autoincrement value to the application.
                 The autoincrement values can be increased by steps
                 (default 1) and a number of values can be prefetched
@@ -1297,7 +1311,7 @@ Ndb::getAutoIncrementValue(const char* aTableName,
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1316,13 +1330,13 @@ Ndb::getAutoIncrementValue(const NdbDictionary::Table * aTable,
 {
   DBUG_ENTER("Ndb::getAutoIncrementValue");
   ASSERT_NOT_MYSQLD;
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
   const BaseString& internal_tabname = table->m_internalName;
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1339,7 +1353,7 @@ Ndb::getAutoIncrementValue(const NdbDictionary::Table * aTable,
                            Uint32 cacheSize, Uint64 step, Uint64 start)
 {
   DBUG_ENTER("Ndb::getAutoIncrementValue");
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
 
   if (getTupleIdFromNdb(table, range, autoValue, cacheSize, step, start) == -1)
@@ -1442,7 +1456,7 @@ int readAutoIncrementValue( const char* aTableName,
 
 Parameters:     aTableName (IN) : The table name.
                 autoValue  (OUT) : The current autoincrement value
-Returns:        0 if successful, -1 if error encountered
+Returns:        0 if succesful, -1 if error encountered
 Remark:         Returns the current autoincrement value to the application.
 ****************************************************************************/
 int
@@ -1464,7 +1478,7 @@ Ndb::readAutoIncrementValue(const char* aTableName,
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1482,13 +1496,13 @@ Ndb::readAutoIncrementValue(const NdbDictionary::Table * aTable,
 {
   DBUG_ENTER("Ndb::readAutoIncrementValue");
   ASSERT_NOT_MYSQLD;
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
   const BaseString& internal_tabname = table->m_internalName;
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1504,7 +1518,7 @@ Ndb::readAutoIncrementValue(const NdbDictionary::Table * aTable,
                             TupleIdRange & range, Uint64 & autoValue)
 {
   DBUG_ENTER("Ndb::readAutoIncrementValue");
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
 
   if (readTupleIdFromNdb(table, range, autoValue) == -1)
@@ -1545,7 +1559,7 @@ int setAutoIncrementValue( const char* aTableName,
 Parameters:     aTableName (IN) : The table name.
                 autoValue  (IN) : The new autoincrement value
                 modify     (IN) : Modify existing value (not initialization)
-Returns:        0 if successful, -1 if error encountered
+Returns:        0 if succesful, -1 if error encountered
 Remark:         Sets a new autoincrement value for the application.
 ****************************************************************************/
 int
@@ -1567,7 +1581,7 @@ Ndb::setAutoIncrementValue(const char* aTableName,
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1584,13 +1598,13 @@ Ndb::setAutoIncrementValue(const NdbDictionary::Table * aTable,
 {
   DBUG_ENTER("Ndb::setAutoIncrementValue");
   ASSERT_NOT_MYSQLD;
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
   const BaseString& internal_tabname = table->m_internalName;
 
   Ndb_local_table_info *info=
     theDictionary->get_local_table_info(internal_tabname);
-  if (info == nullptr) {
+  if (info == 0) {
     theError.code = theDictionary->getNdbError().code;
     DBUG_RETURN(-1);
   }
@@ -1606,7 +1620,7 @@ Ndb::setAutoIncrementValue(const NdbDictionary::Table * aTable,
                            bool modify)
 {
   DBUG_ENTER("Ndb::setAutoIncrementValue");
-  assert(aTable != nullptr);
+  assert(aTable != 0);
   const NdbTableImpl* table = & NdbTableImpl::getImpl(*aTable);
 
   if (setTupleIdInNdb(table, range, autoValue, modify) == -1)
@@ -1684,7 +1698,7 @@ int Ndb::initAutoIncrement()
   setDatabaseName(currentDb.c_str());
   setDatabaseSchemaName(currentSchema.c_str());
 
-  if (m_sys_tab_0 == nullptr) {
+  if (m_sys_tab_0 == NULL) {
     assert(theDictionary->m_error.code != 0);
     theError.code = theDictionary->m_error.code;
     return -1;
@@ -1735,8 +1749,8 @@ Ndb::opTupleIdOnNdb(const NdbTableImpl* table,
   DBUG_PRINT("enter", ("table: %u  value: %lu  op: %u",
                        aTableId, (ulong) opValue, op));
 
-  NdbTransaction*    tConnection = nullptr;
-  NdbOperation*      tOperation = nullptr;
+  NdbTransaction*    tConnection = NULL;
+  NdbOperation*      tOperation = NULL;
   Uint64             tValue;
   NdbRecAttr*        tRecAttrResult;
 
@@ -1750,11 +1764,11 @@ Ndb::opTupleIdOnNdb(const NdbTableImpl* table,
                                        (const char *) &aTableId,
                                        sizeof(Uint32));
 
-  if (tConnection == nullptr)
+  if (tConnection == NULL)
     goto error_handler;
 
   tOperation = tConnection->getNdbOperation(m_sys_tab_0);
-  if (tOperation == nullptr)
+  if (tOperation == NULL)
     goto error_handler;
 
   switch (op)
@@ -1829,19 +1843,19 @@ Ndb::opTupleIdOnNdb(const NdbTableImpl* table,
 error_handler:
   DBUG_PRINT("error", ("ndb=%d con=%d op=%d",
              theError.code,
-             tConnection != nullptr ? tConnection->theError.code : -1,
-             tOperation != nullptr ? tOperation->theError.code : -1));
+             tConnection != NULL ? tConnection->theError.code : -1,
+             tOperation != NULL ? tOperation->theError.code : -1));
 
-  if (theError.code == 0 && tConnection != nullptr)
+  if (theError.code == 0 && tConnection != NULL)
     theError.code = tConnection->theError.code;
-  if (theError.code == 0 && tOperation != nullptr)
+  if (theError.code == 0 && tOperation != NULL)
     theError.code = tOperation->theError.code;
   assert(theError.code != 0);
 
   NdbError savedError;
   savedError = theError;
 
-  if (tConnection != nullptr)
+  if (tConnection != NULL)
     this->closeTransaction(tConnection);
 
   theError = savedError;
@@ -2069,10 +2083,10 @@ const BaseString
 Ndb::getDatabaseFromInternalName(const char * internalName)
 {
   char * databaseName = new char[strlen(internalName) + 1];
-  if (databaseName == nullptr)
+  if (databaseName == NULL)
   {
     errno = ENOMEM;
-    return BaseString(nullptr);
+    return BaseString(NULL);
   }
   strcpy(databaseName, internalName);
   char *ptr = databaseName;
@@ -2090,10 +2104,10 @@ const BaseString
 Ndb::getSchemaFromInternalName(const char * internalName)
 {
   char * schemaName = new char[strlen(internalName)];
-  if (schemaName == nullptr)
+  if (schemaName == NULL)
   {
     errno = ENOMEM;
-    return BaseString(nullptr);
+    return BaseString(NULL);
   }
   const char *ptr1 = internalName;
    
@@ -2118,7 +2132,7 @@ Uint64 Ndb::get_eventbuf_max_alloc()
 void
 Ndb::set_eventbuf_max_alloc(Uint64 sz)
 {
-  if (theEventBuffer != nullptr)
+  if (theEventBuffer != NULL)
   {
     theEventBuffer->m_max_alloc = sz;
   }
@@ -2159,7 +2173,7 @@ NdbEventOperation* Ndb::createEventOperation(const char* eventName)
     NdbEventOperationImpl *op=
       NdbEventBuffer::getEventOperationImpl(tOp);
     op->m_next= theImpl->m_ev_op;
-    op->m_prev= nullptr;
+    op->m_prev= 0;
     theImpl->m_ev_op= op;
     if (op->m_next)
       op->m_next->m_prev= op;
@@ -2188,7 +2202,7 @@ NdbEventOperation *Ndb::getEventOperation(NdbEventOperation* tOp)
     op= theImpl->m_ev_op;
   if (op)
     return op->m_facade;
-  return nullptr;
+  return 0;
 }
 
 int
@@ -2295,13 +2309,13 @@ NdbEventOperation *Ndb::nextEvent()
 
   // Remove the event data from the head
   NdbEventOperation *op = theEventBuffer->nextEvent2();
-  if (op == nullptr)
-    return nullptr;
+  if (op == NULL)
+    return NULL;
 
   if (unlikely(op->isErrorEpoch(&errType)))
   {
     if (errType ==  NdbDictionary::Event::TE_INCONSISTENT)
-      return nullptr;
+      return NULL;
 
     if (errType ==  NdbDictionary::Event::TE_OUT_OF_MEMORY)
       printOverflowErrorAndExit();
@@ -2333,7 +2347,7 @@ Ndb::isConsistentGCI(Uint64 gci)
 const NdbEventOperation*
 Ndb::getNextEventOpInEpoch2(Uint32* iter, Uint32* event_types)
 {
-  return getNextEventOpInEpoch3(iter, event_types, nullptr);
+  return getNextEventOpInEpoch3(iter, event_types, NULL);
 }
 
 const NdbEventOperation*
@@ -2342,15 +2356,15 @@ Ndb::getNextEventOpInEpoch3(Uint32* iter, Uint32* event_types,
 {
   NdbEventOperationImpl* op =
     theEventBuffer->getEpochEventOperations(iter, event_types, cumulative_any_value);
-  if (op != nullptr)
+  if (op != NULL)
     return op->m_facade;
-  return nullptr;
+  return NULL;
 }
 
 const NdbEventOperation*
 Ndb::getGCIEventOperations(Uint32* iter, Uint32* event_types)
 {
-  return getNextEventOpInEpoch3(iter, event_types, nullptr);
+  return getNextEventOpInEpoch3(iter, event_types, NULL);
   /*
    * No event operation is added to gci_ops list for exceptional event data.
    * So it is not possible to get them in event_types. No check needed.
@@ -2425,13 +2439,14 @@ Ndb::printState(const char* fmt, ...)
   vsprintf(buf, fmt, ap);
   va_end(ap);
   NdbMutex_Lock(ndb_print_state_mutex);
+  bool dups = false;
   unsigned i;
   ndbout << buf << " ndb=" << hex << (void*)this << endl;
   for (unsigned n = 0; n < MAX_NDB_NODES; n++) {
     NdbTransaction* con = theConnectionArray[n];
-    if (con != nullptr) {
+    if (con != 0) {
       ndbout << "conn " << n << ":" << endl;
-      while (con != nullptr) {
+      while (con != 0) {
         con->printState();
         con = con->theNext;
       }
@@ -2440,18 +2455,21 @@ Ndb::printState(const char* fmt, ...)
   ndbout << "prepared: " << theNoOfPreparedTransactions<< endl;
   if (checkdups(thePreparedTransactionsArray, theNoOfPreparedTransactions)) {
     ndbout << "!! DUPS !!" << endl;
+    dups = true;
   }
   for (i = 0; i < theNoOfPreparedTransactions; i++)
     thePreparedTransactionsArray[i]->printState();
   ndbout << "sent: " << theNoOfSentTransactions<< endl;
   if (checkdups(theSentTransactionsArray, theNoOfSentTransactions)) {
     ndbout << "!! DUPS !!" << endl;
+    dups = true;
   }
   for (i = 0; i < theNoOfSentTransactions; i++)
     theSentTransactionsArray[i]->printState();
   ndbout << "completed: " << theNoOfCompletedTransactions<< endl;
   if (checkdups(theCompletedTransactionsArray, theNoOfCompletedTransactions)) {
     ndbout << "!! DUPS !!" << endl;
+    dups = true;
   }
   for (i = 0; i < theNoOfCompletedTransactions; i++)
     theCompletedTransactionsArray[i]->printState();
@@ -2470,7 +2488,7 @@ Ndb::getNdbErrorDetail(const NdbError& err, char* buff, Uint32 buffLen) const
   if (!buff)
     DBUG_RETURN(NULL);
 
-  if (err.details != nullptr)
+  if (err.details != NULL)
   {
     DBUG_PRINT("info", ("err.code is %u", err.code));
     switch (err.code) {
@@ -2728,5 +2746,5 @@ Ndb::getClientStatName(Uint32 id) const
   if (likely(id < NumClientStatistics))
     return ClientStatNames[id];
 
-  return nullptr;
+  return NULL;
 }

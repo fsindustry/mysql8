@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,16 +29,15 @@
 
 #include <math.h>
 #include <mysql/plugin.h>
-#include <cstdint>
 
+#include "m_ctype.h"
 #include "my_tree.h"
-#include "mysql/strings/m_ctype.h"
 #include "storage/myisam/fulltext.h"
 #include "storage/myisam/queues.h"
 
-inline bool true_word_char(int c, uint8_t ch) {
-  return ((c & (MY_CHAR_U | MY_CHAR_L | MY_CHAR_NMR)) != 0) || ch == '_';
-}
+#define true_word_char(ctype, character) \
+  ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
+#define misc_word_char(X) 0
 
 #define FT_MAX_WORD_LEN_FOR_SORT 31
 

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,6 @@
 #ifndef MYSQL_ROUTING_DESTINATION_TLS_CONTEXT_INCLUDED
 #define MYSQL_ROUTING_DESTINATION_TLS_CONTEXT_INCLUDED
 
-#include "mysqlrouter/routing_export.h"
-
-#include <chrono>
 #include <map>
 #include <mutex>
 #include <string>
@@ -38,14 +35,8 @@
 /**
  * TlsClientContext per destination.
  */
-class ROUTING_EXPORT DestinationTlsContext {
+class DestinationTlsContext {
  public:
-  DestinationTlsContext(bool session_cache_mode, size_t ssl_session_cache_size,
-                        unsigned int ssl_session_cache_timeout)
-      : session_cache_mode_(session_cache_mode),
-        ssl_session_cache_size_(ssl_session_cache_size),
-        ssl_session_cache_timeout_(ssl_session_cache_timeout) {}
-
   /**
    * set SslVerify.
    */
@@ -101,11 +92,9 @@ class ROUTING_EXPORT DestinationTlsContext {
    * If a TlsClientContext for the destination exists, a pointer to it is
    * returned.
    *
-   * @param dest_id  unique identifier of a destination
-   * @param hostname name of the destination host
+   * @param dest_id identified of a destination
    */
-  TlsClientContext *get(const std::string &dest_id,
-                        const std::string &hostname);
+  TlsClientContext *get(const std::string &dest_id);
 
  private:
   SslVerify ssl_verify_{SslVerify::kDisabled};
@@ -119,10 +108,6 @@ class ROUTING_EXPORT DestinationTlsContext {
   std::map<std::string, std::unique_ptr<TlsClientContext>> tls_contexts_;
 
   std::mutex mtx_;
-
-  bool session_cache_mode_{true};
-  size_t ssl_session_cache_size_{};
-  std::chrono::seconds ssl_session_cache_timeout_{std::chrono::seconds(0)};
 };
 
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,14 +34,13 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_io.h"
+#include "my_loglevel.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
 #include "sql/current_thd.h"
@@ -98,12 +97,14 @@ Delegate::Delegate(
 #else
   if (mysql_rwlock_init(0, &lock)) return;
 #endif
+  init_sql_alloc(key_memory_delegate, &memroot, 1024, 0);
   inited = true;
 }
 
 Delegate::~Delegate() {
   inited = false;
   mysql_rwlock_destroy(&lock);
+  memroot.Clear();
 }
 
 int Delegate::add_observer(void *observer, st_plugin_int *plugin) {
@@ -206,7 +207,7 @@ void Delegate::update_plugin_ref_count() {
   if (intern_value == DELEGATE_SPIN_LOCK && opt_value == DELEGATE_OS_LOCK) {
     for (auto ref : m_acquired_references) {
       for (size_t count = ref.second; count != 0; --count)
-        plugin_unlock(nullptr, ref.first);
+        plugin_unlock(NULL, ref.first);
     }
     m_acquired_references.clear();
   } else if (intern_value == DELEGATE_OS_LOCK &&
@@ -243,7 +244,7 @@ bool Delegate::use_spin_lock_type() {
 }
 
 void Delegate::acquire_plugin_ref_count(Observer_info *info) {
-  plugin_ref internal_ref = plugin_lock(nullptr, &info->plugin);
+  plugin_ref internal_ref = plugin_lock(NULL, &info->plugin);
   ++(m_acquired_references[internal_ref]);
 }
 
@@ -455,7 +456,6 @@ void delegates_update_lock_type() {
   plugins add to thd->lex will be automatically unlocked.
  */
 #define FOREACH_OBSERVER(r, f, args)                                   \
-  r = 0;                                                               \
   Prealloced_array<plugin_ref, 8> plugins(PSI_NOT_INSTRUMENTED);       \
   read_lock();                                                         \
   Observer_info_iterator iter = observer_info_iter();                  \
@@ -467,8 +467,9 @@ void delegates_update_lock_type() {
                              ? info->plugin                            \
                              : my_plugin_lock(0, &info->plugin));      \
     if (!plugin) {                                                     \
-      /* plugin is not initialized or deleted, this is not an error */ \
-      continue;                                                        \
+      /* plugin is not intialized or deleted, this is not an error */  \
+      r = 0;                                                           \
+      break;                                                           \
     }                                                                  \
     if (!replication_optimize_for_static_plugin_config)                \
       plugins.push_back(plugin);                                       \
@@ -496,7 +497,6 @@ void delegates_update_lock_type() {
   if (!plugins.empty()) plugin_unlock_list(0, &plugins[0], plugins.size());
 
 #define FOREACH_OBSERVER_ERROR_OUT(r, f, args, out)                    \
-  r = 0;                                                               \
   Prealloced_array<plugin_ref, 8> plugins(PSI_NOT_INSTRUMENTED);       \
   read_lock();                                                         \
   Observer_info_iterator iter = observer_info_iter();                  \
@@ -510,15 +510,13 @@ void delegates_update_lock_type() {
                              ? info->plugin                            \
                              : my_plugin_lock(0, &info->plugin));      \
     if (!plugin) {                                                     \
-      /* plugin is not initialized or deleted, this is not an error */ \
-      continue;                                                        \
+      /* plugin is not intialized or deleted, this is not an error */  \
+      r = 0;                                                           \
+      break;                                                           \
     }                                                                  \
     if (!replication_optimize_for_static_plugin_config)                \
       plugins.push_back(plugin);                                       \
                                                                        \
-    if (nullptr == ((Observer *)info->observer)->f) {                  \
-      continue;                                                        \
-    }                                                                  \
     bool hook_error = false;                                           \
     hook_error = ((Observer *)info->observer)->f(args, error_out);     \
                                                                        \
@@ -578,45 +576,12 @@ int Trans_delegate::before_commit(THD *thd, bool all,
   param.is_create_table_as_query_block =
       (thd->lex->sql_command == SQLCOM_CREATE_TABLE &&
        !thd->lex->query_block->field_list_is_empty());
-  param.thd = thd;
 
   bool is_real_trans =
       (all || !thd->get_transaction()->is_active(Transaction_ctx::SESSION));
   if (is_real_trans) param.flags |= TRANS_IS_REAL_TRANS;
 
   int ret = 0;
-
-  /* After this debug point we mark the transaction as committing in THD. */
-  DBUG_EXECUTE_IF("trans_delegate_before_commit_before_before_call_observers", {
-    const char act[] =
-        "now signal "
-        "signal.trans_delegate_before_commit_before_before_call_observers_"
-        "reached "
-        "wait_for "
-        "signal.trans_delegate_before_commit_before_before_call_observers_"
-        "waiting";
-    assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
-  });
-
-  thd->rpl_thd_ctx.set_tx_rpl_delegate_stage_status(
-      Rpl_thd_context::TX_RPL_STAGE_BEFORE_COMMIT);
-
-  /**
-    If thread is killed or commits are blocked do not commit the transaction.
-    Post this thread cannot be killed.
-  */
-  if (thd->is_killed() || m_rollback_transaction_not_reached_before_commit) {
-    /**
-      Disconnect the client connection if not already done.
-      Do not KILL connection if the transaction is going to be rolledback.
-    */
-    if (!thd->is_killed()) {
-      mysql_mutex_lock(&thd->LOCK_thd_data);
-      thd->awake(THD::KILL_CONNECTION);
-      mysql_mutex_unlock(&thd->LOCK_thd_data);
-    }
-    return 1;
-  }
   FOREACH_OBSERVER(ret, before_commit, (&param));
   plugin_foreach(thd, se_before_commit, MYSQL_STORAGE_ENGINE_PLUGIN, &param);
   return ret;
@@ -789,8 +754,6 @@ int Trans_delegate::before_rollback(THD *thd, bool all) {
   if (is_real_trans) param.flags |= TRANS_IS_REAL_TRANS;
 
   int ret = 0;
-  thd->rpl_thd_ctx.set_tx_rpl_delegate_stage_status(
-      Rpl_thd_context::TX_RPL_STAGE_BEFORE_ROLLBACK);
   FOREACH_OBSERVER(ret, before_rollback, (&param));
   plugin_foreach(thd, se_before_rollback, MYSQL_STORAGE_ENGINE_PLUGIN, &param);
   return ret;
@@ -853,11 +816,6 @@ int Trans_delegate::after_rollback(THD *thd, bool all) {
 
 int Trans_delegate::trans_begin(THD *thd, int &out) {
   DBUG_TRACE;
-  if (m_rollback_transaction_on_begin) {
-    out = ER_OPERATION_NOT_ALLOWED_WHILE_PRIMARY_CHANGE_IS_RUNNING;
-    return 0;
-  }
-
   Trans_param param;
   TRANS_PARAM_ZERO(param);
   param.server_uuid = server_uuid;
@@ -867,37 +825,10 @@ int Trans_delegate::trans_begin(THD *thd, int &out) {
   param.hold_timeout = thd->variables.net_wait_timeout;
   param.server_id = thd->server_id;
   param.rpl_channel_type = thd->rpl_thd_ctx.get_rpl_channel_type();
-  param.thd = thd;
 
   int ret = 0;
-  thd->rpl_thd_ctx.set_tx_rpl_delegate_stage_status(
-      Rpl_thd_context::TX_RPL_STAGE_BEGIN);
   FOREACH_OBSERVER_ERROR_OUT(ret, begin, &param, out);
   return ret;
-}
-
-int Trans_delegate::set_transactions_at_begin_must_fail() {
-  DBUG_TRACE;
-  m_rollback_transaction_on_begin = true;
-  return false;
-}
-
-int Trans_delegate::set_no_restrictions_at_transaction_begin() {
-  DBUG_TRACE;
-  m_rollback_transaction_on_begin = false;
-  return false;
-}
-
-int Trans_delegate::set_transactions_not_reached_before_commit_must_fail() {
-  DBUG_TRACE;
-  m_rollback_transaction_not_reached_before_commit = true;
-  return false;
-}
-
-int Trans_delegate::set_no_restrictions_at_transactions_before_commit() {
-  DBUG_TRACE;
-  m_rollback_transaction_not_reached_before_commit = false;
-  return false;
 }
 
 int Binlog_storage_delegate::after_flush(THD *thd, const char *log_file,
@@ -1383,7 +1314,7 @@ static bool is_show_status(enum_sql_command sql_command) {
   }
 }
 
-int launch_hook_trans_begin(THD *thd, Table_ref *all_tables) {
+int launch_hook_trans_begin(THD *thd, TABLE_LIST *all_tables) {
   DBUG_TRACE;
   LEX *lex = thd->lex;
   enum_sql_command sql_command = lex->sql_command;
@@ -1443,7 +1374,7 @@ int launch_hook_trans_begin(THD *thd, Table_ref *all_tables) {
       bool is_sys_db = false;
       bool stop_db_check = false;
 
-      for (Table_ref *table = all_tables; table && !stop_db_check;
+      for (TABLE_LIST *table = all_tables; table && !stop_db_check;
            table = table->next_global) {
         assert(table->db && table->table_name);
 

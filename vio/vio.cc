@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,7 @@
   Note that we can't have assertion on file descriptors;  The reason for
   this is that during mysql shutdown, another thread can close a file
   we are working on.  In this case we should just return read errors from
-  the file descriptor.
+  the file descriptior.
 */
 
 #include <sys/types.h>
@@ -44,7 +44,6 @@
 #include "mysql/psi/mysql_socket.h"
 #include "mysql/psi/psi_memory.h"  // IWYU pragma: keep
 #include "mysql/service_mysql_alloc.h"
-#include "string_with_len.h"
 #include "template_utils.h"
 #include "vio/vio_priv.h"
 
@@ -359,12 +358,6 @@ bool vio_reset(Vio *vio, enum enum_vio_type type, my_socket sd,
 
   if (vio_init(&new_vio, type, sd, flags)) return true;
 
-#ifdef USE_PPOLL_IN_VIO
-  /* Preserve thread_id & signal_mask for this connection */
-  new_vio.thread_id = vio->thread_id;
-  new_vio.signal_mask = vio->signal_mask;
-#endif /* USE_PPOLL_IN_VIO */
-
   /* Preserve perfschema info for this connection */
   new_vio.mysql_socket.m_psi = vio->mysql_socket.m_psi;
 
@@ -556,7 +549,7 @@ void vio_delete(Vio *vio) { internal_vio_delete(vio); }
   components below it when application finish
 
 */
-void vio_end() { vio_ssl_end(); }
+void vio_end(void) { vio_ssl_end(); }
 
 struct vio_string {
   const char *m_str;
@@ -588,4 +581,5 @@ void get_vio_type_name(enum enum_vio_type vio_type, const char **str,
   }
   *str = vio_type_names[index].m_str;
   *len = vio_type_names[index].m_len;
+  return;
 }

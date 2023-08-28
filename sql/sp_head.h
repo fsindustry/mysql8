@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,6 @@
 #include <vector>
 
 #include "lex_string.h"
-#include "m_string.h"
 #include "map_helpers.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
@@ -37,9 +36,7 @@
 #include "my_psi_config.h"
 #include "my_sqlcommand.h"
 #include "my_sys.h"
-#include "mysql/components/my_service.h"
-#include "mysql/components/services/bits/psi_statement_bits.h"
-#include "mysql/components/services/language_service.h"
+#include "mysql/components/services/psi_statement_bits.h"
 #include "mysqld_error.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/create_field.h"
@@ -445,9 +442,6 @@ class sp_head {
   /// Stored program characteristics.
   st_sp_chistics *m_chistics;
 
-  /// Code if language is not SQL
-  LEX_CSTRING code;
-
   /**
     The value of sql_mode system variable at the CREATE-time.
 
@@ -466,6 +460,7 @@ class sp_head {
   LEX_STRING m_params;
   LEX_CSTRING m_body;
   LEX_CSTRING m_body_utf8;
+  LEX_STRING m_defstr;
   LEX_STRING m_definer_user;
   LEX_STRING m_definer_host;
 
@@ -477,8 +472,8 @@ class sp_head {
   ulong m_recursion_level;
 
   /**
-    A list of different recursion level instances for the same procedure.
-    For every recursion level we have an sp_head instance. This instances
+    A list of diferent recursion level instances for the same procedure.
+    For every recursion level we have a sp_head instance. This instances
     connected in the list. The list ordered by increasing recursion level
     (m_recursion_level).
   */
@@ -551,15 +546,6 @@ class sp_head {
 
   /// Is this routine being executed?
   bool is_invoked() const { return m_flags & IS_INVOKED; }
-
-  /**
-    @returns true if this is an SQL routine, and
-             false if it is an external routine
-  */
-  bool is_sql() const {
-    assert(m_chistics->language.length > 0);
-    return native_strcasecmp(m_chistics->language.str, "SQL") == 0;
-  }
 
   /**
     Get the value of the SP cache version, as remembered
@@ -773,7 +759,7 @@ class sp_head {
     Get SP-instruction at given index.
 
     NOTE: it is important to have *unsigned* int here, sometimes we get (-1)
-    passed here, so it gets converted to MAX_INT, and the result of the
+    passed here, so it get's converted to MAX_INT, and the result of the
     function call is NULL.
   */
   sp_instr *get_instr(uint i) {
@@ -799,9 +785,9 @@ class sp_head {
     routine, NULL if none.
   */
   void add_used_tables_to_table_list(THD *thd,
-                                     Table_ref ***query_tables_last_ptr,
+                                     TABLE_LIST ***query_tables_last_ptr,
                                      enum_sql_command sql_command,
-                                     Table_ref *belong_to_view);
+                                     TABLE_LIST *belong_to_view);
 
   /**
     Check if this stored routine contains statements disallowed
@@ -955,26 +941,6 @@ class sp_head {
   /// Flags of LEX::enum_binlog_stmt_unsafe.
   uint32 unsafe_flags;
 
- public:
-  /**
-    language component related state of this sp.
-   */
-  external_program_handle m_language_stored_program;
-
-  /**
-     Initialize and parse an external routine
-
-     If @ref m_language_stored_program is already set,
-     nothing will be done.
-
-     @param service The_program_execution service that will
-                    be used to execute this function
-
-     @returns false on success; true on failure
-  */
-  bool init_external_routine(
-      my_service<SERVICE_TYPE(external_program_execution)> &service);
-
  private:
   /// Copy sp name from parser.
   void init_sp_name(THD *thd, sp_name *spname);
@@ -997,15 +963,6 @@ class sp_head {
   bool execute(THD *thd, bool merge_da_on_success);
 
   /**
-    Execute external routine.
-
-    @param thd                  Thread context.
-
-    @return Error status.
-  */
-  bool execute_external_routine(THD *thd);
-
-  /**
     Perform a forward flow analysis in the generated code.
     Mark reachable instructions, for the optimizer.
   */
@@ -1026,7 +983,7 @@ class sp_head {
 
     @return Error status.
   */
-  bool merge_table_list(THD *thd, Table_ref *table, LEX *lex_for_tmp_check);
+  bool merge_table_list(THD *thd, TABLE_LIST *table, LEX *lex_for_tmp_check);
 
   friend sp_head *sp_start_parsing(THD *thd, enum_sp_type sp_type,
                                    sp_name *sp_name);

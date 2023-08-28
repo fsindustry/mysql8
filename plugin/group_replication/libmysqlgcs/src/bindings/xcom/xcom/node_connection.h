@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -74,22 +74,6 @@ static inline connection_descriptor *new_connection(int fd) {
   return c;
 }
 #endif
-
-/**
- * @brief Free a connection_descriptor created with new_connection.
- *        This function will, if the [in] parameter is not nullptr:
- *        - Free the pointer
- *        - Set the pointer to nullptr
- *
- * @param con a pointer to a connection_descriptor.
- */
-static inline void free_connection(connection_descriptor *&con) {
-  if (con != nullptr) {
-    free(con);
-    con = nullptr;
-  }
-}
-
 static inline int is_connected(connection_descriptor *con) {
   return con->connected_ >= CON_FD;
 }

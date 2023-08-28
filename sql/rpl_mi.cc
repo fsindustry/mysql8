@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,10 +30,10 @@
 #include "include/compression.h"
 #include "include/mutex_lock.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/psi_stage_bits.h"
 #include "mysql_version.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
@@ -45,8 +45,6 @@
 #include "sql/rpl_msr.h"      // channel_map
 #include "sql/rpl_replica.h"  // master_retry_count
 #include "sql/sql_class.h"
-#include "string_with_len.h"
-#include "strmake.h"
 
 enum {
   LINES_IN_MASTER_INFO_WITH_SSL = 14,
@@ -114,13 +112,13 @@ enum {
 };
 
 /*
-  Please every time you add a new field to the master info, update
+  Please every time you add a new field to the mater info, update
   what follows. For now, this is just used to get the number of
   fields.
 */
 const char *info_mi_fields[] = {"number_of_lines",
-                                "source_log_name",
-                                "source_log_pos",
+                                "master_log_name",
+                                "master_log_pos",
                                 "host",
                                 "user",
                                 "password",
@@ -146,8 +144,8 @@ const char *info_mi_fields[] = {"number_of_lines",
                                 "public_key_path",
                                 "get_public_key",
                                 "network_namespace",
-                                "source_compression_algorithm",
-                                "source_zstd_compression_level",
+                                "master_compression_algorithm",
+                                "master_zstd_compression_level",
                                 "tls_ciphersuites",
                                 "source_connection_auto_failover",
                                 "gtid_only"};
@@ -224,7 +222,10 @@ Master_info::Master_info(
   ignore_server_ids = new Server_ids;
   strcpy(compression_algorithm, COMPRESSION_ALGORITHM_UNCOMPRESSED);
   zstd_compression_level = default_zstd_compression_level;
-  net_server_ext_init(&server_extn);
+  server_extn.m_user_data = nullptr;
+  server_extn.m_before_header = nullptr;
+  server_extn.m_after_header = nullptr;
+  server_extn.compress_ctx.algorithm = MYSQL_UNCOMPRESSED;
   gtid_monitoring_info = new Gtid_monitoring_info(&data_lock);
 
   mysql_mutex_init(*key_info_rotate_lock, &this->rotate_lock,
@@ -364,7 +365,7 @@ void Master_info::end_info() {
 
 int Master_info::flush_info(bool force) {
   DBUG_TRACE;
-  DBUG_PRINT("enter", ("source_pos: %lu", (ulong)master_log_pos));
+  DBUG_PRINT("enter", ("master_pos: %lu", (ulong)master_log_pos));
 
   bool skip_flushing = !inited;
   /*
@@ -393,7 +394,7 @@ int Master_info::flush_info(bool force) {
   return 0;
 
 err:
-  LogErr(ERROR_LEVEL, ER_RPL_ERROR_WRITING_SOURCE_CONFIGURATION);
+  LogErr(ERROR_LEVEL, ER_RPL_ERROR_WRITING_MASTER_CONFIGURATION);
   return 1;
 }
 
@@ -430,7 +431,7 @@ int Master_info::mi_init_info() {
 err:
   handler->end_info();
   inited = false;
-  LogErr(ERROR_LEVEL, ER_RPL_ERROR_READING_SOURCE_CONFIGURATION);
+  LogErr(ERROR_LEVEL, ER_RPL_ERROR_READING_MASTER_CONFIGURATION);
   return 1;
 }
 

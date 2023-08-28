@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@ class DuktapeStatementReaderFactory {
  public:
   DuktapeStatementReaderFactory(
       std::string filename, std::vector<std::string> module_prefixes,
-      std::map<std::string, std::function<std::string()>> session,
+      std::map<std::string, std::string> session,
       std::shared_ptr<MockServerGlobalScope> global_scope)
       : filename_{std::move(filename)},
         module_prefixes_{std::move(module_prefixes)},
@@ -60,9 +60,18 @@ class DuktapeStatementReaderFactory {
 
     std::vector<AsyncNotice> get_async_notices() override { return {}; }
 
-    stdx::expected<handshake_data, ErrorResponse> handshake(
-        bool /* is_greeting */) override {
+    stdx::expected<classic_protocol::message::server::Greeting, std::error_code>
+    server_greeting(bool /* with_tls */) override {
+      return stdx::make_unexpected(
+          make_error_code(std::errc::no_such_file_or_directory));
+    }
+
+    stdx::expected<handshake_data, ErrorResponse> handshake() override {
       return stdx::make_unexpected(ErrorResponse(1064, what_, "HY000"));
+    }
+
+    std::chrono::microseconds server_greeting_exec_time() override {
+      return {};
     }
 
     void set_session_ssl_info(const SSL * /* ssl */) override {}
@@ -76,7 +85,7 @@ class DuktapeStatementReaderFactory {
  private:
   std::string filename_;
   std::vector<std::string> module_prefixes_;
-  std::map<std::string, std::function<std::string()>> session_;
+  std::map<std::string, std::string> session_;
   std::shared_ptr<MockServerGlobalScope> global_scope_;
 };
 
@@ -84,10 +93,10 @@ class DuktapeStatementReader : public StatementReaderBase {
  public:
   enum class HandshakeState { INIT, GREETED, AUTH_SWITCHED, DONE };
 
-  DuktapeStatementReader(
-      std::string filename, std::vector<std::string> module_prefixes,
-      std::map<std::string, std::function<std::string()>> session_data,
-      std::shared_ptr<MockServerGlobalScope> shared_globals);
+  DuktapeStatementReader(std::string filename,
+                         std::vector<std::string> module_prefixes,
+                         std::map<std::string, std::string> session_data,
+                         std::shared_ptr<MockServerGlobalScope> shared_globals);
 
   DuktapeStatementReader(const DuktapeStatementReader &) = delete;
   DuktapeStatementReader(DuktapeStatementReader &&);
@@ -111,17 +120,16 @@ class DuktapeStatementReader : public StatementReaderBase {
 
   std::vector<AsyncNotice> get_async_notices() override;
 
-  stdx::expected<handshake_data, ErrorResponse> handshake(
-      bool with_tls) override;
-
- private:
   stdx::expected<classic_protocol::message::server::Greeting, std::error_code>
-  server_greeting();
+  server_greeting(bool with_tls) override;
 
-  std::chrono::microseconds server_greeting_exec_time();
+  stdx::expected<handshake_data, ErrorResponse> handshake() override;
+
+  std::chrono::microseconds server_greeting_exec_time() override;
 
   void set_session_ssl_info(const SSL *ssl) override;
 
+ private:
   struct Pimpl;
   std::unique_ptr<Pimpl> pimpl_;
   bool has_notices_{false};

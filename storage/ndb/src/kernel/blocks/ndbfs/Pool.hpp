@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,12 +79,12 @@
 //
 // T& get();
 // Description:
-//   gets an element from the Pool.
+//   get's an element from the Pool.
 // Parameters:
 //   _
 // Return value:
 //   T& the element extracted from the Pool. (element must be cleared to
-//   mimic newly created element)
+//   mimick newly created element)
 // Errors:
 //      -
 // Asserts:
@@ -148,7 +148,7 @@
 //
 // Pool<T>& operator=(const Pool<T>& cp);
 // Description:
-//   Prohibit use of assignment operator.
+//   Prohibit use of assignement operator.
 // Parameters:
 //   cp
 // Return value:

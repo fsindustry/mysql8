@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -142,13 +142,6 @@ class Routine : virtual public Entity_object {
   virtual void set_sql_data_access(enum_sql_data_access sda) = 0;
 
   /////////////////////////////////////////////////////////////////////////
-  // external language.
-  /////////////////////////////////////////////////////////////////////////
-
-  virtual const String_type &external_language() const = 0;
-  virtual void set_external_language(const String_type &el) = 0;
-
-  /////////////////////////////////////////////////////////////////////////
   // security type.
   /////////////////////////////////////////////////////////////////////////
 
@@ -215,7 +208,7 @@ class Routine : virtual public Entity_object {
   virtual const Parameter_collection &parameters() const = 0;
 
   /**
-    Allocate a new object graph and invoke the copy constructor for
+    Allocate a new object graph and invoke the copy contructor for
     each object. Only used in unit testing.
 
     @return pointer to dynamically allocated copy

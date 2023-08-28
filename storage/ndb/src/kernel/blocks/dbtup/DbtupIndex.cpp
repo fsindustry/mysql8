@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,7 +61,7 @@ Dbtup::tuxGetTupAddr(Uint32 fragPtrI,
 {
   jamEntryDebug();
   PagePtr pagePtr;
-  ndbrequire(c_page_pool.getPtr(pagePtr, pageId));
+  c_page_pool.getPtr(pagePtr, pageId);
   lkey1 = pagePtr.p->frag_page_id;
   lkey2 = pageIndex;
 }
@@ -135,6 +135,7 @@ Dbtup::tuxReadAttrsCurr(EmulatedJamBuffer *jamBuf,
                         const Uint32* attrIds,
                         Uint32 numAttrs,
                         Uint32* dataOut,
+                        bool xfrmFlag,
                         Uint32 tupVersion)
 {
   thrjamEntryDebug(jamBuf);
@@ -156,6 +157,7 @@ Dbtup::tuxReadAttrsCurr(EmulatedJamBuffer *jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 
@@ -172,7 +174,8 @@ Dbtup::tuxReadAttrsOpt(EmulatedJamBuffer * jamBuf,
                        Uint32 tupVersion,
                        const Uint32* attrIds,
                        Uint32 numAttrs,
-                       Uint32* dataOut)
+                       Uint32* dataOut,
+                       bool xfrmFlag)
 {
   thrjamEntryDebug(jamBuf);
   // search for tuple version if not original
@@ -195,6 +198,7 @@ Dbtup::tuxReadAttrsOpt(EmulatedJamBuffer * jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 
@@ -203,6 +207,7 @@ Dbtup::tuxReadAttrsCommon(KeyReqStruct &req_struct,
                           const Uint32* attrIds,
                           Uint32 numAttrs,
                           Uint32* dataOut,
+                          bool xfrmFlag,
                           Uint32 tupVersion)
 {
   /**
@@ -247,7 +252,8 @@ Dbtup::tuxReadAttrsCommon(KeyReqStruct &req_struct,
                            attrIds,
                            numAttrs,
                            dataOut,
-                           ZNIL);
+                           ZNIL,
+                           xfrmFlag);
   // done
   return ret;
 }
@@ -364,14 +370,33 @@ Dbtup::tuxReadPk(Uint32* fragPtrP_input,
   // read pk attributes from original tuple
     
   // do it
-  ret = readKeyAttributes(&req_struct,
+  ret = readAttributes(&req_struct,
                        attrIds,
                        numAttrs,
                        dataOut,
                        ZNIL,
                        xfrmFlag);
   // done
-  if (unlikely(ret < 0))
+  if (ret >= 0) {
+    // remove headers
+    Uint32 n= 0;
+    Uint32 i= 0;
+    while (n < numAttrs)
+    {
+      const AttributeHeader ah(dataOut[i]);
+      Uint32 size= ah.getDataSize();
+      ndbrequire(size != 0);
+      for (Uint32 j= 0; j < size; j++)
+      {
+        dataOut[i + j - n]= dataOut[i + j + 1];
+      }
+      n+= 1;
+      i+= 1 + size;
+    }
+    ndbrequire((int)i == ret);
+    ret -= numAttrs;
+  }
+  else
   {
     jam();
     return ret;
@@ -519,7 +544,8 @@ Dbtup::tuxReadAttrs(EmulatedJamBuffer * jamBuf,
                     Uint32 tupVersion,
                     const Uint32* attrIds,
                     Uint32 numAttrs,
-                    Uint32* dataOut)
+                    Uint32* dataOut,
+                    bool xfrmFlag)
 {
   thrjamEntryDebug(jamBuf);
   // use own variables instead of globals
@@ -546,6 +572,7 @@ Dbtup::tuxReadAttrs(EmulatedJamBuffer * jamBuf,
                             attrIds,
                             numAttrs,
                             dataOut,
+                            xfrmFlag,
                             tupVersion);
 }
 
@@ -730,7 +757,7 @@ Dbtup::buildIndex(Signal* signal, Uint32 buildPtrI)
       goto next_tuple;
     }
 
-    ndbrequire(c_page_pool.getPtr(pagePtr, realPageId));
+    c_page_pool.getPtr(pagePtr, realPageId);
 
 next_tuple:
     // get tuple
@@ -795,7 +822,7 @@ next_tuple:
       update. If an update aborts then the copy tuple is copied to
       the original tuple. The build will however have found that
       tuple as a copy tuple. The original tuple is stable and is thus
-      preferable to store in TUX.
+      preferrable to store in TUX.
       */
       jam();
 
@@ -804,7 +831,7 @@ next_tuple:
        *   we will here build all copies of the tuple
        *
        * Note only "real" tupVersion's should be added 
-       *      i.e delete's shouldn't be added 
+       *      i.e delete's shouldnt be added 
        *      (unless it's the first op, when "original" should be added)
        */
 
@@ -1141,7 +1168,7 @@ Dbtup::mt_scan_next(Uint32 tableId, Uint32 fragPtrI,
   }
 
   PagePtr pagePtr;
-  ndbrequire(c_page_pool.getPtr(pagePtr, pos->m_page_no));
+  c_page_pool.getPtr(pagePtr, pos->m_page_no);
 
   while (1)
   {
@@ -1176,7 +1203,7 @@ Dbtup::mt_scan_next(Uint32 tableId, Uint32 fragPtrI,
       break;
 
     pos->m_page_idx = 0;
-    ndbrequire(c_page_pool.getPtr(pagePtr, pos->m_page_no));
+    c_page_pool.getPtr(pagePtr, pos->m_page_no);
   }
 
   return 1;

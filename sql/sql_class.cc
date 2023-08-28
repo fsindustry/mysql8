@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,17 +32,17 @@
 #include <utility>
 
 #include "field_types.h"
+#include "m_ctype.h"
 #include "m_string.h"
-#include "mutex_lock.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_systime.h"
 #include "my_thread.h"
 #include "my_time.h"
-#include "mysql/components/services/bits/psi_error_bits.h"
 #include "mysql/components/services/log_builtins.h"  // LogErr
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/psi_error_bits.h"
 #include "mysql/plugin_audit.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_error.h"
@@ -52,12 +52,9 @@
 #include "mysql/psi/mysql_table.h"
 #include "mysql/psi/psi_table.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysys_err.h"  // EE_OUTOFMEMORY
 #include "pfs_statement_provider.h"
 #include "rpl_source.h"  // unregister_slave
-#include "scope_guard.h"
-#include "server_component/mysql_server_event_tracking_bridge_imp.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"
 #include "sql/check_stack.h"
@@ -84,10 +81,9 @@
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
 #include "sql/query_result.h"
-#include "sql/rpl_rli.h"  // Relay_log_info
+#include "sql/rpl_replica.h"  // rpl_master_erroneous_autoinc
+#include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/rpl_transaction_write_set_ctx.h"
-#include "sql/server_component/mysql_server_event_tracking_bridge_imp.h"
-#include "sql/server_component/mysql_thd_store_imp.h"
 #include "sql/sp_cache.h"         // sp_cache_clear
 #include "sql/sp_head.h"          // sp_head
 #include "sql/sql_audit.h"        // mysql_audit_free_thd
@@ -109,11 +105,8 @@
 #include "sql/transaction.h"  // trans_rollback
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
-#include "sql/xa/sql_cmd_xa.h"                   // Sql_cmd_xa_*
-#include "sql/xa/transaction_cache.h"            // xa::Transaction_cache
 #include "storage/perfschema/pfs_instr_class.h"  // PFS_CLASS_STAGE
 #include "storage/perfschema/terminology_use_previous.h"
-#include "string_with_len.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
 
@@ -131,230 +124,6 @@ char empty_c_string[1] = {0}; /* used for not defined db */
 
 const char *const THD::DEFAULT_WHERE = "field list";
 extern PSI_stage_info stage_waiting_for_disk_space;
-
-#ifndef NDEBUG
-/**
-   For debug purpose only. Used for
-   MTR mem_cnt_sql_keys, mem_cnt_temptable_keys keys.
-
-   @param thd   pointer to THD object
-*/
-bool fail_on_alloc(THD *thd) {
-  char alloc_name[512];
-  if (!thd->current_key_name) return false;
-  if (DBUG_EVALUATE_IF(thd->current_key_name, 1, 0)) {
-    thd->conn_mem_alloc_number++;
-    snprintf(alloc_name, sizeof(alloc_name), "alloc_number%llu",
-             thd->conn_mem_alloc_number);
-    if (DBUG_EVALUATE_IF(alloc_name, 1, 0)) return true;
-  }
-  return false;
-}
-#endif
-
-void Thd_mem_cnt::disable() {
-  if (m_enabled) {
-    flush();
-    m_enabled = false;
-  }
-}
-
-/**
-   Increase memory counter at 'alloc' operation. Update
-   global memory counter.
-
-   @param size   amount of memory allocated.
-*/
-void Thd_mem_cnt::alloc_cnt(size_t size) {
-  mem_counter += size;
-  max_conn_mem = std::max(max_conn_mem, mem_counter);
-
-  if (!m_enabled) {
-    return;
-  }
-
-  assert(!opt_initialize && m_thd != nullptr);
-  assert(!m_thd->kill_immunizer || !m_thd->kill_immunizer->is_active() ||
-         !is_error_mode());
-  assert(m_thd->is_killable);
-
-#ifndef NDEBUG
-  if (is_error_mode() && fail_on_alloc(m_thd)) {
-    m_thd->is_mem_cnt_error_issued = true;
-    generate_error(ER_DA_CONN_LIMIT, m_thd->variables.conn_mem_limit,
-                   mem_counter);
-  }
-#endif
-
-  if (mem_counter > m_thd->variables.conn_mem_limit) {
-#ifndef NDEBUG
-    // Used for testing the entering to idle state
-    // after successful statement execution (see mem_cnt_common_debug.test).
-    if (!DBUG_EVALUATE_IF("mem_cnt_no_error_on_exec_session", 1, 0))
-#endif
-      (void)generate_error(ER_DA_CONN_LIMIT, m_thd->variables.conn_mem_limit,
-                           mem_counter);
-  }
-
-  if ((curr_mode & MEM_CNT_UPDATE_GLOBAL_COUNTER) &&
-      m_thd->variables.conn_global_mem_tracking &&
-      max_conn_mem > glob_mem_counter) {
-    const ulonglong curr_mem =
-        (max_conn_mem / m_thd->variables.conn_mem_chunk_size + 1) *
-        m_thd->variables.conn_mem_chunk_size;
-    assert(curr_mem > glob_mem_counter && curr_mem > mem_counter);
-    const ulonglong delta = curr_mem - glob_mem_counter;
-    ulonglong global_conn_mem_counter_save;
-    ulonglong global_conn_mem_limit_save;
-    {
-      MUTEX_LOCK(lock, &LOCK_global_conn_mem_limit);
-      global_conn_mem_counter += delta;
-      global_conn_mem_counter_save = global_conn_mem_counter;
-      global_conn_mem_limit_save = global_conn_mem_limit;
-    }
-    glob_mem_counter = curr_mem;
-    max_conn_mem = std::max(max_conn_mem, glob_mem_counter);
-    if (global_conn_mem_counter_save > global_conn_mem_limit_save) {
-#ifndef NDEBUG
-      // Used for testing the entering to idle state
-      // after successful statement execution (see mem_cnt_common_debug.test).
-      if (DBUG_EVALUATE_IF("mem_cnt_no_error_on_exec_global", 1, 0)) return;
-#endif
-      (void)generate_error(ER_DA_GLOBAL_CONN_LIMIT, global_conn_mem_limit_save,
-                           global_conn_mem_counter_save);
-    }
-  }
-}
-
-/**
-   Decrease memory counter at 'free' operation.
-
-   @param size   amount of memory freed.
-*/
-void Thd_mem_cnt::free_cnt(size_t size) {
-  if (mem_counter >= size) {
-    mem_counter -= size;
-  } else {
-    /* Freeing memory allocated by another. */
-    mem_counter = 0;
-  }
-}
-
-/**
-   Function resets current memory counter mode and adjusts
-   global memory counter according to thread memory counter.
-
-   @returns -1 if OOM error, 0 otherwise.
-*/
-int Thd_mem_cnt::reset() {
-  restore_mode();
-  max_conn_mem = mem_counter;
-  if (m_thd->variables.conn_global_mem_tracking &&
-      (curr_mode & MEM_CNT_UPDATE_GLOBAL_COUNTER)) {
-    ulonglong delta;
-    ulonglong global_conn_mem_counter_save;
-    ulonglong global_conn_mem_limit_save;
-    if (glob_mem_counter > mem_counter) {
-      delta = glob_mem_counter - mem_counter;
-      MUTEX_LOCK(lock, &LOCK_global_conn_mem_limit);
-      assert(global_conn_mem_counter >= delta);
-      global_conn_mem_counter -= delta;
-      global_conn_mem_counter_save = global_conn_mem_counter;
-      global_conn_mem_limit_save = global_conn_mem_limit;
-    } else {
-      delta = mem_counter - glob_mem_counter;
-      MUTEX_LOCK(lock, &LOCK_global_conn_mem_limit);
-      global_conn_mem_counter += delta;
-      global_conn_mem_counter_save = global_conn_mem_counter;
-      global_conn_mem_limit_save = global_conn_mem_limit;
-    }
-    glob_mem_counter = mem_counter;
-    if (is_connection_stage &&
-        (global_conn_mem_counter_save > global_conn_mem_limit_save))
-      return generate_error(ER_DA_GLOBAL_CONN_LIMIT, global_conn_mem_limit_save,
-                            global_conn_mem_counter_save);
-  }
-  if (is_connection_stage && (mem_counter > m_thd->variables.conn_mem_limit))
-    return generate_error(ER_DA_CONN_LIMIT, m_thd->variables.conn_mem_limit,
-                          mem_counter);
-  is_connection_stage = false;
-  return 0;
-}
-
-/**
-   Function flushes memory counters before deleting the memory counter object.
-*/
-void Thd_mem_cnt::flush() {
-  max_conn_mem = mem_counter = 0;
-  if (glob_mem_counter > 0) {
-    MUTEX_LOCK(lock, &LOCK_global_conn_mem_limit);
-    assert(global_conn_mem_counter >= glob_mem_counter);
-    global_conn_mem_counter -= glob_mem_counter;
-  }
-  glob_mem_counter = 0;
-}
-
-/**
-   Generate OOM error and set therad to KILL_CONNECTION
-   state. Do nothing if thread is already killed or any error is
-   already issued.
-
-   @param err_no         Error number.
-   @param mem_limit      Memory limit.
-   @param mem_size       Memory size.
-
-   @returns -1 if OOM error is generated, 0 otherwise.
-*/
-int Thd_mem_cnt::generate_error(int err_no, ulonglong mem_limit,
-                                ulonglong mem_size) {
-  if (is_error_mode()) {
-    int err_no_tmp = 0;
-    const bool is_log_err = is_error_log_mode();
-    assert(!m_thd->kill_immunizer || !m_thd->kill_immunizer->is_active());
-    // Set NO ERROR mode to avoid error message duplication.
-    no_error_mode();
-    // No OOM error if any error is already issued or fatal error is set.
-    if (!m_thd->is_error() && !m_thd->is_fatal_error()) {
-      MUTEX_LOCK(lock, &m_thd->LOCK_thd_data);
-      // Ignore OOM error if thread is already killed.
-      if (!m_thd->killed) {
-        err_no_tmp = err_no;
-        m_thd->killed = THD::KILL_CONNECTION;
-      }
-    }
-
-    if (err_no_tmp) {
-      m_thd->push_diagnostics_area(&m_da, false);
-      my_error(err_no_tmp, MYF(0), mem_limit, mem_size);
-      m_thd->pop_diagnostics_area();
-      if (is_log_err) {
-        switch (err_no_tmp) {
-          case ER_DA_CONN_LIMIT:
-            LogErr(ERROR_LEVEL, ER_CONN_LIMIT, mem_limit, mem_size);
-            break;
-          case ER_DA_GLOBAL_CONN_LIMIT:
-            LogErr(ERROR_LEVEL, ER_GLOBAL_CONN_LIMIT, mem_limit, mem_size);
-            break;
-
-          default:
-            assert(0);
-        }
-      }
-      return -1;
-    }
-  }
-  return 0;
-}
-
-/**
-   Set THD error status using memory counter diagnostics area.
-*/
-void Thd_mem_cnt::set_thd_error_status() const {
-  m_thd->get_stmt_da()->set_overwrite_status(true);
-  m_thd->get_stmt_da()->set_error_status(
-      m_da.mysql_errno(), m_da.message_text(), m_da.returned_sqlstate());
-  m_thd->get_stmt_da()->set_overwrite_status(false);
-}
 
 void THD::Transaction_state::backup(THD *thd) {
   this->m_sql_command = thd->lex->sql_command;
@@ -407,7 +176,7 @@ THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
   //
   // Do NOT reset LEX if we're running tests. LEX is used by SELECT statements.
 
-  const bool reset = (m_reset_lex == RESET_LEX ? true : false);
+  bool reset = (m_reset_lex == RESET_LEX ? true : false);
   if (DBUG_EVALUATE_IF("use_attachable_trx", false, reset)) {
     m_thd->lex->reset_n_backup_query_tables_list(
         m_trx_state.m_query_tables_list);
@@ -523,7 +292,7 @@ THD::Attachable_trx::~Attachable_trx() {
 
   m_thd->restore_backup_open_tables_state(&m_trx_state.m_open_tables_state);
 
-  const bool reset = (m_reset_lex == RESET_LEX ? true : false);
+  bool reset = (m_reset_lex == RESET_LEX ? true : false);
   if (DBUG_EVALUATE_IF("use_attachable_trx", false, reset)) {
     m_thd->lex->restore_backup_query_tables_list(
         m_trx_state.m_query_tables_list);
@@ -573,11 +342,11 @@ void THD::enter_stage(const PSI_stage_info *new_stage,
 const char *THD::proc_info(const System_variables &sysvars) const {
   DBUG_TRACE;
   const char *ret = proc_info();
-  const terminology_use_previous::enum_compatibility_version version =
+  terminology_use_previous::enum_compatibility_version version =
       static_cast<terminology_use_previous::enum_compatibility_version>(
           sysvars.terminology_use_previous);
   DBUG_PRINT("info", ("session.terminology_use_previous=%d", (int)version));
-  if ((ret != nullptr) && (version != terminology_use_previous::NONE)) {
+  if (version != terminology_use_previous::NONE) {
     auto compatible_name_info =
         terminology_use_previous::lookup(PFS_CLASS_STAGE, ret, false);
 #ifndef NDEBUG
@@ -635,7 +404,6 @@ THD::THD(bool enable_plugins)
       m_db(NULL_CSTR),
       rli_fake(nullptr),
       rli_slave(nullptr),
-      copy_status_var_ptr(nullptr),
       initial_status_var(nullptr),
       status_var_aggregated(false),
       m_connection_attributes(),
@@ -656,7 +424,6 @@ THD::THD(bool enable_plugins)
       ha_data(PSI_NOT_INSTRUMENTED, ha_data.initial_capacity),
       binlog_row_event_extra_data(nullptr),
       skip_readonly_check(false),
-      skip_transaction_read_only_check(false),
       binlog_unsafe_warning_flags(0),
       binlog_table_maps(0),
       binlog_accessed_db_names(nullptr),
@@ -705,8 +472,6 @@ THD::THD(bool enable_plugins)
       skip_gtid_rollback(false),
       is_commit_in_middle_of_statement(false),
       has_gtid_consistency_violation(false),
-      main_mem_root(key_memory_thd_main_mem_root,
-                    global_system_variables.query_alloc_block_size),
       main_da(false),
       m_parser_da(false),
       m_query_rewrite_plugin_da(false),
@@ -717,13 +482,13 @@ THD::THD(bool enable_plugins)
       m_is_plugin_fake_ddl(false),
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
-      bind_parameter_values_count(0),
-      external_store_(),
-      events_cache_(nullptr),
-      audit_plugins_present(false) {
+      bind_parameter_values_count(0) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
+  init_sql_alloc(key_memory_thd_main_mem_root, &main_mem_root,
+                 global_system_variables.query_alloc_block_size,
+                 global_system_variables.query_prealloc_size);
   stmt_arena = this;
   thread_stack = nullptr;
   m_catalog.str = "std";
@@ -745,7 +510,8 @@ THD::THD(bool enable_plugins)
   // Must be reset to handle error with THD's created for init of mysqld
   lex->thd = nullptr;
   lex->set_current_query_block(nullptr);
-  m_lock_usec = 0L;
+  utime_after_lock = 0L;
+  current_linfo = nullptr;
   slave_thread = false;
   memset(&variables, 0, sizeof(variables));
   m_thread_id = Global_THD_manager::reserved_thread_id;
@@ -761,9 +527,6 @@ THD::THD(bool enable_plugins)
   durability_property = HA_REGULAR_DURABILITY;
 #ifndef NDEBUG
   dbug_sentry = THD_SENTRY_MAGIC;
-  current_key_name = nullptr;
-  conn_mem_alloc_number = 0;
-  is_mem_cnt_error_issued = false;
 #endif
   mysql_audit_init_thd(this);
   net.vio = nullptr;
@@ -779,8 +542,6 @@ THD::THD(bool enable_plugins)
   mysql_mutex_init(key_LOCK_thd_query, &LOCK_thd_query, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_thd_sysvar, &LOCK_thd_sysvar, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_thd_protocol, &LOCK_thd_protocol,
-                   MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(key_LOCK_thd_security_ctx, &LOCK_thd_security_ctx,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_query_plan, &LOCK_query_plan, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_current_cond, &LOCK_current_cond,
@@ -847,13 +608,6 @@ THD::THD(bool enable_plugins)
   debug_binlog_xid_last.reset();
 #endif
   set_system_user(false);
-  set_connection_admin(false);
-  m_mem_cnt.set_thd(this);
-
-  events_cache_ = new (std::nothrow) Event_reference_caching_cache();
-  if (events_cache_ == nullptr || !events_cache_->valid()) {
-    /*ToDo: Raise warning */
-  }
 }
 
 void THD::copy_table_access_properties(THD *thd) {
@@ -981,15 +735,15 @@ void THD::raise_note_printf(uint sql_errno, ...) {
   (void)raise_condition(sql_errno, nullptr, Sql_condition::SL_NOTE, ebuff);
 }
 
-my_timeval THD::query_start_timeval_trunc(uint decimals) {
-  my_timeval tv;
-  tv.m_tv_sec = start_time.tv_sec;
+struct timeval THD::query_start_timeval_trunc(uint decimals) {
+  struct timeval tv;
+  tv.tv_sec = start_time.tv_sec;
   if (decimals) {
-    tv.m_tv_usec = start_time.tv_usec;
+    tv.tv_usec = start_time.tv_usec;
     my_timeval_trunc(&tv, decimals);
     query_start_usec_used = true;
   } else {
-    tv.m_tv_usec = 0;
+    tv.tv_usec = 0;
   }
   return tv;
 }
@@ -1026,12 +780,10 @@ Sql_condition *THD::raise_condition(uint sql_errno, const char *sqlstate,
       (condition handler) that prevents entering infinite recursion, when
       a plugin signals error, when already handling the error.
 
-      mysql_event_tracking_general_notify() must therefore be called after
-      handle_condition().
+      mysql_audit_notify() must therefore be called after handle_condition().
     */
-    mysql_event_tracking_general_notify(
-        this, AUDIT_EVENT(EVENT_TRACKING_GENERAL_ERROR), sql_errno, msg,
-        strlen(msg));
+    mysql_audit_notify(this, AUDIT_EVENT(MYSQL_AUDIT_GENERAL_ERROR), sql_errno,
+                       msg, strlen(msg));
 
     is_slave_error = true;  // needed to catch query errors during replication
 
@@ -1081,8 +833,7 @@ void THD::init(void) {
   {
     ulong tmp;
     tmp = sql_rnd_with_mutex();
-    randominit(&rand,
-               tmp + static_cast<ulong>(reinterpret_cast<uintptr_t>(&rand)),
+    randominit(&rand, tmp + (ulong)&rand,
                tmp + (ulong)::atomic_global_query_id);
   }
 
@@ -1127,11 +878,8 @@ void THD::init(void) {
   m_se_gtid_flags.reset();
   owned_gtid.dbug_print(nullptr, "set owned_gtid (clear) in THD::init");
 
-  /*
-    This will clear the writeset session history and re-set delegate state to
-    INIT
-  */
-  rpl_thd_ctx.init();
+  // This will clear the writeset session history.
+  rpl_thd_ctx.dependency_tracker_ctx().set_last_session_sequence_number(0);
 
   /*
     This variable is used to temporarily disable the password validation plugin
@@ -1175,8 +923,6 @@ void THD::cleanup_connection(void) {
   debug_sync_end_thread(this);
 #endif /* defined(ENABLED_DEBUG_SYNC) */
   killed = NOT_KILLED;
-  rpl_thd_ctx.set_tx_rpl_delegate_stage_status(
-      Rpl_thd_context::TX_RPL_STAGE_CONNECTION_CLEANED);
   running_explain_analyze = false;
   m_thd_life_cycle_stage = enum_thd_life_cycle_stages::ACTIVE;
   init();
@@ -1234,7 +980,6 @@ void THD::cleanup(void) {
   DEBUG_SYNC(this, "thd_cleanup_start");
 
   killed = KILL_CONNECTION;
-
   if (trn_ctx->xid_state()->has_state(XID_STATE::XA_PREPARED)) {
     /*
       Return error is not an option as XA is in prepared state and
@@ -1244,11 +989,11 @@ void THD::cleanup(void) {
             &mdl_context, xs->get_xid()->key(), xs->get_xid()->key_length())) {
       LogErr(ERROR_LEVEL, ER_XA_CANT_CREATE_MDL_BACKUP);
     }
-    xa::Transaction_cache::detach(trn_ctx);
+    transaction_cache_detach(trn_ctx);
   } else {
     xs->set_state(XID_STATE::XA_NOTR);
     trans_rollback(this);
-    xa::Transaction_cache::remove(trn_ctx);
+    transaction_cache_delete(trn_ctx);
   }
 
   locked_tables_list.unlock_locked_tables(this);
@@ -1371,8 +1116,6 @@ void THD::release_resources() {
   mysql_mutex_lock(&LOCK_thd_query);
   mysql_mutex_unlock(&LOCK_thd_query);
 
-  mysql_audit_free_thd(this);
-
   stmt_map.reset(); /* close all prepared statements */
   if (!is_cleanup_done()) cleanup();
 
@@ -1399,11 +1142,7 @@ void THD::release_resources() {
     delete rli_fake;
     rli_fake = nullptr;
   }
-
-  delete events_cache_;
-  events_cache_ = nullptr;
-
-  release_external_store();
+  mysql_audit_free_thd(this);
 
   if (current_thd == this) restore_globals();
 
@@ -1422,7 +1161,6 @@ void THD::release_resources() {
   mysql_mutex_unlock(&LOCK_status);
 
   m_thd_life_cycle_stage = enum_thd_life_cycle_stages::RESOURCES_RELEASED;
-  disable_mem_cnt();
 }
 
 THD::~THD() {
@@ -1450,7 +1188,6 @@ THD::~THD() {
   mysql_mutex_destroy(&LOCK_thd_query);
   mysql_mutex_destroy(&LOCK_thd_sysvar);
   mysql_mutex_destroy(&LOCK_thd_protocol);
-  mysql_mutex_destroy(&LOCK_thd_security_ctx);
   mysql_mutex_destroy(&LOCK_current_cond);
   mysql_mutex_destroy(&LOCK_group_replication_connection_mutex);
 
@@ -1476,7 +1213,7 @@ THD::~THD() {
     but then need to be removed on error scenarios, we call this method
     here
   */
-  unregister_replica(this, true, true);
+  unregister_slave(this, true, true);
 
   main_mem_root.Clear();
 
@@ -1641,7 +1378,7 @@ void THD::disconnect(bool server_shutdown) {
     While exiting kill immune mode, awake() is called again with the killed
     state saved in THD::kill_immunizer object.
 
-    active_vio is already associated to the thread when it is in the kill
+    active_vio is aleady associated to the thread when it is in the kill
     immune mode. THD::awake() closes the active_vio.
    */
   if (kill_immunizer != nullptr)
@@ -1718,7 +1455,7 @@ void THD::store_globals() {
   */
   set_my_thread_var_id(m_thread_id);
 #endif
-  real_id = my_thread_self();
+  real_id = my_thread_self();  // For debugging
 }
 
 /*
@@ -1726,8 +1463,6 @@ void THD::store_globals() {
   store_global call for this thread.
 */
 void THD::restore_globals() {
-  // Remove reference to specific OS thread.
-  real_id = 0;
   /*
     Assert that thread_stack is initialized: it's necessary to be able
     to track stack overrun.
@@ -1853,7 +1588,7 @@ bool THD::convert_string(LEX_STRING *to, const CHARSET_INFO *to_cs,
                          const char *from, size_t from_length,
                          const CHARSET_INFO *from_cs, bool report_error) {
   DBUG_TRACE;
-  const size_t new_length = to_cs->mbmaxlen * from_length;
+  size_t new_length = to_cs->mbmaxlen * from_length;
   if (!(to->str = (char *)alloc(new_length + 1))) {
     to->length = 0;  // Safety fix
     return true;     // EOM
@@ -1868,13 +1603,15 @@ bool THD::convert_string(LEX_STRING *to, const CHARSET_INFO *to_cs,
                          from_length, from_cs, 6);
     if (report_error) {
       my_error(ER_CANNOT_CONVERT_STRING, MYF(0), printable_buff,
-               from_cs->csname, to_cs->csname);
+               replace_utf8_utf8mb3(from_cs->csname),
+               replace_utf8_utf8mb3(to_cs->csname));
       return true;
     } else {
       push_warning_printf(this, Sql_condition::SL_WARNING,
                           ER_INVALID_CHARACTER_STRING,
                           ER_THD(this, ER_CANNOT_CONVERT_STRING),
-                          printable_buff, from_cs->csname, to_cs->csname);
+                          printable_buff, replace_utf8_utf8mb3(from_cs->csname),
+                          replace_utf8_utf8mb3(to_cs->csname));
     }
   }
 
@@ -1944,14 +1681,6 @@ void THD::shutdown_active_vio() {
   DBUG_TRACE;
   mysql_mutex_assert_owner(&LOCK_thd_data);
   if (active_vio) {
-#ifdef USE_PPOLL_IN_VIO
-    // Vio::thread_id may not be correct if the THD has been
-    // associated with a different OS thread since the Vio object was
-    // created. So we store the current THD::real_id here so that
-    // vio_shutdown() will not try to send SIGALRM to an incorrect, or
-    // invalid thread id.
-    active_vio->thread_id = real_id;
-#endif /* USE_PPOLL_IN_VIO */
     vio_shutdown(active_vio);
     active_vio = nullptr;
     m_SSL = nullptr;
@@ -1962,14 +1691,6 @@ void THD::shutdown_clone_vio() {
   DBUG_TRACE;
   mysql_mutex_assert_owner(&LOCK_thd_data);
   if (clone_vio != nullptr) {
-#ifdef USE_PPOLL_IN_VIO
-    // Vio::thread_id may not be correct if the THD has been
-    // associated with a different OS thread since the Vio object was
-    // created. So we store the current THD::real_id here so that
-    // vio_shutdown() will not try to send SIGALRM to an incorrect, or
-    // invalid thread id.
-    clone_vio->thread_id = real_id;
-#endif /* USE_PPOLL_IN_VIO */
     vio_shutdown(clone_vio);
     clone_vio = nullptr;
   }
@@ -2065,7 +1786,7 @@ Prepared_statement_map::Prepared_statement_map()
       m_last_found_statement(nullptr) {}
 
 int Prepared_statement_map::insert(Prepared_statement *statement) {
-  st_hash.emplace(statement->id(), unique_ptr<Prepared_statement>(statement));
+  st_hash.emplace(statement->id, unique_ptr<Prepared_statement>(statement));
   if (statement->name().str) {
     names_hash.emplace(to_string(statement->name()), statement);
   }
@@ -2091,7 +1812,7 @@ int Prepared_statement_map::insert(Prepared_statement *statement) {
 
 err_max:
   if (statement->name().str) names_hash.erase(to_string(statement->name()));
-  st_hash.erase(statement->id());
+  st_hash.erase(statement->id);
   return 1;
 }
 
@@ -2101,7 +1822,7 @@ Prepared_statement *Prepared_statement_map::find_by_name(
 }
 
 Prepared_statement *Prepared_statement_map::find(ulong id) {
-  if (m_last_found_statement == nullptr || id != m_last_found_statement->id()) {
+  if (m_last_found_statement == nullptr || id != m_last_found_statement->id) {
     Prepared_statement *stmt = find_or_nullptr(st_hash, id);
     if (stmt && stmt->name().str) return nullptr;
     m_last_found_statement = stmt;
@@ -2113,7 +1834,7 @@ void Prepared_statement_map::erase(Prepared_statement *statement) {
   if (statement == m_last_found_statement) m_last_found_statement = nullptr;
   if (statement->name().str) names_hash.erase(to_string(statement->name()));
 
-  st_hash.erase(statement->id());
+  st_hash.erase(statement->id);
   mysql_mutex_lock(&LOCK_prepared_stmt_count);
   assert(prepared_stmt_count > 0);
   prepared_stmt_count--;
@@ -2154,11 +1875,6 @@ Prepared_statement_map::~Prepared_statement_map() {
 
 void THD::send_kill_message() const {
   int err = killed;
-  if (m_mem_cnt.is_error()) {
-    assert(err == KILL_CONNECTION);
-    m_mem_cnt.set_thd_error_status();
-    return;
-  }
   if (err && !get_stmt_da()->is_set()) {
     if ((err == KILL_CONNECTION) && !connection_events_loop_aborted())
       err = KILL_QUERY;
@@ -2253,13 +1969,22 @@ void THD::begin_attachable_rw_transaction() {
     Seed for random() is saved for the first! usage of RAND()
     We reset examined_row_count and num_truncated_fields and add these to the
     result to ensure that if we have a bug that would reset these within
-    a function, we are not losing any rows from the main statement.
+    a function, we are not loosing any rows from the main statement.
 
     We do not reset value of last_insert_id().
 ****************************************************************************/
 
 void THD::reset_sub_statement_state(Sub_statement_state *backup,
                                     uint new_state) {
+  /* BUG#33029, if we are replicating from a buggy master, reset
+     auto_inc_intervals_forced to prevent substatement
+     (triggers/functions) from using erroneous INSERT_ID value
+   */
+  if (rpl_master_erroneous_autoinc(this)) {
+    assert(backup->auto_inc_intervals_forced.nb_elements() == 0);
+    auto_inc_intervals_forced.swap(&backup->auto_inc_intervals_forced);
+  }
+
   backup->option_bits = variables.option_bits;
   backup->check_for_truncated_fields = check_for_truncated_fields;
   backup->in_sub_stmt = in_sub_stmt;
@@ -2303,6 +2028,14 @@ void THD::reset_sub_statement_state(Sub_statement_state *backup,
 
 void THD::restore_sub_statement_state(Sub_statement_state *backup) {
   DBUG_TRACE;
+  /* BUG#33029, if we are replicating from a buggy master, restore
+     auto_inc_intervals_forced so that the top statement can use the
+     INSERT_ID value set before this statement.
+   */
+  if (rpl_master_erroneous_autoinc(this)) {
+    backup->auto_inc_intervals_forced.swap(&auto_inc_intervals_forced);
+    assert(backup->auto_inc_intervals_forced.nb_elements() == 0);
+  }
 
   /*
     To save resources we want to release savepoints which were created
@@ -2664,7 +2397,7 @@ void THD::increment_questions_counter() {
 */
 void THD::time_out_user_resource_limits() {
   mysql_mutex_assert_owner(&LOCK_user_conn);
-  const ulonglong check_time = start_utime;
+  ulonglong check_time = start_utime;
   DBUG_TRACE;
 
   /* If more than a hour since last check, reset resource checking */
@@ -2763,7 +2496,7 @@ void THD::syntax_error(int mysql_errno, ...) {
   @param format         Error format message. NULL means ER(ER_SYNTAX_ERROR).
 */
 
-void THD::syntax_error_at(const POS &location, const char *format, ...) {
+void THD::syntax_error_at(const YYLTYPE &location, const char *format, ...) {
   va_list args;
   va_start(args, format);
   vsyntax_error_at(location, format, args);
@@ -2785,14 +2518,14 @@ void THD::syntax_error_at(const POS &location, const char *format, ...) {
   @param location       YYSTYPE object: error position
   @param mysql_errno    Error number to get a format string with ER_THD()
 */
-void THD::syntax_error_at(const POS &location, int mysql_errno, ...) {
+void THD::syntax_error_at(const YYLTYPE &location, int mysql_errno, ...) {
   va_list args;
   va_start(args, mysql_errno);
   vsyntax_error_at(location, ER_THD_NONCONST(this, mysql_errno), args);
   va_end(args);
 }
 
-void THD::vsyntax_error_at(const POS &location, const char *format,
+void THD::vsyntax_error_at(const YYLTYPE &location, const char *format,
                            va_list args) {
   vsyntax_error_at(location.raw.start, format, args);
 }
@@ -2826,7 +2559,7 @@ void THD::vsyntax_error_at(const char *pos_in_lexer_raw_buffer,
           ? m_parser_state->m_lip.get_lineno(pos_in_lexer_raw_buffer)
           : 1;
   const char *pos = pos_in_lexer_raw_buffer ? pos_in_lexer_raw_buffer : "";
-  const ErrConvString err(pos, strlen(pos), variables.character_set_client);
+  ErrConvString err(pos, strlen(pos), variables.character_set_client);
   (void)vsnprintf(buff, sizeof(buff), format, args);
   my_printf_error(ER_PARSE_ERROR, ER_THD(this, ER_PARSE_ERROR), MYF(0), buff,
                   err.ptr(), lineno);
@@ -2899,7 +2632,6 @@ void THD::send_statement_status() {
 
   switch (da->status()) {
     case Diagnostics_area::DA_ERROR:
-      assert(!is_mem_cnt_error_issued || is_mem_cnt_error());
       /* The query failed, send error to log and abort bootstrap. */
       error = m_protocol->send_error(da->mysql_errno(), da->message_text(),
                                      da->returned_sqlstate());
@@ -2927,7 +2659,7 @@ void THD::send_statement_status() {
 void THD::claim_memory_ownership(bool claim [[maybe_unused]]) {
 #ifdef HAVE_PSI_MEMORY_INTERFACE
   /*
-    Ownership of the THD object is transferred to this thread.
+    Ownership of the THD object is transfered to this thread.
     This happens typically:
     - in the event scheduler,
       when the scheduler thread creates a work item and
@@ -2994,29 +2726,10 @@ bool THD::is_current_stmt_binlog_log_replica_updates_disabled() const {
           !mysql_bin_log.is_open());
 }
 
-bool THD::is_current_stmt_binlog_enabled_and_caches_empty() const {
-  return mysql_bin_log.is_current_stmt_binlog_enabled_and_caches_empty(this);
-}
-
 bool THD::is_current_stmt_binlog_row_enabled_with_write_set_extraction() const {
   return ((variables.transaction_write_set_extraction != HASH_ALGORITHM_OFF) &&
           is_current_stmt_binlog_format_row() &&
           !is_current_stmt_binlog_disabled());
-}
-
-void THD::enable_low_level_commit_ordering() {
-  DBUG_TRACE;
-  m_is_low_level_commit_ordering_enabled = true;
-}
-
-void THD::disable_low_level_commit_ordering() {
-  DBUG_TRACE;
-  m_is_low_level_commit_ordering_enabled = false;
-}
-
-bool THD::is_low_level_commit_ordering_enabled() const {
-  DBUG_TRACE;
-  return m_is_low_level_commit_ordering_enabled;
 }
 
 bool THD::Query_plan::is_single_table_plan() const {
@@ -3066,11 +2779,10 @@ bool THD::sql_parser() {
     It is undefined (unchanged) on error. If "root" is NULL on success,
     then the parser has already called lex->make_sql_cmd() internally.
   */
-  extern int my_sql_parser_parse(class THD * thd,
-                                 class Parse_tree_root * *root);
+  extern int MYSQLparse(class THD * thd, class Parse_tree_root * *root);
 
   Parse_tree_root *root = nullptr;
-  if (my_sql_parser_parse(this, &root) || is_error()) {
+  if (MYSQLparse(this, &root) || is_error()) {
     /*
       Restore the original LEX if it was replaced when parsing
       a stored procedure. We must ensure that a parsing error
@@ -3190,8 +2902,7 @@ void THD::pop_protocol() {
 }
 
 void THD::set_time() {
-  start_utime = my_micro_time();
-  m_lock_usec = 0;
+  start_utime = utime_after_lock = my_micro_time();
   if (user_time.tv_sec || user_time.tv_usec)
     start_time = user_time;
   else
@@ -3202,410 +2913,23 @@ void THD::set_time() {
 #endif
 }
 
-void THD::inc_lock_usec(ulonglong lock_usec) {
+void THD::set_time_after_lock() {
   /*
     If mysql_lock_tables() is called multiple times,
-    we sum all the lock times here.
-    This is the desired behavior, to know how much
-    time was spent waiting on SQL tables.
-    When Innodb reports additional lock time for DATA locks,
-    it is counted as well.
-    The performance_schema lock time for the current
-    statement is updated accordingly.
+    we stick with the first timestamp. This prevents
+    anomalities with things like CREATE INDEX, where
+    otherwise, we'll get the lock timestamp for the
+    data dictionary update.
   */
-  m_lock_usec += lock_usec;
-  MYSQL_SET_STATEMENT_LOCK_TIME(m_statement_psi, m_lock_usec);
+  if (utime_after_lock != start_utime) return;
+  utime_after_lock = my_micro_time();
+  MYSQL_SET_STATEMENT_LOCK_TIME(m_statement_psi,
+                                (utime_after_lock - start_utime));
 }
 
 void THD::update_slow_query_status() {
-  if (my_micro_time() > start_utime + variables.long_query_time)
+  if (my_micro_time() > utime_after_lock + variables.long_query_time)
     server_status |= SERVER_QUERY_WAS_SLOW;
-}
-
-bool THD::add_external(unsigned int slot, void *data) {
-  if (!data)
-    external_store_.erase(slot);
-  else
-    external_store_[slot] = data;
-  return false;
-}
-
-void *THD::fetch_external(unsigned int slot) {
-  return external_store_.at(slot) ? external_store_.at(slot) : nullptr;
-}
-
-bool THD::check_event_subscribers(Event_tracking_class event,
-                                  unsigned long subevent, bool check_audited) {
-  audit_plugins_present = false;
-  if (check_audited && this->m_audited == false) return true;
-
-  auto mapping =
-      Singleton_event_tracking_service_to_plugin_mapping::create_instance();
-  assert(mapping != nullptr);
-
-  mysql_event_class_t plugin_event = mapping->plugin_event_class(event);
-  unsigned long plugin_subevent = mapping->plugin_sub_event(subevent);
-
-  if (mysql_audit_acquire_plugins(this, plugin_event, plugin_subevent,
-                                  check_audited)) {
-    if (events_cache_ == nullptr || !events_cache_->valid()) return true;
-    const my_h_service *refs{nullptr};
-
-    if (events_cache_->get(event, &refs)) return true;
-
-    return !(refs != nullptr && *refs);
-  }
-  audit_plugins_present = true;
-  return false;
-}
-
-bool THD::push_event_tracking_data(
-    Event_tracking_class event,
-    const Event_tracking_information *event_tracking_information) {
-  Event_tracking_information *data = nullptr;
-  if (event_tracking_information) {
-    switch (event) {
-      case Event_tracking_class::AUTHENTICATION:
-        data = new (std::nothrow) Event_tracking_authentication_information(*(
-            reinterpret_cast<const Event_tracking_authentication_information *>(
-                event_tracking_information)));
-        break;
-      case Event_tracking_class::GENERAL:
-        data = new (std::nothrow) Event_tracking_general_information(
-            *(reinterpret_cast<const Event_tracking_general_information *>(
-                event_tracking_information)));
-        break;
-      case Event_tracking_class::COMMAND:
-        [[fallthrough]];
-      case Event_tracking_class::CONNECTION:
-        [[fallthrough]];
-      case Event_tracking_class::GLOBAL_VARIABLE:
-        [[fallthrough]];
-      case Event_tracking_class::MESSAGE:
-        [[fallthrough]];
-      case Event_tracking_class::PARSE:
-        [[fallthrough]];
-      case Event_tracking_class::SHUTDOWN:
-        [[fallthrough]];
-      case Event_tracking_class::STARTUP:
-        [[fallthrough]];
-      case Event_tracking_class::QUERY:
-        [[fallthrough]];
-      case Event_tracking_class::STORED_PROGRAM:
-        [[fallthrough]];
-      case Event_tracking_class::TABLE_ACCESS:
-        break;
-      default:
-        assert(false);
-        return true;
-    };
-  }
-  event_tracking_data_.push(std::make_pair(event, data));
-  return false;
-}
-
-void THD::pop_event_tracking_data() {
-  if (!event_tracking_data_.empty()) {
-    auto information = event_tracking_data_.top();
-    if (information.second) delete information.second;
-    event_tracking_data_.pop();
-  }
-}
-
-bool THD::event_notify(struct st_mysql_event_generic *event_data) {
-  if (event_data == nullptr) return true;
-
-  if (push_event_tracking_data(event_data->event_class,
-                               event_data->event_information))
-    return true;
-
-  auto cleanup_guard =
-      create_scope_guard([&] { this->pop_event_tracking_data(); });
-
-  bool retval = false;
-
-  if (audit_plugins_present) {
-    /* Notify all plugins first */
-    switch (event_data->event_class) {
-      case Event_tracking_class::AUTHENTICATION:
-        retval |= (srv_event_tracking_authentication->notify(
-                      reinterpret_cast<
-                          const mysql_event_tracking_authentication_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-        break;
-      case Event_tracking_class::COMMAND:
-        retval |=
-            (srv_event_tracking_command->notify(
-                reinterpret_cast<const mysql_event_tracking_command_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::CONNECTION:
-        retval |=
-            (srv_event_tracking_connection->notify(
-                reinterpret_cast<const mysql_event_tracking_connection_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::GENERAL:
-        retval |=
-            (srv_event_tracking_general->notify(
-                reinterpret_cast<const mysql_event_tracking_general_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::GLOBAL_VARIABLE:
-        retval |= (srv_event_tracking_global_variable->notify(
-                      reinterpret_cast<
-                          const mysql_event_tracking_global_variable_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-        break;
-      case Event_tracking_class::MESSAGE:
-        retval |=
-            (srv_event_tracking_message->notify(
-                reinterpret_cast<const mysql_event_tracking_message_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::PARSE:
-        retval |= (srv_event_tracking_parse->notify(
-                      reinterpret_cast<mysql_event_tracking_parse_data *>(
-                          const_cast<void *>(event_data->event))))
-                      ? true
-                      : false;
-        break;
-      case Event_tracking_class::QUERY:
-        retval |= (srv_event_tracking_query->notify(
-                      reinterpret_cast<const mysql_event_tracking_query_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-        break;
-      case Event_tracking_class::SHUTDOWN:
-        retval |=
-            (srv_event_tracking_lifecycle->notify_shutdown(
-                reinterpret_cast<const mysql_event_tracking_shutdown_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::STARTUP:
-        retval |=
-            (srv_event_tracking_lifecycle->notify_startup(
-                reinterpret_cast<const mysql_event_tracking_startup_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-        break;
-      case Event_tracking_class::STORED_PROGRAM:
-        retval |= (srv_event_tracking_stored_program->notify(
-                      reinterpret_cast<
-                          const mysql_event_tracking_stored_program_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-        break;
-      case Event_tracking_class::TABLE_ACCESS:
-        retval |= (srv_event_tracking_table_access->notify(
-                      reinterpret_cast<
-                          const mysql_event_tracking_table_access_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-        break;
-      default:
-        assert(false);
-        break;
-    };
-  }
-
-  if (events_cache_ == nullptr || !events_cache_->valid()) return retval;
-
-  const my_h_service *refs{nullptr};
-
-  if (events_cache_->get(event_data->event_class, &refs)) return retval;
-
-  switch (event_data->event_class) {
-    case Event_tracking_class::AUTHENTICATION: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_authentication) *>(
-                *one);
-        retval |=
-            (handle->notify(reinterpret_cast<
-                            const mysql_event_tracking_authentication_data *>(
-                event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::COMMAND: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_command) *>(*one);
-        retval |=
-            (handle->notify(
-                reinterpret_cast<const mysql_event_tracking_command_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-
-    case Event_tracking_class::CONNECTION: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto *handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_connection) *>(*one);
-        retval |=
-            (handle->notify(
-                 reinterpret_cast<const mysql_event_tracking_connection_data *>(
-                     event_data->event))
-                 ? true
-                 : false);
-      }
-      break;
-    }
-    case Event_tracking_class::GENERAL: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_general) *>(*one);
-        retval |=
-            (handle->notify(
-                 reinterpret_cast<const mysql_event_tracking_general_data *>(
-                     event_data->event))
-                 ? true
-                 : false);
-      }
-      break;
-    }
-    case Event_tracking_class::GLOBAL_VARIABLE: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_global_variable) *>(
-                *one);
-        retval |=
-            (handle->notify(reinterpret_cast<
-                            const mysql_event_tracking_global_variable_data *>(
-                event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::MESSAGE: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_message) *>(*one);
-        retval |=
-            (handle->notify(
-                reinterpret_cast<const mysql_event_tracking_message_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::PARSE: {
-      for (const my_h_service *one = refs; *one; one++) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_parse) *>(*one);
-        retval |=
-            (handle->notify(reinterpret_cast<mysql_event_tracking_parse_data *>(
-                const_cast<void *>(event_data->event))))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::QUERY: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_query) *>(*one);
-        retval |= (handle->notify(
-                      reinterpret_cast<const mysql_event_tracking_query_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
-      }
-      break;
-    }
-    case Event_tracking_class::SHUTDOWN: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_lifecycle) *>(*one);
-        retval |=
-            (handle->notify_shutdown(
-                reinterpret_cast<const mysql_event_tracking_shutdown_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::STARTUP: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_lifecycle) *>(*one);
-        retval |=
-            (handle->notify_startup(
-                reinterpret_cast<const mysql_event_tracking_startup_data *>(
-                    event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::STORED_PROGRAM: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_stored_program) *>(
-                *one);
-        retval |=
-            (handle->notify(reinterpret_cast<
-                            const mysql_event_tracking_stored_program_data *>(
-                event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    case Event_tracking_class::TABLE_ACCESS: {
-      for (const my_h_service *one = refs; *one; ++one) {
-        auto handle =
-            reinterpret_cast<SERVICE_TYPE(event_tracking_table_access) *>(*one);
-        retval |=
-            (handle->notify(reinterpret_cast<
-                            const mysql_event_tracking_table_access_data *>(
-                event_data->event)))
-                ? true
-                : false;
-      }
-      break;
-    }
-    default: {
-      assert(false);
-      retval = false;
-      break;
-    }
-  };
-
-  return retval;
-}
-
-void THD::release_external_store() {
-  /* See if any component stored data. If so, try to free it */
-  if (!external_store_.empty())
-    (void)free_thd_store_resource(this, external_store_);
 }
 
 /**
@@ -3615,6 +2939,8 @@ void THD::release_external_store() {
   @param db         Schema name in which table is being created.
   @param tablename  Table name being created.
   @param hton       Handlerton representing engine used for table.
+
+  @returns void
 */
 void Transactional_ddl_context::init(dd::String_type db,
                                      dd::String_type tablename,
@@ -3628,6 +2954,8 @@ void Transactional_ddl_context::init(dd::String_type db,
 /**
   Remove the table share used while creating the table, if the transaction
   is being rolledback.
+
+  @returns void
 */
 void Transactional_ddl_context::rollback() {
   if (!inited()) return;
@@ -3652,6 +2980,8 @@ void Transactional_ddl_context::rollback() {
   End the transactional context created by calling post ddl hook for engine
   on which table is being created. This is done after transaction rollback
   and commit.
+
+  @returns void
 */
 void Transactional_ddl_context::post_ddl() {
   if (!inited()) return;

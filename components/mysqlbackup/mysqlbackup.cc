@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/services/psi_memory.h"
 #include "mysql/service_security_context.h"
 #include "mysqld_error.h"
-#include "string_with_len.h"
 
 /// This file contains a definition of the mysqlbackup component.
 
@@ -363,10 +362,6 @@ mysql_service_status_t mysqlbackup_deinit() {
   if (unregister_status_variables()) failed = 1;
   if (unregister_system_variables()) failed = 1;
   if (deinitialize_log_service()) failed = 1;
-  // Reset variables to the state they had at the first dlopen().
-  mysqlbackup_component_version = nullptr;
-  mysqlbackup_backup_id = nullptr;
-  mysqlbackup_component_sys_var_registered = false;
   return (failed);
 }
 
@@ -388,7 +383,6 @@ REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
 REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(udf_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_thd_security_context);
-REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_security_context_options);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_page_track);
 REQUIRES_SERVICE_PLACEHOLDER(global_grants_check);
@@ -408,7 +402,6 @@ REQUIRES_SERVICE(registry), REQUIRES_SERVICE(log_builtins),
     REQUIRES_SERVICE(status_variable_registration),
     REQUIRES_SERVICE(udf_registration),
     REQUIRES_SERVICE(mysql_thd_security_context),
-    REQUIRES_SERVICE(mysql_runtime_error),
     REQUIRES_SERVICE(mysql_security_context_options),
     REQUIRES_SERVICE(mysql_page_track), REQUIRES_SERVICE(global_grants_check),
     REQUIRES_SERVICE(mysql_current_thread_reader),

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,17 +43,17 @@
 #include <vector>
 
 #include "binlog_event.h"
-#include "buffer/buffer_sequence_view.h"  // Buffer_sequence_view
-#include "compression/base.h"  // binary_log::transaction::compression::type
 #include "template_utils.h"
 #include "uuid.h"
+
+#include "compression/base.h"
 
 namespace binary_log {
 /**
   @class Rotate_event
 
   When a binary log file exceeds a size limit, a ROTATE_EVENT is written
-  at the end of the file that points to the next file in the sequence.
+  at the end of the file that points to the next file in the squence.
   This event is information for the slave to know the name of the next
   binary log it is going to receive.
 
@@ -266,7 +266,7 @@ class Format_description_event : public Binary_log_event {
   uint8_t common_header_len;
   /*
     The list of post-headers' lengths followed
-    by the checksum alg description byte
+    by the checksum alg decription byte
   */
   std::vector<uint8_t> post_header_len;
   unsigned char server_version_split[ST_SERVER_VER_SPLIT_LEN];
@@ -394,7 +394,7 @@ class Stop_event : public Binary_log_event {
 /**
   @class Incident_event
 
-   Class representing an incident, an occurrence out of the ordinary,
+   Class representing an incident, an occurance out of the ordinary,
    that happened on the master.
 
    The event is used to inform the slave that something out of the
@@ -539,7 +539,7 @@ class Xid_event : public Binary_log_event {
   @class XA_prepare_event
 
   An XA_prepare event is generated for a XA prepared transaction.
-  Like Xid_event it contains XID of the *prepared* transaction.
+  Like Xid_event it contans XID of the *prepared* transaction.
 
   @section XA_prepare_event_binary_format Binary Format
 
@@ -583,7 +583,6 @@ class XA_prepare_event : public Binary_log_event {
   */
   static const int MY_XIDDATASIZE = 128;
 
- public:
   struct MY_XID {
     long formatID;
     long gtrid_length;
@@ -625,19 +624,6 @@ class XA_prepare_event : public Binary_log_event {
   void print_event_info(std::ostream &) override {}
   void print_long_info(std::ostream &) override {}
 #endif
-  /**
-    Whether or not this `XA_prepare_event` represents an `XA COMMIT ONE
-    PHASE`.
-
-    @return true if it's an `XA COMMIT ONE PHASE`, false otherwise.
-   */
-  bool is_one_phase() const;
-  /**
-    Retrieves the content of `my_xid` member variable.
-
-    @return The const-reference to the `my_xid` member variable.
-   */
-  MY_XID const &get_xid() const;
 };
 
 /**
@@ -719,197 +705,193 @@ struct gtid_info {
   int64_t rpl_gtid_gno;
 };
 
-/// Event that encloses all the events of a transaction.
-///
-/// It is used for carrying compressed payloads, and contains
-/// compression metadata.
-class Transaction_payload_event : public Binary_log_event {
- public:
-  using Buffer_sequence_view_t = mysqlns::buffer::Buffer_sequence_view<>;
+/**
+  This event is a wrapper event and encloses many other events.
 
+  It is mostly used for carrying compressed payloads as its content
+  can be compressed, in which case, its metadata shall contain
+  information about the compression metadata as well.
+ */
+class Transaction_payload_event : public Binary_log_event {
  private:
   Transaction_payload_event &operator=(const Transaction_payload_event &) =
       delete;
   Transaction_payload_event(const Transaction_payload_event &) = delete;
 
+ public:
+  /**
+    The on-the-wire fields
+   */
+  enum fields {
+    /** Marks the end of the payload header. */
+    OTW_PAYLOAD_HEADER_END_MARK = 0,
+
+    /** The payload field */
+    OTW_PAYLOAD_SIZE_FIELD = 1,
+
+    /** The compression type field */
+    OTW_PAYLOAD_COMPRESSION_TYPE_FIELD = 2,
+
+    /** The uncompressed size field */
+    OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD = 3,
+
+    /** Other fields are appended here. */
+  };
+
  protected:
-  /// The compressed data, when entire payload is in one chunk.
+  /**
+    The raw bytes which are the data that this event contains.
+   */
   const char *m_payload{nullptr};
 
-  /// The compressed data, when payload consists of a sequence of buffers
-  Buffer_sequence_view_t *m_buffer_sequence_view;
-
-  /// The size of the compressed data.
+  /**
+    The size of the data.
+   */
   uint64_t m_payload_size{0};
 
-  /// The compression algorithm that was used.
+  /**
+    If the data is compressed, which compression was used.
+
+    For now, the only compressors supported are: ZSTD or NONE.
+
+    NONE means no compression at all. ZSTD means using ZSTD compression.
+   */
   transaction::compression::type m_compression_type{
       transaction::compression::type::NONE};
 
-  /// The uncompressed size of the data. This is the same as @c
-  /// m_payload_size if the algorithms is NONE.
+  /**
+    The size of the data uncompressed. This is the same as @c m_payload_size if
+    there is no compression involved.
+   */
   uint64_t m_uncompressed_size{0};
 
  public:
-  /// There are four fields: "compression type", "payload size",
-  /// "uncompressed size", and "end mark".  Each of the three first
-  /// fields is stored as a triple, where:
-  /// - the first element is a type code,
-  /// - the second element is a number containing the length of the
-  ///   third element, and
-  /// - the third element is the value.
-  /// The last field, "end mark", is stored as only a type code.  All
-  /// elements are stored in the "net_store_length" format.
-  /// net_store_length stores 64 bit numbers in a variable length
-  /// format, using 1 to 9 bytes depending on the magnitude of the
-  /// value; 1 for values up to 250, longer for bigger values.
-  ///
-  /// So:
-  /// - The first element in each triple is always length 1 since type
-  ///   codes are small;
-  /// - the second element in each triple is always length 1 since the
-  ///   third field is at most 9 bytes;
-  /// - the third field in each triple is:
-  ///   - at most 1 for the "compression type" since type codes are small;
-  ///   - at most 9 for the "payload size" and "uncompressed size".
-  /// - the end mark is always 1 byte since it is a constant value
-  ///   less than 250
-  static constexpr size_t compression_type_max_length = 1 + 1 + 1;
-  static constexpr size_t payload_size_max_length = 1 + 1 + 9;
-  static constexpr size_t uncompressed_size_max_length = 1 + 1 + 9;
-  static constexpr size_t end_mark_max_length = 1;
+  static const unsigned short COMPRESSION_TYPE_MIN_LENGTH = 1;
+  static const unsigned short COMPRESSION_TYPE_MAX_LENGTH = 9;
+  static const unsigned short PAYLOAD_SIZE_MIN_LENGTH = 0;
+  static const unsigned short PAYLOAD_SIZE_MAX_LENGTH = 9;
+  static const unsigned short UNCOMPRESSED_SIZE_MIN_LENGTH = 0;
+  static const unsigned short UNCOMPRESSED_SIZE_MAX_LENGTH = 9;
 
-  /// The maximum size of the "payload data header".
-  ///
-  /// Any log event consists of the common-header (19 bytes, same
-  /// format for all event types), followed by a post-header (size
-  /// defined per event type; 0 for payload events), followed by data
-  /// (variable length and defined by each event type).  For payload
-  /// events, the data contains a payload data header (these 4
-  /// fields), followed by the payload (compressed data).
-  static constexpr size_t max_payload_data_header_length =
-      compression_type_max_length + payload_size_max_length +
-      uncompressed_size_max_length + end_mark_max_length;
+  static const int MAX_DATA_LENGTH = COMPRESSION_TYPE_MAX_LENGTH +
+                                     PAYLOAD_SIZE_MAX_LENGTH +
+                                     UNCOMPRESSED_SIZE_MAX_LENGTH;
 
-  /// The maximum size of all headers, i.e., everything but the
-  /// payload.
-  ///
-  /// This includes common-header, post-header, and payload
-  /// data header.
-  static constexpr size_t max_length_of_all_headers =
-      LOG_EVENT_HEADER_LEN + Binary_log_event::TRANSACTION_PAYLOAD_HEADER_LEN +
-      max_payload_data_header_length;
-  /// The maximum length of the payload size, defined such that the total
-  /// event size does not exceed max_log_event_size.
-  static constexpr size_t max_payload_length =
-      max_log_event_size - max_length_of_all_headers;
+  /**
+    Creates @c Transaction_payload_event with the given data which has the
+    given size.
 
-  /// Construct an object from the given fields.
-  ///
-  /// @param payload The (compressed) payload data.
-  ///
-  /// @param payload_size The size of @c payload in bytes.
-  ///
-  /// @param compression_type the compression type that was used to
-  /// compress @c payload.
-  ///
-  /// @param uncompressed_size the size of the data when uncompressed.
-  ///
-  /// The function does not validate that the payload matches the
-  /// metadata provided.
+    @param payload the data that this event shall wrap.
+    @param payload_size the size of the payload.
+
+    The data shall not be compressed. However, there is no other validation
+    that this is the case.
+   */
+  Transaction_payload_event(const char *payload, uint64_t payload_size);
+
+  /**
+    Creates @c Transaction_payload_event with the given data which has the
+    given size. The data provided may or may not have been compressed. In
+    any case the compression_type must be set.
+
+    @param payload the data that this event shall wrap.
+    @param payload_size the size of the payload.
+    @param compression_type the compression type used for the data provided.
+    @param uncompressed_size the size of the data when uncompressed.
+
+    The data may or may not be compressed. There is no validation or check
+    that it is or that the payload matches the metadata provided.
+   */
   Transaction_payload_event(const char *payload, uint64_t payload_size,
                             uint16_t compression_type,
                             uint64_t uncompressed_size);
 
-  /// Decode the event from a buffer.
-  ///
-  /// @param buf The buffer to decode.
-  ///
-  /// @param fde The format description event used to decode the
-  /// buffer.
+  /**
+    This constructor takes a raw buffer and a format descriptor event and
+    decodes the buffer. It populates this event metadata with the contents
+    of the buffer.
+
+    @param buf the buffer to decode.
+    @param fde the format description event used to decode the buffer.
+   */
   Transaction_payload_event(const char *buf,
                             const Format_description_event *fde);
 
+  /**
+    This destroys the transaction payload event.
+   */
   ~Transaction_payload_event() override;
 
-  /// Set the compression type used for the enclosed payload.
-  ///
-  /// @note API clients must call either all or none of set_payload,
-  /// set_payload_size, set_compression_type, and
-  /// set_uncompressed_size.
-  ///
-  /// @param type the compression type.
+  /**
+    Shall set the compression type used for the enclosed payload.
+
+    @param type the compression type.
+   */
   void set_compression_type(transaction::compression::type type) {
     m_compression_type = type;
   }
 
-  /// @return the compression type.
+  /**
+    Shall return the compression type used for the enclosed payload.
+
+    @return the compression type.
+   */
   transaction::compression::type get_compression_type() const {
     return m_compression_type;
   }
 
-  /// Set the (compressed) size of the payload in this event.
-  ///
-  /// @note API clients must call either all or none of set_payload,
-  /// set_payload_size, set_compression_type, and
-  /// set_uncompressed_size.
-  ///
-  /// @param size The compressed size of the payload.
+  /**
+    Shall set the size of the payload inside this event.
+
+    @param size The payload size.
+   */
   void set_payload_size(uint64_t size) { m_payload_size = size; }
 
-  /// @return The payload size.
+  /**
+    Shall get the size of the payload inside this event.
+
+    @return The payload size.
+   */
   uint64_t get_payload_size() const { return m_payload_size; }
 
-  /// Set the uncompressed size of the payload.
-  ///
-  /// @note API clients must call either all or none of set_payload,
-  /// set_payload_size, set_compression_type, and
-  /// set_uncompressed_size.
-  ///
-  /// @param size The uncompressed size of the payload.
+  /**
+    Shall set the uncompressed size of the payload.
+
+    @param size the uncompressed size of the payload.
+   */
   void set_uncompressed_size(uint64_t size) { m_uncompressed_size = size; }
 
-  /// Return the alleged uncompressed size according to the field
-  /// stored in the event.
-  ///
-  /// This cannot be trusted; the actual size can only be computed by
-  /// decompressing the event.
+  /**
+    Shall get the uncompressed size of the event.
+
+    @return uncompressed_size.
+   */
   uint64_t get_uncompressed_size() const { return m_uncompressed_size; }
 
-  /// Set the (possibly compressed) payload for the event.
-  ///
-  /// The ownership and responsibility to destroy the data is
-  /// transferred to the event.
-  ///
-  /// @note API clients must call either all or none of set_payload,
-  /// set_payload_size, set_compression_type, and
-  /// set_uncompressed_size.
-  ///
-  /// @param data The payload of the event.
+  /**
+    Shall set the payload of the event.
+
+    @param data the payload of the event.
+   */
   void set_payload(const char *data) { m_payload = data; }
 
-  /// @return the payload of the event.
+  /**
+    Shall get the payload of the event.
+
+    @return the payload of the event.
+   */
   const char *get_payload() const { return m_payload; }
 
-  /// Set the (possibly compressed) payload for the event.
-  ///
-  /// The payload is given as a Buffer_sequence_view.  The ownership
-  /// of the data remains with the caller; the caller must ensure that
-  /// the iterators remain valid for as long as this event needs them.
-  ///
-  /// @note API clients must call either all or none of set_payload,
-  /// set_payload_size, set_compression_type, and
-  /// set_uncompressed_size.
-  ///
-  /// @param buffer_sequence_view Container holding the data.
-  void set_payload(Buffer_sequence_view_t *buffer_sequence_view);
+  /**
+    Shall return a textual representation of this event.
 
-  /// @return a textual representation of this event.
+    @return a textial representation of this event.
+   */
   std::string to_string() const;
 
 #ifndef HAVE_MYSYS
-  void print_event_info(std::ostream &) override;
-  void print_long_info(std::ostream &) override;
+  virtual void print_event_info(std::ostream &) override;
+  virtual void print_long_info(std::ostream &) override;
 #endif
 };
 
@@ -1067,18 +1049,6 @@ class Gtid_event : public Binary_log_event {
   void print_event_info(std::ostream &) override {}
   void print_long_info(std::ostream &) override {}
 #endif
-  /*
-    Commit group ticket consists of: 1st bit, used internally for
-    synchronization purposes ("is in use"),  followed by 63 bits for
-    the ticket value.
-  */
-  static constexpr int COMMIT_GROUP_TICKET_LENGTH = 8;
-  /*
-    Default value of commit_group_ticket, which means it is not
-    being used.
-  */
-  static constexpr std::uint64_t kGroupTicketUnset = 0;
-
  protected:
   static const int ENCODED_FLAG_LENGTH = 1;
   static const int ENCODED_SID_LENGTH = 16;  // Uuid::BYTE_LENGTH;
@@ -1136,8 +1106,6 @@ class Gtid_event : public Binary_log_event {
   static const std::int64_t GNO_END = INT64_MAX;
 
  public:
-  virtual std::int64_t get_gno() const { return gtid_info_struct.rpl_gtid_gno; }
-  Uuid get_uuid() const { return Uuid_parent_struct; }
   /// Total length of post header
   static const int POST_HEADER_LENGTH =
       ENCODED_FLAG_LENGTH +               /* flags */
@@ -1152,10 +1120,9 @@ class Gtid_event : public Binary_log_event {
     On the originating master, the event has only one timestamp as the two
     timestamps are equal. On every other server we have two timestamps.
   */
-  static const int MAX_DATA_LENGTH =
-      FULL_COMMIT_TIMESTAMP_LENGTH + TRANSACTION_LENGTH_MAX_LENGTH +
-      FULL_SERVER_VERSION_LENGTH +
-      COMMIT_GROUP_TICKET_LENGTH; /* 64-bit unsigned integer */
+  static const int MAX_DATA_LENGTH = FULL_COMMIT_TIMESTAMP_LENGTH +
+                                     TRANSACTION_LENGTH_MAX_LENGTH +
+                                     FULL_SERVER_VERSION_LENGTH;
 
   static const int MAX_EVENT_LENGTH =
       LOG_EVENT_HEADER_LEN + POST_HEADER_LENGTH + MAX_DATA_LENGTH;
@@ -1175,28 +1142,6 @@ class Gtid_event : public Binary_log_event {
   uint32_t original_server_version;
   /** The version of the immediate server */
   uint32_t immediate_server_version;
-
-  /** Ticket number used to group sessions together during the BGC. */
-  std::uint64_t commit_group_ticket{kGroupTicketUnset};
-
-  /**
-    Returns the length of the packed `commit_group_ticket` field. It may be
-    8 bytes or 0 bytes, depending on whether or not the value is
-    instantiated.
-
-    @return The length of the packed `commit_group_ticket` field
-  */
-  int get_commit_group_ticket_length() const;
-
-  /**
-   Set the commit_group_ticket and update the transaction length if
-   needed, that is, if the commit_group_ticket was not set already
-   account it on the transaction size.
-
-   @param value The commit_group_ticket value.
-  */
-  void set_commit_group_ticket_and_update_transaction_length(
-      std::uint64_t value);
 };
 
 /**
@@ -1406,7 +1351,7 @@ class Transaction_context_event : public Binary_log_event {
   <tr>
     <td>seq_number</td>
     <td>8 bytes integer</td>
-    <td>Variable to identify the next sequence number to be allotted to the
+    <td>Variable to identify the next sequence number to be alloted to the
   certified transaction.</td>
   </tr>
 
@@ -1422,7 +1367,7 @@ class Transaction_context_event : public Binary_log_event {
 class View_change_event : public Binary_log_event {
  public:
   /**
-    Decodes the view_change_log_event generated in case a server enters or
+    Decodes the view_change_log_event generated incase a server enters or
     leaves the group.
 
     <pre>
@@ -1479,98 +1424,16 @@ class View_change_event : public Binary_log_event {
 };
 
 /**
-  @class Heartbeat_event_v2
-
-  Replication event to ensure to replica that source is alive.
-  The event is originated by source's dump thread and sent straight to
-  replica without being logged. Slave itself does not store it in relay log
-  but rather uses a data for immediate checks and throws away the event.
-
-  Two members of the class m_log_filename and m_log_position comprise
-  @see the rpl_event_coordinates instance. The coordinates that a heartbeat
-  instance carries correspond to the last event source has sent from
-  its binlog.
-
-  Also this event will be generated only for the source server with
-  version > 8.0.26
-
-  @section Heartbeat_event_v2_binary_format Binary Format
-
-  The Body has one component:
-
-  <table>
-  <caption>Body for Heartbeat_event</caption>
-
-  <tr>
-    <th>Name</th>
-    <th>Format</th>
-    <th>Description</th>
-  </tr>
-
-  <tr>
-    <td>m_log_filename</td>
-    <td>String variable to store the binlog name</td>
-    <td>Name of the current binlog being written to.</td>
-  </tr>
-  <tr>
-    <td>m_log_pos</td>
-    <td>8 byte unsigned integar</td>
-    <td>Name of the current binlog being written to.</td>
-  </tr>
-  </table>
-*/
-
-class Heartbeat_event_v2 : public Binary_log_event {
- public:
-  /**
-    Sent by a source to a replica to let the replica know that the source is
-    still alive. Events of this type do not appear in the binary or relay logs.
-    They are generated on a source server by the thread that dumps events and
-    sent straight to the replica without ever being written to the binary log.
-
-    @param buf  Contains the serialized event.
-    @param fde  An FDE event (see Rotate_event constructor for more info).
-  */
-  Heartbeat_event_v2(const char *buf, const Format_description_event *fde);
-
-  /**
-    Creates an empty heartbeat event.
-   */
-  Heartbeat_event_v2();
-
-  virtual ~Heartbeat_event_v2() override = default;
-
-  // Set the binlog filename
-  void set_log_filename(const std::string name);
-  // Set the position
-  void set_log_position(uint64_t position);
-  // Return the binlog filename
-  const std::string get_log_filename() const;
-  // Return the position
-  uint64_t get_log_position() const;
-
-  // Return the max length of an encoded packet.
-  static uint64_t max_encoding_length();
-#ifndef HAVE_MYSYS
-  void print_event_info(std::ostream &info) override;
-  void print_long_info(std::ostream &info) override;
-#endif
- protected:
-  std::string m_log_filename{};
-  uint64_t m_log_position{0};
-};
-
-/**
   @class Heartbeat_event
 
-  Replication event to ensure to replica that source is alive.
-  The event is originated by source's dump thread and sent straight to
-  replica without being logged. Slave itself does not store it in relay log
+  Replication event to ensure to slave that master is alive.
+  The event is originated by master's dump thread and sent straight to
+  slave without being logged. Slave itself does not store it in relay log
   but rather uses a data for immediate checks and throws away the event.
 
   Two members of the class log_ident and Binary_log_event::log_pos comprise
   @see the rpl_event_coordinates instance. The coordinates that a heartbeat
-  instance carries correspond to the last event source has sent from
+  instance carries correspond to the last event master has sent from
   its binlog.
 
   @section Heartbeat_event_binary_format Binary Format
@@ -1597,19 +1460,17 @@ class Heartbeat_event_v2 : public Binary_log_event {
 class Heartbeat_event : public Binary_log_event {
  public:
   /**
-    Sent by a source to a replica to let the replica know that the source is
+    Sent by a master to a slave to let the slave know that the master is
     still alive. Events of this type do not appear in the binary or relay logs.
-    They are generated on a source server by the thread that dumps events and
-    sent straight to the replica without ever being written to the binary log.
+    They are generated on a master server by the thread that dumps events and
+    sent straight to the slave without ever being written to the binary log.
 
     @param buf  Contains the serialized event.
     @param fde  An FDE event (see Rotate_event constructor for more info).
   */
   Heartbeat_event(const char *buf, const Format_description_event *fde);
 
-  // Return the file name
   const char *get_log_ident() { return log_ident; }
-  // Return the length of file name
   unsigned int get_ident_len() { return ident_len; }
 
  protected:

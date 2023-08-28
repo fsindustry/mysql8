@@ -1,4 +1,4 @@
-// Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+// Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -38,8 +38,8 @@
 /// once it has done that it will continue to monitor the child as well
 /// as the parent.
 ///
-/// The safe_process then checks the following things:
-/// 1. Child exits, propagate the child's return code to the parent
+/// The safe_process then checks the follwing things:
+/// 1. Child exits, propagate the childs return code to the parent
 ///    by exiting with the same return code as the child.
 ///
 /// 2. Parent dies, immediately kill the child and exit, thus the
@@ -84,7 +84,7 @@ static void message(const char *fmt, ...) {
 }
 
 [[noreturn]] static void die(const char *fmt, ...) {
-  const DWORD last_err = GetLastError();
+  DWORD last_err = GetLastError();
 
   va_list args;
   std::fprintf(stderr, "%s: FATAL ERROR, ", safe_process_name);
@@ -131,7 +131,7 @@ DWORD get_parent_pid(DWORD pid) {
 
   CloseHandle(snapshot);
 
-  if (parent_pid == static_cast<DWORD>(-1)) die("Could not find parent pid");
+  if (parent_pid == -1) die("Could not find parent pid");
 
   return parent_pid;
 }
@@ -165,7 +165,7 @@ void fix_file_append_flag_inheritance(DWORD std_handle) {
 }
 
 int main(int argc, const char **argv) {
-  const DWORD pid = GetCurrentProcessId();
+  DWORD pid = GetCurrentProcessId();
   sprintf(safe_process_name, "safe_process[%lu]", (unsigned long)pid);
 
   // Create an event for the signal handler
@@ -255,8 +255,8 @@ int main(int argc, const char **argv) {
         (unsigned long)parent_pid);
 
   // Create the child process in a job
-  JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {};
-  STARTUPINFO si = {};
+  JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {0};
+  STARTUPINFO si = {0};
   si.cb = sizeof(si);
 
   // Create the job object to make it possible to kill the process
@@ -319,15 +319,14 @@ int main(int argc, const char **argv) {
   // new process group. Process groups also allow to kill process and its
   // descendants, subject to some restrictions (processes have to run within
   // the same console,and must not ignore CTRL_BREAK)
-  const DWORD create_flags[] = {CREATE_BREAKAWAY_FROM_JOB,
-                                CREATE_NEW_PROCESS_GROUP, 0};
+  DWORD create_flags[] = {CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP,
+                          0};
 
   BOOL jobobject_assigned = FALSE;
   BOOL process_created = FALSE;
-  PROCESS_INFORMATION process_info = {};
+  PROCESS_INFORMATION process_info = {0};
 
-  for (unsigned int i = 0; i < sizeof(create_flags) / sizeof(create_flags[0]);
-       i++) {
+  for (int i = 0; i < sizeof(create_flags) / sizeof(create_flags[0]); i++) {
     process_created = CreateProcess(
         NULL, (LPSTR)child_args, NULL, NULL, TRUE,  // Inherit handles
         CREATE_SUSPENDED | create_flags[i], NULL, NULL, &si, &process_info);

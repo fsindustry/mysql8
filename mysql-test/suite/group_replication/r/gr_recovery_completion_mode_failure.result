@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 #
 # Create t1 and t2 on both servers
@@ -34,8 +34,6 @@ SET SESSION sql_log_bin=1;
 server2
 SET @configured_rec_policy= @@GLOBAL.group_replication_recovery_complete_at;
 SET GLOBAL group_replication_recovery_complete_at= "transactions_applied";
-Warnings:
-Warning	1681	'group_replication_recovery_complete_at' is deprecated and will be removed in a future release.
 #
 # Lock table t1 on server 2
 # Table t1: Blocks first phase of recovery
@@ -57,10 +55,12 @@ INSERT INTO t2 VALUES (1);
 #
 server2
 #
-# Fake a stopped applier thread during recovery.
+# Stop the group replication applier thread during recovery.
 #
 server2
-SET @@GLOBAL.DEBUG= '+d,group_replication_wait_for_gtid_execution_force_error';
+STOP SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 #
 # UnLock table t1: First phase of recovery can carry on.
 # Member 2 will error out as it can't wait for data execution
@@ -68,7 +68,6 @@ SET @@GLOBAL.DEBUG= '+d,group_replication_wait_for_gtid_execution_force_error';
 server_2 (server2)
 UNLOCK TABLES;
 include/gr_wait_for_member_state.inc
-SET @@GLOBAL.DEBUG= '-d,group_replication_wait_for_gtid_execution_force_error';
 #
 # Test cleanup
 #
@@ -80,6 +79,4 @@ include/start_group_replication.inc
 DROP TABLE t1;
 DROP TABLE t2;
 SET GLOBAL group_replication_recovery_complete_at= @configured_rec_policy;
-Warnings:
-Warning	1681	'group_replication_recovery_complete_at' is deprecated and will be removed in a future release.
 include/group_replication_end.inc

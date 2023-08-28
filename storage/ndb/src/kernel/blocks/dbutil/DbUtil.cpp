@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -482,7 +482,7 @@ DbUtil::execNODE_FAILREP(Signal* signal){
         getNodeInfo(refToNode(signal->getSendersBlockRef())).m_version));
     SegmentedSectionPtr ptr;
     SectionHandle handle(this, signal);
-    ndbrequire(handle.getSection(ptr, 0));
+    handle.getSection(ptr, 0);
     memset(rep->theNodes, 0, sizeof(rep->theNodes));
     copy(rep->theNodes, ptr);
     releaseSections(handle);
@@ -738,13 +738,11 @@ DbUtil::execDUMP_STATE_ORD(Signal* signal){
       // ** Print a specific record **
       if (signal->length() >= 3) {
 	PreparePtr prepPtr;
-        if (!c_preparePool.getPtr(prepPtr, signal->theData[2]))
-        {
+	if (!c_preparePool.isSeized(signal->theData[2])) {
 	  ndbout << "Prepare Id: " << signal->theData[2] 
 		 << " (Not seized!)" << endl;
-        }
-        else
-        {
+	} else {
+	  c_preparePool.getPtr(prepPtr, signal->theData[2]);
 	  prepPtr.p->print();
 	}
 	return;
@@ -765,16 +763,15 @@ DbUtil::execDUMP_STATE_ORD(Signal* signal){
     }
     case 2:
       // ** Print a specific record **
-      if (signal->length() >= 3)
-      {
-        PreparedOperationPtr prepOpPtr;
-        if (!c_preparedOperationPool.getPtr(prepOpPtr, signal->theData[2]))
-        {
+      if (signal->length() >= 3) {
+	if (!c_preparedOperationPool.isSeized(signal->theData[2])) {
 	  ndbout << "PreparedOperation Id: " << signal->theData[2] 
 		 << " (Not seized!)" << endl;
 	  return;
 	}
 	ndbout << "PreparedOperation Id: " << signal->theData[2] << endl;
+	PreparedOperationPtr prepOpPtr;
+	c_preparedOperationPool.getPtr(prepOpPtr, signal->theData[2]);
 	prepOpPtr.p->print();
 	return;
       }
@@ -959,9 +956,7 @@ void DbUtil::execDBINFO_SCANREQ(Signal *signal)
 
     const size_t num_config_params =
       sizeof(pools[0].config_params) / sizeof(pools[0].config_params[0]);
-    const Uint32 numPools = NDB_ARRAY_SIZE(pools);
     Uint32 pool = cursor->data[0];
-    ndbrequire(pool < numPools);
     BlockNumber bn = blockToMain(number());
     while(pools[pool].poolname)
     {
@@ -1170,7 +1165,7 @@ DbUtil::execUTIL_PREPARE_REQ(Signal* signal)
 		       senderRef, senderData);
     return;
   };
-  ndbrequire(handle.getSection(ptr, UtilPrepareReq::PROPERTIES_SECTION));
+  handle.getSection(ptr, UtilPrepareReq::PROPERTIES_SECTION);
   const Uint32 noPages  = (ptr.sz + sizeof(Page32)) / sizeof(Page32);
   ndbassert(noPages > 0);
   if (!prepPtr.p->preparePages.seize(noPages)) {
@@ -1294,7 +1289,7 @@ DbUtil::execGET_TABINFO_CONF(Signal* signal){
   
   SectionHandle handle(this, signal);
   SegmentedSectionPtr dictTabInfoPtr;
-  ndbrequire(handle.getSection(dictTabInfoPtr, GetTabInfoConf::DICT_TAB_INFO));
+  handle.getSection(dictTabInfoPtr, GetTabInfoConf::DICT_TAB_INFO);
   ndbrequire(dictTabInfoPtr.sz == totalLen);
   
   if (prepI != RNIL)
@@ -1358,7 +1353,7 @@ DbUtil::execGET_TABINFOREF(Signal* signal){
  * Prepare Operation
  * 
  * Using a prepare record, prepare an operation (i.e. create PreparedOperation).
- * Info from both Prepare request (PreparePages) and DictTabInfo is used.
+ * Info from both Pepare request (PreparePages) and DictTabInfo is used.
  * 
  * Algorithm:
  * -# Seize AttrbuteMapping
@@ -1768,16 +1763,20 @@ DbUtil::execUTIL_RELEASE_REQ(Signal* signal){
   const Uint32 prepareId      = req->prepareId;
   const Uint32 senderData     = req->senderData;
 
-  PreparedOperationPtr prepOpPtr;
-  if (!c_preparedOperationPool.getPtr(prepOpPtr, prepareId))
-  {
+#if 0
+  /**
+   * This only works in when ARRAY_GUARD is defined (debug-mode)
+   */
+  if (!c_preparedOperationPool.isSeized(prepareId)) {
     UtilReleaseRef * ref = (UtilReleaseRef *)signal->getDataPtr();
     ref->prepareId = prepareId;
     ref->errorCode = UtilReleaseRef::NO_SUCH_PREPARE_SEIZED;
     sendSignal(clientRef, GSN_UTIL_RELEASE_REF, signal, 
 	       UtilReleaseRef::SignalLength, JBB);
-    return;
   }
+#endif
+  PreparedOperationPtr prepOpPtr;
+  c_preparedOperationPool.getPtr(prepOpPtr, prepareId);
   
   releasePreparedOperation(prepOpPtr);
   
@@ -2202,7 +2201,7 @@ DbUtil::execUTIL_EXECUTE_REQ(Signal* signal)
    * Get PreparedOperation struct
    *******************************/
   PreparedOperationPtr prepOpPtr;
-  ndbrequire(c_preparedOperationPool.getPtr(prepOpPtr, prepareId));
+  c_preparedOperationPool.getPtr(prepOpPtr, prepareId);
 
   prepOpPtr.p->releaseFlag = releaseFlag;
 
@@ -2211,9 +2210,9 @@ DbUtil::execUTIL_EXECUTE_REQ(Signal* signal)
   SectionHandle handle(this, signal);
   SegmentedSectionPtr headerPtr, dataPtr;
 
-  ndbrequire(handle.getSection(headerPtr, UtilExecuteReq::HEADER_SECTION));
+  handle.getSection(headerPtr, UtilExecuteReq::HEADER_SECTION);
   SectionReader headerReader(headerPtr, getSectionSegmentPool());
-  ndbrequire(handle.getSection(dataPtr, UtilExecuteReq::DATA_SECTION));
+  handle.getSection(dataPtr, UtilExecuteReq::DATA_SECTION);
   SectionReader dataReader(dataPtr, getSectionSegmentPool());
 
 #if 0 //def EVENT_DEBUG
@@ -2597,7 +2596,8 @@ DbUtil::execTRANSID_AI(Signal* signal){
      * transaction was aborted and the TRANSID_AI was delayed
      */
     OperationPtr opPtr;
-    ndbrequire(c_operationPool.getPtr(opPtr, opI));
+    opPtr.i = opI;
+    c_operationPool.getPtrIgnoreAlloc(opPtr);
     opP = opPtr.p;
     
     /* Use transPtrI == RNIL as test of op record validity */
@@ -2607,6 +2607,11 @@ DbUtil::execTRANSID_AI(Signal* signal){
       break;
     }
     
+#ifdef ARRAY_GUARD
+    /* Op was valid, do normal debug-only allocation double-check */
+    ndbrequire(c_operationPool.isSeized(opI));
+#endif
+
     /* Valid op record must always point to allocated transaction record */
     c_runningTransactions.getPtr(transPtr, opP->transPtrI);
 
@@ -2689,8 +2694,7 @@ DbUtil::execTCKEYCONF(Signal* signal){
   const Uint32 ops = TcKeyConf::getNoOfOperations(confInfo);  
   for(Uint32 i = 0; i<ops; i++){
     OperationPtr opPtr;
-    ndbrequire(c_operationPool.getPtr(opPtr,
-                                      keyConf->operations[i].apiOperationPtr));
+    c_operationPool.getPtr(opPtr, keyConf->operations[i].apiOperationPtr);
     
     ndbrequire(opPtr.p->transPtrI == transI);
     opPtr.p->rsExpect += keyConf->operations[i].attrInfoLen;

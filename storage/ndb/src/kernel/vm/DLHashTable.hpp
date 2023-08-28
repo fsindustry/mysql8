@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,6 @@
 #define DL_HASHTABLE_HPP
 
 #include <ndb_global.h>
-#include "Pool.hpp"
 
 #define JAM_FILE_ID 313
 
@@ -109,7 +108,7 @@ public:
    * Remove element (and set Ptr to removed element)
    * Note does not return to pool
    */
-  [[nodiscard]] bool remove(Ptr<T> &, const T & key);
+  void remove(Ptr<T> &, const T & key);
 
   /**
    * Remove element
@@ -190,14 +189,21 @@ private:
 template <typename P, typename M>
 inline
 DLMHashTable<P, M>::DLMHashTable(P & _pool)
-  : mask(0), hashValues(NULL), thePool(_pool)
-{}
+  : thePool(_pool)
+{
+  // Require user defined constructor on T since we fiddle
+  // with T's members
+  ASSERT_TYPE_HAS_CONSTRUCTOR(T);
+
+  mask = 0;
+  hashValues = 0;
+}
 
 template <typename P, typename M>
 inline
 DLMHashTable<P, M>::~DLMHashTable()
 {
-  if (hashValues != NULL)
+  if (hashValues != 0)
     delete [] hashValues;
 }
 
@@ -349,7 +355,7 @@ DLMHashTable<P, M>::next(Ptr<T>& p) const
 
 template <typename P, typename M>
 inline
-bool
+void
 DLMHashTable<P, M>::remove(Ptr<T> & ptr, const T & key)
 {
   const Uint32 hv = M::hashValue(key) & mask;
@@ -383,14 +389,13 @@ DLMHashTable<P, M>::remove(Ptr<T> & ptr, const T & key)
 
       ptr.i = i;
       ptr.p = p;
-      return true;
+      return;
     }
     prev.p = p;
     prev.i = i;
     i = M::nextHash(*p);
   }
   ptr.i = RNIL;
-  return false;
 }
 
 template <typename P, typename M>

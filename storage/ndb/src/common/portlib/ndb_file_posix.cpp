@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include "ndb_config.h" // HAVE_POSIX_FALLOCATE, HAVE_XFS_XFS_H
 
 #include "portlib/ndb_file.h"
@@ -75,13 +74,15 @@ int ndb_file::write_forward(const void* buf, ndb_file::size_t count)
   if (ret >= 0)
   {
     assert(ndb_file::size_t(ret) == count);
-    if (do_sync_after_write(ret) == -1) return -1;
+    if (!m_synced_on_write)
+    {
+      m_write_byte_count.fetch_add(ret);
+    }
   }
   return ret;
 }
 
-int ndb_file::write_pos(const void* buf, ndb_file::size_t count,
-                        ndb_off_t offset)
+int ndb_file::write_pos(const void* buf, ndb_file::size_t count, ndb_file::off_t offset)
 {
   require(check_block_size_and_alignment(buf, count, offset));
   int ret;
@@ -91,7 +92,10 @@ int ndb_file::write_pos(const void* buf, ndb_file::size_t count,
   if (ret >= 0)
   {
     assert(ndb_file::size_t(ret) == count);
-    if (do_sync_after_write(ret) == -1) return -1;
+    if (!m_synced_on_write)
+    {
+      m_write_byte_count.fetch_add(ret);
+    }
   }
   return ret;
 }
@@ -112,29 +116,25 @@ int ndb_file::read_backward(void* buf, ndb_file::size_t count) const
   // Current pos - count must be within file.
   // Seek -count, read should read all.
   // if partial read - fatal error!
+  int ret;
   errno = 0;
-  const off_t off_count = (off_t)count;
-  if (off_count < 0 || std::uintmax_t{count} != std::uintmax_t(off_count))
-  {
-    errno = EOVERFLOW;
-    return -1;
-  }
-  ndb_off_t offset = ::lseek(m_handle, -off_count, SEEK_CUR);
+  off_t offset = ::lseek(m_handle, -(long)count, SEEK_CUR);
   if (offset < 0)
   {
     if (errno != 0)
       return -1;
     std::abort();
   }
-  ssize_t ret;
+  // TODO check for negative offset
+  // TODO use read_pos ?
   do {
     ret = ::read(m_handle, buf, count);
   } while (ret == -1 && errno == EINTR);
-  if (ret >= 0 && ret != off_count)
+  if (ret >= 0 && ret != (long)count)
   {
-    return -1;
+    std::abort(); // TODO something less fatal, should kind of close file
   }
-  offset = ::lseek(m_handle, -off_count, SEEK_CUR);
+  offset = ::lseek(m_handle, -(long)count, SEEK_CUR);
   if (offset < 0)
   {
     if (errno != 0)
@@ -143,8 +143,7 @@ int ndb_file::read_backward(void* buf, ndb_file::size_t count) const
   }
   return ret;
 }
-int ndb_file::read_pos(void* buf, ndb_file::size_t count,
-    ndb_off_t offset) const
+int ndb_file::read_pos(void* buf, ndb_file::size_t count, ndb_file::off_t offset) const
 {
   require(check_block_size_and_alignment(buf, count, offset));
   int ret;
@@ -154,22 +153,25 @@ int ndb_file::read_pos(void* buf, ndb_file::size_t count,
   return ret;
 }
 
-ndb_off_t ndb_file::get_pos() const
+ndb_file::off_t ndb_file::get_pos() const
 {
-  return ::lseek(m_handle, 0, SEEK_CUR);
+  off_t ret = ::lseek(m_handle, 0, SEEK_CUR);
+  if (ret == -1)
+    return ret;
+  return ret;
 }
 
-int ndb_file::set_pos(ndb_off_t pos) const
+int ndb_file::set_pos(off_t pos) const
 {
   require(check_block_size_and_alignment(nullptr, 0, pos));
-  ndb_off_t ret = ::lseek(m_handle, pos, SEEK_SET);
+  off_t ret = ::lseek(m_handle, pos, SEEK_SET);
   if (ret == -1)
     return -1;
   require(ret == pos);
   return 0;
 }
 
-ndb_off_t ndb_file::get_size() const
+ndb_file::off_t ndb_file::get_size() const
 {
   struct stat st;
   int ret = ::fstat(m_handle, &st);
@@ -178,11 +180,11 @@ ndb_off_t ndb_file::get_size() const
   return st.st_size;
 }
 
-int ndb_file::extend(ndb_off_t end, extend_flags flags) const
+int ndb_file::extend(off_t end, extend_flags flags) const
 {
   require(check_block_size_and_alignment(nullptr, end, end));
   require((flags == NO_FILL) || (flags == ZERO_FILL));
-  const ndb_off_t size = get_size();
+  const off_t size = get_size();
   if (size == -1)
   {
     return -1;
@@ -205,10 +207,10 @@ int ndb_file::extend(ndb_off_t end, extend_flags flags) const
   return 0;
 }
 
-int ndb_file::truncate(ndb_off_t end) const
+int ndb_file::truncate(off_t end) const
 {
   require(check_block_size_and_alignment(nullptr, end, end));
-  ndb_off_t size = get_size();
+  off_t size = get_size();
   if (size == -1)
   {
     return -1;
@@ -228,7 +230,7 @@ int ndb_file::truncate(ndb_off_t end) const
 
 int ndb_file::allocate() const
 {
-  ndb_off_t size = get_size();
+  off_t size = get_size();
   if (size == -1)
   {
     return -1;
@@ -240,7 +242,7 @@ int ndb_file::allocate() const
     xfs_flock64_t fl;
     fl.l_whence= 0;
     fl.l_start= 0;
-    fl.l_len= (ndb_off_t)size;
+    fl.l_len= (off64_t)size;
     if (::xfsctl(NULL, m_handle, XFS_IOC_RESVSP64, &fl) < 0)
     {
       std::printf("failed to optimally allocate disk space");
@@ -271,7 +273,7 @@ int ndb_file::do_sync() const
  * On Linux open(O_CREAT | O_DIRECT) can create a file and leave it behind even
  * if call fail due to O_DIRECT not supported on file system.
  *
- * It is chosen to separate create() and open() instead, create() fails if
+ * It is choosen to separate create() and open() instead, create() fails if
  * there is already a file.
  */
 int ndb_file::create(const char name[])
@@ -303,10 +305,23 @@ int ndb_file::open(const char name[], unsigned flags)
   if (bad_flags != 0) abort();
 
   m_open_flags = 0;
-  m_write_need_sync = false;
-  m_os_syncs_each_write = false;
+  m_sync_on_write = false;
+  m_synced_on_write = false;
 
   if (flags & FsOpenReq::OM_APPEND) m_open_flags |= O_APPEND;
+#ifdef O_SYNC
+  if (flags & FsOpenReq::OM_SYNC)
+  {
+    m_open_flags |= O_SYNC;
+    m_synced_on_write = true;
+  }
+#else
+  if (flags & FsOpenReq::OM_SYNC)
+  {
+    m_sync_on_write = true;
+    m_synced_on_write = true;
+  }
+#endif
   switch (flags & FsOpenReq::OM_READ_WRITE_MASK)
   {
   case FsOpenReq::OM_READONLY:
@@ -445,14 +460,14 @@ int ndb_file::set_direct_io(bool assume_implicit_datasync)
    * flag in InnoDB (O_DIRECT_NO_FSYNC).
    *
    * We will only ever set this flag if O_DIRECT is
-   * successfully applied on the file. This flag will not
+   * succesfully applied on the file. This flag will not
    * change anything on block code. The blocks are still
    * expected to issue sync flags at the same places as
    * before, but if this flag is supported, the fsync
    * call will be skipped.
    */
 
-  m_os_syncs_each_write |= assume_implicit_datasync;
+  m_synced_on_write |= assume_implicit_datasync;
   return 0;
 }
 
@@ -505,7 +520,7 @@ int ndb_file::detect_direct_io_block_size_and_alignment()
 
 int ndb_file::reopen_with_sync(const char name[])
 {
-  if (m_os_syncs_each_write)
+  if (m_synced_on_write)
   {
     /*
      * If already synced on write by for example implicit by direct I/O mode no
@@ -524,14 +539,14 @@ int ndb_file::reopen_with_sync(const char name[])
     {
       ::close(m_handle);
       m_handle = fd;
-      m_os_syncs_each_write = true;
+      m_synced_on_write = true;
       return 0;
     }
   }
 #endif
 
   // If turning on O_SYNC failed fall back on explicit fsync
-  m_write_need_sync = true;
+  m_sync_on_write = true;
 
   return 0;
 }

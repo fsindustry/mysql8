@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,16 +70,6 @@ enum class Window_retrieve_cached_row_reason {
   LAST_IN_PEERSET = 4,
   MISC_POSITIONS = 5  // NTH_VALUE, LEAD/LAG have dynamic indexes 5..N
 };
-
-/**
-  The number of windows is limited to avoid the stack blowing up
-  when constructing iterators recursively. There used to be no limit, but
-  it would be unsafe since QEP_shared::m_idx of tmp tables assigned for windows
-  would exceed the old range of its type plan_idx (int8). It
-  has now been widened, so the max number of windows could be increased
-  if need be, modulo other problems. We could also make it a system variable.
-*/
-constexpr int kMaxWindows = 127;
 
 /**
   Represents the (explicit) window of a SQL 2003 section 7.11 \<window clause\>,
@@ -316,7 +306,7 @@ class Window {
     See #m_tmp_pos
   */
   void save_pos(Window_retrieve_cached_row_reason reason) {
-    const int reason_index = static_cast<int>(reason);
+    int reason_index = static_cast<int>(reason);
     m_tmp_pos.m_rowno = m_frame_buffer_positions[reason_index].m_rowno;
     std::memcpy(m_tmp_pos.m_position,
                 m_frame_buffer_positions[reason_index].m_position,
@@ -327,7 +317,7 @@ class Window {
     See #m_tmp_pos
   */
   void restore_pos(Window_retrieve_cached_row_reason reason) {
-    const int reason_index = static_cast<int>(reason);
+    int reason_index = static_cast<int>(reason);
     m_frame_buffer_positions[reason_index].m_rowno = m_tmp_pos.m_rowno;
     std::memcpy(m_frame_buffer_positions[reason_index].m_position,
                 m_tmp_pos.m_position, frame_buffer()->file->ref_length);
@@ -338,8 +328,8 @@ class Window {
   */
   void copy_pos(Window_retrieve_cached_row_reason from_reason,
                 Window_retrieve_cached_row_reason to_reason) {
-    const int from_index = static_cast<int>(from_reason);
-    const int to_index = static_cast<int>(to_reason);
+    int from_index = static_cast<int>(from_reason);
+    int to_index = static_cast<int>(to_reason);
     m_frame_buffer_positions[to_index].m_rowno =
         m_frame_buffer_positions[from_index].m_rowno;
 
@@ -449,7 +439,7 @@ class Window {
 
   /**
     Execution state: used iff m_needs_last_peer_in_frame. True if a row
-    leaving the frame is the last row in the peer set within the frame.
+    leaving the frame is the last row in the peer set withing the frame.
   */
   int64 m_is_last_row_in_peerset_within_frame;
 
@@ -478,25 +468,20 @@ class Window {
     Execution state: The number of the row being visited for its contribution
     to a window function, relative to the start of the partition. Note that
     this will often be different from the current row for which we are
-    processing the window function, readying it for output. That is given by
-    \c m_rowno_in_partition, q.v. Contrast also with \c m_rowno_in_frame
-    which is frame relative.
+    processing the window function, reading it for output. That is given by
+    m_rowno_in_partition, q.v.
   */
   int64 m_rowno_being_visited;
 
   /**
-    Execution state: the row number of the row we are looking at for evaluating
-    its contribution to some window function(s).  It is relative to start of
-    the frame and 1-based. It is typically set after fetching a row from the
-    frame buffer using \c bring_back_frame_row and before calling
-    \c copy_funcs.  Cf. also \c m_is_last_row_in_frame.
+    Execution state: the row number of the current row within a frame, cf.
+    m_is_last_row_in_frame, relative to start of the frame. 1-based.
   */
   int64 m_rowno_in_frame;
 
   /**
     Execution state: The row number of the current row being readied for
     output within the partition. 1-based.
-    In \c process_buffered_windowing_record this is known as \c current_row.
   */
   int64 m_rowno_in_partition;
 
@@ -605,12 +590,6 @@ class Window {
   */
   int64 m_last_rowno_in_range_frame;
 
-  /**
-    Execution state. Only used for ROWS frame optimized MIN/MAX.
-    The (1-based) number in the partition of first row in the current frame.
-  */
-  int64 m_first_rowno_in_rows_frame;
-
   /*------------------------------------------------------------------------
    *
    * Window function special behaviour toggles. These boolean flag influence
@@ -625,7 +604,7 @@ class Window {
    *     copy_<kind>_window_functions()  [see process_buffered_windowing_record]
    *     w.set_<toggle>(false)
    *
-   * to achieve a special semantic, since we cannot pass down extra parameters.
+   * to achive a special semantic, since we cannot pass down extra parameters.
    *
    *------------------------------------------------------------------------*/
 
@@ -981,7 +960,7 @@ class Window {
     @return false if success, true if error
   */
   static bool setup_windows1(THD *thd, Query_block *select,
-                             Ref_item_array ref_item_array, Table_ref *tables,
+                             Ref_item_array ref_item_array, TABLE_LIST *tables,
                              mem_root_deque<Item *> *fields,
                              List<Window> *windows);
   /**
@@ -1017,7 +996,7 @@ class Window {
     @returns false if success, true if error
   */
   bool resolve_window_ordering(THD *thd, Ref_item_array ref_item_array,
-                               Table_ref *tables,
+                               TABLE_LIST *tables,
                                mem_root_deque<Item *> *fields, ORDER *o,
                                bool partition_order);
   /**
@@ -1287,7 +1266,7 @@ class Window {
     See #m_is_last_row_in_frame
   */
   bool is_last_row_in_frame() const {
-    return m_is_last_row_in_frame || m_query_block->m_table_list.elements == 0;
+    return m_is_last_row_in_frame || m_query_block->table_list.elements == 0;
   }
 
   /**
@@ -1323,17 +1302,6 @@ class Window {
     See #m_rowno_in_partition
   */
   void set_rowno_in_partition(int64 rowno) { m_rowno_in_partition = rowno; }
-
-  /**
-    See #m_first_rowno_in_rows_frame
-  */
-  void set_first_rowno_in_rows_frame(int64 rowno) {
-    m_first_rowno_in_rows_frame = rowno;
-  }
-
-  int64 first_rowno_in_rows_frame() const {
-    return m_first_rowno_in_rows_frame;
-  }
 
   /**
     See #m_first_rowno_in_range_frame

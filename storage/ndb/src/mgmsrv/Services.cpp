@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,6 +24,8 @@
 
 #include <ndb_global.h>
 
+#include <uucode.h>
+#include <socket_io.h>
 #include <util/version.h>
 #include <mgmapi.h>
 #include <EventLogger.hpp>
@@ -41,8 +43,6 @@
 
 #include <ndb_base64.h>
 #include <ndberror.h>
-#include "portlib/NdbTCP.h"
-#include "portlib/ndb_sockaddr.h"
 
 extern bool g_StopServer;
 extern bool g_RestartServer;
@@ -349,17 +349,13 @@ extern int g_errorInsert;
 
 #define SLEEP_ERROR_INSERTED(x) if(ERROR_INSERTED(x)){NdbSleep_SecSleep(10);}
 
-MgmApiSession::MgmApiSession(class MgmtSrvr & mgm, ndb_socket_t sock,
-                             Uint64 session_id)
-  : SocketServer::Session(sock),
-    m_mgmsrv(mgm),
-    m_session_id(session_id),
-    m_name("unknown:0")
+MgmApiSession::MgmApiSession(class MgmtSrvr & mgm, NDB_SOCKET_TYPE sock, Uint64 session_id)
+  : SocketServer::Session(sock), m_mgmsrv(mgm),
+    m_session_id(session_id), m_name("unknown:0")
 {
   DBUG_ENTER("MgmApiSession::MgmApiSession");
-  m_secure_socket.init_from_new(sock);
-  m_input = new SecureSocketInputStream(m_secure_socket, SOCKET_TIMEOUT);
-  m_output = new BufferedSecureOutputStream(m_secure_socket, SOCKET_TIMEOUT);
+  m_input = new SocketInputStream(sock, SOCKET_TIMEOUT);
+  m_output = new BufferedSockOutputStream(sock, SOCKET_TIMEOUT);
   m_parser = new Parser_t(commands, *m_input);
   m_stopSelf= 0;
   m_ctx= NULL;
@@ -367,17 +363,19 @@ MgmApiSession::MgmApiSession(class MgmtSrvr & mgm, ndb_socket_t sock,
   m_errorInsert= 0;
   m_vMajor = m_vMinor = m_vBuild = 0;
 
-  ndb_sockaddr addr;
-  if (ndb_getpeername(sock, &addr) == 0)
+  struct sockaddr_in6 addr;
+  ndb_socket_len_t addrlen= sizeof(addr);
+  if (ndb_getpeername(sock, (struct sockaddr*)&addr, &addrlen) == 0)
   {
     char addr_buf[NDB_ADDR_STRLEN];
-    char *addr_str = Ndb_inet_ntop(&addr,
+    char *addr_str = Ndb_inet_ntop(AF_INET6,
+                                   static_cast<void*>(&addr.sin6_addr),
                                    addr_buf,
                                    sizeof(addr_buf));
     char buf[512];
     char *sockaddr_string = Ndb_combine_address_port(buf, sizeof(buf),
                                                      addr_str,
-                                                     addr.get_port());
+                                                     ntohs(addr.sin6_port));
     m_name.assfmt("%s", sockaddr_string);
   }
   DBUG_PRINT("info", ("new connection from: %s", m_name.c_str()));
@@ -394,10 +392,10 @@ MgmApiSession::~MgmApiSession()
     delete m_output;
   if (m_parser)
     delete m_parser;
-  if(m_secure_socket.is_valid())
+  if(ndb_socket_valid(m_socket))
   {
-    m_secure_socket.close();
-    m_secure_socket.invalidate();
+    ndb_socket_close(m_socket);
+    ndb_socket_invalidate(&m_socket);
   }
   if(m_stopSelf < 0)
     g_RestartServer= true;
@@ -489,10 +487,10 @@ MgmApiSession::runSession()
 
   NdbMutex_Lock(m_mutex);
   m_ctx= NULL;
-  if(m_secure_socket.is_valid())
+  if(ndb_socket_valid(m_socket))
   {
-    m_secure_socket.close();
-    m_secure_socket.invalidate();
+    ndb_socket_close(m_socket);
+    ndb_socket_invalidate(&m_socket);
   }
   NdbMutex_Unlock(m_mutex);
 
@@ -521,7 +519,7 @@ MgmApiSession::get_nodeid(Parser_t::Context &,
   args.get("endian", &endian);
   args.get("name", &name);
   args.get("timeout", &timeout);
-  /* for backwards compatibility keep track if client uses new protocol */
+  /* for backwards compatability keep track if client uses new protocol */
   const bool log_event_version= args.get("log_event", &log_event);
 
   m_output->println("get nodeid reply");
@@ -555,13 +553,15 @@ MgmApiSession::get_nodeid(Parser_t::Context &,
     return;
   }
 
-  ndb_sockaddr client_addr;
+  struct sockaddr_in6 client_addr;
   {
-    int r = ndb_getpeername(m_secure_socket.ndb_socket(), &client_addr);
+    ndb_socket_len_t addrlen= sizeof(client_addr);
+    int r = ndb_getpeername(m_socket, (struct sockaddr*)&client_addr, &addrlen);
     if (r != 0 )
     {
-      m_output->println("result: getpeername() failed, err= %d",
-                        ndb_socket_errno());
+      m_output->println("result: getpeername(" MY_SOCKET_FORMAT \
+                        ") failed, err= %d",
+                        MY_SOCKET_FORMAT_VALUE(m_socket), r);
       m_output->println("%s", "");
       return;
     }
@@ -654,25 +654,25 @@ MgmApiSession::getConfig(Parser_t::Context &,
     m_output->print("\n");
     return;
   }
-  const size_t len = pack64.length();
-  assert(strlen(pack64.c_str()) == len);
 
   m_output->println("result: Ok");
-  m_output->println("Content-Length: %zu", len);
+  m_output->println("Content-Length: %u", pack64.length());
   m_output->println("Content-Type: ndbconfig/octet-stream");
   SLEEP_ERROR_INSERTED(2);
   m_output->println("Content-Transfer-Encoding: base64");
   m_output->print("\n");
 
+  unsigned len = (unsigned)strlen(pack64.c_str());
   if(ERROR_INSERTED(3))
   {
     // Return only half the packed config
-    m_output->write(pack64.c_str(), len / 2);
+    BaseString half64 = pack64.substr(0, pack64.length());
+    m_output->write(half64.c_str(), (unsigned)strlen(half64.c_str()));
     m_output->write("\n", 1);
     return;
   }
   m_output->write(pack64.c_str(), len);
-  m_output->write("\n", 1);
+  m_output->write("\n\n", 2);
   return;
 }
 
@@ -868,7 +868,7 @@ MgmApiSession::getClusterLogLevel(Parser<MgmApiSession>::Context &			, Propertie
                           "schema" };
 
   int const loglevel_count = (CFG_MAX_LOGLEVEL - CFG_MIN_LOGLEVEL + 1);
-  static_assert(NDB_ARRAY_SIZE(names) == loglevel_count);
+  NDB_STATIC_ASSERT(NDB_ARRAY_SIZE(names) == loglevel_count);
   LogLevel::EventCategory category;
 
   m_output->println("get cluster loglevel");
@@ -989,23 +989,21 @@ MgmApiSession::restart(Properties const &args, int version) {
     nostart = 0,
     initialstart = 0,
     abort = 0, force = 0;
-  const char *nodes_str;
+  char *nodes_str;
   Vector<NodeId> nodes;
     
   args.get("initialstart", &initialstart);
   args.get("nostart", &nostart);
   args.get("abort", &abort);
-  args.get("node", &nodes_str);
+  args.get("node", (const char **)&nodes_str);
   args.get("force", &force);
 
   char *p, *last;
-  char *nodes_tmpstr = strdup(nodes_str);
-  for ((p = my_strtok_r(nodes_tmpstr, " ", &last)); p;
-       (p = my_strtok_r(nullptr, " ", &last)))
-  {
+  for((p = my_strtok_r(nodes_str, " ", &last));
+      p;
+      (p = my_strtok_r(NULL, " ", &last))) {
     nodes.push_back(atoi(p));
   }
-  free(nodes_tmpstr);
 
   int restarted = 0;
   int result= m_mgmsrv.restartNodes(nodes,
@@ -1226,10 +1224,10 @@ MgmApiSession::stop_v2(Parser<MgmApiSession>::Context &,
 void
 MgmApiSession::stop(Properties const &args, int version) {
   Uint32 abort, force = 0;
-  const char *nodes_str;
+  char *nodes_str;
   Vector<NodeId> nodes;
 
-  args.get("node", &nodes_str);
+  args.get("node", (const char **)&nodes_str);
   if(nodes_str == NULL)
   {
     m_output->println("stop reply");
@@ -1241,13 +1239,11 @@ MgmApiSession::stop(Properties const &args, int version) {
   args.get("force", &force);
 
   char *p, *last;
-  char *nodes_tmpstr = strdup(nodes_str);
-  for ((p = my_strtok_r(nodes_tmpstr, " ", &last)); p;
-       (p = my_strtok_r(nullptr, " ", &last)))
-  {
+  for((p = my_strtok_r(nodes_str, " ", &last));
+      p;
+      (p = my_strtok_r(NULL, " ", &last))) {
     nodes.push_back(atoi(p));
   }
-  free(nodes_tmpstr);
 
   int stopped= 0;
   int result= 0;
@@ -1574,7 +1570,7 @@ Ndb_mgmd_event_service::log(int eventType, const Uint32* theData,
   logevent2str(str, eventType, theData, len, nodeId, 0,
                pretty_text, sizeof(pretty_text));
 
-  Vector<ndb_socket_t> copy;
+  Vector<NDB_SOCKET_TYPE> copy;
   m_clients.lock();
   for(i = m_clients.size() - 1; i >= 0; i--)
   {
@@ -1661,9 +1657,9 @@ Ndb_mgmd_event_service::check_listeners()
 
     SocketOutputStream out(m_clients[i].m_socket);
 
-    DBUG_PRINT("info",("%d %s",
+    DBUG_PRINT("info",("%d " MY_SOCKET_FORMAT,
                        i,
-                       ndb_socket_to_string(m_clients[i].m_socket).c_str()));
+                       MY_SOCKET_FORMAT_VALUE(m_clients[i].m_socket)));
 
     if(out.println("<PING>") < 0)
     {
@@ -1687,8 +1683,8 @@ void
 Ndb_mgmd_event_service::add_listener(const Event_listener& client)
 {
   DBUG_ENTER("Ndb_mgmd_event_service::add_listener");
-  DBUG_PRINT("enter",("client.m_socket: %s",
-                      ndb_socket_to_string(client.m_socket).c_str()));
+  DBUG_PRINT("enter",("client.m_socket: " MY_SOCKET_FORMAT,
+                      MY_SOCKET_FORMAT_VALUE(client.m_socket)));
 
   check_listeners();
 
@@ -1794,7 +1790,7 @@ MgmApiSession::listen_event(Parser<MgmApiSession>::Context & ctx,
 
   Ndb_mgmd_event_service::Event_listener le;
   le.m_parsable = parsable;
-  le.m_socket = m_secure_socket.ndb_socket();
+  le.m_socket = m_socket;
 
   Vector<BaseString> list;
   param.trim();
@@ -1860,7 +1856,7 @@ done:
   {
     m_mgmsrv.m_event_listner.add_listener(le);
     m_stop = true;
-    m_secure_socket.invalidate();
+    ndb_socket_invalidate(&m_socket);
   }
 }
 
@@ -1893,32 +1889,27 @@ MgmApiSession::transporter_connect(Parser_t::Context &ctx,
 				   Properties const &args)
 {
   bool close_with_reset = true;
-  bool log_failure = false;
   BaseString errormsg;
-  if (!m_mgmsrv.transporter_connect(m_secure_socket.ndb_socket(), errormsg,
-                                    close_with_reset, log_failure))
+  if (!m_mgmsrv.transporter_connect(m_socket, errormsg, close_with_reset))
   {
     // Connection not allowed or failed
-    if (log_failure)
-    {
-      g_eventLogger->warning("Failed to convert connection "
-                             "from '%s' to transporter: %s",
-                             name(),
-                             errormsg.c_str());
-    }
+    g_eventLogger->warning("Failed to convert connection "
+                           "from '%s' to transporter: %s",
+                           name(),
+                           errormsg.c_str());
     // Close the socket to indicate failure to client
-    m_secure_socket.close_with_reset(close_with_reset);
-    m_secure_socket.invalidate(); // Already closed
+    ndb_socket_close_with_reset(m_socket, close_with_reset);
+    ndb_socket_invalidate(&m_socket); // Already closed
   }
   else
   {
     /*
-      Conversion to transporter succeeded
+      Conversion to transporter suceeded
       Stop this session thread and release resources
       but don't close the socket, it's been taken over
       by the transporter
     */
-    m_secure_socket.invalidate();  // so nobody closes it
+    ndb_socket_invalidate(&m_socket);   // so nobody closes it
   }
 
   m_stop= true; // Stop the session
@@ -1941,18 +1932,14 @@ MgmApiSession::report_event(Parser_t::Context &ctx,
 {
   Uint32 length;
   const char *data_string;
-  Uint32 data[MAX_EVENT_LENGTH];
+  Uint32 data[25];
 
   args.get("length", &length);
-  assert(length < MAX_EVENT_LENGTH);
   args.get("data", &data_string);
 
   BaseString tmp(data_string);
   Vector<BaseString> item;
   tmp.split(item, " ");
-  if (length > MAX_EVENT_LENGTH)
-    // Data is going to be truncated
-    length = MAX_EVENT_LENGTH;
   for (int i = 0; (Uint32) i < length ; i++)
   {
     sscanf(item[i].c_str(), "%u", data+i);
@@ -2224,9 +2211,10 @@ void MgmApiSession::setConfig(Parser_t::Context &ctx,
     int r = 0;
     size_t start = 0;
     do {
-      if((r= m_secure_socket.read(SOCKET_TIMEOUT,
-                                  &buf64[start],
-                                  (int)(len64-start))) < 1)
+      if((r= read_socket(m_socket,
+                         SOCKET_TIMEOUT,
+                         &buf64[start],
+                         (int)(len64-start))) < 1)
       {
         delete[] buf64;
         result.assfmt("read_socket failed, errno: %d", errno);
@@ -2234,15 +2222,11 @@ void MgmApiSession::setConfig(Parser_t::Context &ctx,
       }
       start += r;
     } while(start < len64);
-    if (buf64[len64 - 1] != '\n')
-    {
-      delete[] buf64;
-      result.assfmt("Failed to read config");
-      goto done;
-    }
+
     char* decoded = new char[base64_needed_decoded_length((size_t)len64 - 1)];
     int decoded_len= ndb_base64_decode(buf64, len64-1, decoded, NULL);
     delete[] buf64;
+
     if (decoded_len == -1)
     {
       result.assfmt("Failed to decode config");
@@ -2653,5 +2637,5 @@ MgmApiSession::set_ports(Parser_t::Context &,
 
 template class MutexVector<int>;
 template class Vector<ParserRow<MgmApiSession> const*>;
-template class Vector<ndb_socket_t>;
+template class Vector<NDB_SOCKET_TYPE>;
 template class Vector<SimpleSignal>;

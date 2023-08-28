@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 #include "my_compiler.h"
 
 #include "my_inttypes.h"
-#include "mysql/components/services/bits/psi_statement_bits.h"
+#include "mysql/components/services/psi_statement_bits.h"
 #include "mysql_com.h"
 #include "sql/debug_sync.h"
 #include "sql/field.h"
@@ -76,7 +76,7 @@ class Materialized_cursor final : public Server_side_cursor {
   /// A fake unit to supply to Query_result_send when fetching
   Query_expression fake_query_expression;
   /// Cursor to the table that contains the materialized result
-  TABLE *m_table{nullptr};
+  TABLE *table{nullptr};
   /**
     List of items to send to client, copy of original items, but created in
     the cursor object's mem_root.
@@ -89,10 +89,10 @@ class Materialized_cursor final : public Server_side_cursor {
  public:
   Materialized_cursor(Query_result *result);
   void set_table(TABLE *table_arg);
-  void set_result(Query_result *result_arg) { m_result = result_arg; }
+  void set_result(Query_result *result_arg) { result = result_arg; }
   int send_result_set_metadata(
       THD *thd, const mem_root_deque<Item *> &send_result_set_metadata);
-  bool is_open() const override { return m_table->has_storage_handler(); }
+  bool is_open() const override { return table->has_storage_handler(); }
   bool open(THD *) override;
   bool fetch(ulong num_rows) override;
   void close() override;
@@ -109,35 +109,27 @@ class Materialized_cursor final : public Server_side_cursor {
 */
 
 class Query_result_materialize final : public Query_result_union {
+  Query_result *result; /**< the result object of the caller (PS or SP) */
  public:
+  Materialized_cursor *materialized_cursor;
   Query_result_materialize(Query_result *result_arg)
-      : Query_result_union(), m_result(result_arg) {}
-  ~Query_result_materialize() override { destroy(m_cursor); }
+      : Query_result_union(),
+        result(result_arg),
+        materialized_cursor(nullptr) {}
+  ~Query_result_materialize() override { delete materialized_cursor; }
   void set_result(Query_result *result_arg) {
-    m_result = result_arg;
-    if (m_cursor != nullptr) {
-      m_cursor->set_result(result_arg);
-    }
+    result = result_arg;
+    if (materialized_cursor != nullptr)
+      materialized_cursor->set_result(result_arg);
   }
-  bool check_supports_cursor() const override { return false; }
+  bool check_simple_query_block() const override { return false; }
   bool prepare(THD *thd, const mem_root_deque<Item *> &list,
                Query_expression *u) override;
   bool start_execution(THD *thd) override;
   bool send_result_set_metadata(THD *thd, const mem_root_deque<Item *> &list,
                                 uint flags) override;
-  void cleanup() override { m_result->cleanup(); }
-  Server_side_cursor *cursor() const override { return m_cursor; }
-
- private:
-  /// The materialized cursor associated with this result
-  Materialized_cursor *m_cursor{nullptr};
-  /// The query result supplied by the caller (PS or SP)
-  Query_result *m_result;
+  void cleanup(THD *) override {}
 };
-
-Query_result *new_cursor_result(MEM_ROOT *mem_root, Query_result *result) {
-  return new (mem_root) Query_result_materialize(result);
-}
 
 /**************************************************************************/
 
@@ -158,9 +150,6 @@ Query_result *new_cursor_result(MEM_ROOT *mem_root, Query_result *result) {
   @returns false on success, true on error
 
   @note
-  Only used for cursors created by stored procedures. Cursors created
-  for prepared statements are handled by simpler interfaces
-  (new_cursor_result(), Materialized_cursor::open(), etc).
   On first invocation, mysql_open_cursor creates a query result object
   for management of the materialized result. When this cursor is prepared,
   it creates a materialized cursor object (Materialized_cursor) inside
@@ -186,35 +175,47 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
   Query_result_materialize *result_materialize = nullptr;
   LEX *lex = thd->lex;
 
-  Sql_cmd_dml *sql_cmd =
-      lex->m_sql_cmd != nullptr && lex->m_sql_cmd->sql_cmd_type() == SQL_CMD_DML
-          ? down_cast<Sql_cmd_dml *>(lex->m_sql_cmd)
-          : nullptr;
+  Sql_cmd_dml *sql_cmd = lex->m_sql_cmd != nullptr && lex->m_sql_cmd->is_dml()
+                             ? down_cast<Sql_cmd_dml *>(lex->m_sql_cmd)
+                             : nullptr;
 
   // Only DML statements may have assigned a cursor.
   if (sql_cmd == nullptr) {
     my_error(ER_WRONG_ARGUMENTS, MYF(0), "with cursor");
     return true;
   }
-  /*
-    Cursors are not supported for regular (non-prepared, non-SP) statements,
-    and the statement must return data (usually a SELECT statement).
-  */
-  assert(sql_cmd->may_use_cursor() && !sql_cmd->is_regular());
 
   /*
     Create the result object for materialization.
-    Two situations are possible here:
-    1. If this is a preparable un-prepared statement, create object in
-       statement mem_root.
-    2. If this is a prepared statement for which a result object for
+    Three situations are possible here:
+    1. If this is a preparable un-prepared statement (may happen for statements
+       that are part of stored procedures), create object in statement mem_root.
+    2. If this is a prepared statement but no result object for materialization
+       exists, create object in statement mem_root.
+       Since the statement is already prepared, explicitly prepare the
+       result object, which includes creating the temporary table.
+    3. If this is a prepared statement for which a result object for
        materialization exists, reuse this object.
+
+    Cursors are not supported for regular (non-prepared, non-SP) statements,
+    and the statement must return data (usually a SELECT statement).
   */
-  if (!sql_cmd->is_prepared()) {
-    const Prepared_stmt_arena_holder ps_arena_holder(thd);
+  if (!sql_cmd->may_use_cursor() || sql_cmd->is_regular()) {
+  } else if (!sql_cmd->is_prepared()) {
+    Prepared_stmt_arena_holder ps_arena_holder(thd);
 
     result_materialize = new (thd->mem_root) Query_result_materialize(result);
     if (result_materialize == nullptr) return true;
+  } else if (lex->result == nullptr) {
+    Prepared_stmt_arena_holder ps_arena_holder(thd);
+
+    result_materialize = new (thd->mem_root) Query_result_materialize(result);
+    if (result_materialize == nullptr) return true;
+
+    sql_cmd->set_query_result(result_materialize);
+
+    // Signal that query result must be prepared on execution
+    sql_cmd->set_lazy_result();
   } else {
     result_materialize =
         down_cast<Query_result_materialize *>(sql_cmd->query_result());
@@ -229,19 +230,18 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
   parent_locker = thd->m_statement_psi;
   thd->m_digest = nullptr;
   thd->m_statement_psi = nullptr;
-  DBUG_EXECUTE_IF("bug33218625_kill_injection", thd->killed = THD::KILL_QUERY;);
 
-  const bool rc = mysql_execute_command(thd);
+  bool rc = mysql_execute_command(thd);
 
   thd->m_digest = parent_digest;
   DEBUG_SYNC(thd, "after_table_close");
   thd->m_statement_psi = parent_locker;
 
-  // Get the cursor that was created for materialization
-  Server_side_cursor *cursor =
-      result_materialize != nullptr ? result_materialize->cursor() : nullptr;
+  Materialized_cursor *materialized_cursor =
+      result_materialize != nullptr ? result_materialize->materialized_cursor
+                                    : nullptr;
 
-  if (*pcursor == nullptr) *pcursor = cursor;
+  if (*pcursor == nullptr) *pcursor = materialized_cursor;
 
   if (rc) {
     /*
@@ -249,9 +249,9 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
       created, in this case metadata in client-server protocol is rolled
       back and the cursor is closed (if it is open).
     */
-    if (cursor != nullptr) {
+    if (materialized_cursor != nullptr) {
       result_materialize->abort_result_set(thd);
-      cursor->close();
+      materialized_cursor->close();
     }
     return true;
   }
@@ -263,13 +263,13 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
     network, bypassing Query_result mechanism. An example of
     such command is SHOW PRIVILEGES.
   */
-  if (cursor != nullptr) {
+  if (materialized_cursor != nullptr) {
     /*
       NOTE: close_thread_tables() has been called in
       mysql_execute_command(), so all tables except from the cursor
       temporary table have been closed.
     */
-    if (cursor->open(thd)) {
+    if (materialized_cursor->open(thd)) {
       return true;
     }
   }
@@ -287,7 +287,7 @@ Materialized_cursor::Materialized_cursor(Query_result *result_arg)
       item_list(*THR_MALLOC) {}
 
 /// Bind a temporary table with a materialized cursor.
-void Materialized_cursor::set_table(TABLE *table_arg) { m_table = table_arg; }
+void Materialized_cursor::set_table(TABLE *table_arg) { table = table_arg; }
 
 /**
   Preserve the original metadata to be sent to the client.
@@ -308,7 +308,7 @@ int Materialized_cursor::send_result_set_metadata(
   Query_arena backup_arena;
   thd->swap_query_arena(m_arena, &backup_arena);
   if (item_list.empty()) {
-    if (m_table->fill_item_list(&item_list)) {
+    if (table->fill_item_list(&item_list)) {
       thd->swap_query_arena(backup_arena, &m_arena);
       return true;
     }
@@ -342,8 +342,8 @@ int Materialized_cursor::send_result_set_metadata(
     mysql_execute_command() is finished, item_list can not be used for
     sending metadata, because it references closed table.
   */
-  if (m_result->send_result_set_metadata(thd, item_list,
-                                         Protocol::SEND_NUM_ROWS)) {
+  if (result->send_result_set_metadata(thd, item_list,
+                                       Protocol::SEND_NUM_ROWS)) {
     thd->swap_query_arena(backup_arena, &m_arena);
     return true;
   }
@@ -363,8 +363,8 @@ bool Materialized_cursor::open(THD *thd) {
 
   /* Create a list of fields and start sequential scan. */
 
-  rc = m_result->prepare(thd, item_list, &fake_query_expression);
-  rc = !rc && m_table->file->ha_rnd_init(true);
+  rc = result->prepare(thd, item_list, &fake_query_expression);
+  rc = !rc && table->file->ha_rnd_init(true);
   is_rnd_inited = !rc;
 
   thd->swap_query_arena(backup_arena, &m_arena);
@@ -373,9 +373,9 @@ bool Materialized_cursor::open(THD *thd) {
 
   if (!rc) {
     thd->server_status |= SERVER_STATUS_CURSOR_EXISTS;
-    m_result->send_eof(thd);
+    result->send_eof(thd);
   } else {
-    m_result->abort_result_set(thd);
+    result->abort_result_set(thd);
   }
 
   fetch_limit = 0;
@@ -400,29 +400,30 @@ bool Materialized_cursor::fetch(ulong num_rows) {
   THD *thd = current_thd;
 
   int res = 0;
+  result->begin_dataset();
   for (fetch_limit += num_rows; fetch_count < fetch_limit; fetch_count++) {
-    if ((res = m_table->file->ha_rnd_next(m_table->record[0]))) break;
+    if ((res = table->file->ha_rnd_next(table->record[0]))) break;
     /* Send data only if the read was successful. */
     /*
       If network write failed (i.e. due to a closed socked),
       the error has already been set. Return true if the error
       is set.
     */
-    if (m_result->send_data(thd, item_list)) return true;
+    if (result->send_data(thd, item_list)) return true;
   }
 
   switch (res) {
     case 0:
       thd->server_status |= SERVER_STATUS_CURSOR_EXISTS;
-      m_result->send_eof(thd);
+      result->send_eof(thd);
       break;
     case HA_ERR_END_OF_FILE:
       thd->server_status |= SERVER_STATUS_LAST_ROW_SENT;
-      m_result->send_eof(thd);
+      result->send_eof(thd);
       close();
       break;
     default:
-      m_table->file->print_error(res, MYF(0));
+      table->file->print_error(res, MYF(0));
       close();
       return true;
   }
@@ -432,10 +433,10 @@ bool Materialized_cursor::fetch(ulong num_rows) {
 
 void Materialized_cursor::close() {
   if (is_rnd_inited) {
-    (void)m_table->file->ha_rnd_end();
+    (void)table->file->ha_rnd_end();
     is_rnd_inited = false;
   }
-  close_tmp_table(m_table);
+  close_tmp_table(table);
   m_arena.free_items();
   item_list.clear();
   mem_root.ClearForReuse();
@@ -443,7 +444,7 @@ void Materialized_cursor::close() {
 
 Materialized_cursor::~Materialized_cursor() {
   assert(!is_open());
-  if (m_table != nullptr) free_tmp_table(m_table);
+  if (table != nullptr) free_tmp_table(table);
 }
 
 /***************************************************************************
@@ -455,12 +456,12 @@ bool Query_result_materialize::prepare(THD *thd,
                                        Query_expression *u) {
   unit = u;
 
-  if (m_result->prepare(thd, fields, u)) return true;
+  if (result->prepare(thd, fields, u)) return true;
 
-  assert(table == nullptr && m_cursor == nullptr);
+  assert(table == nullptr && materialized_cursor == nullptr);
 
-  m_cursor = new (thd->mem_root) Materialized_cursor(m_result);
-  if (m_cursor == nullptr) return true;
+  materialized_cursor = new (thd->mem_root) Materialized_cursor(result);
+  if (materialized_cursor == nullptr) return true;
   /*
     Objects associated with the temporary table should be created as follows:
     - Metadata about the temporary table are created on the Statement mem_root.
@@ -472,10 +473,10 @@ bool Query_result_materialize::prepare(THD *thd,
   if (create_result_table(thd, *unit->get_unit_column_types(), false,
                           thd->variables.option_bits | TMP_TABLE_ALL_COLUMNS,
                           "", false, false)) {
-    destroy(m_cursor);
+    delete materialized_cursor;
     return true;
   }
-  m_cursor->set_table(table);
+  materialized_cursor->set_table(table);
 
   return false;
 }
@@ -485,7 +486,7 @@ bool Query_result_materialize::start_execution(THD *thd) {
   if (table->is_created()) return false;
 
   MEM_ROOT *saved_mem_root = thd->mem_root;
-  thd->mem_root = &m_cursor->mem_root;
+  thd->mem_root = &materialized_cursor->mem_root;
   if (instantiate_tmp_table(thd, table)) {
     thd->mem_root = saved_mem_root;
     return true;
@@ -500,7 +501,7 @@ bool Query_result_materialize::start_execution(THD *thd) {
 
 bool Query_result_materialize::send_result_set_metadata(
     THD *thd, const mem_root_deque<Item *> &list, uint) {
-  if (m_cursor->send_result_set_metadata(thd, list)) {
+  if (materialized_cursor->send_result_set_metadata(thd, list)) {
     return true;
   }
 

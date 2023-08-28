@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,6 @@
 #include <my_sys.h>
 #include "client/pattern_matcher.cc"
 
-struct CHARSET_INFO;
-
 namespace mysql_client_test_ns {
 
 class PatternMatcherTest : public ::testing::Test {
@@ -36,7 +34,9 @@ class PatternMatcherTest : public ::testing::Test {
 
  protected:
   void SetUp() override {
-    cs_info = get_charset_by_name("utf8mb4_0900_ai_ci", MYF(0));
+    MY_CHARSET_LOADER loader;
+    my_charset_loader_init_mysys(&loader);
+    cs_info = my_collation_get_by_name(&loader, "utf8mb4_0900_ai_ci", MYF(0));
   }
 };
 

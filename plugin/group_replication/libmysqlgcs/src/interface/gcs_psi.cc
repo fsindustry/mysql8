@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -140,16 +140,12 @@ static PSI_cond_info all_gcs_psi_cond_keys_info[] = {
      "GCS_Gcs_suspicions_manager::m_suspicions_cond", PSI_FLAG_SINGLETON, 0,
      PSI_DOCUMENT_ME}};
 
-PSI_memory_key key_MEM_XCOM_xcom_cache, key_MEM_Gcs_message_data_m_buffer;
+PSI_memory_key key_MEM_XCOM_xcom_cache;
 
 static PSI_memory_info xcom_cache_memory_info[] = {
     {&key_MEM_XCOM_xcom_cache, "GCS_XCom::xcom_cache",
      PSI_FLAG_ONLY_GLOBAL_STAT, PSI_VOLATILITY_UNKNOWN,
-     "Memory usage statistics for the XCom cache."},
-    {&key_MEM_Gcs_message_data_m_buffer, "Gcs_message_data::m_buffer",
-     PSI_FLAG_MEM_COLLECT, PSI_VOLATILITY_UNKNOWN,
-     "Memory used for the transaction data payload which is send to the "
-     "network."}};
+     "Memory usage statistics for the XCom cache."}};
 
 void register_gcs_thread_psi_keys() {
   const char *category = "group_rpl";
@@ -194,6 +190,8 @@ int psi_report_mem_alloc(size_t size) {
       PSI_NOT_INSTRUMENTED) {
     return 0;
   }
+  /* This instrument is flagged global, so there should be no thread owner. */
+  assert(owner == nullptr);
 #endif /* HAVE_PSI_MEMORY_INTERFACE */
   current_count += size;
   return 1;

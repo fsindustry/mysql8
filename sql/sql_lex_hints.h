@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,25 +30,31 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/lex_symbol.h"
 #include "sql/lexer_yystype.h"
-#include "sql/parser_yystype.h"
 #include "sql/sql_class.h"
 #include "sql/sql_digest_stream.h"
 #include "sql/sql_lex_hash.h"
-#include "strings/sql_chars.h"
+#include "sql_chars.h"
 
+// This must be last, due to bison 2.3 on OsX
+#ifndef YYSTYPE_IS_DECLARED
+#define YYSTYPE_IS_DECLARED 1
+#endif  // YYSTYPE_IS_DECLARED
 #include "sql/sql_hints.yy.h"
 
 class PT_hint_list;
+union YYSTYPE;
+
+void hint_lex_init_maps(CHARSET_INFO *cs, hint_lex_char_classes *hint_map);
 
 /// Lexical scanner for hint comments.
 ///
 /// When the main lexical scanner recognizes the "/*+" delimiter, it calls
-/// the hint parser (my_hint_parser_parse) to consume the rest of hint tokens
+/// the hint parser (HINT_PARSER_parse) to consume the rest of hint tokens
 /// including the */ delimiter. The hint parser uses Hint_scanner as its own
 /// lexer to scan hint-specific tokens.
 class Hint_scanner {
@@ -147,10 +153,8 @@ class Hint_scanner {
 
             ptr++;  // skip closing quote
 
-            if (thd->charset_is_system_charset && double_separators == 0) {
-              yytext = thd->strmake(yytext, yyleng);  // null-terminate it.
+            if (thd->charset_is_system_charset && double_separators == 0)
               return ret;
-            }
 
             LEX_STRING s;
             if (!thd->charset_is_system_charset) {
@@ -178,7 +182,7 @@ class Hint_scanner {
 
   int scan_ident() {
     for (;;) {
-      const hint_lex_char_classes chr_class = peek_class();
+      hint_lex_char_classes chr_class = peek_class();
       switch (chr_class) {
         case HINT_CHR_IDENT:
         case HINT_CHR_DIGIT:
@@ -341,7 +345,7 @@ class Hint_scanner {
 
   uchar get_byte() {
     assert(!eof());
-    const char ret = *ptr;
+    char ret = *ptr;
     yyleng++;
     ptr++;
     return ret;
@@ -376,7 +380,7 @@ class Hint_scanner {
   }
 
   bool skip_mb() {
-    const size_t len = my_ismbchar(cs, ptr, input_buf_end);
+    size_t len = my_ismbchar(cs, ptr, input_buf_end);
     if (len == 0) {
       ptr++;
       yyleng++;
@@ -465,16 +469,14 @@ class Hint_scanner {
   }
 };
 
-inline int my_hint_parser_lex(MY_HINT_PARSER_STYPE *yacc_yylval,
-                              Hint_scanner *scanner) {
+inline int HINT_PARSER_lex(YYSTYPE *yacc_yylval, Hint_scanner *scanner) {
   auto yylval = reinterpret_cast<Lexer_yystype *>(yacc_yylval);
-  const int ret = scanner->get_next_token();
+  int ret = scanner->get_next_token();
   yylval->hint_string.str = scanner->yytext;
   yylval->hint_string.length = scanner->yyleng;
   return ret;
 }
 
-void my_hint_parser_error(THD *, Hint_scanner *, PT_hint_list **,
-                          const char *msg);
+void HINT_PARSER_error(THD *, Hint_scanner *, PT_hint_list **, const char *msg);
 
 #endif /* SQL_LEX_HINTS_ICLUDED */

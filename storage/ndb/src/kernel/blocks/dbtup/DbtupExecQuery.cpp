@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -164,7 +164,7 @@ Uint32 Dbtup::copyAttrinfo(Uint32 storedProcId,
     // Read sectionPtr's
     reader.getWords(&cinBuffer[0], 5);
 
-    // Read interpreted sections 0..3, up to the parameter section
+    // Read interpreted sections 0..3, upto the parameter section
     const Uint32 readLen = cinBuffer[0] + cinBuffer[1] +
                            cinBuffer[2] + cinBuffer[3];
     Uint32 *pos = &cinBuffer[5];
@@ -183,11 +183,11 @@ Uint32 Dbtup::copyAttrinfo(Uint32 storedProcId,
       paramLen = cinBuffer[4];
       ndbrequire(reader.getWords(pos, paramLen));
       pos += paramLen;
-      ndbassert(intmax_t{readerLen} == (pos - cinBuffer));
+      ndbassert(readerLen == (pos - cinBuffer));
     }
     else
     {
-      // A set of parameters, skip up to the one specified by 'ParamNo'
+      // A set of parameters, skip upto the one specified by 'ParamNo'
       for (uint i=0; i < storedPtr.p->storedParamNo; i++)
       {
         reader.getWord(pos);
@@ -644,7 +644,7 @@ Dbtup::load_diskpage(Signal* signal,
     if (unlikely((flags & 7) == ZREFRESH))
     {
       jam();
-      /* Refresh of previously nonexistent DD tuple.
+      /* Refresh of previously nonexistant DD tuple.
        * No diskpage to load at commit time
        */
       regOperPtr->op_struct.bit_field.m_wait_log_buffer= 0;
@@ -1535,7 +1535,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
        if (accminupdateptr)
        {
          /**
-          * Update ACC local-key, once *everything* has completed successfully
+          * Update ACC local-key, once *everything* has completed succesfully
           */
          c_lqh->accminupdate(signal,
                              regOperPtr->userpointer,
@@ -1868,7 +1868,8 @@ int Dbtup::handleReadReq(Signal* signal,
                              &cinBuffer[0],
                              req_struct->attrinfo_len,
                              dst,
-                             dstLen);
+                             dstLen,
+                             false);
     if (likely(ret >= 0))
     {
 /* ------------------------------------------------------------------------- */
@@ -2649,57 +2650,13 @@ int Dbtup::handleInsertReq(Signal* signal,
       goto update_error;
     }
   }
-
-  if (unlikely(req_struct->interpreted_exec))
+  
+  if (unlikely((res = updateAttributes(req_struct, &cinBuffer[0],
+                                       req_struct->attrinfo_len)) < 0))
   {
     jam();
-
-    /* Interpreted insert only processes the finalUpdate section */
-    const Uint32 RinitReadLen= cinBuffer[0];
-    const Uint32 RexecRegionLen= cinBuffer[1];
-    const Uint32 RfinalUpdateLen= cinBuffer[2];
-    //const Uint32 RfinalRLen= cinBuffer[3];
-    //const Uint32 RsubLen= cinBuffer[4];
-
-    const Uint32 offset = 5 + RinitReadLen + RexecRegionLen;
-    req_struct->log_size = 0;
-
-    if (unlikely((res = updateAttributes(req_struct, &cinBuffer[offset],
-                                         RfinalUpdateLen)) < 0))
-    {
-      jam();
-      terrorCode = Uint32(-res);
-      goto update_error;
-    }
-
-    /**
-     * Send normal format AttrInfo back to LQH for
-     * propagation
-     */
-    req_struct->log_size = RfinalUpdateLen;
-    MEMCOPY_NO_WORDS(&clogMemBuffer[0],
-                     &cinBuffer[offset],
-                     RfinalUpdateLen);
-
-    if (unlikely(sendLogAttrinfo(signal,
-                                 req_struct,
-                                 RfinalUpdateLen,
-                                 regOperPtr.p) != 0))
-    {
-      jam();
-      goto update_error;
-    }
-  }
-  else
-  {
-    /* Normal insert */
-    if (unlikely((res = updateAttributes(req_struct, &cinBuffer[0],
-                                         req_struct->attrinfo_len)) < 0))
-    {
-      jam();
-      terrorCode = Uint32(-res);
-      goto update_error;
-    }
+    terrorCode = Uint32(-res);
+    goto update_error;
   }
 
   if (ERROR_INSERTED(4017))
@@ -3225,7 +3182,7 @@ Dbtup::handleRefreshReq(Signal* signal,
        if (accminupdateptr)
        {
          /**
-          * Update ACC local-key, once *everything* has completed successfully
+          * Update ACC local-key, once *everything* has completed succesfully
           */
          jamDebug();
          c_lqh->accminupdate(signal,
@@ -3538,7 +3495,8 @@ int Dbtup::interpreterStartLab(Signal* signal,
                                   &cinBuffer[5],
                                   RinitReadLen,
                                   &dst[0],
-                                  dstLen);
+                                  dstLen,
+                                  false);
         if (TnoDataRW >= 0)
         {
           jamDebug();
@@ -3654,7 +3612,8 @@ int Dbtup::interpreterStartLab(Signal* signal,
                                 &cinBuffer[5],
                                 RinitReadLen,
                                 &dst[0],
-                                dstLen);
+                                dstLen,
+                                false);
       if (TnoDataRW >= 0)
       {
         jamDebug();
@@ -3679,7 +3638,8 @@ int Dbtup::interpreterStartLab(Signal* signal,
                                 &cinBuffer[RinstructionCounter],
                                 RfinalRLen,
                                 &dst[RattroutCounter],
-                                (dstLen - RattroutCounter));
+                                (dstLen - RattroutCounter),
+                                 false);
       if (TnoDataRW >= 0)
       {
         jamDebug();
@@ -3888,7 +3848,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
 				     &theAttrinfo,
 				     (Uint32)1,
 				     &TregMemBuffer[theRegister],
-				     (Uint32)3);
+				     (Uint32)3,
+                                     false);
 	  if (TnoDataRW == 2)
           {
 	    /* ------------------------------------------------------------- */
@@ -4292,7 +4253,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
         {
 	  Int32 TnoDataR = readAttributes(req_struct,
 					  &attrId, 1,
-					  tmpArea, tmpAreaSz);
+					  tmpArea, tmpAreaSz,
+                                          false);
 	  
 	  if (unlikely(TnoDataR < 0))
           {
@@ -4382,7 +4344,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
           Int32 TnoDataR = readAttributes(req_struct,
                                           &attr2Id, 1,
                                           &tmpArea[firstAttrWords],
-                                          tmpAreaSz-firstAttrWords);
+                                          tmpAreaSz-firstAttrWords,
+                                          false);
           if (unlikely(TnoDataR < 0))
           {
             jam();
@@ -4571,7 +4534,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
         {
 	  Int32 TnoDataR= readAttributes(req_struct,
 					  &attrId, 1,
-					  tmpArea, tmpAreaSz);
+					  tmpArea, tmpAreaSz,
+                                          false);
 	  
 	  if (unlikely(TnoDataR < 0))
           {
@@ -4605,7 +4569,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
         {
 	  Int32 TnoDataR= readAttributes(req_struct,
 					  &attrId, 1,
-					  tmpArea, tmpAreaSz);
+					  tmpArea, tmpAreaSz,
+                                          false);
 	  
 	  if (unlikely(TnoDataR < 0))
           {
@@ -4732,7 +4697,7 @@ int Dbtup::interpreterNextLab(Signal* signal,
  * dst_off_ptr where to write attribute offsets
  * src         pointer to packed attributes
  * tabDesc     array of attribute descriptors (used for getting max size)
- * no_of_attr  no of attributes to expand
+ * no_of_attr  no of atributes to expand
  */
 static
 Uint32*
@@ -4830,7 +4795,7 @@ Dbtup::expand_tuple(KeyReqStruct* req_struct,
          * from handle_lcp_keep_commit. In this case we are currently
          * performing a DELETE operation. This operation is the final
          * operation that will be committed. It could very well have
-         * been preceded by an UPDATE operation that did set the
+         * been preceeded by an UPDATE operation that did set the
          * MM_GROWN bit. In this case it is important to get the original
          * length from the end of the varsize part and not the page
          * entry length which is essentially the meaning of the MM_GROWN
@@ -5467,7 +5432,7 @@ Dbtup::handle_size_change_after_update(KeyReqStruct* req_struct,
       if (copy_bits & Tuple_header::COPY_TUPLE)
       {
         jamDebug();
-        ndbrequire(c_page_pool.getPtr(pagePtr, ref.m_page_no));
+        c_page_pool.getPtr(pagePtr, ref.m_page_no);
         pageP = (Var_page*)pagePtr.p;
       }
       alloc = pageP->get_entry_len(idx);
@@ -5602,7 +5567,7 @@ Dbtup::optimize_var_part(KeyReqStruct* req_struct,
   Uint32 idx = ref.m_page_idx;
 
   Ptr<Page> pagePtr;
-  ndbrequire(c_page_pool.getPtr(pagePtr, ref.m_page_no));
+  c_page_pool.getPtr(pagePtr, ref.m_page_no);
 
   Var_page* pageP = (Var_page*)pagePtr.p;
   Uint32 var_part_size = pageP->get_entry_len(idx);
@@ -5762,7 +5727,7 @@ Dbtup::nr_read_pk(Uint32 fragPtrI,
 			 attrIds,
 			 numAttrs,
 			 dst,
-			 ZNIL);
+			 ZNIL, false);
     
     // done
     if (likely(ret >= 0)) {
@@ -6063,7 +6028,7 @@ Dbtup::nr_delete_page_callback(Signal* signal,
 			       Uint32 userpointer, Uint32 page_id)//unused
 {
   Ptr<GlobalPage> gpage;
-  ndbrequire(m_global_page_pool.getPtr(gpage, page_id));
+  m_global_page_pool.getPtr(gpage, page_id);
   PagePtr pagePtr((Tup_page*)gpage.p, gpage.i);
   disk_page_set_dirty(pagePtr);
   Dblqh::Nr_op_info op;
@@ -6134,7 +6099,7 @@ Dbtup::nr_delete_log_buffer_callback(Signal* signal,
     tablePtr.p->m_offsets[DD].m_fix_header_size - 1;
   
   Ptr<GlobalPage> gpage;
-  ndbrequire(m_global_page_pool.getPtr(gpage, op.m_page_id));
+  m_global_page_pool.getPtr(gpage, op.m_page_id);
   PagePtr pagePtr((Tup_page*)gpage.p, gpage.i);
 
   /**

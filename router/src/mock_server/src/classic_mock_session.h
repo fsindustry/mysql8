@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -121,8 +121,7 @@ class MySQLServerMockSessionClassic : public MySQLServerMockSession {
   void send_response_then_disconnect();
   void finish();
 
-  stdx::expected<void, ErrorResponse> authenticate(
-      const std::vector<uint8_t> &client_auth_method_data);
+  bool authenticate(const std::vector<uint8_t> &client_auth_method_data);
 
   MySQLClassicProtocol protocol_;
 

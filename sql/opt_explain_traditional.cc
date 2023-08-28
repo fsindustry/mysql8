@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,10 @@
 
 #include <cstddef>  // size_t
 
+#include "m_ctype.h"
+#include "m_string.h"
+
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/current_thd.h"
 #include "sql/item.h"
 #include "sql/query_result.h"
@@ -36,7 +38,6 @@
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 
 /**
   Heads of "extra" column parts

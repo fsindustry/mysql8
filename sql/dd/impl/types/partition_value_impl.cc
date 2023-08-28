@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,7 +41,6 @@
 #include "sql/dd/impl/types/partition_impl.h"  // Partition_impl
 #include "sql/dd/types/object_table.h"
 #include "sql/dd/types/weak_object.h"
-#include "string_with_len.h"
 
 namespace dd {
 class Object_key;

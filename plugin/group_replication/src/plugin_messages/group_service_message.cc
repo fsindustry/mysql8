@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,19 +23,18 @@
 #include "plugin/group_replication/include/plugin_messages/group_service_message.h"
 #include <string.h>
 #include "my_dbug.h"
-#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 
 Group_service_message::Group_service_message()
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
       m_tag(""),
-      m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
+      m_data(),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {}
 
 Group_service_message::Group_service_message(const uchar *buf, size_t len)
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
       m_tag(""),
-      m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
+      m_data(),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {
   decode(buf, len);
@@ -89,9 +88,6 @@ void Group_service_message::encode_payload(std::vector<uchar> *buffer) const {
     buffer->insert(buffer->end(), m_data.begin(), m_data.end());
     /* purecov: end */
   }
-
-  encode_payload_item_int8(buffer, PIT_SENT_TIMESTAMP,
-                           Metrics_handler::get_current_time());
 }
 
 void Group_service_message::decode_payload(const uchar *buffer, const uchar *) {
@@ -119,11 +115,4 @@ bool Group_service_message::set_tag(const char *tag) {
     return false;
   }
   return true;
-}
-
-uint64_t Group_service_message::get_sent_timestamp(const unsigned char *buffer,
-                                                   size_t length) {
-  DBUG_TRACE;
-  return Plugin_gcs_message::get_sent_timestamp(buffer, length,
-                                                PIT_SENT_TIMESTAMP);
 }

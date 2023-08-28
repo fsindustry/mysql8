@@ -1,7 +1,7 @@
 #ifndef PROTOCOL_CLASSIC_INCLUDED
 #define PROTOCOL_CLASSIC_INCLUDED
 
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,14 +26,12 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "my_compiler.h"  // include before mysql_com.h because of STDCALL
-#include "mysql_com.h"    // TODO: fix mysql_com.h dependency on my_compiler.h
-
 #include "field_types.h"  // enum_field_types
+#include "m_ctype.h"
 #include "my_command.h"
 #include "my_inttypes.h"
 #include "my_io.h"
-#include "mysql/strings/m_ctype.h"
+#include "mysql_com.h"
 #include "mysql_time.h"
 #include "sql/protocol.h"  // Protocol
 #include "violite.h"
@@ -200,8 +198,7 @@ class Protocol_classic : public Protocol {
   /* Return raw packet buffer */
   uchar *get_raw_packet() { return input_raw_packet; }
   /* Set read timeout */
-  virtual void set_read_timeout(ulong read_timeout,
-                                bool on_full_packet = false);
+  virtual void set_read_timeout(ulong read_timeout);
   /* Set write timeout */
   virtual void set_write_timeout(ulong write_timeout);
 

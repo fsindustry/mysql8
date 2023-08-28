@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,7 +44,6 @@
 #include <time.h>
 
 #include <algorithm>
-#include <cinttypes>
 
 #include "my_inttypes.h"
 #include "my_macros.h"
@@ -307,7 +306,7 @@ void my_write_core(int sig) {
 #pragma comment(lib, "dbghelp")
 #endif
 
-static thread_local EXCEPTION_POINTERS *exception_ptrs;
+static EXCEPTION_POINTERS *exception_ptrs;
 
 #define MODULE64_SIZE_WINXP 576
 #define STACKWALK_MAX_FRAMES 64
@@ -399,32 +398,22 @@ static void get_symbol_path(char *path, size_t size) {
 #define SYMOPT_NO_PROMPTS 0
 #endif
 
-void my_print_stacktrace(const uchar * /* stack_bottom */,
-                         ulong /* thread_stack */) {
+void my_print_stacktrace(const uchar *unused1, ulong unused2) {
   HANDLE hProcess = GetCurrentProcess();
   HANDLE hThread = GetCurrentThread();
-  static IMAGEHLP_MODULE64 module{};
-  module.SizeOfStruct = sizeof(module);
-
+  static IMAGEHLP_MODULE64 module = {sizeof(module)};
   static IMAGEHLP_SYMBOL64_PACKAGE package;
   DWORD64 addr;
   DWORD machine;
   int i;
   CONTEXT context;
-  STACKFRAME64 frame{};
+  STACKFRAME64 frame = {0};
   static char symbol_path[MAX_SYMBOL_PATH];
 
-  if (exception_ptrs) {
-    /* Copy context, as stackwalking on original will unwind the stack */
-    context = *(exception_ptrs->ContextRecord);
-  } else {
-    /*
-      We are to print stack outside the signal handler, let's just capture the
-      current context.
-    */
-    RtlCaptureContext(&context);
-  }
+  if (!exception_ptrs) return;
 
+  /* Copy context, as stackwalking on original will unwind the stack */
+  context = *(exception_ptrs->ContextRecord);
   /*Initialize symbols.*/
   SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_NO_PROMPTS | SYMOPT_DEFERRED_LOADS |
                 SYMOPT_DEBUG);
@@ -434,19 +423,13 @@ void my_print_stacktrace(const uchar * /* stack_bottom */,
   /*Prepare stackframe for the first StackWalk64 call*/
   frame.AddrFrame.Mode = frame.AddrPC.Mode = frame.AddrStack.Mode =
       AddrModeFlat;
-#if (defined _M_IX86)
-  machine = IMAGE_FILE_MACHINE_I386;
-  frame.AddrFrame.Offset = context.Ebp;
-  frame.AddrPC.Offset = context.Eip;
-  frame.AddrStack.Offset = context.Esp;
-#elif (defined _M_X64)
+#if (defined _M_X64)
   machine = IMAGE_FILE_MACHINE_AMD64;
   frame.AddrFrame.Offset = context.Rbp;
   frame.AddrPC.Offset = context.Rip;
   frame.AddrStack.Offset = context.Rsp;
 #else
   /*There is currently no need to support IA64*/
-  /* Warning C4068: unknown pragma 'error' */
 #pragma error("unsupported architecture")
 #endif
 
@@ -457,9 +440,7 @@ void my_print_stacktrace(const uchar * /* stack_bottom */,
   for (i = 0; i < STACKWALK_MAX_FRAMES; i++) {
     DWORD64 function_offset = 0;
     DWORD line_offset = 0;
-    IMAGEHLP_LINE64 line{};
-    line.SizeOfStruct = sizeof(line);
-
+    IMAGEHLP_LINE64 line = {sizeof(line)};
     BOOL have_module = false;
     BOOL have_symbol = false;
     BOOL have_source = false;
@@ -473,7 +454,7 @@ void my_print_stacktrace(const uchar * /* stack_bottom */,
         SymGetSymFromAddr64(hProcess, addr, &function_offset, &(package.sym));
     have_source = SymGetLineFromAddr64(hProcess, addr, &line_offset, &line);
 
-    my_safe_printf_stderr("%llx    ", addr);
+    my_safe_printf_stderr("%p    ", addr);
     if (have_module) {
       char *base_image_name = strrchr(module.ImageName, '\\');
       if (base_image_name)
@@ -494,7 +475,7 @@ void my_print_stacktrace(const uchar * /* stack_bottom */,
         base_file_name++;
       else
         base_file_name = line.FileName;
-      my_safe_printf_stderr("[%s:%lu]", base_file_name, line.LineNumber);
+      my_safe_printf_stderr("[%s:%u]", base_file_name, line.LineNumber);
     }
     my_safe_printf_stderr("%s", "\n");
   }
@@ -505,7 +486,7 @@ void my_print_stacktrace(const uchar * /* stack_bottom */,
   file name is constructed from executable name plus
   ".dmp" extension
 */
-void my_write_core(int /* sig */) {
+void my_write_core(int unused) {
   char path[MAX_PATH];
   // See comment below for clarification about size of dump_fname
   char dump_fname[MAX_PATH + 1 + 10 + 4 + 1] = "core.dmp";
@@ -521,7 +502,7 @@ void my_write_core(int /* sig */) {
     // 1 byte for termitated \0. Such size of output buffer guarantees
     // that there is enough space to place a result of string formatting
     // performed by snprintf().
-    snprintf(dump_fname, sizeof(dump_fname), "%s.%lu.dmp", module_name,
+    snprintf(dump_fname, sizeof(dump_fname), "%s.%u.dmp", module_name,
              GetCurrentProcessId());
   }
   my_create_minidump(dump_fname, 0, 0);
@@ -552,7 +533,7 @@ void my_create_minidump(const char *name, HANDLE process, DWORD pid) {
   hFile = CreateFile(name, GENERIC_WRITE, 0, 0, CREATE_ALWAYS,
                      FILE_ATTRIBUTE_NORMAL, 0);
   if (hFile) {
-    const MINIDUMP_TYPE mdt =
+    MINIDUMP_TYPE mdt =
         (MINIDUMP_TYPE)(MiniDumpNormal | MiniDumpWithThreadInfo |
                         MiniDumpWithProcessThreadData);
     /* Create minidump, use info only if same process. */
@@ -560,12 +541,12 @@ void my_create_minidump(const char *name, HANDLE process, DWORD pid) {
       my_safe_printf_stderr("Minidump written to %s\n",
                             _fullpath(path, name, sizeof(path)) ? path : name);
     } else {
-      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %lu\n",
+      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %d\n",
                             GetLastError());
     }
     CloseHandle(hFile);
   } else {
-    my_safe_printf_stderr("CreateFile(%s) failed, last error %lu\n", name,
+    my_safe_printf_stderr("CreateFile(%s) failed, last error %d\n", name,
                           GetLastError());
   }
 }
@@ -787,7 +768,7 @@ void my_safe_print_system_time() {
   char hrs_buf[3] = "00";
   char mins_buf[3] = "00";
   char secs_buf[3] = "00";
-  const int base = 10;
+  int base = 10;
 #ifdef _WIN32
   SYSTEMTIME utc_time;
   long hrs, mins, secs;

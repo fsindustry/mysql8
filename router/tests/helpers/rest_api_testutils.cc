@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -234,18 +234,11 @@ std::string RestApiComponentTest::create_password_file() {
   const std::string userfile =
       mysql_harness::Path(conf_dir_.name()).join("users").str();
   {
-    ProcessWrapper::OutputResponder responder{
-        [](const std::string &line) -> std::string {
-          if (line == "Please enter password: ")
-            return std::string(kRestApiPassword) + "\n";
-
-          return "";
-        }};
-
     auto &cmd =
         launch_command(get_origin().join("mysqlrouter_passwd").str(),
-                       {"set", userfile, kRestApiUsername}, EXIT_SUCCESS, true,
-                       std::chrono::milliseconds(-1), responder);
+                       {"set", userfile, kRestApiUsername}, EXIT_SUCCESS, true);
+    cmd.register_response("Please enter password",
+                          std::string(kRestApiPassword) + "\n");
     check_exit_code(cmd, EXIT_SUCCESS);
   }
 
@@ -396,8 +389,7 @@ void RestApiComponentTest::fetch_and_validate_schema_and_resource(
   ASSERT_TRUE(wait_for_rest_endpoint_ready(test_params.uri, http_port_,
                                            test_params.user_name,
                                            test_params.user_password))
-      << http_server.get_full_output()
-      << http_server.get_logfile_content("", "", 500);
+      << http_server.get_full_output() << http_server.get_full_logfile();
 
   for (HttpMethod::pos_type ndx = 0; ndx < HttpMethod::Pos::_LAST; ++ndx) {
     if (test_params.methods.test(ndx)) {

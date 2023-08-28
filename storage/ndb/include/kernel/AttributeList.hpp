@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,7 @@
 #ifndef ATTRIBUTE_LIST_HPP
 #define ATTRIBUTE_LIST_HPP
 
-#include "kernel/ndb_limits.h"
-#include "ndb_types.h"
-#include "util/Bitmask.hpp"
+#include "ndb_limits.h"
 
 #define JAM_FILE_ID 4
 

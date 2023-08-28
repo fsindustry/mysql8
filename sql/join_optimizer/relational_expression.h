@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,34 +25,14 @@
 
 #include <stdint.h>
 
-#include "sql/item.h"
 #include "sql/join_optimizer/bit_utils.h"
-#include "sql/join_optimizer/estimate_selectivity.h"
 #include "sql/join_optimizer/node_map.h"
 #include "sql/join_optimizer/overflow_bitset.h"
 #include "sql/join_type.h"
 #include "sql/mem_root_array.h"
 #include "sql/sql_class.h"
 
-struct AccessPath;
-class Item_eq_base;
 class Item_func_eq;
-
-// Some information about each predicate that the join optimizer would like to
-// have available in order to avoid computing it anew for each use of that
-// predicate.
-struct CachedPropertiesForPredicate {
-  Mem_root_array<ContainedSubquery> contained_subqueries;
-  double selectivity;
-
-  // For equijoins only: A bitmap of which sargable predicates
-  // are part of the same multi-equality as this one (except the
-  // condition itself, which is excluded), and thus are redundant
-  // against it. This is used in AlreadyAppliedThroughSargable()
-  // to quickly find out if we already have applied any of them
-  // as a join condition.
-  OverflowBitset redundant_against_sargable_predicates;
-};
 
 // Describes a rule disallowing specific joins; if any tables from
 // needed_to_activate_rule is part of the join, then _all_ tables from
@@ -65,68 +45,6 @@ struct ConflictRule {
 };
 
 /**
-   RelationalExpression objects in the same companion set are those
-   that are inner-joined against each other; we use this to see in
-   what parts of the graph we allow cycles. (Within companion sets, we
-   are also allowed to add Cartesian products if we deem that an
-   advantage, but we don't do it currently.) Tables may be alone in
-   their companion sets. Companion sets are also used when calculating
-   selectivity for equijoin predicates using multi-field indexes,
-   @see EstimateEqualPredicateSelectivity()).
-*/
-class CompanionSet final {
- public:
-  CompanionSet() = default;
-
-  explicit CompanionSet(THD *thd) : m_equal_terms(thd->mem_root) {}
-
-  ///  No copying.
-  CompanionSet(const CompanionSet &) = delete;
-  CompanionSet &operator=(const CompanionSet &) = delete;
-
-  /// Add the set of equal fields specified by 'func_eq'.
-  void AddEquijoinCondition(THD *thd, const Item_func_eq &eq);
-
-  /**
-     If 'field' is part of an equijoin predicate in this CompanionSet, return a
-     table_map of the tables involved in that predicate. Otherwise, return 0.
-  */
-  table_map GetEqualityMap(const Field &field) const;
-
-  /// For tracing and debugging.
-  /// @returns A string representation like "{{t1.f1, t2.f2}, {t2.f3, t3.f4}}".
-  std::string ToString() const;
-
- private:
-  using FieldArray = Mem_root_array<const Field *>;
-
-  /**
-     This represents equality between a set of fields, i.e.
-     "t1.f1=t2.f2...=tN.fN".
-   */
-  struct EqualTerm {
-    /// The fields that are equal to each other.
-    FieldArray *fields;
-
-    /// A map of all tables in 'fields'.
-    table_map tables;
-  };
-
-  /**
-     The set of sets of fields in equijoin predicates in this companion set.
-     (@see EstimateEqualPredicateSelectivity() to see how this is utilized.)
-     For example, if we have:
-
-     SELECT ... FROM t1, t2, t3 WHERE t1.x=t2.x AND t2.x=t3.x AND t2.y=t3.y
-
-     m_equal_terms will contain:
-
-     {{t1.x, t2.x, t3.x}, {t2.y, t3.y}}
-   */
-  Mem_root_array<EqualTerm> m_equal_terms;
-};
-
-/**
   Represents an expression tree in the relational algebra of joins.
   Expressions are either tables, or joins of two expressions.
   (Joins can have join conditions, but more general filters are
@@ -135,13 +53,18 @@ class CompanionSet final {
   These are used as an abstract precursor to the join hypergraph;
   they represent the joins in the query block more or less directly,
   without any reordering. (The parser should largely have output a
-  structure like this instead of Table_ref, but we are not there yet.)
+  structure like this instead of TABLE_LIST, but we are not there yet.)
   The only real manipulation we do on them is pushing down conditions,
   identifying equijoin conditions from other join conditions,
   and identifying join conditions that touch given tables (also a form
   of pushdown).
  */
 struct RelationalExpression {
+  explicit RelationalExpression(THD *thd)
+      : multi_children(thd->mem_root),
+        join_conditions(thd->mem_root),
+        equijoin_conditions(thd->mem_root) {}
+
   enum Type {
     INNER_JOIN = static_cast<int>(JoinType::INNER),
     LEFT_JOIN = static_cast<int>(JoinType::OUTER),
@@ -169,14 +92,6 @@ struct RelationalExpression {
 
     TABLE = 100
   } type;
-
-  explicit RelationalExpression(THD *thd)
-      : multi_children(thd->mem_root),
-        join_conditions(thd->mem_root),
-        equijoin_conditions(thd->mem_root),
-        properties_for_join_conditions(thd->mem_root),
-        properties_for_equijoin_conditions(thd->mem_root) {}
-
   table_map tables_in_subtree;
 
   // Exactly the same as tables_in_subtree, just with node indexes instead of
@@ -185,11 +100,18 @@ struct RelationalExpression {
   hypergraph::NodeMap nodes_in_subtree;
 
   // If type == TABLE.
-  const Table_ref *table;
+  const TABLE_LIST *table;
   Mem_root_array<Item *> join_conditions_pushable_to_this;
-
-  // The CompanionSet that this object is part of.
-  CompanionSet *companion_set{nullptr};
+  // Tables in the same companion set are those that are inner-joined
+  // against each other; we use this to see in what parts of the graph
+  // we allow cycles. (Within companion sets, we are also allowed to
+  // add Cartesian products if we deem that an advantage, but we don't
+  // do it currently.) -1 means that the table is not part of a companion
+  // set, e.g. because it only participates in outer joins. Tables may
+  // also be alone in their companion sets, which essentially means
+  // the same thing as -1. The companion sets are just opaque identifiers;
+  // the number itself doesn't mean much.
+  int companion_set{-1};
 
   // If type != TABLE. Note that equijoin_conditions will be split off
   // from join_conditions fairly late (at CreateHashJoinConditions()),
@@ -198,21 +120,7 @@ struct RelationalExpression {
   Mem_root_array<RelationalExpression *>
       multi_children;  // See MULTI_INNER_JOIN.
   Mem_root_array<Item *> join_conditions;
-  Mem_root_array<Item_eq_base *> equijoin_conditions;
-
-  // For each element in join_conditions and equijoin_conditions (respectively),
-  // contains some cached properties that the join optimizer would like to have
-  // available for frequent reuse.
-  //
-  // It is a bit awkward to have these separate instead of in the same arrays,
-  // but the latter would complicate MakeJoinHypergraph() a fair amount,
-  // as this information is private to the join optimizer (ie., it is not
-  // generated along with the hypergraph; it is added after MakeJoinHypergraph()
-  // is completed).
-  Mem_root_array<CachedPropertiesForPredicate> properties_for_join_conditions;
-  Mem_root_array<CachedPropertiesForPredicate>
-      properties_for_equijoin_conditions;
-
+  Mem_root_array<Item_func_eq *> equijoin_conditions;
   // If true, at least one condition under “join_conditions” is a false (0)
   // constant. (Such conditions can never be under “equijoin_conditions”.)
   bool join_conditions_reject_all_rows{false};
@@ -244,8 +152,9 @@ inline bool PassesConflictRules(hypergraph::NodeMap joined_tables,
   return true;
 }
 
-// Whether (a <expr> b) === (b <expr> a). See also OperatorsAreAssociative() and
-// OperatorsAre{Left,Right}Asscom() in make_join_hypergraph.cc.
+// Whether (a <expr> b) === (b <expr> a). See also OperatorIsAssociative(),
+// OperatorsAreAssociative() // and OperatorsAre{Left,Right}Asscom()
+// in make_join_hypergraph.cc.
 inline bool OperatorIsCommutative(const RelationalExpression &expr) {
   return expr.type == RelationalExpression::INNER_JOIN ||
          expr.type == RelationalExpression::FULL_OUTER_JOIN;
@@ -271,48 +180,5 @@ void ForEachOperator(RelationalExpression *expr, Func &&func) {
   }
   func(expr);
 }
-
-/// The collection of CompanionSet objects for a given JoinHypergraph.
-class CompanionSetCollection final {
- public:
-  CompanionSetCollection(THD *thd, struct RelationalExpression *root) {
-    Compute(thd, root, nullptr);
-  }
-
-  /// No copying.
-  CompanionSetCollection(const CompanionSetCollection &) = delete;
-  CompanionSetCollection &operator=(const CompanionSetCollection &) = delete;
-
-  CompanionSet *Find(table_map tables) { return FindInternal(tables); }
-
-  const CompanionSet *Find(table_map tables) const {
-    return FindInternal(tables);
-  }
-
-  /// For trace and debugging.
-  std::string ToString() const;
-
- private:
-  /// A mapping from table number to CompanionSet.
-  std::array<CompanionSet *, MAX_TABLES> m_table_num_to_companion_set{nullptr};
-
-  /**
-      Compute the CompanionSet of 'expr' and all of its descendants.
-      @param thd The current thread.
-      @param expr Compute CompanionSet of this  and all of its descendants.
-      @param current_set The CompanionSet to which 'expr' will belong, or
-     nullptr if 'expr' is the root of a new set.
-  */
-  void Compute(THD *thd, RelationalExpression *expr, CompanionSet *current_set);
-
-  /**
-     For a given set of tables, find the CompanionSet they are part of
-     Returns nullptr if the tables are in different (i.e., incompatible)
-     CompanionSet instances.  If so, a condition using this set of
-     tables can _not_ induce a new (cycle) edge in the hypergraph, as
-     there are non-inner joins in the way.
-  */
-  CompanionSet *FindInternal(table_map tables) const;
-};
 
 #endif  // SQL_JOIN_OPTIMIZER_RELATIONAL_EXPRESSION_H

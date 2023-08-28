@@ -1,7 +1,7 @@
 #ifndef GSTREAM_INCLUDED
 #define GSTREAM_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,9 +26,9 @@
 #include <stddef.h>
 
 #include "lex_string.h"
+#include "m_ctype.h" /* my_charset_latin1, my_charset_bin */
+#include "m_string.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h" /* my_charset_latin1, my_charset_bin */
-#include "nulls.h"
 
 class THD;
 

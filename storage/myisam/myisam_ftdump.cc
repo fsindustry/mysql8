@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,17 +27,15 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
-#include "m_string.h"
 #include "my_compiler.h"
 #include "my_getopt.h"
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "print_version.h"
 #include "storage/myisam/ftdefs.h"
 #include "storage/myisam/myisamdef.h"
 #include "welcome_copyright_notice.h"
 
-[[noreturn]] static void usage();
+static void usage() MY_ATTRIBUTE((noreturn));
 static void complain(int val);
 static bool get_one_option(int, const struct my_option *, char *);
 

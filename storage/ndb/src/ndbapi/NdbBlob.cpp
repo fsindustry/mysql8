@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,7 @@
 #include <signaldata/TcKeyReq.hpp>
 #include <NdbEnv.h>
 #include <ndb_version.h>
-#include "mysql/strings/m_ctype.h"
+#include <m_ctype.h>
 
 /*
  * Reading index table directly (as a table) is faster but there are
@@ -67,10 +67,10 @@ NdbBlob::getBlobTableName(char* btname, Ndb* anNdb, const char* tableName, const
 {
   DBUG_ENTER("NdbBlob::getBlobTableName");
   NdbTableImpl* t = anNdb->theDictionary->m_impl.getTable(tableName);
-  if (t == nullptr)
+  if (t == NULL)
     DBUG_RETURN(-1);
   NdbColumnImpl* c = t->getColumn(columnName);
-  if (c == nullptr)
+  if (c == NULL)
     DBUG_RETURN(-1);
   getBlobTableName(btname, t, c);
   DBUG_RETURN(0);
@@ -80,7 +80,7 @@ void
 NdbBlob::getBlobTableName(char* btname, const NdbTableImpl* t, const NdbColumnImpl* c)
 {
   DBUG_ENTER("NdbBlob::getBlobTableName");
-  assert(t != nullptr && c != nullptr && c->getBlobType() && c->getPartSize() != 0);
+  assert(t != 0 && c != 0 && c->getBlobType() && c->getPartSize() != 0);
   std::memset(btname, 0, NdbBlobImpl::BlobTableNameSize);
   sprintf(btname, "NDB$BLOB_%d_%d", (int)t->m_id, (int)c->m_column_no);
   DBUG_PRINT("info", ("blob table name: %s", btname));
@@ -176,12 +176,12 @@ NdbBlob::getBlobTable(NdbTableImpl& bt, const NdbTableImpl* t, const NdbColumnIm
       for (i = 0; n < noOfKeys; i++) {
         assert(i < t->m_columns.size());
         const NdbColumnImpl* c = t->getColumn(i);
-        assert(c != nullptr);
+        assert(c != NULL);
         if (c->m_pk) {
           bt.addColumn(*c);
           // addColumn might usefully return the column added..
           NdbColumnImpl* bc = bt.getColumn(n);
-          assert(bc != nullptr);
+          assert(bc != NULL);
           if (c->getDistributionKey()) {
             bc->setDistributionKey(true);
           }
@@ -245,14 +245,14 @@ NdbBlob::getBlobTable(NdbTableImpl& bt, const NdbTableImpl* t, const NdbColumnIm
 int
 NdbBlob::getBlobEventName(char* bename, Ndb* anNdb, const char* eventName, const char* columnName)
 {
-  std::unique_ptr<NdbEventImpl> e(
-          anNdb->theDictionary->m_impl.getEvent(eventName));
-  if (e == nullptr)
+  NdbEventImpl* e = anNdb->theDictionary->m_impl.getEvent(eventName);
+  if (e == NULL)
     return -1;
   NdbColumnImpl* c = e->m_tableImpl->getColumn(columnName);
-  if (c == nullptr)
+  if (c == NULL)
     return -1;
-  getBlobEventName(bename, e.get(), c);
+  getBlobEventName(bename, e, c);
+  delete e; // it is from new NdbEventImpl
   return 0;
 }
 
@@ -268,7 +268,7 @@ NdbBlob::getBlobEvent(NdbEventImpl& be, const NdbEventImpl* e, const NdbColumnIm
 {
   DBUG_ENTER("NdbBlob::getBlobEvent");
   // blob table
-  assert(c->m_blobTable != nullptr);
+  assert(c->m_blobTable != NULL);
   const NdbTableImpl& bt = *c->m_blobTable;
   // blob event name
   char bename[MAX_TAB_NAME_SIZE+1];
@@ -276,8 +276,9 @@ NdbBlob::getBlobEvent(NdbEventImpl& be, const NdbEventImpl* e, const NdbColumnIm
   bename[sizeof(bename)-1]= 0;
   be.setName(bename);
   be.setTable(bt);
-  // simple assignments
+  // simple assigments
   be.mi_type = e->mi_type;
+  be.m_dur = e->m_dur;
   be.m_mergeEvents = e->m_mergeEvents;
   // report unchanged data
   // not really needed now since UPD is DEL o INS and we subscribe to all
@@ -319,58 +320,58 @@ NdbBlob::init()
   theBtColumnNo[2] = -1;
   theBtColumnNo[3] = -1;
   theBtColumnNo[4] = -1;
-  theNdb = nullptr;
-  theNdbCon = nullptr;
-  theNdbOp = nullptr;
-  theEventOp = nullptr;
-  theBlobEventOp = nullptr;
-  theBlobEventPkRecAttr = nullptr;
-  theBlobEventDistRecAttr = nullptr;
-  theBlobEventPartRecAttr = nullptr;
-  theBlobEventPkidRecAttr = nullptr;
-  theBlobEventDataRecAttr = nullptr;
-  theTable = nullptr;
-  theAccessTable = nullptr;
-  theBlobTable = nullptr;
-  theColumn = nullptr;
+  theNdb = NULL;
+  theNdbCon = NULL;
+  theNdbOp = NULL;
+  theEventOp = NULL;
+  theBlobEventOp = NULL;
+  theBlobEventPkRecAttr = NULL;
+  theBlobEventDistRecAttr = NULL;
+  theBlobEventPartRecAttr = NULL;
+  theBlobEventPkidRecAttr = NULL;
+  theBlobEventDataRecAttr = NULL;
+  theTable = NULL;
+  theAccessTable = NULL;
+  theBlobTable = NULL;
+  theColumn = NULL;
   theFillChar = 0xFF;
   theInlineSize = 0;
   thePartSize = 0;
   theStripeSize = 0;
   theGetFlag = false;
-  theGetBuf = nullptr;
+  theGetBuf = NULL;
   theSetFlag = false;
   theSetValueInPreExecFlag = false;
-  theSetBuf = nullptr;
+  theSetBuf = NULL;
   theGetSetBytes = 0;
   thePendingBlobOps = 0;
-  theActiveHook = nullptr;
-  theActiveHookArg = nullptr;
+  theActiveHook = NULL;
+  theActiveHookArg = NULL;
   thePartLen = 0;
-  theInlineData = nullptr;
-  theHeadInlineRecAttr = nullptr;
-  theHeadInlineReadOp = nullptr;
+  theInlineData = NULL;
+  theHeadInlineRecAttr = NULL;
+  theHeadInlineReadOp = NULL;
   theHeadInlineUpdateFlag = false;
   userDefinedPartitioning = false;
   thePartitionId = noPartitionId();
-  thePartitionIdRecAttr = nullptr;
+  thePartitionIdRecAttr = NULL;
   theNullFlag = -1;
   theLength = 0;
   thePos = 0;
-  theNext = nullptr;
+  theNext = NULL;
   m_keyHashSet = false;
   m_keyHash = 0;
-  m_keyHashNext = nullptr;
+  m_keyHashNext = NULL;
 
   m_blobOp.m_state = BlobTask::BTS_INIT;
-  m_blobOp.m_readBuffer = nullptr;
+  m_blobOp.m_readBuffer = 0;
   m_blobOp.m_readBufferLen = 0;
   m_blobOp.m_lastPartLen = 0;
-  m_blobOp.m_writeBuffer = nullptr;
+  m_blobOp.m_writeBuffer = 0;
   m_blobOp.m_writeBufferLen = 0;
   m_blobOp.m_oldLen = 0;
   m_blobOp.m_position = 0;
-  m_blobOp.m_lastDeleteOp = nullptr;
+  m_blobOp.m_lastDeleteOp = NULL;
 #ifndef BUG_31546136_FIXED
   m_blobOp.m_delayedWriteHead = false;
 #endif
@@ -392,7 +393,7 @@ NdbBlob::release()
 // buffers
 
 NdbBlob::Buf::Buf() :
-  data(nullptr),
+  data(NULL),
   size(0),
   maxsize(0)
 {
@@ -425,7 +426,7 @@ NdbBlob::Buf::release()
 {
   if (data)
     delete [] data;
-  data = nullptr;
+  data = NULL;
   size = 0;
   maxsize = 0;
 }
@@ -614,7 +615,7 @@ NdbBlob::packKeyValue(const NdbTableImpl* aTable, const Buf& srcBuf)
   unsigned pack_pos = 0;
   for (unsigned i = 0; i < aTable->m_columns.size(); i++) {
     NdbColumnImpl* c = aTable->m_columns[i];
-    assert(c != nullptr);
+    assert(c != NULL);
     if (c->m_pk) {
       unsigned len = c->m_attrSize * c->m_arraySize;
       Uint32 pack_len;
@@ -649,7 +650,7 @@ NdbBlob::unpackKeyValue(const NdbTableImpl* aTable, Buf& dstBuf)
   unsigned pack_pos = 0;
   for (unsigned i = 0; i < aTable->m_columns.size(); i++) {
     NdbColumnImpl* c = aTable->m_columns[i];
-    assert(c != nullptr);
+    assert(c != NULL);
     if (c->m_pk) {
       unsigned len = c->m_attrSize * c->m_arraySize;
       Uint32 pack_len;
@@ -751,10 +752,10 @@ NdbBlob::getNullOrEmptyBlobHeadDataPtr(const char * & data,
    */
   assert(theState==Prepared);
   assert(theLength==0);
-  assert(theSetBuf==nullptr);
+  assert(theSetBuf==NULL);
   assert(theGetSetBytes==0);
   assert(thePos==0);
-  assert(theHeadInlineBuf.data!=nullptr);
+  assert(theHeadInlineBuf.data!=NULL);
 
   DBUG_PRINT("info", ("getNullOrEmptyBlobHeadDataPtr.  Nullable : %d",
                       theColumn->m_nullable));
@@ -762,7 +763,7 @@ NdbBlob::getNullOrEmptyBlobHeadDataPtr(const char * & data,
   if (theColumn->m_nullable)
   {
     /* Null Blob */
-    data = nullptr;
+    data = NULL;
     byteSize = 0;
     return;
   }
@@ -783,8 +784,8 @@ NdbBlob::getNullOrEmptyBlobHeadDataPtr(const char * & data,
     byteSize = theHead.varsize + 2;
 
   /* Reset affected members */
-  theSetBuf=nullptr;
-  theHead = Head();
+  theSetBuf=NULL;
+  std::memset(&theHead, 0, sizeof(theHead));
 
   /* This column is not null anymore - record the fact so that
    * a setNull() call will modify state
@@ -849,10 +850,10 @@ NdbBlob::unpackBlobHead(Head& head, const char* buf, int blobVersion)
       head.pkid |= ((Uint32)*p++ << n);
     for (i = 0, n = 0; i < 8; i++, n += 8)
       head.length |= ((Uint64)*p++ << n);
-    assert(p - (const uchar*)buf == 16);
+    assert(p - (uchar*)buf == 16);
     assert(head.reserved == 0);
     head.headsize = (NDB_BLOB_V2_HEAD_SIZE << 2);
-    DBUG_DUMP("info", (const uchar*)buf, 16);
+    DBUG_DUMP("info", (uchar*)buf, 16);
   }
   DBUG_PRINT("info", ("unpack: varsize=%u length=%u pkid=%u",
                       (uint)head.varsize, (uint)head.length, (uint)head.pkid));
@@ -879,10 +880,10 @@ NdbBlob::getTableKeyValue(NdbOperation* anOp)
   unsigned pos = 0;
   for (unsigned i = 0; i < theTable->m_columns.size(); i++) {
     NdbColumnImpl* c = theTable->m_columns[i];
-    assert(c != nullptr);
+    assert(c != NULL);
     if (c->m_pk) {
       unsigned len = c->m_attrSize * c->m_arraySize;
-      if (anOp->getValue_impl(c, (char*)&data[pos]) == nullptr) {
+      if (anOp->getValue_impl(c, (char*)&data[pos]) == NULL) {
         setErrorCode(anOp);
         DBUG_RETURN(-1);
       }
@@ -923,7 +924,7 @@ NdbBlob::getBlobKeyHash()
 
     const Uint32 numKeyCols = cmpTab->m_noOfKeys;
     uint64 nr1 = 0;
-    uint64 nr2 = 4;
+    uint64 nr2 = 0;
     const uchar* dataPtr = (const uchar*) keyBuf.data;
 
     Uint32 n = 0;
@@ -961,12 +962,6 @@ NdbBlob::getBlobKeyHash()
   DBUG_RETURN(m_keyHash);
 }
 
-/*
- * Returns:
- *  0 - if keys are equal for this and other
- *  1 - if keys are different for this and other
- *  -1 - on error
- */
 int
 NdbBlob::getBlobKeysEqual(NdbBlob* other)
 {
@@ -1012,11 +1007,6 @@ NdbBlob::getBlobKeysEqual(NdbBlob* other)
                                       lbA,
                                       lenA);
       assert(ok);
-      if (unlikely(!ok))
-      {
-        DBUG_PRINT("error", ("Corrupt length of key column %u", i));
-        DBUG_RETURN(-1);
-      }
       Uint32 lbB, lenB;
       ok = NdbSqlUtil::get_var_length(colImpl->m_type,
                                       dataPtrB,
@@ -1024,12 +1014,8 @@ NdbBlob::getBlobKeysEqual(NdbBlob* other)
                                       lbB,
                                       lenB);
       assert(ok);
-      if (unlikely(!ok))
-      {
-        DBUG_PRINT("error", ("Corrupt length of key column %u", i));
-        DBUG_RETURN(-1);
-      }
       assert(lbA == lbB);
+
       CHARSET_INFO* cs = colImpl->m_cs ? colImpl->m_cs : &my_charset_bin;
       int res = (cs->coll->strnncollsp)(cs,
                                         dataPtrA + lbA,
@@ -1077,12 +1063,12 @@ NdbBlob::setTableKeyValue(NdbOperation* anOp)
   for (unsigned i = 0;  n < noOfKeys; i++) {
     assert(i < theTable->m_columns.size());
     const NdbColumnImpl* c = theTable->getColumn(i);
-    assert(c != nullptr);
+    assert(c != NULL);
     if (c->m_pk) {
       unsigned len = c->m_attrSize * c->m_arraySize;
       if (isBlobPartOp) {
         c = theBlobTable->getColumn(n);
-        assert(c != nullptr);
+        assert(c != NULL);
       }
       if (anOp->equal_impl(c, (const char*)&data[pos]) == -1) {
         setErrorCode(anOp);
@@ -1107,7 +1093,7 @@ NdbBlob::setAccessKeyValue(NdbOperation* anOp)
   unsigned pos = 0;
   for (unsigned i = 0; i < columns; i++) {
     NdbColumnImpl* c = theAccessTable->m_columns[i];
-    assert(c != nullptr);
+    assert(c != NULL);
     if (c->m_pk) {
       unsigned len = c->m_attrSize * c->m_arraySize;
       if (anOp->equal_impl(c, (const char*)&data[pos]) == -1) {
@@ -1181,10 +1167,10 @@ int
 NdbBlob::getPartDataValue(NdbOperation* anOp, char* buf, Uint16* aLenLoc)
 {
   DBUG_ENTER("NdbBlob::getPartDataValue");
-  assert(aLenLoc != nullptr);
+  assert(aLenLoc != NULL);
   Uint32 bcNo = theBtColumnNo[BtColumnData];
   if (theFixedDataFlag) {
-    if (anOp->getValue(bcNo, buf) == nullptr) {
+    if (anOp->getValue(bcNo, buf) == NULL) {
       setErrorCode(anOp);
       DBUG_RETURN(-1);
     }
@@ -1192,8 +1178,8 @@ NdbBlob::getPartDataValue(NdbOperation* anOp, char* buf, Uint16* aLenLoc)
     *aLenLoc = thePartSize;
   } else {
     const NdbColumnImpl* bc = theBlobTable->getColumn(bcNo);
-    assert(bc != nullptr);
-    if (anOp->getVarValue(bc, buf, aLenLoc) == nullptr) {
+    assert(bc != NULL);
+    if (anOp->getVarValue(bc, buf, aLenLoc) == NULL) {
       setErrorCode(anOp);
       DBUG_RETURN(-1);
     }
@@ -1215,7 +1201,7 @@ NdbBlob::setPartDataValue(NdbOperation* anOp, const char* buf, const Uint16& aLe
     }
   } else {
     const NdbColumnImpl* bc = theBlobTable->getColumn(bcNo);
-    assert(bc != nullptr);
+    assert(bc != NULL);
     if (anOp->setVarValue(bc, buf, aLen) == -1) {
       setErrorCode(anOp);
       DBUG_RETURN(-1);
@@ -1233,7 +1219,7 @@ NdbBlob::getHeadInlineValue(NdbOperation* anOp)
    * specific checks
    */
   theHeadInlineRecAttr = anOp->getValue_impl(theColumn, theHeadInlineBuf.data);
-  if (theHeadInlineRecAttr == nullptr) {
+  if (theHeadInlineRecAttr == NULL) {
     setErrorCode(anOp);
     DBUG_RETURN(-1);
   }
@@ -1248,16 +1234,18 @@ NdbBlob::getHeadInlineValue(NdbOperation* anOp)
     thePartitionIdRecAttr = 
       anOp->getValue_impl(&NdbColumnImpl::getImpl(*NdbDictionary::Column::FRAGMENT));
     
-    if (thePartitionIdRecAttr == nullptr) {
+    if (thePartitionIdRecAttr == NULL) {
       setErrorCode(anOp);
       DBUG_RETURN(-1);
     }
   }
   /*
    * If we get no data from this op then the operation is aborted
-   * one way or other.
+   * one way or other.  Following hack in 5.0 makes sure we don't read
+   * garbage.  The proper fix exists only in version >= 5.1.
    */
-  theHead = Head();
+  // 5.0 theHead->length = 0;
+  std::memset(&theHead, 0, sizeof(theHead));
   packBlobHead();
   DBUG_RETURN(0);
 }
@@ -1266,7 +1254,7 @@ void
 NdbBlob::getHeadFromRecAttr()
 {
   DBUG_ENTER("NdbBlob::getHeadFromRecAttr");
-  assert(theHeadInlineRecAttr != nullptr);
+  assert(theHeadInlineRecAttr != NULL);
   theNullFlag = theHeadInlineRecAttr->isNULL();
   assert(theEventBlobVersion >= 0 || theNullFlag != -1);
   if (theNullFlag == 0) {
@@ -1292,7 +1280,7 @@ NdbBlob::getHeadFromRecAttr()
     }
     else
     {
-      assert(thePartitionIdRecAttr == nullptr);
+      assert(thePartitionIdRecAttr == NULL);
     }
   }
 
@@ -1326,7 +1314,7 @@ NdbBlob::setHeadInlineValue(NdbOperation* anOp)
 {
   DBUG_ENTER("NdbBlob::setHeadInlineValue");
   prepareSetHeadInlineValue();
-  const char* aValue = theNullFlag ? nullptr : theHeadInlineBuf.data;
+  const char* aValue = theNullFlag ? 0 : theHeadInlineBuf.data;
   if (anOp->setValue(theColumn, aValue) == -1) {
     setErrorCode(anOp);
     DBUG_RETURN(-1);
@@ -1349,7 +1337,7 @@ NdbBlob::getValue(void* data, Uint32 bytes)
     setErrorCode(NdbBlobImpl::ErrState);
     DBUG_RETURN(-1);
   }
-  if (data == nullptr && bytes != 0) {
+  if (data == NULL && bytes != 0) {
     setErrorCode(NdbBlobImpl::ErrUsage);
     DBUG_RETURN(-1);
   }
@@ -1372,7 +1360,7 @@ NdbBlob::setValue(const void* data, Uint32 bytes)
     setErrorCode(NdbBlobImpl::ErrState);
     DBUG_RETURN(-1);
   }
-  if (data == nullptr && bytes != 0) {
+  if (data == NULL && bytes != 0) {
     setErrorCode(NdbBlobImpl::ErrUsage);
     DBUG_RETURN(-1);
   }
@@ -1383,7 +1371,7 @@ NdbBlob::setValue(const void* data, Uint32 bytes)
     // write inline part now
     // as we don't want to have problems with
     // non-nullable columns
-    if (theSetBuf != nullptr) {
+    if (theSetBuf != NULL) {
       Uint32 n = theGetSetBytes;
       if (n > theInlineSize)
         n = theInlineSize;
@@ -1433,7 +1421,7 @@ NdbBlob::getDefined(int& isNull) // deprecated
 {
   DBUG_ENTER("NdbBlob::getDefined");
   if (theState == Prepared && theSetFlag) {
-    isNull = (theSetBuf == nullptr);
+    isNull = (theSetBuf == NULL);
     DBUG_RETURN(0);
   }
   isNull = theNullFlag;
@@ -1445,7 +1433,7 @@ NdbBlob::getNull(bool& isNull) // deprecated
 {
   DBUG_ENTER("NdbBlob::getNull");
   if (theState == Prepared && theSetFlag) {
-    isNull = (theSetBuf == nullptr);
+    isNull = (theSetBuf == NULL);
     DBUG_RETURN(0);
   }
   if (theNullFlag == -1) {
@@ -1461,7 +1449,7 @@ NdbBlob::getNull(int& isNull)
 {
   DBUG_ENTER("NdbBlob::getNull");
   if (theState == Prepared && theSetFlag) {
-    isNull = (theSetBuf == nullptr);
+    isNull = (theSetBuf == NULL);
     DBUG_RETURN(0);
   }
   isNull = theNullFlag;
@@ -1483,7 +1471,7 @@ NdbBlob::setNull()
   }
   if (theNullFlag == -1) {
     if (theState == Prepared) {
-      DBUG_RETURN(setValue(nullptr, 0));
+      DBUG_RETURN(setValue(0, 0));
     }
     setErrorCode(NdbBlobImpl::ErrState);
     DBUG_RETURN(-1);
@@ -1966,7 +1954,7 @@ NdbBlob::readTablePart(char* buf, Uint32 part, Uint16& len)
 {
   DBUG_ENTER("NdbBlob::readTablePart");
   NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-  if (tOp == nullptr ||
+  if (tOp == NULL ||
       /*
        * This was committedRead() before.  However lock on main
        * table tuple does not fully protect blob parts since DBTUP
@@ -1992,7 +1980,7 @@ NdbBlob::readEventParts(char* buf, Uint32 part, Uint32 count)
 {
   DBUG_ENTER("NdbBlob::readEventParts");
   // length not asked for - event code checks each part is full
-  if (theEventOp->readBlobParts(buf, this, part, count, (Uint16*)nullptr) == -1) {
+  if (theEventOp->readBlobParts(buf, this, part, count, (Uint16*)0) == -1) {
     setErrorCode(theEventOp);
     DBUG_RETURN(-1);
   }
@@ -2032,7 +2020,7 @@ NdbBlob::insertPart(const char* buf, Uint32 part, const Uint16& len)
   DBUG_ENTER("NdbBlob::insertPart");
   DBUG_PRINT("info", ("part=%u len=%u", part, (Uint32)len));
   NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-  if (tOp == nullptr ||
+  if (tOp == NULL ||
       tOp->insertTuple() == -1 ||
       setPartKeyValue(tOp, part) == -1 ||
       setPartPkidValue(tOp, theHead.pkid) == -1 ||
@@ -2070,7 +2058,7 @@ NdbBlob::updatePart(const char* buf, Uint32 part, const Uint16& len)
   DBUG_ENTER("NdbBlob::updatePart");
   DBUG_PRINT("info", ("part=%u len=%u", part, (Uint32)len));
   NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-  if (tOp == nullptr ||
+  if (tOp == NULL ||
       tOp->updateTuple() == -1 ||
       setPartKeyValue(tOp, part) == -1 ||
       setPartPkidValue(tOp, theHead.pkid) == -1 ||
@@ -2131,7 +2119,7 @@ NdbBlob::deleteParts(Uint32 part, Uint32 count)
   Uint32 n = 0;
   while (n < count) {
     NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-    if (tOp == nullptr ||
+    if (tOp == NULL ||
         tOp->deleteTuple() == -1 ||
         setPartKeyValue(tOp, part + n) == -1) {
       setErrorCode(tOp);
@@ -2174,7 +2162,7 @@ NdbBlob::deletePartsUnknown(Uint32 part)
     while (n < bat) {
       NdbOperation*& tOp = tOpList[n];  // ref
       tOp = theNdbCon->getNdbOperation(theBlobTable);
-      if (tOp == nullptr ||
+      if (tOp == NULL ||
           tOp->deleteTuple() == -1 ||
           setPartKeyValue(tOp, part + count + n) == -1) {
         setErrorCode(tOp);
@@ -2215,7 +2203,7 @@ NdbBlob::writePart(const char* buf, Uint32 part, const Uint16& len)
   DBUG_ENTER("NdbBlob::writePart");
   DBUG_PRINT("info", ("part=%u len=%u", part, (Uint32)len));
   NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-  if (tOp == nullptr ||
+  if (tOp == NULL ||
       tOp->writeTuple() == -1 ||
       setPartKeyValue(tOp, part) == -1 ||
       setPartPkidValue(tOp, theHead.pkid) == -1 ||
@@ -2267,7 +2255,7 @@ int
 NdbBlob::invokeActiveHook()
 {
   DBUG_ENTER("NdbBlob::invokeActiveHook");
-  assert(theState == Active && theActiveHook != nullptr);
+  assert(theState == Active && theActiveHook != NULL);
   int ret = (*theActiveHook)(this, theActiveHookArg);
   if (ret != 0) {
     // no error is set on blob level
@@ -2390,7 +2378,7 @@ NdbBlob::atPrepareCommon(NdbTransaction* aCon, NdbOperation* anOp,
 
         if (!isIndexOp())
         {
-          assert(theNdbOp->theLockHandle == nullptr);
+          assert(theNdbOp->theLockHandle == NULL);
           /* If the kernel supports it we'll ask for a lockhandle
            * to allow us to unlock the main table row when the
            * Blob handle is closed
@@ -2597,17 +2585,17 @@ NdbBlob::atPrepare(NdbEventOperationImpl* anOp, NdbEventOperationImpl* aBlobOp, 
                        this, anOp, aBlobOp,
                        theBlobVersion, theFixedDataFlag));
   // tinyblob sanity
-  assert((theBlobEventOp == nullptr) == (theBlobTable == nullptr));
+  assert((theBlobEventOp == NULL) == (theBlobTable == NULL));
   // extra buffers
   theBlobEventDataBuf.alloc(theVarsizeBytes + thePartSize);
   // prepare receive of head+inline
   theHeadInlineRecAttr = theEventOp->getValue(aColumn, theHeadInlineBuf.data, version);
-  if (theHeadInlineRecAttr == nullptr) {
+  if (theHeadInlineRecAttr == NULL) {
     setErrorCode(theEventOp);
     DBUG_RETURN(-1);
   }
   // prepare receive of blob part
-  if (theBlobEventOp != nullptr) {
+  if (theBlobEventOp != NULL) {
     const NdbColumnImpl* bc;
     char* buf;
     // one must subscribe to all primary keys
@@ -2629,10 +2617,10 @@ NdbBlob::atPrepare(NdbEventOperationImpl* anOp, NdbEventOperationImpl* aBlobOp, 
       buf = theBlobEventDataBuf.data;
       theBlobEventDataRecAttr = theBlobEventOp->getValue(bc, buf, version);
       if (unlikely(
-            theBlobEventPkRecAttr == nullptr ||
-            theBlobEventDistRecAttr == nullptr ||
-            theBlobEventPartRecAttr == nullptr ||
-            theBlobEventDataRecAttr == nullptr
+            theBlobEventPkRecAttr == NULL ||
+            theBlobEventDistRecAttr == NULL ||
+            theBlobEventPartRecAttr == NULL ||
+            theBlobEventDataRecAttr == NULL
          )) {
         setErrorCode(theBlobEventOp);
         DBUG_RETURN(-1);
@@ -2644,13 +2632,13 @@ NdbBlob::atPrepare(NdbEventOperationImpl* anOp, NdbEventOperationImpl* aBlobOp, 
       for (i = 0; n < noOfKeys; i++) {
         assert(i < theTable->m_columns.size());
         const NdbColumnImpl* c = theTable->m_columns[i];
-        assert(c != nullptr);
+        assert(c != NULL);
         if (c->m_pk) {
           bc = theBlobTable->m_columns[n];
-          assert(bc != nullptr && bc->m_pk);
+          assert(bc != NULL && bc->m_pk);
           NdbRecAttr* ra;
-          ra = theBlobEventOp->getValue(bc, (char*)nullptr, version);
-          if (unlikely(ra == nullptr)) {
+          ra = theBlobEventOp->getValue(bc, (char*)0, version);
+          if (unlikely(ra == NULL)) {
             setErrorCode(theBlobEventOp);
             DBUG_RETURN(-1);
           }
@@ -2675,10 +2663,10 @@ NdbBlob::atPrepare(NdbEventOperationImpl* anOp, NdbEventOperationImpl* aBlobOp, 
       buf = theBlobEventDataBuf.data;
       theBlobEventDataRecAttr = theBlobEventOp->getValue(bc, buf, version);
       if (unlikely(
-            (theStripeSize != 0 && theBlobEventDistRecAttr == nullptr) ||
-            theBlobEventPartRecAttr == nullptr ||
-            theBlobEventPkidRecAttr == nullptr ||
-            theBlobEventDataRecAttr == nullptr
+            (theStripeSize != 0 && theBlobEventDistRecAttr == NULL) ||
+            theBlobEventPartRecAttr == NULL ||
+            theBlobEventPkidRecAttr == NULL ||
+            theBlobEventDataRecAttr == NULL
          )) {
         setErrorCode(theBlobEventOp);
         DBUG_RETURN(-1);
@@ -2762,10 +2750,10 @@ NdbBlob::prepareColumn()
   // sanity check
   assert(theColumn->m_attrSize * theColumn->m_arraySize == getHeadInlineSize());
   if (thePartSize > 0) {
-    const NdbTableImpl* bt = nullptr;
-    const NdbColumnImpl* bc = nullptr;
-    if ((bt = theColumn->m_blobTable) == nullptr ||
-        (bc = bt->getColumn(theBtColumnNo[BtColumnData])) == nullptr ||
+    const NdbTableImpl* bt = NULL;
+    const NdbColumnImpl* bc = NULL;
+    if ((bt = theColumn->m_blobTable) == NULL ||
+        (bc = bt->getColumn(theBtColumnNo[BtColumnData])) == NULL ||
         bc->getType() != partType ||
         bc->getLength() != (int)thePartSize) {
       setErrorCode(NdbBlobImpl::ErrTable);
@@ -2923,7 +2911,7 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
       NdbOperation::LockMode lockMode =
         ! isTakeOverOp() ?
           NdbOperation::LM_Read : NdbOperation::LM_CommittedRead;
-      if (tOp == nullptr ||
+      if (tOp == NULL ||
           tOp->readTuple(lockMode) == -1 ||
           setTableKeyValue(tOp) == -1 ||
           getHeadInlineValue(tOp) == -1) {
@@ -2960,16 +2948,16 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
         assert(!userDefinedPartitioning);
         Uint32 pkAttrId = theAccessTable->getNoOfColumns() - 1;
         NdbOperation* tOp = theNdbCon->getNdbOperation(theAccessTable, theNdbOp);
-        if (tOp == nullptr ||
+        if (tOp == NULL ||
             tOp->readTuple() == -1 ||
             setAccessKeyValue(tOp) == -1 ||
-            tOp->getValue(pkAttrId, thePackKeyBuf.data) == nullptr) {
+            tOp->getValue(pkAttrId, thePackKeyBuf.data) == NULL) {
           setErrorCode(tOp);
           DBUG_RETURN(BA_ERROR);
         }
       } else {
         NdbIndexOperation* tOp = theNdbCon->getNdbIndexOperation(theAccessTable->m_index, theTable, theNdbOp);
-        if (tOp == nullptr ||
+        if (tOp == NULL ||
             tOp->readTuple() == -1 ||
             setAccessKeyValue(tOp) == -1 ||
             getTableKeyValue(tOp) == -1) {
@@ -2985,7 +2973,7 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
            */
           thePartitionIdRecAttr = tOp->getValue_impl(&NdbColumnImpl::getImpl(*NdbDictionary::Column::FRAGMENT));
           
-          if (thePartitionIdRecAttr == nullptr) {
+          if (thePartitionIdRecAttr == NULL) {
             setErrorCode(tOp);
             DBUG_RETURN(BA_ERROR);
           }
@@ -3001,7 +2989,7 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
     if (isUpdateOp() || isDeleteOp()) {
       // add op before this one to read head+inline via index
       NdbIndexOperation* tOp = theNdbCon->getNdbIndexOperation(theAccessTable->m_index, theTable, theNdbOp);
-      if (tOp == nullptr ||
+      if (tOp == NULL ||
           tOp->readTuple() == -1 ||
           setAccessKeyValue(tOp) == -1 ||
           getHeadInlineValue(tOp) == -1) {
@@ -3021,7 +3009,7 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
     }
   }
 
-  if (theActiveHook != nullptr) {
+  if (theActiveHook != NULL) {
     // need blob head for callback
     rc = BA_EXEC;
   }
@@ -3060,7 +3048,8 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType)
  * Initialise BlobTask structure based on request parameters
  *
  */
-int NdbBlob::initBlobTask(NdbTransaction::ExecType anExecType [[maybe_unused]])
+int
+NdbBlob::initBlobTask(NdbTransaction::ExecType anExecType)
 {
   DBUG_ENTER("NdbBlob::initBlobTask");
 
@@ -3071,7 +3060,7 @@ int NdbBlob::initBlobTask(NdbTransaction::ExecType anExecType [[maybe_unused]])
 
     if (theGetFlag)
     {
-      assert(theGetSetBytes == 0 || theGetBuf != nullptr);
+      assert(theGetSetBytes == 0 || theGetBuf != 0);
       assert(theGetSetBytes <= theInlineSize ||
              anExecType == NdbTransaction::NoCommit);
       
@@ -3141,7 +3130,7 @@ int NdbBlob::initBlobTask(NdbTransaction::ExecType anExecType [[maybe_unused]])
       /* Read partition id if needed */
       if (userDefinedPartitioning)
       {
-        if (thePartitionIdRecAttr != nullptr)
+        if (thePartitionIdRecAttr != NULL)
         {
           assert( this == theNdbOp->theBlobList );
           Uint32 id= thePartitionIdRecAttr->u_32_value();
@@ -3208,7 +3197,7 @@ int NdbBlob::initBlobTask(NdbTransaction::ExecType anExecType [[maybe_unused]])
     DBUG_PRINT("info", ("Delete op oldlen = %llu", theLength));
 
     m_blobOp.m_state = BlobTask::BTS_WRITE_PARTS;  // No need to write head
-    m_blobOp.m_writeBuffer = nullptr;
+    m_blobOp.m_writeBuffer = NULL;
     m_blobOp.m_writeBufferLen = 0;
     m_blobOp.m_oldLen = theLength;
     m_blobOp.m_position = theInlineSize;
@@ -3449,7 +3438,7 @@ NdbBlob::handleBlobTask(NdbTransaction::ExecType anExecType)
     {
       DBUG_PRINT("info", ("State BTS_WRITE_HEAD"));
       /* U/W */
-      const bool setNull = (m_blobOp.m_writeBuffer == nullptr &&
+      const bool setNull = (m_blobOp.m_writeBuffer == NULL &&
                             !isDeleteOp());
       const bool oldLenUnknown = (m_blobOp.m_oldLen == ~Uint64(0));
 
@@ -3608,7 +3597,7 @@ NdbBlob::handleBlobTask(NdbTransaction::ExecType anExecType)
           if (numPartsDeleted != 0)
           {
             /* Check last op outcome */
-            assert(m_blobOp.m_lastDeleteOp != nullptr);
+            assert(m_blobOp.m_lastDeleteOp != NULL);
 
             const Uint32 rc = m_blobOp.m_lastDeleteOp->getNdbError().code;
 
@@ -3637,7 +3626,7 @@ NdbBlob::handleBlobTask(NdbTransaction::ExecType anExecType)
             /* Issue another delete */
             DBUG_PRINT("info", ("Issue blind delete for part partIdx %llu", partIdx));
             NdbOperation* tOp = theNdbCon->getNdbOperation(theBlobTable);
-            if (tOp == nullptr ||
+            if (tOp == NULL ||
                 tOp->deleteTuple() == -1 ||
                 setPartKeyValue(tOp, partIdx) == -1) {
               setErrorCode(tOp);
@@ -3697,7 +3686,7 @@ NdbBlob::handleBlobTask(NdbTransaction::ExecType anExecType)
         m_blobOp.m_delayedWriteHead = false;
         DBUG_PRINT("info", ("BTS_DONE : Adding op to update header"));
         NdbOperation* tOp = theNdbCon->getNdbOperation(theTable);
-        if (tOp == nullptr ||
+        if (tOp == NULL ||
             tOp->updateTuple() == -1 ||
             setTableKeyValue(tOp) == -1 ||
             setHeadInlineValue(tOp) == -1) {
@@ -3753,7 +3742,7 @@ NdbBlob::handleBlobTask(NdbTransaction::ExecType anExecType)
  *  - Change Blob handle state to Active
  *  - Execute user's activeHook function if set
  *  - Add an operation to update the Blob's head+inline bytes if
- *    necessary 
+ *    necesary 
  */
 NdbBlob::BlobAction
 NdbBlob::postExecute(NdbTransaction::ExecType anExecType)
@@ -3797,14 +3786,14 @@ NdbBlob::postExecute(NdbTransaction::ExecType anExecType)
 
   setState(anExecType == NdbTransaction::NoCommit ? Active : Closed);
   // activation callback
-  if (theActiveHook != nullptr) {
+  if (theActiveHook != NULL) {
     if (invokeActiveHook() == -1)
       DBUG_RETURN(BA_ERROR);
   }
   /* Cope with any changes to the head from the ActiveHook */
   if (anExecType == NdbTransaction::NoCommit && theHeadInlineUpdateFlag) {
     NdbOperation* tOp = theNdbCon->getNdbOperation(theTable);
-    if (tOp == nullptr ||
+    if (tOp == NULL ||
        tOp->updateTuple() == -1 ||
        setTableKeyValue(tOp) == -1 ||
        setHeadInlineValue(tOp) == -1) {
@@ -3847,7 +3836,7 @@ NdbBlob::preCommit()
     if (theHeadInlineUpdateFlag) {
         // add an operation to update head+inline
         NdbOperation* tOp = theNdbCon->getNdbOperation(theTable);
-        if (tOp == nullptr ||
+        if (tOp == NULL ||
             tOp->updateTuple() == -1 ||
             setTableKeyValue(tOp) == -1 ||
             setHeadInlineValue(tOp) == -1) {
@@ -3927,14 +3916,14 @@ NdbBlob::atNextResultCommon()
   if (setPos(0) == -1)
     DBUG_RETURN(-1);
   if (theGetFlag) {
-    assert(theGetSetBytes == 0 || theGetBuf != nullptr);
+    assert(theGetSetBytes == 0 || theGetBuf != 0);
     Uint32 bytes = theGetSetBytes;
     if (readDataPrivate(theGetBuf, bytes) == -1)
       DBUG_RETURN(-1);
   }
   setState(Active);
   // activation callback
-  if (theActiveHook != nullptr) {
+  if (theActiveHook != NULL) {
     if (invokeActiveHook() == -1)
       DBUG_RETURN(-1);
   }
@@ -3982,7 +3971,7 @@ NdbBlob::setErrorCode(int anErrorCode, bool invalidFlag)
   DBUG_PRINT("info", ("this=%p code=%u", this, anErrorCode));
   theError.code = anErrorCode;
   // conditionally copy error to operation level
-  if (theNdbOp != nullptr && theNdbOp->theError.code == 0)
+  if (theNdbOp != NULL && theNdbOp->theError.code == 0)
     theNdbOp->setErrorCode(theError.code);
   if (invalidFlag)
     setState(Invalid);
@@ -4000,7 +3989,7 @@ void
 NdbBlob::setErrorCode(NdbOperation* anOp, bool invalidFlag)
 {
   int code = 0;
-  if (anOp != nullptr && (code = anOp->theError.code) != 0)
+  if (anOp != NULL && (code = anOp->theError.code) != 0)
     ;
   else if ((code = theNdbCon->theError.code) != 0)
     ;
@@ -4103,7 +4092,7 @@ NdbBlob::close(bool execPendingBlobOps)
      * do nothing and the main table row stays locked until
      * commit / abort.
      */
-    if (likely(theNdbOp->theLockHandle != nullptr))
+    if (likely(theNdbOp->theLockHandle != NULL))
     {
       if (theNdbOp->theLockHandle->m_openBlobCount == 0)
       {
@@ -4117,10 +4106,10 @@ NdbBlob::close(bool execPendingBlobOps)
         const NdbOperation* op = theNdbCon->unlock(theNdbOp->theLockHandle,
                                                    NdbOperation::AbortOnError);
         
-        if (unlikely(op == nullptr))
+        if (unlikely(op == NULL))
         {
           /* setErrorCode will extract the error from the transaction... */
-          setErrorCode((NdbOperation*) nullptr, true); // Set Blob to invalid state
+          setErrorCode((NdbOperation*) NULL, true); // Set Blob to invalid state
           DBUG_RETURN(-1);
         }
         

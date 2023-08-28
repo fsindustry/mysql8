@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,7 +41,7 @@ using namespace std;
 */
 fido_make_cred::fido_make_cred() {
   m_cred = fido_cred_new();
-  // always set default type algorithm to COSE_ES256
+  // always set defaut type algorithm to COSE_ES256
   set_type();
 }
 
@@ -57,7 +57,7 @@ fido_make_cred::~fido_make_cred() { fido_cred_free(&m_cred); }
 
   @param [in] challenge       buffer holding the server challenge
 
-  @retval false   successful generation of credentials.
+  @retval false   successfull generation of credentials.
   @retval true    error occurred.
 */
 bool fido_make_cred::make_credentials(const char *challenge) {
@@ -121,10 +121,10 @@ bool fido_make_cred::parse_challenge(const char *challenge) {
   This method checks if a token device is available on client host.
   If device is present, device expects user to perform gesture action,
   upon which device generates credential details, which consists of
-  authenticator data, signature and optional x509 certificate which is
+  authenticator data, signature and optinal x509 certificate which is
   passed to server.
 
-  @retval FIDO_OK(false) successful generation of credentials.
+  @retval FIDO_OK(false) successfull generation of credentials.
   @retval true           error occurred.
 */
 bool fido_make_cred::generate_signature() {
@@ -132,8 +132,7 @@ bool fido_make_cred::generate_signature() {
   fido_init(0);
   size_t dev_infos_len = 0;
   fido_dev_info_t *dev_infos = fido_dev_info_new(1);
-  if (fido_dev_info_manifest(dev_infos, 1, &dev_infos_len) != FIDO_OK ||
-      dev_infos_len == 0) {
+  if (fido_dev_info_manifest(dev_infos, 1, &dev_infos_len) != FIDO_OK) {
     fido_dev_info_free(&dev_infos, 1);
     get_plugin_messages("No FIDO device available on client host.",
                         message_type::ERROR);
@@ -148,7 +147,7 @@ bool fido_make_cred::generate_signature() {
     ret_code = true;
     goto end;
   } else {
-    const std::string s(
+    std::string s(
         "Please insert FIDO device and perform gesture action for"
         " registration to complete.");
     get_plugin_messages(s, message_type::INFO);
@@ -179,16 +178,15 @@ end:
 bool fido_make_cred::make_challenge_response(
     unsigned char *&challenge_response) {
   /* copy client response into buf */
-  const unsigned long authdata_len = get_authdata_len();
-  const unsigned long sig_len = get_sig_len();
-  const unsigned long cert_len = get_x5c_len();
-  const unsigned long rp_id_len = strlen(get_rp_id());
+  unsigned long authdata_len = get_authdata_len();
+  unsigned long sig_len = get_sig_len();
+  unsigned long cert_len = get_x5c_len();
+  unsigned long rp_id_len = strlen(get_rp_id());
 
   /* calculate total required buffer length */
-  const size_t len = net_length_size(authdata_len) + net_length_size(sig_len) +
-                     (cert_len ? net_length_size(cert_len) + cert_len : 0) +
-                     net_length_size(rp_id_len) + authdata_len + sig_len +
-                     rp_id_len;
+  size_t len = net_length_size(authdata_len) + net_length_size(sig_len) +
+               (cert_len ? net_length_size(cert_len) + cert_len : 0) +
+               net_length_size(rp_id_len) + authdata_len + sig_len + rp_id_len;
   unsigned char *str = new unsigned char[len];
   unsigned char *pos = str;
   pos = net_store_length(pos, authdata_len);
@@ -215,12 +213,7 @@ bool fido_make_cred::make_challenge_response(
   pos += rp_id_len;
   assert(len == (size_t)(pos - str));
 
-  const uint64 needed = base64_needed_encoded_length((uint64)len);
-  unsigned char *tmp_value = new unsigned char[needed];
-  base64_encode(str, len, reinterpret_cast<char *>(tmp_value));
-  /* Ensure caller will release this memory. */
-  challenge_response = tmp_value;
-
+  base64_encode(str, len, reinterpret_cast<char *>(challenge_response));
   delete[] str;
   return false;
 }
@@ -230,6 +223,8 @@ bool fido_make_cred::make_challenge_response(
 
   @param [in] scramble   buffer holding random salt
   @param [in] len        length of salt
+
+  @retval void
 */
 void fido_make_cred::set_scramble(unsigned char *scramble, size_t len) {
   fido_cred_set_clientdata_hash(m_cred, scramble, len);
@@ -239,6 +234,8 @@ void fido_make_cred::set_scramble(unsigned char *scramble, size_t len) {
   Set method to set user name.
 
   @param [in] user   buffer holding user name
+
+  @retval void
 */
 void fido_make_cred::set_user(string user) {
   fido_cred_set_user(m_cred,
@@ -250,6 +247,8 @@ void fido_make_cred::set_user(string user) {
   Method to set the algorithm type
 
   @param [in] type   algorithm type
+
+  @retval void
 */
 void fido_make_cred::set_type(int type) { fido_cred_set_type(m_cred, type); }
 
@@ -257,6 +256,8 @@ void fido_make_cred::set_type(int type) { fido_cred_set_type(m_cred, type); }
   Method to set the relying party name or id
 
   @param [in] rp_id   buffer holding relying party name
+
+  @retval void
 */
 void fido_make_cred::set_rp_id(string rp_id) {
   fido_cred_set_rp(m_cred, rp_id.c_str(), nullptr);
@@ -330,6 +331,6 @@ bool fido_registration::make_credentials(const char *challenge) {
   Helper method to get challenge response
 */
 bool fido_registration::make_challenge_response(
-    unsigned char *&challenge_response) {
+    unsigned char *challenge_response) {
   return m_fido_make_cred.make_challenge_response(challenge_response);
 }

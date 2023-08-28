@@ -32,7 +32,6 @@ TRIGGER	%.%	YES	YES
 enabled_consumers
 events_stages_current
 events_stages_history
-events_statements_cpu
 events_statements_current
 events_statements_history
 events_transactions_current
@@ -57,7 +56,6 @@ TRIGGER	%.%	YES	YES
 enabled_consumers
 events_stages_current
 events_stages_history
-events_statements_cpu
 events_statements_current
 events_statements_history
 events_transactions_current
@@ -204,7 +202,6 @@ TRIGGER	%.%	YES	YES
 enabled_consumers
 events_stages_current
 events_stages_history
-events_statements_cpu
 events_statements_current
 events_statements_history
 events_transactions_current
@@ -221,6 +218,7 @@ innodb/clone_gtid_thread	BACKGROUND
 innodb/dict_stats_thread	BACKGROUND
 innodb/fts_optimize_thread	BACKGROUND
 innodb/io_ibuf_thread	BACKGROUND
+innodb/io_log_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
@@ -230,7 +228,6 @@ innodb/io_write_thread	BACKGROUND
 innodb/io_write_thread	BACKGROUND
 innodb/io_write_thread	BACKGROUND
 innodb/log_checkpointer_thread	BACKGROUND
-innodb/log_files_governor_thread	BACKGROUND
 innodb/log_flush_notifier_thread	BACKGROUND
 innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND
@@ -255,7 +252,6 @@ TRIGGER	%.%	YES	YES
 enabled_consumers
 events_stages_current
 events_stages_history
-events_statements_cpu
 events_statements_current
 events_statements_history
 events_transactions_current
@@ -272,6 +268,7 @@ innodb/clone_gtid_thread	BACKGROUND
 innodb/dict_stats_thread	BACKGROUND
 innodb/fts_optimize_thread	BACKGROUND
 innodb/io_ibuf_thread	BACKGROUND
+innodb/io_log_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
 innodb/io_read_thread	BACKGROUND
@@ -281,7 +278,6 @@ innodb/io_write_thread	BACKGROUND
 innodb/io_write_thread	BACKGROUND
 innodb/io_write_thread	BACKGROUND
 innodb/log_checkpointer_thread	BACKGROUND
-innodb/log_files_governor_thread	BACKGROUND
 innodb/log_flush_notifier_thread	BACKGROUND
 innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND

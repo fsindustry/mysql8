@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 # Test non-transaction
 create table t1(a int, b int) engine= myisam;
@@ -197,7 +197,6 @@ BEGIN
 # insert into t1(a,b) values(1,1),(2,1)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -232,7 +231,6 @@ BEGIN
 # update t1 set a = a + 5 where b = 1 LIMIT 1
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -266,7 +264,6 @@ BEGIN
 # delete from t1 where a = 6
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -311,7 +308,6 @@ BEGIN
 # insert into t2(a,b) values(2,1),(3,1)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t2`
@@ -327,7 +323,6 @@ BEGIN
 # update t2 set a = a + 5 where b = 1
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t2`
@@ -349,7 +344,6 @@ BEGIN
 # delete from t2 where a = 7
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t2`
@@ -378,7 +372,6 @@ BEGIN
 # insert into t1(a,b) values(1,5)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -409,7 +402,6 @@ BEGIN
 # insert into t1(a,b) values(1,7)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -440,7 +432,6 @@ BEGIN
 # insert into t2(a,b) values(2,5)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t2`
@@ -452,7 +443,6 @@ BEGIN
 # insert into t2(a,b) values(2,6)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t2`
@@ -549,7 +539,6 @@ BEGIN
 # insert into t3(a, b) values(1,1)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t3` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t3`
@@ -580,7 +569,6 @@ BEGIN
 # insert into t4(a, b) values(2,1)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t4` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t4`
@@ -611,10 +599,8 @@ BEGIN
 # update t3,t4 set t3.a=3, t4.a=4 where t3.b=t4.b
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t3` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t4` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id #
 # at #
@@ -657,7 +643,6 @@ BEGIN
 # insert into t5(a, b) values(3,1)
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t5` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t5`
@@ -688,10 +673,8 @@ BEGIN
 # update t4,t5 set t4.a=4, t5.a=5 where t4.b=t5.b
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t4` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t5` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t5`
@@ -752,7 +735,6 @@ BEGIN
 # load data infile '../../std_data/words.dat' into table t6
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t6` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id #
 # at #
@@ -1091,8 +1073,6 @@ create table t7(a bigint) engine= myisam;
 insert into t7(a) values(1),(2);
 delete from t7 where a = 1;
 set session binlog_format=mixed;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set @@session.binlog_rows_query_log_events= on;
 # Test the comment event is sent in mixed mode for special
 # functions when setting binlog_rows_query_log_events= on

@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -28,30 +28,30 @@
 
 // UCS-2 support.
 
-#include <algorithm>
-#include <cassert>
-#include <cerrno>
-#include <climits>
-#include <cstdarg>
-#include <cstdint>
-#include <cstring>
-#include <limits>
+#include <assert.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <string.h>
+#include <sys/types.h>
 
+#include <algorithm>
+
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
-#include "my_sys.h"  // MY_ERRNO_ERANGE etc.
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
-#include "strings/m_ctype_internals.h"
+
+#include "my_inttypes.h"
+#include "my_sys.h"
 #include "template_utils.h"
 
 #ifndef EILSEQ
 #define EILSEQ ENOENT
 #endif
 
-#define ULONGLONG_MAX (~(unsigned long long)0)
-#define MAX_NEGATIVE_NUMBER ((unsigned long long)0x8000000000000000LL)
+#define ULONGLONG_MAX (~(ulonglong)0)
+#define MAX_NEGATIVE_NUMBER ((ulonglong)0x8000000000000000LL)
 #define INIT_CNT 9
 #define LFACTOR 1000000000ULL
 #define LFACTOR1 10000000000ULL
@@ -60,18 +60,8 @@
 static unsigned long lfactor[9] = {
     1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L};
 
-MY_COMPILER_DIAGNOSTIC_PUSH()
-// Suppress warning C4146 unary minus operator applied to unsigned type,
-// result still unsigned
-MY_COMPILER_MSVC_DIAGNOSTIC_IGNORE(4146)
-static inline long long ulonglong_with_sign(bool negative,
-                                            unsigned long long ll) {
-  return negative ? -ll : ll;
-}
-MY_COMPILER_DIAGNOSTIC_POP()
-
-static inline int my_bincmp(const uint8_t *s, const uint8_t *se,
-                            const uint8_t *t, const uint8_t *te) {
+static inline int my_bincmp(const uchar *s, const uchar *se, const uchar *t,
+                            const uchar *te) {
   int slen = (int)(se - s), tlen = (int)(te - t);
   int len = std::min(slen, tlen);
   int cmp = memcmp(s, t, len);
@@ -106,11 +96,11 @@ static long my_strntol_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
   int cnv;
   my_wc_t wc;
   unsigned int cutlim;
-  uint32_t cutoff = 0;
-  uint32_t res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
-  const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
-  const uint8_t *save = nullptr;
+  uint32 cutoff;
+  uint32 res;
+  const uchar *s = (const uchar *)nptr;
+  const uchar *e = (const uchar *)nptr + l;
+  const uchar *save;
 
   *err = 0;
   do {
@@ -142,8 +132,8 @@ bs:
   overflow = 0;
   res = 0;
   save = s;
-  cutoff = ((uint32_t)~0L) / (uint32_t)base;
-  cutlim = (unsigned)(((uint32_t)~0L) % (uint32_t)base);
+  cutoff = ((uint32)~0L) / (uint32)base;
+  cutlim = (uint)(((uint32)~0L) % (uint32)base);
 
   do {
     if ((cnv = cs->cset->mb_wc(cs, &wc, s, e)) > 0) {
@@ -160,7 +150,7 @@ bs:
       if (res > cutoff || (res == cutoff && wc > cutlim))
         overflow = 1;
       else {
-        res *= (uint32_t)base;
+        res *= (uint32)base;
         res += wc;
       }
     } else if (cnv == MY_CS_ILSEQ) {
@@ -181,33 +171,31 @@ bs:
   }
 
   if (negative) {
-    if (res > (uint32_t)std::numeric_limits<int32_t>::min()) overflow = 1;
-  } else if (res > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()))
+    if (res > (uint32)INT_MIN32) overflow = 1;
+  } else if (res > INT_MAX32)
     overflow = 1;
 
   if (overflow) {
     err[0] = ERANGE;
-    return negative ? std::numeric_limits<int32_t>::min()
-                    : std::numeric_limits<int32_t>::max();
+    return negative ? INT_MIN32 : INT_MAX32;
   }
 
   return (negative ? -((long)res) : (long)res);
 }
 
-static unsigned long my_strntoul_mb2_or_mb4(const CHARSET_INFO *cs,
-                                            const char *nptr, size_t l,
-                                            int base, const char **endptr,
-                                            int *err) {
+static ulong my_strntoul_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
+                                    size_t l, int base, const char **endptr,
+                                    int *err) {
   int negative = 0;
   int overflow;
   int cnv;
   my_wc_t wc;
   unsigned int cutlim;
-  uint32_t cutoff = 0;
-  uint32_t res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
-  const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
-  const uint8_t *save = nullptr;
+  uint32 cutoff;
+  uint32 res;
+  const uchar *s = (const uchar *)nptr;
+  const uchar *e = (const uchar *)nptr + l;
+  const uchar *save;
 
   *err = 0;
   do {
@@ -239,8 +227,8 @@ bs:
   overflow = 0;
   res = 0;
   save = s;
-  cutoff = ((uint32_t)~0L) / (uint32_t)base;
-  cutlim = (unsigned)(((uint32_t)~0L) % (uint32_t)base);
+  cutoff = ((uint32)~0L) / (uint32)base;
+  cutlim = (uint)(((uint32)~0L) % (uint32)base);
 
   do {
     if ((cnv = cs->cset->mb_wc(cs, &wc, s, e)) > 0) {
@@ -257,7 +245,7 @@ bs:
       if (res > cutoff || (res == cutoff && wc > cutlim))
         overflow = 1;
       else {
-        res *= (uint32_t)base;
+        res *= (uint32)base;
         res += wc;
       }
     } else if (cnv == MY_CS_ILSEQ) {
@@ -279,25 +267,25 @@ bs:
 
   if (overflow) {
     err[0] = (ERANGE);
-    return (~(uint32_t)0);
+    return (~(uint32)0);
   }
 
   return (negative ? -((long)res) : (long)res);
 }
 
-static long long my_strntoll_mb2_or_mb4(const CHARSET_INFO *cs,
-                                        const char *nptr, size_t l, int base,
-                                        const char **endptr, int *err) {
+static longlong my_strntoll_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
+                                       size_t l, int base, const char **endptr,
+                                       int *err) {
   int negative = 0;
   int overflow;
   int cnv;
   my_wc_t wc;
-  unsigned long long cutoff = 0;
-  unsigned int cutlim = 0;
-  unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
-  const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
-  const uint8_t *save = nullptr;
+  ulonglong cutoff;
+  unsigned int cutlim;
+  ulonglong res;
+  const uchar *s = (const uchar *)nptr;
+  const uchar *e = (const uchar *)nptr + l;
+  const uchar *save;
 
   *err = 0;
   do {
@@ -329,8 +317,8 @@ bs:
   overflow = 0;
   res = 0;
   save = s;
-  cutoff = (~(unsigned long long)0) / (unsigned long int)base;
-  cutlim = (unsigned)((~(unsigned long long)0) % (unsigned long int)base);
+  cutoff = (~(ulonglong)0) / (unsigned long int)base;
+  cutlim = (uint)((~(ulonglong)0) % (unsigned long int)base);
 
   do {
     if ((cnv = cs->cset->mb_wc(cs, &wc, s, e)) > 0) {
@@ -347,7 +335,7 @@ bs:
       if (res > cutoff || (res == cutoff && wc > cutlim))
         overflow = 1;
       else {
-        res *= (unsigned long long)base;
+        res *= (ulonglong)base;
         res += wc;
       }
     } else if (cnv == MY_CS_ILSEQ) {
@@ -368,8 +356,8 @@ bs:
   }
 
   if (negative) {
-    if (res > (unsigned long long)LLONG_MIN) overflow = 1;
-  } else if (res > (unsigned long long)LLONG_MAX)
+    if (res > (ulonglong)LLONG_MIN) overflow = 1;
+  } else if (res > (ulonglong)LLONG_MAX)
     overflow = 1;
 
   if (overflow) {
@@ -377,23 +365,22 @@ bs:
     return negative ? LLONG_MIN : LLONG_MAX;
   }
 
-  return ulonglong_with_sign(negative, res);
+  return negative ? -res : res;
 }
 
-static unsigned long long my_strntoull_mb2_or_mb4(const CHARSET_INFO *cs,
-                                                  const char *nptr, size_t l,
-                                                  int base, const char **endptr,
-                                                  int *err) {
+static ulonglong my_strntoull_mb2_or_mb4(const CHARSET_INFO *cs,
+                                         const char *nptr, size_t l, int base,
+                                         const char **endptr, int *err) {
   int negative = 0;
   int overflow;
   int cnv;
   my_wc_t wc;
-  unsigned long long cutoff = 0;
+  ulonglong cutoff;
   unsigned int cutlim;
-  unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
-  const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
-  const uint8_t *save = nullptr;
+  ulonglong res;
+  const uchar *s = (const uchar *)nptr;
+  const uchar *e = (const uchar *)nptr + l;
+  const uchar *save;
 
   *err = 0;
   do {
@@ -425,8 +412,8 @@ bs:
   overflow = 0;
   res = 0;
   save = s;
-  cutoff = (~(unsigned long long)0) / (unsigned long int)base;
-  cutlim = (unsigned)((~(unsigned long long)0) % (unsigned long int)base);
+  cutoff = (~(ulonglong)0) / (unsigned long int)base;
+  cutlim = (uint)((~(ulonglong)0) % (unsigned long int)base);
 
   do {
     if ((cnv = cs->cset->mb_wc(cs, &wc, s, e)) > 0) {
@@ -443,7 +430,7 @@ bs:
       if (res > cutoff || (res == cutoff && wc > cutlim))
         overflow = 1;
       else {
-        res *= (unsigned long long)base;
+        res *= (ulonglong)base;
         res += wc;
       }
     } else if (cnv == MY_CS_ILSEQ) {
@@ -465,10 +452,10 @@ bs:
 
   if (overflow) {
     err[0] = ERANGE;
-    return (~(unsigned long long)0);
+    return (~(ulonglong)0);
   }
 
-  return ulonglong_with_sign(negative, res);
+  return negative ? -res : res;
 }
 
 static double my_strntod_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
@@ -477,8 +464,8 @@ static double my_strntod_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
   char buf[256];
   double res;
   char *b = buf;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
-  const uint8_t *end = nullptr;
+  const uchar *s = (const uchar *)nptr;
+  const uchar *end;
   my_wc_t wc;
   int cnv;
 
@@ -489,7 +476,7 @@ static double my_strntod_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
 
   while ((cnv = cs->cset->mb_wc(cs, &wc, s, end)) > 0) {
     s += cnv;
-    if (wc > (int)u'e' || !wc) break; /* Can't be part of double */
+    if (wc > (int)(uchar)'e' || !wc) break; /* Can't be part of double */
     *b++ = (char)wc;
   }
 
@@ -499,22 +486,23 @@ static double my_strntod_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
   return res;
 }
 
-static unsigned long long my_strntoull10rnd_mb2_or_mb4(
-    const CHARSET_INFO *cs, const char *nptr, size_t length, int unsign_fl,
-    const char **endptr, int *err) {
+static ulonglong my_strntoull10rnd_mb2_or_mb4(const CHARSET_INFO *cs,
+                                              const char *nptr, size_t length,
+                                              int unsign_fl,
+                                              const char **endptr, int *err) {
   char buf[256], *b = buf;
-  unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  ulonglong res;
+  const uchar *end, *s = (const uchar *)nptr;
   my_wc_t wc;
   int cnv;
 
   /* Cut too long strings */
   if (length >= sizeof(buf)) length = sizeof(buf) - 1;
-  const uint8_t *end = s + length;
+  end = s + length;
 
   while ((cnv = cs->cset->mb_wc(cs, &wc, s, end)) > 0) {
     s += cnv;
-    if (wc > (int)u'e' || !wc) break; /* Can't be a number part */
+    if (wc > (int)(uchar)'e' || !wc) break; /* Can't be a number part */
     *b++ = (char)wc;
   }
 
@@ -563,9 +551,7 @@ static size_t my_l10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
   }
 
   for (db = dst, de = dst + len; (dst < de) && *p; p++) {
-    int cnvres =
-        cs->cset->wc_mb(cs, (my_wc_t)p[0], pointer_cast<uint8_t *>(dst),
-                        pointer_cast<uint8_t *>(de));
+    int cnvres = cs->cset->wc_mb(cs, (my_wc_t)p[0], (uchar *)dst, (uchar *)de);
     if (cnvres > 0)
       dst += cnvres;
     else
@@ -575,18 +561,18 @@ static size_t my_l10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
 }
 
 static size_t my_ll10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
-                                      size_t len, int radix, long long val) {
+                                      size_t len, int radix, longlong val) {
   char buffer[65];
   char *p, *db, *de;
   long long_val;
   int sl = 0;
-  unsigned long long uval = (unsigned long long)val;
+  ulonglong uval = (ulonglong)val;
 
   if (radix < 0) {
     if (val < 0) {
       sl = 1;
       /* Avoid integer overflow in (-val) for LLONG_MIN (BUG#31799). */
-      uval = (unsigned long long)0 - uval;
+      uval = (ulonglong)0 - uval;
     }
   }
 
@@ -598,9 +584,9 @@ static size_t my_ll10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
     goto cnv;
   }
 
-  while (uval > (unsigned long long)LONG_MAX) {
-    unsigned long long quo = uval / (unsigned)10;
-    unsigned rem = (unsigned)(uval - quo * (unsigned)10);
+  while (uval > (ulonglong)LONG_MAX) {
+    ulonglong quo = uval / (uint)10;
+    uint rem = (uint)(uval - quo * (uint)10);
     *--p = '0' + rem;
     uval = quo;
   }
@@ -618,9 +604,7 @@ cnv:
   }
 
   for (db = dst, de = dst + len; (dst < de) && *p; p++) {
-    int cnvres =
-        cs->cset->wc_mb(cs, (my_wc_t)p[0], pointer_cast<uint8_t *>(dst),
-                        pointer_cast<uint8_t *>(de));
+    int cnvres = cs->cset->wc_mb(cs, (my_wc_t)p[0], (uchar *)dst, (uchar *)de);
     if (cnvres > 0)
       dst += cnvres;
     else
@@ -631,16 +615,14 @@ cnv:
 }  // extern "C"
 
 extern "C" {
-static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
-                                  const char **endptr, int *error) {
+static longlong my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
+                                 const char **endptr, int *error) {
   const char *s, *end, *start, *n_end, *true_end;
-  uint8_t c = 0;
+  uchar c;
   unsigned long i, j, k;
-  unsigned long long li = 0;
+  ulonglong li;
   int negative;
-  unsigned long cutoff = 0;
-  unsigned long cutoff2 = 0;
-  unsigned long cutoff3 = 0;
+  ulong cutoff, cutoff2, cutoff3;
   my_wc_t wc;
   int res;
 
@@ -657,8 +639,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
 
     for (;;) /* Skip leading spaces and tabs */
     {
-      res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                            pointer_cast<const uint8_t *>(end));
+      res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
       if (res <= 0) goto no_conv;
       s += res;
       if (wc != ' ' && wc != '\t') break;
@@ -673,8 +654,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   if (wc == '-') {
     *error = -1; /* Mark as negative number */
     negative = 1;
-    res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                          pointer_cast<const uint8_t *>(end));
+    res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
     if (res <= 0) goto no_conv;
     s += res;
     cutoff = MAX_NEGATIVE_NUMBER / LFACTOR2;
@@ -683,8 +663,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   } else {
     *error = 0;
     if (wc == '+') {
-      res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                            pointer_cast<const uint8_t *>(end));
+      res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
       if (res <= 0) goto no_conv;
       s += res;
     }
@@ -698,8 +677,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
     i = 0;
     for (;; s += res) {
       if (s == end) goto end_i; /* Return 0 */
-      res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                            pointer_cast<const uint8_t *>(end));
+      res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
       if (res <= 0) goto no_conv;
       if (wc != '0') break;
     }
@@ -716,8 +694,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   /* Handle first 9 digits and store them in i */
   if (n_end > end) n_end = end;
   for (;;) {
-    res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                          pointer_cast<const uint8_t *>(n_end));
+    res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)n_end);
     if (res <= 0) break;
     if ((c = (wc - '0')) > 9) goto end_i;
     s += res;
@@ -731,8 +708,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   n_end = true_end = s + 2 * INIT_CNT;
   if (n_end > end) n_end = end;
   do {
-    res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                          pointer_cast<const uint8_t *>(end));
+    res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
     if (res <= 0) goto no_conv;
     if ((c = (wc - '0')) > 9) goto end_i_and_j;
     s += res;
@@ -742,8 +718,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
     if (s != true_end) goto end_i_and_j;
     goto end3;
   }
-  res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                        pointer_cast<const uint8_t *>(end));
+  res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
   if (res <= 0) goto no_conv;
   if ((c = (wc - '0')) > 9) goto end3;
   s += res;
@@ -751,8 +726,7 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   /* Handle the next 1 or 2 digits and store them in k */
   k = c;
   if (s == end) goto end4;
-  res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(s),
-                        pointer_cast<const uint8_t *>(end));
+  res = cs->cset->mb_wc(cs, &wc, (const uchar *)s, (const uchar *)end);
   if (res <= 0) goto no_conv;
   if ((c = (wc - '0')) > 9) goto end4;
   s += res;
@@ -766,36 +740,36 @@ static long long my_strtoll10_mb2(const CHARSET_INFO *cs, const char *nptr,
   if (i > cutoff ||
       (i == cutoff && ((j > cutoff2 || j == cutoff2) && k > cutoff3)))
     goto overflow;
-  li = i * LFACTOR2 + (unsigned long long)j * 100 + k;
-  return (long long)li;
+  li = i * LFACTOR2 + (ulonglong)j * 100 + k;
+  return (longlong)li;
 
 overflow: /* *endptr is set here */
   *error = MY_ERRNO_ERANGE;
-  return negative ? LLONG_MIN : (long long)ULONGLONG_MAX;
+  return negative ? LLONG_MIN : (longlong)ULONGLONG_MAX;
 
 end_i:
   *endptr = s;
-  return (negative ? ((long long)-(long)i) : (long long)i);
+  return (negative ? ((longlong) - (long)i) : (longlong)i);
 
 end_i_and_j:
-  li = (unsigned long long)i * lfactor[(size_t)(s - start) / 2] + j;
+  li = (ulonglong)i * lfactor[(size_t)(s - start) / 2] + j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end3:
-  li = (unsigned long long)i * LFACTOR + (unsigned long long)j;
+  li = (ulonglong)i * LFACTOR + (ulonglong)j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end4:
-  li = (unsigned long long)i * LFACTOR1 + (unsigned long long)j * 10 + k;
+  li = (ulonglong)i * LFACTOR1 + (ulonglong)j * 10 + k;
   *endptr = s;
   if (negative) {
     if (li > MAX_NEGATIVE_NUMBER) goto overflow;
     if (li == MAX_NEGATIVE_NUMBER) return LLONG_MIN;
-    return -((long long)li);
+    return -((longlong)li);
   }
-  return (long long)li;
+  return (longlong)li;
 
 no_conv:
   /* There was no number to convert.  */
@@ -812,11 +786,11 @@ static size_t my_scan_mb2(const CHARSET_INFO *cs, const char *str,
 
   switch (sequence_type) {
     case MY_SEQ_SPACES:
-      for (res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(str),
-                                 pointer_cast<const uint8_t *>(end));
-           res > 0 && wc == ' '; str += res,
-          res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(str),
-                                pointer_cast<const uint8_t *>(end))) {
+      for (res =
+               cs->cset->mb_wc(cs, &wc, (const uchar *)str, (const uchar *)end);
+           res > 0 && wc == ' ';
+           str += res, res = cs->cset->mb_wc(cs, &wc, (const uchar *)str,
+                                             (const uchar *)end)) {
       }
       return (size_t)(str - str0);
     default:
@@ -831,13 +805,13 @@ static void my_fill_mb2(const CHARSET_INFO *cs, char *s, size_t slen,
 
   assert((slen % 2) == 0);
 
-  buflen = cs->cset->wc_mb(cs, (my_wc_t)fill, pointer_cast<uint8_t *>(buf),
-                           pointer_cast<uint8_t *>(buf) + sizeof(buf));
+  buflen = cs->cset->wc_mb(cs, (my_wc_t)fill, (uchar *)buf,
+                           (uchar *)buf + sizeof(buf));
 
   assert(buflen > 0);
 
   while (slen >= (size_t)buflen) {
-    /* Enough space for the character */
+    /* Enough space for the characer */
     memcpy(s, buf, (size_t)buflen);
     s += buflen;
     slen -= buflen;
@@ -944,8 +918,8 @@ static size_t my_lengthsp_mb2(const CHARSET_INFO *cs [[maybe_unused]],
 #define MY_UTF16_SURROGATE_LOW_FIRST 0xDC00
 #define MY_UTF16_SURROGATE_LOW_LAST 0xDFFF
 
-#define MY_UTF16_HIGH_HEAD(x) ((((uint8_t)(x)) & 0xFC) == 0xD8)
-#define MY_UTF16_LOW_HEAD(x) ((((uint8_t)(x)) & 0xFC) == 0xDC)
+#define MY_UTF16_HIGH_HEAD(x) ((((uchar)(x)) & 0xFC) == 0xD8)
+#define MY_UTF16_LOW_HEAD(x) ((((uchar)(x)) & 0xFC) == 0xDC)
 #define MY_UTF16_SURROGATE(x) (((x)&0xF800) == 0xD800)
 
 #define MY_UTF16_WC2(a, b) ((a << 8) + b)
@@ -961,7 +935,7 @@ static size_t my_lengthsp_mb2(const CHARSET_INFO *cs [[maybe_unused]],
 
 extern "C" {
 static int my_utf16_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
-                        const uint8_t *s, const uint8_t *e) {
+                        const uchar *s, const uchar *e) {
   if (s + 2 > e) return MY_CS_TOOSMALL2;
 
   /*
@@ -989,21 +963,21 @@ static int my_utf16_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
 }
 
 static int my_uni_utf16(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t wc,
-                        uint8_t *s, uint8_t *e) {
+                        uchar *s, uchar *e) {
   if (wc <= 0xFFFF) {
     if (s + 2 > e) return MY_CS_TOOSMALL2;
     if (MY_UTF16_SURROGATE(wc)) return MY_CS_ILUNI;
-    *s++ = (uint8_t)(wc >> 8);
-    *s = (uint8_t)(wc & 0xFF);
+    *s++ = (uchar)(wc >> 8);
+    *s = (uchar)(wc & 0xFF);
     return 2;
   }
 
   if (wc <= 0x10FFFF) {
     if (s + 4 > e) return MY_CS_TOOSMALL4;
-    *s++ = (uint8_t)((wc -= 0x10000) >> 18) | 0xD8;
-    *s++ = (uint8_t)(wc >> 10) & 0xFF;
-    *s++ = (uint8_t)((wc >> 8) & 3) | 0xDC;
-    *s = (uint8_t)wc & 0xFF;
+    *s++ = (uchar)((wc -= 0x10000) >> 18) | 0xD8;
+    *s++ = (uchar)(wc >> 10) & 0xFF;
+    *s++ = (uchar)((wc >> 8) & 3) | 0xDC;
+    *s = (uchar)wc & 0xFF;
     return 4;
   }
 
@@ -1046,27 +1020,25 @@ static size_t my_caseup_utf16(const CHARSET_INFO *cs, char *src, size_t srclen,
   assert(src == dst && srclen == dstlen);
 
   while ((src < srcend) &&
-         (res = cs->cset->mb_wc(cs, &wc, pointer_cast<uint8_t *>(src),
-                                pointer_cast<uint8_t *>(srcend))) > 0) {
+         (res = cs->cset->mb_wc(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_toupper_utf16(uni_plane, &wc);
-    if (res != cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(src),
-                               pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != cs->cset->wc_mb(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
 }
 
-static void my_hash_sort_utf16(const CHARSET_INFO *cs, const uint8_t *s,
-                               size_t slen, uint64_t *n1, uint64_t *n2) {
+static void my_hash_sort_utf16(const CHARSET_INFO *cs, const uchar *s,
+                               size_t slen, uint64 *n1, uint64 *n2) {
   my_wc_t wc;
   int res;
-  const uint8_t *e =
-      s + cs->cset->lengthsp(cs, pointer_cast<const char *>(s), slen);
+  const uchar *e = s + cs->cset->lengthsp(cs, (const char *)s, slen);
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
+  uint64 tmp1;
+  uint64 tmp2;
 
-  uint64_t tmp1 = *n1;
-  uint64_t tmp2 = *n2;
+  tmp1 = *n1;
+  tmp2 = *n2;
 
   while ((s < e) && (res = cs->cset->mb_wc(cs, &wc, s, e)) > 0) {
     my_tosort_utf16(uni_plane, &wc);
@@ -1091,24 +1063,21 @@ static size_t my_casedn_utf16(const CHARSET_INFO *cs, char *src, size_t srclen,
   assert(src == dst && srclen == dstlen);
 
   while ((src < srcend) &&
-         (res = cs->cset->mb_wc(cs, &wc, pointer_cast<uint8_t *>(src),
-                                pointer_cast<uint8_t *>(srcend))) > 0) {
+         (res = cs->cset->mb_wc(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_tolower_utf16(uni_plane, &wc);
-    if (res != cs->cset->wc_mb(cs, wc, pointer_cast<uint8_t *>(src),
-                               pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != cs->cset->wc_mb(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
 }
 
-static int my_strnncoll_utf16(const CHARSET_INFO *cs, const uint8_t *s,
-                              size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_utf16(const CHARSET_INFO *cs, const uchar *s,
+                              size_t slen, const uchar *t, size_t tlen,
                               bool t_is_prefix) {
   int s_res, t_res;
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   while (s < se && t < te) {
@@ -1159,13 +1128,11 @@ static int my_strnncoll_utf16(const CHARSET_INFO *cs, const uint8_t *s,
     @retval Positive number, if a > b
 */
 
-static int my_strnncollsp_utf16(const CHARSET_INFO *cs, const uint8_t *s,
-                                size_t slen, const uint8_t *t, size_t tlen) {
+static int my_strnncollsp_utf16(const CHARSET_INFO *cs, const uchar *s,
+                                size_t slen, const uchar *t, size_t tlen) {
   int res;
-  my_wc_t s_wc = 0;
-  my_wc_t t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  my_wc_t s_wc = 0, t_wc = 0;
+  const uchar *se = s + slen, *te = t + tlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   assert((slen % 2) == 0);
@@ -1215,16 +1182,15 @@ static int my_strnncollsp_utf16(const CHARSET_INFO *cs, const uint8_t *s,
   return res;
 }
 
-static unsigned my_ismbchar_utf16(const CHARSET_INFO *cs, const char *b,
-                                  const char *e) {
+static uint my_ismbchar_utf16(const CHARSET_INFO *cs, const char *b,
+                              const char *e) {
   my_wc_t wc;
-  int res = cs->cset->mb_wc(cs, &wc, pointer_cast<const uint8_t *>(b),
-                            pointer_cast<const uint8_t *>(e));
-  return (unsigned)(res > 0 ? res : 0);
+  int res = cs->cset->mb_wc(cs, &wc, (const uchar *)b, (const uchar *)e);
+  return (uint)(res > 0 ? res : 0);
 }
 
-static unsigned my_mbcharlen_utf16(const CHARSET_INFO *cs [[maybe_unused]],
-                                   unsigned c) {
+static uint my_mbcharlen_utf16(const CHARSET_INFO *cs [[maybe_unused]],
+                               uint c) {
   assert(0);
   return MY_UTF16_HIGH_HEAD(c) ? 4 : 2;
 }
@@ -1243,7 +1209,7 @@ static size_t my_numchars_utf16(const CHARSET_INFO *cs, const char *b,
 static size_t my_charpos_utf16(const CHARSET_INFO *cs, const char *b,
                                const char *e, size_t pos) {
   const char *b0 = b;
-  unsigned charlen = 0;
+  uint charlen;
 
   for (; pos; b += charlen, pos--) {
     if (!(charlen = my_ismbchar(cs, b, e)))
@@ -1256,7 +1222,7 @@ static size_t my_well_formed_len_utf16(const CHARSET_INFO *cs, const char *b,
                                        const char *e, size_t nchars,
                                        int *error) {
   const char *b0 = b;
-  unsigned charlen = 0;
+  uint charlen;
   *error = 0;
 
   for (; nchars; b += charlen, nchars--) {
@@ -1285,13 +1251,13 @@ static int my_wildcmp_utf16_bin(const CHARSET_INFO *cs, const char *str,
                             w_many, nullptr);
 }
 
-static int my_strnncoll_utf16_bin(const CHARSET_INFO *cs, const uint8_t *s,
-                                  size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_utf16_bin(const CHARSET_INFO *cs, const uchar *s,
+                                  size_t slen, const uchar *t, size_t tlen,
                                   bool t_is_prefix) {
   int s_res, t_res;
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
 
   while (s < se && t < te) {
     s_res = cs->cset->mb_wc(cs, &s_wc, s, se);
@@ -1311,14 +1277,11 @@ static int my_strnncoll_utf16_bin(const CHARSET_INFO *cs, const uint8_t *s,
   return (int)(t_is_prefix ? (t - te) : ((se - s) - (te - t)));
 }
 
-static int my_strnncollsp_utf16_bin(const CHARSET_INFO *cs, const uint8_t *s,
-                                    size_t slen, const uint8_t *t,
-                                    size_t tlen) {
+static int my_strnncollsp_utf16_bin(const CHARSET_INFO *cs, const uchar *s,
+                                    size_t slen, const uchar *t, size_t tlen) {
   int res;
-  my_wc_t s_wc = 0;
-  my_wc_t t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  my_wc_t s_wc = 0, t_wc = 0;
+  const uchar *se = s + slen, *te = t + tlen;
 
   assert((slen % 2) == 0);
   assert((tlen % 2) == 0);
@@ -1364,16 +1327,17 @@ static int my_strnncollsp_utf16_bin(const CHARSET_INFO *cs, const uint8_t *s,
   return res;
 }
 
-static void my_hash_sort_utf16_bin(const CHARSET_INFO *cs, const uint8_t *pos,
-                                   size_t len, uint64_t *nr1, uint64_t *nr2) {
-  const uint8_t *end =
-      pos + cs->cset->lengthsp(cs, pointer_cast<const char *>(pos), len);
-  uint64_t tmp1 = *nr1;
-  uint64_t tmp2 = *nr2;
+static void my_hash_sort_utf16_bin(const CHARSET_INFO *cs, const uchar *pos,
+                                   size_t len, uint64 *nr1, uint64 *nr2) {
+  const uchar *end = pos + cs->cset->lengthsp(cs, (const char *)pos, len);
+  uint64 tmp1;
+  uint64 tmp2;
+
+  tmp1 = *nr1;
+  tmp2 = *nr2;
 
   for (; pos < end; pos++) {
-    tmp1 ^= (uint64_t)((((unsigned)tmp1 & 63) + tmp2) * ((unsigned)*pos)) +
-            (tmp1 << 8);
+    tmp1 ^= (uint64)((((uint)tmp1 & 63) + tmp2) * ((uint)*pos)) + (tmp1 << 8);
     tmp2 += 3;
   }
 
@@ -1446,7 +1410,7 @@ CHARSET_INFO my_charset_utf16_general_ci = {
     MY_CS_COMPILED | MY_CS_PRIMARY | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "utf16",             /* cs name    */
-    "utf16_general_ci",  /* m_coll_name  */
+    "utf16_general_ci",  /* name         */
     "UTF-16 Unicode",    /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -1482,7 +1446,7 @@ CHARSET_INFO my_charset_utf16_bin = {
     MY_CS_COMPILED | MY_CS_BINSORT | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "utf16",             /* cs name      */
-    "utf16_bin",         /* m_coll_name  */
+    "utf16_bin",         /* name         */
     "UTF-16 Unicode",    /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -1513,7 +1477,7 @@ CHARSET_INFO my_charset_utf16_bin = {
 
 extern "C" {
 static int my_utf16le_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
-                          const uint8_t *s, const uint8_t *e) {
+                          const uchar *s, const uchar *e) {
   my_wc_t lo;
 
   if (s + 2 > e) return MY_CS_TOOSMALL2;
@@ -1538,11 +1502,11 @@ static int my_utf16le_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
 }
 
 static int my_uni_utf16le(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t wc,
-                          uint8_t *s, uint8_t *e) {
+                          uchar *s, uchar *e) {
   if (wc < MY_UTF16_SURROGATE_HIGH_FIRST ||
       (wc > MY_UTF16_SURROGATE_LOW_LAST && wc <= 0xFFFF)) {
     if (s + 2 > e) return MY_CS_TOOSMALL2;
-    int2store(s, (uint16_t)wc);
+    int2store(s, (uint16)wc);
     return 2; /* [0000-D7FF,E000-FFFF] */
   }
 
@@ -1602,7 +1566,7 @@ CHARSET_INFO my_charset_utf16le_general_ci = {
     MY_CS_COMPILED | MY_CS_PRIMARY | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "utf16le",            /* cs name    */
-    "utf16le_general_ci", /* m_coll_name  */
+    "utf16le_general_ci", /* name         */
     "UTF-16LE Unicode",   /* comment      */
     nullptr,              /* tailoring    */
     nullptr,              /* coll_param   */
@@ -1638,7 +1602,7 @@ CHARSET_INFO my_charset_utf16le_bin = {
     MY_CS_COMPILED | MY_CS_BINSORT | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "utf16le",           /* cs name      */
-    "utf16le_bin",       /* m_coll_name  */
+    "utf16le_bin",       /* name         */
     "UTF-16LE Unicode",  /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -1669,20 +1633,20 @@ CHARSET_INFO my_charset_utf16le_bin = {
 
 extern "C" {
 static int my_utf32_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
-                        const uint8_t *s, const uint8_t *e) {
+                        const uchar *s, const uchar *e) {
   if (s + 4 > e) return MY_CS_TOOSMALL4;
   *pwc = (((my_wc_t)s[0]) << 24) + (s[1] << 16) + (s[2] << 8) + (s[3]);
   return 4;
 }
 
 static int my_uni_utf32(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t wc,
-                        uint8_t *s, uint8_t *e) {
+                        uchar *s, uchar *e) {
   if (s + 4 > e) return MY_CS_TOOSMALL4;
 
-  s[0] = (uint8_t)(wc >> 24);
-  s[1] = (uint8_t)(wc >> 16) & 0xFF;
-  s[2] = (uint8_t)(wc >> 8) & 0xFF;
-  s[3] = (uint8_t)wc & 0xFF;
+  s[0] = (uchar)(wc >> 24);
+  s[1] = (uchar)(wc >> 16) & 0xFF;
+  s[2] = (uchar)(wc >> 8) & 0xFF;
+  s[3] = (uchar)wc & 0xFF;
   return 4;
 }
 }  // extern "C"
@@ -1722,30 +1686,29 @@ static size_t my_caseup_utf32(const CHARSET_INFO *cs, char *src, size_t srclen,
   assert(src == dst && srclen == dstlen);
 
   while ((src < srcend) &&
-         (res = my_utf32_uni(cs, &wc, pointer_cast<uint8_t *>(src),
-                             pointer_cast<uint8_t *>(srcend))) > 0) {
+         (res = my_utf32_uni(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_toupper_utf32(uni_plane, &wc);
-    if (res != my_uni_utf32(cs, wc, pointer_cast<uint8_t *>(src),
-                            pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != my_uni_utf32(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
 }
 
-static void my_hash_sort_utf32(const CHARSET_INFO *cs, const uint8_t *s,
-                               size_t slen, uint64_t *n1, uint64_t *n2) {
+static void my_hash_sort_utf32(const CHARSET_INFO *cs, const uchar *s,
+                               size_t slen, uint64 *n1, uint64 *n2) {
   my_wc_t wc;
   int res;
-  const uint8_t *e = s + slen;
+  const uchar *e = s + slen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
-  unsigned ch = 0;
+  uint64 tmp1;
+  uint64 tmp2;
+  uint ch;
 
   /* Skip trailing spaces */
   while (e > s + 3 && e[-1] == ' ' && !e[-2] && !e[-3] && !e[-4]) e -= 4;
 
-  uint64_t tmp1 = *n1;
-  uint64_t tmp2 = *n2;
+  tmp1 = *n1;
+  tmp2 = *n2;
 
   while ((res = my_utf32_uni(cs, &wc, s, e)) > 0) {
     my_tosort_utf32(uni_plane, &wc);
@@ -1782,23 +1745,20 @@ static size_t my_casedn_utf32(const CHARSET_INFO *cs, char *src, size_t srclen,
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
   assert(src == dst && srclen == dstlen);
 
-  while ((res = my_utf32_uni(cs, &wc, pointer_cast<uint8_t *>(src),
-                             pointer_cast<uint8_t *>(srcend))) > 0) {
+  while ((res = my_utf32_uni(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_tolower_utf32(uni_plane, &wc);
-    if (res != my_uni_utf32(cs, wc, pointer_cast<uint8_t *>(src),
-                            pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != my_uni_utf32(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
 }
 
-static int my_strnncoll_utf32(const CHARSET_INFO *cs, const uint8_t *s,
-                              size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_utf32(const CHARSET_INFO *cs, const uchar *s,
+                              size_t slen, const uchar *t, size_t tlen,
                               bool t_is_prefix) {
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   while (s < se && t < te) {
@@ -1849,12 +1809,11 @@ static int my_strnncoll_utf32(const CHARSET_INFO *cs, const uint8_t *s,
     @retval Positive number, if a > b
 */
 
-static int my_strnncollsp_utf32(const CHARSET_INFO *cs, const uint8_t *s,
-                                size_t slen, const uint8_t *t, size_t tlen) {
+static int my_strnncollsp_utf32(const CHARSET_INFO *cs, const uchar *s,
+                                size_t slen, const uchar *t, size_t tlen) {
   int res;
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen, *te = t + tlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   assert((slen % 4) == 0);
@@ -1910,14 +1869,14 @@ static size_t my_strnxfrmlen_utf32(const CHARSET_INFO *cs [[maybe_unused]],
   return len / 2;
 }
 
-static unsigned my_ismbchar_utf32(const CHARSET_INFO *cs [[maybe_unused]],
-                                  const char *b [[maybe_unused]],
-                                  const char *e [[maybe_unused]]) {
+static uint my_ismbchar_utf32(const CHARSET_INFO *cs [[maybe_unused]],
+                              const char *b [[maybe_unused]],
+                              const char *e [[maybe_unused]]) {
   return 4;
 }
 
-static unsigned my_mbcharlen_utf32(const CHARSET_INFO *cs [[maybe_unused]],
-                                   unsigned c [[maybe_unused]]) {
+static uint my_mbcharlen_utf32(const CHARSET_INFO *cs [[maybe_unused]],
+                               uint c [[maybe_unused]]) {
   return 4;
 }
 }  // extern "C"
@@ -2008,17 +1967,15 @@ static size_t my_snprintf_utf32(const CHARSET_INFO *cs [[maybe_unused]],
   return retval;
 }
 
-static long long my_strtoll10_utf32(const CHARSET_INFO *cs [[maybe_unused]],
-                                    const char *nptr, const char **endptr,
-                                    int *error) {
+static longlong my_strtoll10_utf32(const CHARSET_INFO *cs [[maybe_unused]],
+                                   const char *nptr, const char **endptr,
+                                   int *error) {
   const char *s, *end, *start, *n_end, *true_end;
-  uint8_t c = 0;
+  uchar c;
   unsigned long i, j, k;
-  unsigned long long li = 0;
+  ulonglong li;
   int negative;
-  unsigned long cutoff = 0;
-  unsigned long cutoff2 = 0;
-  unsigned long cutoff3 = 0;
+  ulong cutoff, cutoff2, cutoff3;
 
   s = nptr;
   /* If fixed length string */
@@ -2110,36 +2067,36 @@ static long long my_strtoll10_utf32(const CHARSET_INFO *cs [[maybe_unused]],
   if (i > cutoff ||
       (i == cutoff && ((j > cutoff2 || j == cutoff2) && k > cutoff3)))
     goto overflow;
-  li = i * LFACTOR2 + (unsigned long long)j * 100 + k;
-  return (long long)li;
+  li = i * LFACTOR2 + (ulonglong)j * 100 + k;
+  return (longlong)li;
 
 overflow: /* *endptr is set here */
   *error = MY_ERRNO_ERANGE;
-  return negative ? LLONG_MIN : (long long)ULONGLONG_MAX;
+  return negative ? LLONG_MIN : (longlong)ULONGLONG_MAX;
 
 end_i:
   *endptr = s;
-  return (negative ? ((long long)-(long)i) : (long long)i);
+  return (negative ? ((longlong) - (long)i) : (longlong)i);
 
 end_i_and_j:
-  li = (unsigned long long)i * lfactor[(size_t)(s - start) / 4] + j;
+  li = (ulonglong)i * lfactor[(size_t)(s - start) / 4] + j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end3:
-  li = (unsigned long long)i * LFACTOR + (unsigned long long)j;
+  li = (ulonglong)i * LFACTOR + (ulonglong)j;
   *endptr = s;
-  return (negative ? -((long long)li) : (long long)li);
+  return (negative ? -((longlong)li) : (longlong)li);
 
 end4:
-  li = (unsigned long long)i * LFACTOR1 + (unsigned long long)j * 10 + k;
+  li = (ulonglong)i * LFACTOR1 + (ulonglong)j * 10 + k;
   *endptr = s;
   if (negative) {
     if (li > MAX_NEGATIVE_NUMBER) goto overflow;
     if (li == MAX_NEGATIVE_NUMBER) return LLONG_MIN;
-    return -((long long)li);
+    return -((longlong)li);
   }
-  return (long long)li;
+  return (longlong)li;
 
 no_conv:
   /* There was no number to convert.  */
@@ -2159,9 +2116,6 @@ static size_t my_charpos_utf32(const CHARSET_INFO *cs [[maybe_unused]],
   return pos * 4 > string_length ? string_length + 4 : pos * 4;
 }
 
-/*
-  Valid characters are 0x00000000..0x0000D7FF and 0x0000E000..0x0010FFFF
- */
 static size_t my_well_formed_len_utf32(const CHARSET_INFO *cs [[maybe_unused]],
                                        const char *b, const char *e,
                                        size_t nchars, int *error) {
@@ -2179,12 +2133,8 @@ static size_t my_well_formed_len_utf32(const CHARSET_INFO *cs [[maybe_unused]],
     e = b + nchars;
   }
   for (; b < e; b += 4) {
-    if (b[0] != 0 || static_cast<unsigned char>(b[1]) > 0x10) {
-      *error = 1;
-      return b - b0;
-    }
-    if (b[1] == 0 && (static_cast<unsigned char>(b[2]) >= 0xd8 &&
-                      static_cast<unsigned char>(b[2]) < 0xe0)) {
+    /* Don't accept characters greater than U+10FFFF */
+    if (b[0] || (uchar)b[1] > 0x10) {
       *error = 1;
       return b - b0;
     }
@@ -2200,10 +2150,10 @@ static void my_fill_utf32(const CHARSET_INFO *cs, char *s, size_t slen,
   assert((slen % 4) == 0);
   {
 #ifndef NDEBUG
-    unsigned buflen =
+    uint buflen =
 #endif
-        cs->cset->wc_mb(cs, (my_wc_t)fill, pointer_cast<uint8_t *>(buf),
-                        pointer_cast<uint8_t *>(buf) + sizeof(buf));
+        cs->cset->wc_mb(cs, (my_wc_t)fill, (uchar *)buf,
+                        (uchar *)buf + sizeof(buf));
     assert(buflen == 4);
   }
   while (s < e) {
@@ -2238,12 +2188,12 @@ static int my_wildcmp_utf32_bin(const CHARSET_INFO *cs, const char *str,
                             w_many, nullptr);
 }
 
-static int my_strnncoll_utf32_bin(const CHARSET_INFO *cs, const uint8_t *s,
-                                  size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_utf32_bin(const CHARSET_INFO *cs, const uchar *s,
+                                  size_t slen, const uchar *t, size_t tlen,
                                   bool t_is_prefix) {
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
 
   while (s < se && t < te) {
     int s_res = my_utf32_uni(cs, &s_wc, s, se);
@@ -2264,22 +2214,23 @@ static int my_strnncoll_utf32_bin(const CHARSET_INFO *cs, const uint8_t *s,
 }
 }  // extern "C"
 
-static inline my_wc_t my_utf32_get(const uint8_t *s) {
+static inline my_wc_t my_utf32_get(const uchar *s) {
   return ((my_wc_t)s[0] << 24) + ((my_wc_t)s[1] << 16) + ((my_wc_t)s[2] << 8) +
          s[3];
 }
 
 extern "C" {
 static int my_strnncollsp_utf32_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                                    const uint8_t *s, size_t slen,
-                                    const uint8_t *t, size_t tlen) {
-  size_t minlen = 0;
+                                    const uchar *s, size_t slen, const uchar *t,
+                                    size_t tlen) {
+  const uchar *se, *te;
+  size_t minlen;
 
   assert((slen % 4) == 0);
   assert((tlen % 4) == 0);
 
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  se = s + slen;
+  te = t + tlen;
 
   for (minlen = std::min(slen, tlen); minlen; minlen -= 4) {
     my_wc_t s_wc = my_utf32_get(s);
@@ -2314,8 +2265,8 @@ static size_t my_scan_utf32(const CHARSET_INFO *cs, const char *str,
     case MY_SEQ_SPACES:
       for (; str < end;) {
         my_wc_t wc;
-        int res = my_utf32_uni(cs, &wc, pointer_cast<const uint8_t *>(str),
-                               pointer_cast<const uint8_t *>(end));
+        int res = my_utf32_uni(cs, &wc, pointer_cast<const uchar *>(str),
+                               pointer_cast<const uchar *>(end));
         if (res < 0 || wc != ' ') break;
         str += res;
       }
@@ -2389,7 +2340,7 @@ CHARSET_INFO my_charset_utf32_general_ci = {
     MY_CS_COMPILED | MY_CS_PRIMARY | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_UNICODE_SUPPLEMENT | MY_CS_NONASCII,
     "utf32",             /* cs name    */
-    "utf32_general_ci",  /* m_coll_name  */
+    "utf32_general_ci",  /* name         */
     "UTF-32 Unicode",    /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -2425,7 +2376,7 @@ CHARSET_INFO my_charset_utf32_bin = {
     MY_CS_COMPILED | MY_CS_BINSORT | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "utf32",             /* cs name    */
-    "utf32_bin",         /* m_coll_name  */
+    "utf32_bin",         /* name         */
     "UTF-32 Unicode",    /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -2454,7 +2405,7 @@ CHARSET_INFO my_charset_utf32_bin = {
     &my_collation_utf32_bin_handler,
     PAD_SPACE};
 
-static const uint8_t ctype_ucs2[] = {
+static const uchar ctype_ucs2[] = {
     0,  32,  32,  32,  32,  32,  32,  32,  32,  32,  40,  40, 40, 40, 40, 32,
     32, 32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32, 32, 32, 32, 32,
     32, 72,  16,  16,  16,  16,  16,  16,  16,  16,  16,  16, 16, 16, 16, 16,
@@ -2473,7 +2424,7 @@ static const uint8_t ctype_ucs2[] = {
     0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  0,  0,  0,  0,
     0};
 
-static const uint8_t to_lower_ucs2[] = {
+static const uchar to_lower_ucs2[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,
     15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
     30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,
@@ -2493,7 +2444,7 @@ static const uint8_t to_lower_ucs2[] = {
     240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254,
     255};
 
-static const uint8_t to_upper_ucs2[] = {
+static const uchar to_upper_ucs2[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,
     15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
     30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,
@@ -2515,23 +2466,23 @@ static const uint8_t to_upper_ucs2[] = {
 
 extern "C" {
 static int my_ucs2_uni(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
-                       const uint8_t *s, const uint8_t *e) {
+                       const uchar *s, const uchar *e) {
   if (s + 2 > e) /* Need 2 characters */
     return MY_CS_TOOSMALL2;
 
-  *pwc = ((uint8_t)s[0]) * 256 + ((uint8_t)s[1]);
+  *pwc = ((uchar)s[0]) * 256 + ((uchar)s[1]);
   return 2;
 }
 
 static int my_uni_ucs2(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t wc,
-                       uint8_t *r, uint8_t *e) {
+                       uchar *r, uchar *e) {
   if (r + 2 > e) return MY_CS_TOOSMALL2;
 
   if (wc > 0xFFFF) /* UCS2 does not support characters outside BMP */
     return MY_CS_ILUNI;
 
-  r[0] = (uint8_t)(wc >> 8);
-  r[1] = (uint8_t)(wc & 0xFF);
+  r[0] = (uchar)(wc >> 8);
+  r[1] = (uchar)(wc & 0xFF);
   return 2;
 }
 }  // extern "C"
@@ -2567,28 +2518,27 @@ static size_t my_caseup_ucs2(const CHARSET_INFO *cs, char *src, size_t srclen,
   assert(src == dst && srclen == dstlen);
 
   while ((src < srcend) &&
-         (res = my_ucs2_uni(cs, &wc, pointer_cast<uint8_t *>(src),
-                            pointer_cast<uint8_t *>(srcend))) > 0) {
+         (res = my_ucs2_uni(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_toupper_ucs2(uni_plane, &wc);
-    if (res != my_uni_ucs2(cs, wc, pointer_cast<uint8_t *>(src),
-                           pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != my_uni_ucs2(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
 }
 
-static void my_hash_sort_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
-                              size_t slen, uint64_t *n1, uint64_t *n2) {
+static void my_hash_sort_ucs2(const CHARSET_INFO *cs, const uchar *s,
+                              size_t slen, uint64 *n1, uint64 *n2) {
   my_wc_t wc;
   int res;
-  const uint8_t *e = s + slen;
+  const uchar *e = s + slen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
+  uint64 tmp1;
+  uint64 tmp2;
 
   while (e > s + 1 && e[-1] == ' ' && e[-2] == '\0') e -= 2;
 
-  uint64_t tmp1 = *n1;
-  uint64_t tmp2 = *n2;
+  tmp1 = *n1;
+  tmp2 = *n2;
 
   while ((s < e) && (res = my_ucs2_uni(cs, &wc, s, e)) > 0) {
     my_tosort_ucs2(uni_plane, &wc);
@@ -2613,12 +2563,9 @@ static size_t my_casedn_ucs2(const CHARSET_INFO *cs, char *src, size_t srclen,
   assert(src == dst && srclen == dstlen);
 
   while ((src < srcend) &&
-         (res = my_ucs2_uni(cs, &wc, pointer_cast<uint8_t *>(src),
-                            pointer_cast<uint8_t *>(srcend))) > 0) {
+         (res = my_ucs2_uni(cs, &wc, (uchar *)src, (uchar *)srcend)) > 0) {
     my_tolower_ucs2(uni_plane, &wc);
-    if (res != my_uni_ucs2(cs, wc, pointer_cast<uint8_t *>(src),
-                           pointer_cast<uint8_t *>(srcend)))
-      break;
+    if (res != my_uni_ucs2(cs, wc, (uchar *)src, (uchar *)srcend)) break;
     src += res;
   }
   return srclen;
@@ -2631,13 +2578,13 @@ static void my_fill_ucs2(const CHARSET_INFO *cs [[maybe_unused]], char *s,
     ;
 }
 
-static int my_strnncoll_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
-                             size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_ucs2(const CHARSET_INFO *cs, const uchar *s,
+                             size_t slen, const uchar *t, size_t tlen,
                              bool t_is_prefix) {
   int s_res, t_res;
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   while (s < se && t < te) {
@@ -2689,8 +2636,9 @@ static int my_strnncoll_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
     > 0  a > b
 */
 
-static int my_strnncollsp_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
-                               size_t slen, const uint8_t *t, size_t tlen) {
+static int my_strnncollsp_ucs2(const CHARSET_INFO *cs, const uchar *s,
+                               size_t slen, const uchar *t, size_t tlen) {
+  const uchar *se, *te;
   size_t minlen;
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
@@ -2698,8 +2646,8 @@ static int my_strnncollsp_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
   slen &= ~1;
   tlen &= ~1;
 
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  se = s + slen;
+  te = t + tlen;
 
   for (minlen = std::min(slen, tlen); minlen; minlen -= 2) {
     int s_wc = uni_plane->page[s[0]] ? (int)uni_plane->page[s[0]][s[1]].sort
@@ -2728,14 +2676,14 @@ static int my_strnncollsp_ucs2(const CHARSET_INFO *cs, const uint8_t *s,
   return 0;
 }
 
-static unsigned my_ismbchar_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
-                                 const char *b [[maybe_unused]],
-                                 const char *e [[maybe_unused]]) {
+static uint my_ismbchar_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
+                             const char *b [[maybe_unused]],
+                             const char *e [[maybe_unused]]) {
   return 2;
 }
 
-static unsigned my_mbcharlen_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
-                                  unsigned c [[maybe_unused]]) {
+static uint my_mbcharlen_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
+                              uint c [[maybe_unused]]) {
   return 2;
 }
 
@@ -2777,13 +2725,13 @@ static int my_wildcmp_ucs2_bin(const CHARSET_INFO *cs, const char *str,
                             w_many, nullptr);
 }
 
-static int my_strnncoll_ucs2_bin(const CHARSET_INFO *cs, const uint8_t *s,
-                                 size_t slen, const uint8_t *t, size_t tlen,
+static int my_strnncoll_ucs2_bin(const CHARSET_INFO *cs, const uchar *s,
+                                 size_t slen, const uchar *t, size_t tlen,
                                  bool t_is_prefix) {
   int s_res, t_res;
   my_wc_t s_wc = 0, t_wc = 0;
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  const uchar *se = s + slen;
+  const uchar *te = t + tlen;
 
   while (s < se && t < te) {
     s_res = my_ucs2_uni(cs, &s_wc, s, se);
@@ -2804,16 +2752,17 @@ static int my_strnncoll_ucs2_bin(const CHARSET_INFO *cs, const uint8_t *s,
 }
 
 static int my_strnncollsp_ucs2_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                                   const uint8_t *s, size_t slen,
-                                   const uint8_t *t, size_t tlen) {
+                                   const uchar *s, size_t slen, const uchar *t,
+                                   size_t tlen) {
+  const uchar *se, *te;
   size_t minlen;
 
   /* extra safety to make sure the lengths are even numbers */
   slen = (slen >> 1) << 1;
   tlen = (tlen >> 1) << 1;
 
-  const uint8_t *se = s + slen;
-  const uint8_t *te = t + tlen;
+  se = s + slen;
+  te = t + tlen;
 
   for (minlen = std::min(slen, tlen); minlen; minlen -= 2) {
     int s_wc = s[0] * 256 + s[1];
@@ -2840,20 +2789,21 @@ static int my_strnncollsp_ucs2_bin(const CHARSET_INFO *cs [[maybe_unused]],
 }
 
 static void my_hash_sort_ucs2_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                                  const uint8_t *key, size_t len, uint64_t *nr1,
-                                  uint64_t *nr2) {
-  const uint8_t *pos = key;
+                                  const uchar *key, size_t len, uint64 *nr1,
+                                  uint64 *nr2) {
+  const uchar *pos = key;
+  uint64 tmp1;
+  uint64 tmp2;
 
   key += len;
 
   while (key > pos + 1 && key[-1] == ' ' && key[-2] == '\0') key -= 2;
 
-  uint64_t tmp1 = *nr1;
-  uint64_t tmp2 = *nr2;
+  tmp1 = *nr1;
+  tmp2 = *nr2;
 
   for (; pos < key; pos++) {
-    tmp1 ^= (uint64_t)((((unsigned)tmp1 & 63) + tmp2) * ((unsigned)*pos)) +
-            (tmp1 << 8);
+    tmp1 ^= (uint64)((((uint)tmp1 & 63) + tmp2) * ((uint)*pos)) + (tmp1 << 8);
     tmp2 += 3;
   }
 
@@ -2925,7 +2875,7 @@ CHARSET_INFO my_charset_ucs2_general_ci = {
     MY_CS_COMPILED | MY_CS_PRIMARY | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,
     "ucs2",              /* cs name    */
-    "ucs2_general_ci",   /* m_coll_name  */
+    "ucs2_general_ci",   /* name         */
     "UCS-2 Unicode",     /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */
@@ -2961,7 +2911,7 @@ CHARSET_INFO my_charset_ucs2_general_mysql500_ci = {
     MY_CS_COMPILED | MY_CS_STRNXFRM | MY_CS_UNICODE |
         MY_CS_NONASCII,         /* state */
     "ucs2",                     /* cs name          */
-    "ucs2_general_mysql500_ci", /* m_coll_name      */
+    "ucs2_general_mysql500_ci", /* name             */
     "UCS-2 Unicode",            /* comment          */
     nullptr,                    /* tailoring        */
     nullptr,                    /* coll_param       */
@@ -2996,7 +2946,7 @@ CHARSET_INFO my_charset_ucs2_bin = {
     0, /* number       */
     MY_CS_COMPILED | MY_CS_BINSORT | MY_CS_UNICODE | MY_CS_NONASCII,
     "ucs2",              /* cs name    */
-    "ucs2_bin",          /* m_coll_name  */
+    "ucs2_bin",          /* name         */
     "UCS-2 Unicode",     /* comment      */
     nullptr,             /* tailoring    */
     nullptr,             /* coll_param   */

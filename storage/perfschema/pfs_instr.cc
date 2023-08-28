@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -226,7 +226,7 @@ int init_instruments(const PFS_global_param *param) {
 }
 
 /** Cleanup all the instruments buffers. */
-void cleanup_instruments() {
+void cleanup_instruments(void) {
   global_mutex_container.cleanup();
   global_rwlock_container.cleanup();
   global_cond_container.cleanup();
@@ -266,46 +266,9 @@ static const uchar *filename_hash_get_key(const uchar *entry, size_t *length) {
   assert(typed_entry != nullptr);
   file = *typed_entry;
   assert(file != nullptr);
-  *length = sizeof(file->m_file_name);
-  result = &file->m_file_name;
+  *length = file->m_filename_length;
+  result = file->m_filename;
   return reinterpret_cast<const uchar *>(result);
-}
-
-static uint filename_hash_func(const LF_HASH *, const uchar *key,
-                               size_t key_len [[maybe_unused]]) {
-  const PFS_file_name *file_name_key;
-  uint64 nr1;
-  uint64 nr2;
-
-  assert(key_len == sizeof(PFS_file_name));
-  file_name_key = reinterpret_cast<const PFS_file_name *>(key);
-  assert(file_name_key != nullptr);
-
-  nr1 = 0;
-  nr2 = 0;
-
-  file_name_key->hash(&nr1, &nr2);
-
-  return nr1;
-}
-
-static int filename_hash_cmp_func(const uchar *key1,
-                                  size_t key_len1 [[maybe_unused]],
-                                  const uchar *key2,
-                                  size_t key_len2 [[maybe_unused]]) {
-  const PFS_file_name *file_name_key1;
-  const PFS_file_name *file_name_key2;
-  int cmp;
-
-  assert(key_len1 == sizeof(PFS_file_name));
-  assert(key_len2 == sizeof(PFS_file_name));
-  file_name_key1 = reinterpret_cast<const PFS_file_name *>(key1);
-  file_name_key2 = reinterpret_cast<const PFS_file_name *>(key2);
-  assert(file_name_key1 != nullptr);
-  assert(file_name_key2 != nullptr);
-
-  cmp = file_name_key1->sort(file_name_key2);
-  return cmp;
 }
 
 /**
@@ -314,16 +277,15 @@ static int filename_hash_cmp_func(const uchar *key1,
 */
 int init_file_hash(const PFS_global_param *param) {
   if ((!filename_hash_inited) && (param->m_file_sizing != 0)) {
-    lf_hash_init3(&filename_hash, sizeof(PFS_file *), LF_HASH_UNIQUE,
-                  filename_hash_get_key, filename_hash_func,
-                  filename_hash_cmp_func, nullptr, nullptr, nullptr);
+    lf_hash_init(&filename_hash, sizeof(PFS_file *), LF_HASH_UNIQUE, 0, 0,
+                 filename_hash_get_key, &my_charset_bin);
     filename_hash_inited = true;
   }
   return 0;
 }
 
 /** Cleanup the file name hash. */
-void cleanup_file_hash() {
+void cleanup_file_hash(void) {
   if (filename_hash_inited) {
     lf_hash_destroy(&filename_hash);
     filename_hash_inited = false;
@@ -583,18 +545,6 @@ void carry_global_memory_stat_free_delta(PFS_memory_stat_free_delta *delta,
   (void)stat->apply_free_delta(delta, &delta_buffer);
 }
 
-void PFS_thread::mem_cnt_alloc(size_t size) {
-#ifndef NDEBUG
-  thd_mem_cnt_alloc(m_cnt_thd, size, current_key_name);
-#else
-  thd_mem_cnt_alloc(m_cnt_thd, size);
-#endif
-}
-
-void PFS_thread::mem_cnt_free(size_t size) {
-  thd_mem_cnt_free(m_cnt_thd, size);
-}
-
 /**
   Create instrumentation for a thread instance.
   @param klass                        the thread class
@@ -647,9 +597,9 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
     pfs->m_digest_hash_pins = nullptr;
     pfs->m_program_hash_pins = nullptr;
 
-    pfs->m_user_name.reset();
-    pfs->m_host_name.reset();
-    pfs->m_db_name.reset();
+    pfs->m_username_length = 0;
+    pfs->m_hostname_length = 0;
+    pfs->m_dbname_length = 0;
     pfs->m_groupname_length = 0;
     pfs->m_user_data = nullptr;
     pfs->m_command = 0;
@@ -658,14 +608,9 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
     pfs->m_stage_progress = nullptr;
     pfs->m_processlist_info[0] = '\0';
     pfs->m_processlist_info_length = 0;
-    pfs->m_secondary = false;
     pfs->m_connection_type = NO_VIO_TYPE;
 
     pfs->m_thd = nullptr;
-    pfs->m_cnt_thd = nullptr;
-#ifndef NDEBUG
-    pfs->current_key_name = nullptr;
-#endif
     pfs->m_host = nullptr;
     pfs->m_user = nullptr;
     pfs->m_account = nullptr;
@@ -710,24 +655,12 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
       }
 
       /* Possible truncation */
-      (void)snprintf(pfs->m_os_name, PFS_MAX_OS_NAME_LENGTH - 1,
-                     klass->m_os_name, seqnum);
+      snprintf(pfs->m_os_name, PFS_MAX_OS_NAME_LENGTH - 1, klass->m_os_name,
+               seqnum);
     } else {
-      (void)snprintf(pfs->m_os_name, PFS_MAX_OS_NAME_LENGTH, "%s",
-                     klass->m_os_name);
+      snprintf(pfs->m_os_name, PFS_MAX_OS_NAME_LENGTH, "%s", klass->m_os_name);
     }
     pfs->m_os_name[PFS_MAX_OS_NAME_LENGTH - 1] = '\0';
-
-    pfs->m_session_all_memory_stat.reset();
-
-#ifdef HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE
-    pfs->m_telemetry = nullptr;
-    pfs->m_telemetry_session = nullptr;
-#endif /* HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE */
-
-#ifndef NDEBUG
-    pfs->m_debug_session_notified = false;
-#endif
 
     pfs->m_lock.dirty_to_allocated(&dirty_state);
   }
@@ -829,24 +762,6 @@ void destroy_thread(PFS_thread *pfs) {
   assert(pfs != nullptr);
   pfs->reset_session_connect_attrs();
   pfs->m_thd = nullptr;
-  pfs->m_cnt_thd = nullptr;
-
-#ifndef NDEBUG
-  assert(!pfs->m_debug_session_notified);
-#endif
-
-#ifdef HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE
-  assert(pfs->m_telemetry_session == nullptr);
-
-  // FIXME: remove this, abort must happen earlier.
-  if (pfs->m_telemetry_session != nullptr) {
-    assert(pfs->m_telemetry != nullptr);
-    pfs->m_telemetry->m_tel_session_destroy(pfs->m_telemetry_session);
-  }
-
-  pfs->m_telemetry = nullptr;
-  pfs->m_telemetry_session = nullptr;
-#endif /* HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE */
 
   PFS_thread_class *klass = pfs->m_class;
   if (klass->is_singleton()) {
@@ -958,15 +873,18 @@ static LF_PINS *get_filename_hash_pins(PFS_thread *thread) {
   Normalize a filename with fully qualified path.
   @param filename                 file to be normalized, null-terminatd
   @param name_len                 length in bytes of the filename
-  @param [out] normalized Normalized file name
+  @param buffer                   output buffer
+  @param buffer_len               size in bytes of buffer, must be >= FN_REFLEN
+  @return normalized, null-terminated filename or NULL
 */
-int normalize_filename(const char *filename, uint name_len,
-                       PFS_file_name &normalized) {
-  char buffer[FN_REFLEN];
+char *normalize_filename(const char *filename, uint name_len, char *buffer,
+                         uint buffer_len) {
   char safe_buffer[FN_REFLEN];
   const char *safe_filename;
 
-  assert(filename != nullptr);
+  assert(filename != NULL);
+  assert(buffer != NULL);
+  assert(buffer_len >= FN_REFLEN);
 
   if (name_len >= FN_REFLEN) {
     /*
@@ -1008,7 +926,7 @@ int normalize_filename(const char *filename, uint name_len,
     works properly for files that do not exist (yet) on the file system.
   */
   char dirbuffer[FN_REFLEN + 1];
-  const size_t dirlen = dirname_length(safe_filename);
+  size_t dirlen = dirname_length(safe_filename);
 
   if (dirlen == 0) {
     dirbuffer[0] = FN_CURLIB;
@@ -1022,12 +940,12 @@ int normalize_filename(const char *filename, uint name_len,
   /* Resolve the absolute directory path. */
   if (my_realpath(buffer, dirbuffer, MYF(0)) != 0) {
     buffer[0] = '\0';
-    return 1;
+    return nullptr;
   }
 
   /* Append the unresolved filename to the resolved path */
   char *ptr = buffer + strlen(buffer);
-  char *buf_end = &buffer[sizeof(buffer) - 1];
+  char *buf_end = &buffer[buffer_len - 1];
   if ((buf_end > ptr) && (*(ptr - 1) != FN_LIBCHAR)) {
     *ptr++ = FN_LIBCHAR;
   }
@@ -1037,8 +955,7 @@ int normalize_filename(const char *filename, uint name_len,
   *buf_end = '\0';
 
   /* Return normalized filename. */
-  normalized.set(buffer, strlen(buffer));
-  return 0;
+  return buffer;
 }
 
 /**
@@ -1055,14 +972,17 @@ PFS_file *find_or_create_file(PFS_thread *thread, PFS_file_class *klass,
   assert(klass != nullptr || !create);
 
   PFS_file *pfs;
-  PFS_file_name normalized_filename;
-  int rc;
+  char buffer[FN_REFLEN];
+  const char *normalized_filename;
+  uint normalized_length;
 
-  rc = normalize_filename(filename, len, normalized_filename);
-  if (rc != 0) {
+  normalized_filename =
+      normalize_filename(filename, len, buffer, (uint)sizeof(buffer));
+  if (normalized_filename == nullptr) {
     global_file_container.m_lost++;
     return nullptr;
   }
+  normalized_length = (uint)strlen(normalized_filename);
 
   LF_PINS *pins = get_filename_hash_pins(thread);
   if (unlikely(pins == nullptr)) {
@@ -1078,7 +998,7 @@ PFS_file *find_or_create_file(PFS_thread *thread, PFS_file_class *klass,
 search:
 
   entry = reinterpret_cast<PFS_file **>(lf_hash_search(
-      &filename_hash, pins, &normalized_filename, sizeof(normalized_filename)));
+      &filename_hash, pins, normalized_filename, normalized_length));
   if (entry && (entry != MY_LF_ERRPTR)) {
     pfs = *entry;
     pfs->m_file_stat.m_open_count++;
@@ -1098,7 +1018,9 @@ search:
     pfs->m_class = klass;
     pfs->m_enabled = klass->m_enabled && flag_global_instrumentation;
     pfs->m_timed = klass->m_timed;
-    pfs->m_file_name = normalized_filename;
+    memcpy(pfs->m_filename, normalized_filename, normalized_length);
+    pfs->m_filename[normalized_length] = '\0';
+    pfs->m_filename_length = normalized_length;
     pfs->m_file_stat.m_open_count = 1;
     pfs->m_file_stat.m_io_stat.reset();
     pfs->m_identity = (const void *)pfs;
@@ -1145,15 +1067,18 @@ PFS_file *start_file_rename(PFS_thread *thread, const char *old_name) {
   assert(thread != nullptr);
   assert(old_name != nullptr);
 
-  const uint old_length = (uint)strlen(old_name);
-  PFS_file_name normalized_filename;
-  int rc;
+  uint old_length = (uint)strlen(old_name);
+  char buffer[FN_REFLEN];
+  const char *normalized_filename;
+  uint normalized_length;
 
-  rc = normalize_filename(old_name, old_length, normalized_filename);
-  if (rc != 0) {
+  normalized_filename =
+      normalize_filename(old_name, old_length, buffer, (uint)sizeof(buffer));
+  if (normalized_filename == nullptr) {
     global_file_container.m_lost++;
     return nullptr;
   }
+  normalized_length = (uint)strlen(normalized_filename);
 
   LF_PINS *pins = get_filename_hash_pins(thread);
   if (unlikely(pins == nullptr)) {
@@ -1162,8 +1087,8 @@ PFS_file *start_file_rename(PFS_thread *thread, const char *old_name) {
   }
 
   /* Find the file instrumentation by name. */
-  auto **entry = reinterpret_cast<PFS_file **>(lf_hash_search(
-      &filename_hash, pins, &normalized_filename, sizeof(normalized_filename)));
+  PFS_file **entry = reinterpret_cast<PFS_file **>(lf_hash_search(
+      &filename_hash, pins, normalized_filename, normalized_length));
 
   PFS_file *pfs = nullptr;
   if (entry && (entry != MY_LF_ERRPTR)) {
@@ -1172,8 +1097,8 @@ PFS_file *start_file_rename(PFS_thread *thread, const char *old_name) {
       Add the new filename after rename() operation completes.
     */
     pfs = *entry;
-    lf_hash_delete(&filename_hash, pins, &pfs->m_file_name,
-                   sizeof(pfs->m_file_name));
+    lf_hash_delete(&filename_hash, pins, pfs->m_filename,
+                   pfs->m_filename_length);
   }
 
   lf_hash_search_unpin(pins);
@@ -1195,23 +1120,40 @@ int end_file_rename(PFS_thread *thread, PFS_file *pfs, const char *new_name,
   assert(pfs != nullptr);
   assert(new_name != nullptr);
 
-  const uint new_length = (uint)strlen(new_name);
+  uint new_length = (uint)strlen(new_name);
+  const char *filename;
+  uint name_length;
 
+  /*
+    If rename() succeeded, than add the new filename to the hash,
+    othwerise restore the old filename.
+  */
   if (likely(rename_result == 0)) {
-    /*
-      If rename() succeeded,
-      update the file instance with the new filename.
-    */
-    PFS_file_name normalized_filename;
-    int rc;
+    filename = new_name;
+    name_length = new_length;
+  } else {
+    filename = pfs->m_filename;
+    name_length = pfs->m_filename_length;
+  }
 
-    rc = normalize_filename(new_name, new_length, normalized_filename);
-    if (rc != 0) {
-      global_file_container.m_lost++;
-      return 1;
-    }
+  char buffer[FN_REFLEN];
+  const char *normalized_filename;
+  uint normalized_length;
 
-    pfs->m_file_name = normalized_filename;
+  normalized_filename =
+      normalize_filename(filename, name_length, buffer, (uint)sizeof(buffer));
+  if (normalized_filename == nullptr) {
+    global_file_container.m_lost++;
+    return 1;
+  }
+
+  normalized_length = (uint)strlen(normalized_filename);
+
+  /* Update the file instance with the new filename. */
+  if (rename_result == 0) {
+    memcpy(pfs->m_filename, normalized_filename, normalized_length);
+    pfs->m_filename[normalized_length] = '\0';
+    pfs->m_filename_length = normalized_length;
   }
 
   LF_PINS *pins = get_filename_hash_pins(thread);
@@ -1222,7 +1164,7 @@ int end_file_rename(PFS_thread *thread, PFS_file *pfs, const char *new_name,
   }
 
   /* Add the new filename or restore the old filename to the hash. */
-  const int res = lf_hash_insert(&filename_hash, pins, &pfs);
+  int res = lf_hash_insert(&filename_hash, pins, &pfs);
   lf_hash_search_unpin(pins);
 
   if (unlikely(res != 0)) {
@@ -1266,8 +1208,7 @@ void delete_file_name(PFS_thread *thread, PFS_file *pfs) {
   LF_PINS *pins = get_filename_hash_pins(thread);
   assert(pins != nullptr);
 
-  lf_hash_delete(&filename_hash, pins, &pfs->m_file_name,
-                 sizeof(pfs->m_file_name));
+  lf_hash_delete(&filename_hash, pins, pfs->m_filename, pfs->m_filename_length);
 }
 
 /**
@@ -1332,7 +1273,7 @@ PFS_table *create_table(PFS_table_share *share, PFS_thread *opening_thread,
   return pfs;
 }
 
-void PFS_table::sanitized_aggregate() {
+void PFS_table::sanitized_aggregate(void) {
   /*
     This thread could be a TRUNCATE on an aggregated summary table,
     and not own the table handle.
@@ -1350,7 +1291,7 @@ void PFS_table::sanitized_aggregate() {
   }
 }
 
-void PFS_table::sanitized_aggregate_io() {
+void PFS_table::sanitized_aggregate_io(void) {
   PFS_table_share *safe_share = sanitize_table_share(m_share);
   if (safe_share != nullptr && m_has_io_stats) {
     safe_aggregate_io(nullptr, &m_table_stat, safe_share);
@@ -1358,7 +1299,7 @@ void PFS_table::sanitized_aggregate_io() {
   }
 }
 
-void PFS_table::sanitized_aggregate_lock() {
+void PFS_table::sanitized_aggregate_lock(void) {
   PFS_table_share *safe_share = sanitize_table_share(m_share);
   if (safe_share != nullptr && m_has_lock_stats) {
     safe_aggregate_lock(&m_table_stat, safe_share);
@@ -1372,7 +1313,7 @@ void PFS_table::safe_aggregate_io(const TABLE_SHARE *optional_server_share,
   assert(table_stat != nullptr);
   assert(table_share != nullptr);
 
-  const uint key_count = sanitize_index_count(table_share->m_key_count);
+  uint key_count = sanitize_index_count(table_share->m_key_count);
 
   PFS_table_share_index *to_stat;
   PFS_table_io_stat *from_stat;
@@ -1529,7 +1470,7 @@ void destroy_socket(PFS_socket *pfs) {
     if (stat.m_count != 0) {
       PFS_single_stat *event_name_array;
       event_name_array = thread->write_instr_class_waits_stats();
-      const uint index = pfs->m_class->m_event_name_index;
+      uint index = pfs->m_class->m_event_name_index;
 
       event_name_array[index].aggregate(&stat);
     }
@@ -1578,7 +1519,7 @@ void destroy_metadata_lock(PFS_metadata_lock *pfs) {
 
 static void fct_reset_mutex_waits(PFS_mutex *pfs) { pfs->m_mutex_stat.reset(); }
 
-static void reset_mutex_waits_by_instance() {
+static void reset_mutex_waits_by_instance(void) {
   global_mutex_container.apply_all(fct_reset_mutex_waits);
 }
 
@@ -1586,19 +1527,19 @@ static void fct_reset_rwlock_waits(PFS_rwlock *pfs) {
   pfs->m_rwlock_stat.reset();
 }
 
-static void reset_rwlock_waits_by_instance() {
+static void reset_rwlock_waits_by_instance(void) {
   global_rwlock_container.apply_all(fct_reset_rwlock_waits);
 }
 
 static void fct_reset_cond_waits(PFS_cond *pfs) { pfs->m_cond_stat.reset(); }
 
-static void reset_cond_waits_by_instance() {
+static void reset_cond_waits_by_instance(void) {
   global_cond_container.apply_all(fct_reset_cond_waits);
 }
 
 static void fct_reset_file_waits(PFS_file *pfs) { pfs->m_file_stat.reset(); }
 
-static void reset_file_waits_by_instance() {
+static void reset_file_waits_by_instance(void) {
   global_file_container.apply_all(fct_reset_file_waits);
 }
 
@@ -1606,12 +1547,12 @@ static void fct_reset_socket_waits(PFS_socket *pfs) {
   pfs->m_socket_stat.reset();
 }
 
-static void reset_socket_waits_by_instance() {
+static void reset_socket_waits_by_instance(void) {
   global_socket_container.apply_all(fct_reset_socket_waits);
 }
 
 /** Reset the wait statistics per object instance. */
-void reset_events_waits_by_instance() {
+void reset_events_waits_by_instance(void) {
   reset_mutex_waits_by_instance();
   reset_rwlock_waits_by_instance();
   reset_cond_waits_by_instance();
@@ -1624,7 +1565,7 @@ static void fct_reset_file_io(PFS_file *pfs) {
 }
 
 /** Reset the I/O statistics per file instance. */
-void reset_file_instance_io() {
+void reset_file_instance_io(void) {
   global_file_container.apply_all(fct_reset_file_io);
 }
 
@@ -1633,7 +1574,7 @@ static void fct_reset_socket_io(PFS_socket *pfs) {
 }
 
 /** Reset the I/O statistics per socket instance. */
-void reset_socket_instance_io() {
+void reset_socket_instance_io(void) {
   global_socket_container.apply_all(fct_reset_socket_io);
 }
 
@@ -1961,30 +1902,26 @@ void aggregate_thread_status(PFS_thread *thread, PFS_account *safe_account,
   if (safe_host != nullptr) {
     safe_host->aggregate_status_stats(status_var);
   }
+
+  return;
 }
 
-static void aggregate_thread_stats(PFS_thread *thread,
-                                   PFS_account *safe_account,
+static void aggregate_thread_stats(PFS_thread *, PFS_account *safe_account,
                                    PFS_user *safe_user, PFS_host *safe_host) {
-  const ulonglong controlled_memory =
-      thread->m_session_all_memory_stat.m_controlled.get_session_max();
-  const ulonglong total_memory =
-      thread->m_session_all_memory_stat.m_total.get_session_max();
-
   if (likely(safe_account != nullptr)) {
-    safe_account->aggregate_disconnect(controlled_memory, total_memory);
-    return;
+    safe_account->m_disconnected_count++;
   }
 
   if (safe_user != nullptr) {
-    safe_user->aggregate_disconnect(controlled_memory, total_memory);
+    safe_user->m_disconnected_count++;
   }
 
   if (safe_host != nullptr) {
-    safe_host->aggregate_disconnect(controlled_memory, total_memory);
+    safe_host->m_disconnected_count++;
   }
 
   /* There is no global table for connections statistics. */
+  return;
 }
 
 void aggregate_thread(PFS_thread *thread, PFS_account *safe_account,
@@ -2411,14 +2348,17 @@ void set_thread_account(PFS_thread *thread) {
   assert(thread->m_user == nullptr);
   assert(thread->m_host == nullptr);
 
-  thread->m_account = find_or_create_account(thread, &thread->m_user_name,
-                                             &thread->m_host_name);
+  thread->m_account = find_or_create_account(
+      thread, thread->m_username, thread->m_username_length, thread->m_hostname,
+      thread->m_hostname_length);
 
-  if ((thread->m_account == nullptr) && (thread->m_user_name.length() > 0))
-    thread->m_user = find_or_create_user(thread, &thread->m_user_name);
+  if ((thread->m_account == nullptr) && (thread->m_username_length > 0))
+    thread->m_user = find_or_create_user(thread, thread->m_username,
+                                         thread->m_username_length);
 
-  if ((thread->m_account == nullptr) && (thread->m_host_name.length() > 0))
-    thread->m_host = find_or_create_host(thread, &thread->m_host_name);
+  if ((thread->m_account == nullptr) && (thread->m_hostname_length > 0))
+    thread->m_host = find_or_create_host(thread, thread->m_hostname,
+                                         thread->m_hostname_length);
 }
 
 static void fct_update_mutex_derived_flags(PFS_mutex *pfs) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,11 +22,11 @@
 
 #include "client/mysqltest/regular_expressions.h"
 
+#include "m_ctype.h"
 #include "my_compiler.h"
-#include "mysql/strings/m_ctype.h"
 
-[[noreturn]] extern void die(const char *fmt, ...)
-    MY_ATTRIBUTE((format(printf, 1, 2)));
+extern void die(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)))
+    MY_ATTRIBUTE((noreturn));
 
 /*
   Filter for queries that can be run using the
@@ -200,7 +200,7 @@ int multi_reg_replace(struct st_replace_regex *r, char *val, size_t *len) {
           // Copy result to output buffer.
           strncpy(out_buf, sout.c_str(), *len + 1);
 
-          // If the buffer has been reallocated, make adjustments
+          // If the buffer has been reallocated, make adjustements
           if (save_out_buf != out_buf) {
             if (save_out_buf == r->even_buf)
               r->even_buf = out_buf;

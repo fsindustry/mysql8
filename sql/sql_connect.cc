@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,10 +30,10 @@
 
 #include "my_config.h"
 
+#include "my_loglevel.h"
 #include "my_psi_config.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "pfs_thread_provider.h"
 #include "sql/table.h"
 
@@ -56,6 +56,7 @@
 #include <utility>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"  // my_stpcpy
 #include "map_helpers.h"
 #include "my_command.h"
@@ -66,7 +67,6 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_thread.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "sql-common/net_ns.h"  // set_network_namespace
@@ -90,7 +90,6 @@
 #include "sql/sql_plugin.h"  // plugin_thdvar_cleanup
 #include "sql/system_variables.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 #include "violite.h"
 
 #ifdef HAVE_ARPA_INET_H
@@ -343,7 +342,7 @@ void reset_mqh(THD *thd, LEX_USER *lu, bool get_them = false) {
   DEBUG_SYNC(thd, "in_reset_mqh_flush_privileges");
   if (lu)  // for GRANT
   {
-    const size_t temp_len = lu->user.length + lu->host.length + 2;
+    size_t temp_len = lu->user.length + lu->host.length + 2;
     char temp_user[USER_HOST_BUFF_SIZE];
 
     memcpy(temp_user, lu->user.str, lu->user.length);
@@ -398,8 +397,8 @@ bool thd_init_client_charset(THD *thd, uint cs_number) {
   if (!opt_character_set_client_handshake ||
       !(cs = get_charset(cs_number, MYF(0))) ||
       !my_strcasecmp(&my_charset_latin1,
-                     global_system_variables.character_set_client->m_coll_name,
-                     cs->m_coll_name)) {
+                     global_system_variables.character_set_client->name,
+                     cs->name)) {
     if (!is_supported_parser_charset(
             global_system_variables.character_set_client)) {
       /* Disallow non-supported parser character sets: UCS2, UTF16, UTF32 */
@@ -644,22 +643,19 @@ static int check_connection(THD *thd) {
     return 1; /* The error is set by alloc(). */
   }
 
-  if (mysql_event_tracking_connection_notify(
-          thd, AUDIT_EVENT(EVENT_TRACKING_CONNECTION_PRE_AUTHENTICATE))) {
+  if (mysql_audit_notify(
+          thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_PRE_AUTHENTICATE))) {
     return 1;
   }
 
   auth_rc = acl_authenticate(thd, COM_CONNECT);
 
-  if (mysql_event_tracking_connection_notify(
-          thd, AUDIT_EVENT(EVENT_TRACKING_CONNECTION_CONNECT))) {
+  if (mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_CONNECT))) {
     return 1;
   }
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
-  if (auth_rc == 0) {
-    PSI_THREAD_CALL(notify_session_connect)(thd->get_psi());
-  }
+  PSI_THREAD_CALL(notify_session_connect)(thd->get_psi());
 #endif /* HAVE_PSI_THREAD_INTERFACE */
 
   if (auth_rc == 0 && connect_errors != 0) {
@@ -678,11 +674,22 @@ static int check_connection(THD *thd) {
     can be inspected.
   */
   thd->set_ssl(net->vio);
+
+  if (net->vio->ssl_arg) {
+    int version = SSL_version((SSL *)net->vio->ssl_arg);
+    if (version == TLS1_VERSION || version == TLS1_1_VERSION) {
+      Security_context *sctx = thd->security_context();
+      LogErr(WARNING_LEVEL, ER_DEPRECATED_TLS_VERSION_SESSION,
+             SSL_get_version((SSL *)net->vio->ssl_arg), sctx->priv_user().str,
+             sctx->priv_host().str, sctx->host_or_ip().str, sctx->user().str);
+    }
+  }
+
   return auth_rc;
 }
 
 /*
-  Authenticate user, with error reporting
+  Autenticate user, with error reporting
 
   SYNOPSIS
    login_connection()
@@ -703,7 +710,7 @@ static bool login_connection(THD *thd) {
              ("login_connection called by thread %u", thd->thread_id()));
 
   /* Use "connect_timeout" value during connection phase */
-  thd->get_protocol_classic()->set_read_timeout(connect_timeout, true);
+  thd->get_protocol_classic()->set_read_timeout(connect_timeout);
   thd->get_protocol_classic()->set_write_timeout(connect_timeout);
 
   error = check_connection(thd);
@@ -734,16 +741,13 @@ static bool login_connection(THD *thd) {
 void end_connection(THD *thd) {
   NET *net = thd->get_protocol_classic()->get_net();
 
-  mysql_event_tracking_connection_notify(
-      thd, AUDIT_EVENT(EVENT_TRACKING_CONNECTION_DISCONNECT), 0);
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_DISCONNECT), 0);
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_THREAD_CALL(notify_session_disconnect)(thd->get_psi());
 #endif /* HAVE_PSI_THREAD_INTERFACE */
 
   plugin_thdvar_cleanup(thd, thd->m_enable_plugins);
-
-  thd->release_external_store();
 
   /*
     The thread may returned back to the pool and assigned to a user
@@ -759,7 +763,7 @@ void end_connection(THD *thd) {
   if (net->error && net->vio != nullptr) {
     if (!thd->killed) {
       Security_context *sctx = thd->security_context();
-      const LEX_CSTRING sctx_user = sctx->user();
+      LEX_CSTRING sctx_user = sctx->user();
       LogErr(
           INFORMATION_LEVEL, ER_ABORTING_USER_CONNECTION, thd->thread_id(),
           (thd->db().str ? thd->db().str : "unconnected"),
@@ -783,14 +787,14 @@ static void prepare_new_connection_state(THD *thd) {
       thd->get_protocol()->has_client_capability(
           CLIENT_ZSTD_COMPRESSION_ALGORITHM)) {
     net->compress = true;  // Use compression
-    const enum enum_compression_algorithm algorithm = get_compression_algorithm(
+    enum enum_compression_algorithm algorithm = get_compression_algorithm(
         thd->get_protocol()->get_compression_algorithm());
     NET_SERVER *server_extn = static_cast<NET_SERVER *>(net->extension);
     if (server_extn != nullptr)
       mysql_compress_context_init(&server_extn->compress_ctx, algorithm,
                                   thd->get_protocol()->get_compression_level());
     if (net->extension == nullptr) {
-      const LEX_CSTRING sctx_user = sctx->user();
+      LEX_CSTRING sctx_user = sctx->user();
       Host_errors errors;
       my_error(ER_NEW_ABORTING_CONNECTION, MYF(0), thd->thread_id(),
                thd->db().str ? thd->db().str : "unconnected",
@@ -813,33 +817,21 @@ static void prepare_new_connection_state(THD *thd) {
   thd->set_proc_info(nullptr);
   thd->set_command(COM_SLEEP);
   thd->init_query_mem_roots();
-  const bool is_admin_conn =
-      (sctx->check_access(SUPER_ACL) ||
-       sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first);
-  thd->m_mem_cnt.set_orig_mode(is_admin_conn ? MEM_CNT_UPDATE_GLOBAL_COUNTER
-                                             : (MEM_CNT_UPDATE_GLOBAL_COUNTER |
-                                                MEM_CNT_GENERATE_ERROR |
-                                                MEM_CNT_GENERATE_LOG_ERROR));
-  if (opt_init_connect.length && !is_admin_conn) {
+
+  if (opt_init_connect.length &&
+      !(sctx->check_access(SUPER_ACL) ||
+        sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first)) {
     if (sctx->password_expired()) {
       LogErr(WARNING_LEVEL, ER_CONN_INIT_CONNECT_IGNORED, sctx->priv_user().str,
              sctx->priv_host().str);
       return;
     }
-    if (sctx->is_in_registration_sandbox_mode()) {
-      LogErr(WARNING_LEVEL, ER_CONN_INIT_CONNECT_IGNORED_MFA,
-             sctx->priv_user().str, sctx->priv_host().str);
-      return;
-    }
-    // Do not print OOM error to error log.
-    thd->m_mem_cnt.set_curr_mode(
-        (MEM_CNT_UPDATE_GLOBAL_COUNTER | MEM_CNT_GENERATE_ERROR));
+
     execute_init_command(thd, &opt_init_connect, &LOCK_sys_init_connect);
-    thd->m_mem_cnt.set_curr_mode(MEM_CNT_DEFAULT);
     if (thd->is_error()) {
       Host_errors errors;
       ulong packet_length;
-      const LEX_CSTRING sctx_user = sctx->user();
+      LEX_CSTRING sctx_user = sctx->user();
       Diagnostics_area *da = thd->get_stmt_da();
       const char *user = sctx_user.str ? sctx_user.str : "unauthenticated";
       const char *what = "init_connect command failed";
@@ -892,8 +884,6 @@ static void prepare_new_connection_state(THD *thd) {
 }
 
 bool thd_prepare_connection(THD *thd) {
-  thd->enable_mem_cnt();
-
   bool rc;
   lex_start(thd);
   rc = login_connection(thd);
@@ -924,8 +914,8 @@ void close_connection(THD *thd, uint sql_errno, bool server_shutdown,
   thd->disconnect(server_shutdown);
 
   if (generate_event) {
-    mysql_event_tracking_connection_notify(
-        thd, AUDIT_EVENT(EVENT_TRACKING_CONNECTION_DISCONNECT), sql_errno);
+    mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_DISCONNECT),
+                       sql_errno);
 #ifdef HAVE_PSI_THREAD_INTERFACE
     PSI_THREAD_CALL(notify_session_disconnect)(thd->get_psi());
 #endif /* HAVE_PSI_THREAD_INTERFACE */

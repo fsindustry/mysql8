@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,7 +70,7 @@ bool Sql_cmd_import_table::execute(THD *thd) {
   });
 
   // Need to keep this alive until after commit/rollback has been done
-  const dd::cache::Dictionary_client::Auto_releaser ar{thd->dd_client()};
+  dd::cache::Dictionary_client::Auto_releaser ar{thd->dd_client()};
 
   if (check_access(thd, FILE_ACL, nullptr, nullptr, nullptr, false, false)) {
     return true;

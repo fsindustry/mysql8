@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,9 +28,9 @@
 #include <string>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_dbug.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/psi_memory_key.h"
 #include "sql/sp_head.h"
 

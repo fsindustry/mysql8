@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,8 @@
 #include <thread>
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
+// if we build within the server, it will set RAPIDJSON_NO_SIZETYPEDEFINE
+// globally and require to include my_rapidjson_size_t.h
 #include "my_rapidjson_size_t.h"
 #endif
 
@@ -42,7 +44,6 @@
 #include <rapidjson/stringbuffer.h>
 
 #include "mysqlrouter/cluster_metadata.h"
-#include "rest_api_testutils.h"
 #include "router_component_test.h"
 
 using mysqlrouter::ClusterType;
@@ -58,18 +59,16 @@ using JsonStringBuffer =
     rapidjson::GenericStringBuffer<rapidjson::UTF8<>, rapidjson::CrtAllocator>;
 }  // namespace
 
-class RouterComponentClusterSetTest : public RestApiComponentTest {
+class RouterComponentClusterSetTest : virtual public RouterComponentTest {
  protected:
   struct ClusterNode {
     std::string uuid;
 
     std::string host;
     uint16_t classic_port;
-    uint16_t x_port{0};
     uint16_t http_port;
 
     ProcessWrapper *process{nullptr};
-    bool is_read_replica{false};
   };
 
   struct ClusterData {
@@ -91,23 +90,13 @@ class RouterComponentClusterSetTest : public RestApiComponentTest {
     std::vector<ClusterData> clusters;
     unsigned primary_cluster_id;
 
-    auto get_md_servers_classic_ports() const {
+    auto get_all_nodes_classic_ports() const {
       std::vector<uint16_t> result;
-      std::vector<uint16_t> secondary_clusters_nodes;
       for (const auto &cluster : clusters) {
         for (const auto &node : cluster.nodes) {
-          if (node.is_read_replica) continue;
-          // PRIMARY cluster nodes first to match the metadata-servers order
-          // expectation
-          if (cluster.role == "PRIMARY")
-            result.push_back(node.classic_port);
-          else
-            secondary_clusters_nodes.push_back(node.classic_port);
+          result.push_back(node.classic_port);
         }
       }
-      result.insert(result.end(), secondary_clusters_nodes.begin(),
-                    secondary_clusters_nodes.end());
-
       return result;
     }
 
@@ -130,17 +119,13 @@ class RouterComponentClusterSetTest : public RestApiComponentTest {
   };
 
   constexpr static unsigned kClustersNumber = 3;
-  constexpr static unsigned kGRNodesPerClusterNumber = 3;
+  constexpr static unsigned kNodesPerClusterNumber = 3;
 
-  void create_clusterset(
-      uint64_t view_id, int target_cluster_id, int primary_cluster_id,
-      const std::string &tracefile, const std::string &router_options = "",
-      const std::string &expected_target_cluster = ".*",
-      bool simulate_cluster_not_found = false,
-      bool use_gr_notifications = false,
-      const std::vector<size_t> &read_replicas_number = {},
-      const mysqlrouter::MetadataSchemaVersion &metadata_version =
-          mysqlrouter::MetadataSchemaVersion{2, 2, 0});
+  void create_clusterset(uint64_t view_id, int target_cluster_id,
+                         int primary_cluster_id, const std::string &tracefile,
+                         const std::string &router_options = "",
+                         const std::string &expected_target_cluster = ".*",
+                         bool simulate_cluster_not_found = false);
 
   void change_clusterset_primary(ClusterSetData &clusterset_data,
                                  const unsigned new_primary_id);
@@ -153,21 +138,11 @@ class RouterComponentClusterSetTest : public RestApiComponentTest {
 
   void add_clusterset_data_field(JsonValue &json_doc, const std::string &field,
                                  const ClusterSetData &clusterset_data,
-                                 const unsigned this_cluster_id,
-                                 const unsigned this_node_id);
+                                 const unsigned this_cluster_id);
 
   void set_mock_metadata(
-      uint64_t view_id, unsigned this_cluster_id, unsigned this_node_id,
-      unsigned target_cluster_id, uint16_t http_port,
-      const ClusterSetData &clusterset_data,
-      const std::string &router_options = "",
-      const std::string &expected_target_cluster = ".*",
-      const mysqlrouter::MetadataSchemaVersion &metadata_version = {2, 1, 0},
-      bool simulate_cluster_not_found = false);
-
-  void set_mock_metadata_on_all_cs_nodes(
-      uint64_t view_id, unsigned target_cluster_id,
-      const ClusterSetData &clusterset_data,
+      uint64_t view_id, unsigned this_cluster_id, unsigned target_cluster_id,
+      uint16_t http_port, const ClusterSetData &clusterset_data,
       const std::string &router_options = "",
       const std::string &expected_target_cluster = ".*",
       const mysqlrouter::MetadataSchemaVersion &metadata_version = {2, 1, 0},

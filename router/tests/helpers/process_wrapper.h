@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -28,11 +28,7 @@
 #include "process_launcher.h"
 #include "router_test_helpers.h"
 
-#include <atomic>
 #include <cstring>
-#include <mutex>
-#include <optional>
-#include <thread>
 
 using mysql_harness::Path;
 
@@ -44,7 +40,8 @@ static constexpr auto kDefaultExpectOutputTimeout =
 
 // wait-timeout should be less than infinite, and long enough that even with
 // valgrind we properly pass the tests
-static constexpr auto kDefaultWaitForExitTimeout = std::chrono::seconds(30);
+static constexpr auto kDefaultWaitForExitTimeout =
+    std::chrono::milliseconds(10000);
 
 static constexpr size_t kReadBufSize = 1024;
 
@@ -57,15 +54,6 @@ static constexpr size_t kReadBufSize = 1024;
  **/
 class ProcessWrapper {
  public:
-  ~ProcessWrapper() { stop_output_reader_thread(); }
-
-  void stop_output_reader_thread() {
-    output_reader_stop_ = true;
-    if (output_reader_.joinable()) {
-      output_reader_.join();
-    }
-  }
-
   /** @brief Checks if the process wrote the specified string to its output.
    *
    * This function loops read()ing child process output, until either the
@@ -85,9 +73,12 @@ class ProcessWrapper {
 
   /** @brief Returns the full output that was produced the process till moment
    *         of calling this method.
+   *  TODO: this description does not match what the code does, this needs to
+   * be fixed.
    */
   std::string get_full_output() {
-    std::lock_guard<std::mutex> output_lock(output_mtx_);
+    while (read_and_autorespond_to_output(std::chrono::milliseconds(0))) {
+    }
     return execute_output_raw_;
   }
 
@@ -97,22 +88,34 @@ class ProcessWrapper {
    * given process is using
    * @param file_path path to the logfile, use "" for default path that the
    * component test is using
-   * @param lines_limit maximum numbers of lines that should be returned; if 0
-   * return all lines; if greater than 0 only return limit/2 beginning lines and
-   * limit/2 ending lines
    */
-  std::string get_logfile_content(const std::string &file_name = "",
-                                  const std::string &file_path = "",
-                                  size_t lines_limit = 0) const;
+  std::string get_full_logfile(const std::string &file_name = "",
+                               const std::string &file_path = "") const {
+    const std::string path = file_path.empty() ? logging_dir_ : file_path;
+    const std::string name = file_name.empty() ? logging_file_ : file_name;
+
+    if (name.empty()) return "";
+
+    return get_file_output(name, path);
+  }
 
   /**
    * get the current output of the process.
    *
    * doesn't check if there is new content.
    */
-  std::string get_current_output() const {
-    std::lock_guard<std::mutex> output_lock(output_mtx_);
-    return execute_output_raw_;
+  std::string get_current_output() const { return execute_output_raw_; }
+
+  /** @brief Register the response that should be written to the process'
+   * input descriptor when the given string appears on it output while
+   * executing expect_output().
+   *
+   * @param query     string that should trigger writing the response
+   * @param response  string that should get written
+   */
+  void register_response(const std::string &query,
+                         const std::string &response) {
+    output_responses_[query] = response;
   }
 
   /** @brief Returns the exit code of the process.
@@ -122,35 +125,19 @@ class ProcessWrapper {
    *
    * @returns exit code of the process
    */
-  mysql_harness::ProcessLauncher::exit_status_type native_exit_code() {
-    if (!exit_status_) {
-      throw std::runtime_error(
-          "RouterComponentTest::Command_handle: exit_code() called without "
-          "wait_for_exit()!");
-    }
-    return *exit_status_;
-  }
-
   int exit_code() {
-    if (!exit_status_) {
+    if (!exit_code_set_) {
       throw std::runtime_error(
           "RouterComponentTest::Command_handle: exit_code() called without "
           "wait_for_exit()!");
     }
-
-    if (auto code = exit_status_->exited()) {
-      return *code;
-    } else {
-      throw std::runtime_error("signal or so.");
-    }
+    return exit_code_;
   }
-
-  bool has_exit_code() const { return exit_status_.has_value(); }
 
   /** @brief Waits for the process to exit, while reading its output and
-   * autoresponding to prompts.
+   * autoresponding to prompts
    *
-   * If the process did not finish yet, it waits the given number of
+   *  If the process did not finish yet, it waits the given number of
    * milliseconds. If the timeout expired, it throws runtime_error. In case of
    * failure, it throws system_error.
    *
@@ -162,23 +149,15 @@ class ProcessWrapper {
   int wait_for_exit(
       std::chrono::milliseconds timeout = kDefaultWaitForExitTimeout);
 
-  mysql_harness::ProcessLauncher::exit_status_type native_wait_for_exit(
-      std::chrono::milliseconds timeout = kDefaultWaitForExitTimeout);
-
   /** @brief Returns process PID
    *
    * @returns PID of the process
    */
-  mysql_harness::ProcessLauncher::process_id_type get_pid() const {
-    return launcher_.get_pid();
-  }
+  uint64_t get_pid() const { return launcher_.get_pid(); }
 
   std::string get_command_line() { return launcher_.get_cmd_line(); }
-  std::string executable() { return launcher_.executable(); }
 
   int kill();
-
-  mysql_harness::ProcessLauncher::exit_status_type native_kill();
 
   std::error_code send_shutdown_event(
       mysql_harness::ProcessLauncher::ShutdownEvent event =
@@ -204,68 +183,60 @@ class ProcessWrapper {
     logging_file_ = logging_file;
   }
 
-  bool output_contains(const std::string &str, bool regex = false) const;
-
-  using OutputResponder = std::function<std::string(const std::string &)>;
-
-  void wait_for_sync_point_result(stdx::expected<void, std::error_code> v) {
-    wait_for_sync_point_result_ = std::move(v);
-  }
-
-  [[nodiscard]] stdx::expected<void, std::error_code>
-  wait_for_sync_point_result() const {
-    return wait_for_sync_point_result_;
-  }
-
  private:
   ProcessWrapper(
       const std::string &app_cmd, const std::vector<std::string> &args,
       const std::vector<std::pair<std::string, std::string>> &env_vars,
-      bool include_stderr, OutputResponder &output_responder);
+      bool include_stderr)
+      : launcher_(app_cmd.c_str(), args, env_vars, include_stderr) {
+    launcher_.start();
+  }
 
  protected:
+  bool output_contains(const std::string &str, bool regex = false) const;
+
   /** @brief read() output from child until timeout expires, optionally
    * autoresponding to prompts
    *
    * @param timeout timeout in milliseconds
    * @param autoresponder_enabled autoresponder is enabled if true (default)
-   * @retval true if at least one byte was read
+   * @returns true if at least one byte was read
    */
   bool read_and_autorespond_to_output(std::chrono::milliseconds timeout,
                                       bool autoresponder_enabled = true);
 
   /** @brief write() predefined responses on found predefined patterns
    *
-   * @param cmd_output buffer containing output to be scanned for triggers and
+   * @param bytes_read buffer length
+   * @param cmd_output buffer containig output to be scanned for triggers and
    * possibly autoresponded to
    */
-  void autorespond_to_matching_lines(const std::string_view &cmd_output);
+  void autorespond_to_matching_lines(int bytes_read, char *cmd_output);
 
   /** @brief write() a predefined response if a predefined pattern is matched
    *
    * @param line line of output that will trigger a response, if matched
-   * @retval true if an autoresponse was sent
+   * @returns true if an autoresponse was sent
    */
   bool autorespond_on_matching_pattern(const std::string &line);
+
+  /** @brief see wait_for_exit() */
+  int wait_for_exit_while_reading_and_autoresponding_to_output(
+      std::chrono::milliseconds timeout);
 
   mysql_harness::ProcessLauncher
       launcher_;  // <- this guy's destructor takes care of
                   // killing the spawned process
   std::string execute_output_raw_;
   std::string last_line_read_;
-  OutputResponder output_responder_;
-  std::optional<mysql_harness::ProcessLauncher::exit_status_type> exit_status_;
+  std::map<std::string, std::string> output_responses_;
+  int exit_code_;
+  bool exit_code_set_{false};
 
   std::string logging_dir_;
   std::string logging_file_;
 
-  std::atomic<bool> output_reader_stop_{false};
-  std::thread output_reader_;
-  mutable std::mutex output_mtx_;
-
   friend class ProcessManager;
-
-  stdx::expected<void, std::error_code> wait_for_sync_point_result_{};
 };  // class ProcessWrapper
 
 #endif  // _PROCESS_WRAPPER_H_

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -98,7 +98,7 @@ int Connection::write(const Blob &blob) {
 
 Blob Connection::read() {
   unsigned char *ptr;
-  const int len = m_vio->read_packet(m_vio, &ptr);
+  int len = m_vio->read_packet(m_vio, &ptr);
 
   if (len < 0) {
     m_error = true;
@@ -253,7 +253,7 @@ const char *Sid::as_string() {
   if (!m_data) return NULL;
 
   if (!m_as_string) {
-    const bool success = ConvertSidToStringSid(m_data->User.Sid, &m_as_string);
+    bool success = ConvertSidToStringSid(m_data->User.Sid, &m_as_string);
 
     if (!success) {
 #ifndef NDEBUG
@@ -345,15 +345,15 @@ UPN::~UPN() {
 
 char *wchar_to_utf8(const wchar_t *string, size_t *len) {
   char *buf = NULL;
-  const size_t str_len = len && *len ? *len : wcslen(string);
+  size_t str_len = len && *len ? *len : wcslen(string);
 
   /*
     A conversion from utf8 to wchar_t will never take more than 3 bytes per
-    character, so a buffer of length 3 * str_len should be sufficient.
+    character, so a buffer of length 3 * str_len schould be sufficient.
     We check that assumption with an assertion later.
   */
 
-  const size_t buf_len = 3 * str_len;
+  size_t buf_len = 3 * str_len;
 
   buf = (char *)malloc(buf_len + 1);
   if (!buf) {
@@ -362,13 +362,12 @@ char *wchar_to_utf8(const wchar_t *string, size_t *len) {
     return NULL;
   }
 
-  const int res =
-      WideCharToMultiByte(CP_UTF8,       // convert to UTF-8
-                          0,             // conversion flags
-                          string,        // input buffer
-                          str_len,       // its length
-                          buf, buf_len,  // output buffer and its size
-                          NULL, NULL);   // default character (not used)
+  int res = WideCharToMultiByte(CP_UTF8,       // convert to UTF-8
+                                0,             // conversion flags
+                                string,        // input buffer
+                                str_len,       // its length
+                                buf, buf_len,  // output buffer and its size
+                                NULL, NULL);   // default character (not used)
 
   if (res) {
     buf[res] = '\0';
@@ -464,7 +463,7 @@ wchar_t *utf8_to_wchar(const char *string, size_t *len) {
 */
 
 const char *get_last_error_message(Error_message_buf buf) {
-  const int error = GetLastError();
+  int error = GetLastError();
 
   buf[0] = '\0';
   FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error,

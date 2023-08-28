@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,8 +41,6 @@
 #include "mysql_com.h"
 #include "sql_string.h" /* STRING_PSI_MEMORY_KEY */
 #include "template_utils.h"
-
-struct CHARSET_INFO;
 
 /* purecov: begin inspected */
 static const char *log_filename = "test_sql_stmt";
@@ -175,9 +173,9 @@ class Table {
       return;
     } else {
       WRITE_VAL("\t[meta][charset result] number: %d\n", cs_info->number);
-      WRITE_VAL("\t[meta][charset result] name: %s\n", cs_info->csname);
-      WRITE_VAL("\t[meta][charset result] collation: %s\n",
-                cs_info->m_coll_name);
+      WRITE_VAL("\t[meta][charset result] name: %s\n",
+                replace_utf8_utf8mb3(cs_info->csname));
+      WRITE_VAL("\t[meta][charset result] collation: %s\n", cs_info->name);
       WRITE_VAL("\t[meta][charset result] sort order: %s\n",
                 cs_info->sort_order);
       WRITE_STR("\n");
@@ -253,7 +251,7 @@ static void dump_decoded_server_status(const char *prefix, uint server_status) {
   WRITE_VAL("%u\n", server_status);
   WRITE_STR(prefix);
   for (int i = 0; i < 30; i++) {
-    const uint flag = 1 << i;
+    uint flag = 1 << i;
     if (server_status & flag) {
 #define FLAG_DELIMITER " "
       switch (flag) {
@@ -316,8 +314,9 @@ static int handle_start_column_metadata(void *pctx, uint num_cols, uint,
   WRITE_STR("handle_start_column_metadata\n");
   DBUG_TRACE;
   DBUG_PRINT("info", ("resultcs->number: %d", resultcs->number));
-  DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
-  DBUG_PRINT("info", ("resultcs->m_coll_name: %s", resultcs->m_coll_name));
+  DBUG_PRINT("info",
+             ("resultcs->csname: %s", replace_utf8_utf8mb3(resultcs->csname)));
+  DBUG_PRINT("info", ("resultcs->name: %s", resultcs->name));
 
   ctx->tables.push_back(Table(num_cols, resultcs));
   ctx->current_col = 0;
@@ -406,7 +405,7 @@ static int handle_store_null(void *pctx) {
   Server_context *ctx = (Server_context *)pctx;
   //  WRITE_STR("handle_store_null\n");
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
   ctx->tables.back().columns[col].row_values.push_back("[NULL]");
 
@@ -417,10 +416,10 @@ static int handle_store_integer(void *pctx, longlong value) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len = snprintf(buffer, sizeof(buffer), "%lld", value);
+  size_t len = snprintf(buffer, sizeof(buffer), "%lld", value);
 
   ctx->tables.back().columns[col].row_values.push_back(
       std::string(buffer, len));
@@ -432,10 +431,10 @@ static int handle_store_longlong(void *pctx, longlong value, uint is_unsigned) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len =
+  size_t len =
       snprintf(buffer, sizeof(buffer), is_unsigned ? "%llu" : "%lld", value);
 
   ctx->tables.back().columns[col].row_values.push_back(
@@ -455,7 +454,7 @@ static int handle_store_decimal(void *pctx, const decimal_t *value) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
   int len = SIZEOF_SQL_STR_VALUE;
@@ -470,10 +469,10 @@ static int handle_store_double(void *pctx, double value, uint32) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len = snprintf(buffer, sizeof(buffer), "%3.7g", value);
+  size_t len = snprintf(buffer, sizeof(buffer), "%3.7g", value);
   ctx->tables.back().columns[col].row_values.push_back(
       std::string(buffer, len));
 
@@ -484,10 +483,10 @@ static int handle_store_date(void *pctx, const MYSQL_TIME *value) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len =
+  size_t len =
       snprintf(buffer, sizeof(buffer), "%s%4d-%02d-%02d", value->neg ? "-" : "",
                value->year, value->month, value->day);
 
@@ -501,10 +500,10 @@ static int handle_store_time(void *pctx, const MYSQL_TIME *value, uint) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len = snprintf(
+  size_t len = snprintf(
       buffer, sizeof(buffer), "%s%02d:%02d:%02d", value->neg ? "-" : "",
       value->day ? (value->day * 24 + value->hour) : value->hour, value->minute,
       value->second);
@@ -517,10 +516,10 @@ static int handle_store_datetime(void *pctx, const MYSQL_TIME *value, uint) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
-  const size_t len =
+  size_t len =
       snprintf(buffer, sizeof(buffer), "%s%4d-%02d-%02d %02d:%02d:%02d",
                value->neg ? "-" : "", value->year, value->month, value->day,
                value->hour, value->minute, value->second);
@@ -535,7 +534,7 @@ static int handle_store_string(void *pctx, const char *const value,
                                size_t length, const CHARSET_INFO *const) {
   Server_context *ctx = (Server_context *)pctx;
   DBUG_TRACE;
-  const uint col = ctx->current_col;
+  uint col = ctx->current_col;
   ctx->current_col++;
 
   ctx->tables.back().columns[col].row_values.push_back(
@@ -739,9 +738,9 @@ static void run_cmd(MYSQL_SESSION session, enum_server_command cmd,
 again:
   print_cmd(cmd, data);
   ctx->cmd = cmd;
-  const int fail = command_service_run_command(
-      session, cmd, data, &my_charset_utf8mb3_general_ci, &protocol_callbacks,
-      txt_or_bin, ctx);
+  int fail = command_service_run_command(session, cmd, data,
+                                         &my_charset_utf8_general_ci,
+                                         &protocol_callbacks, txt_or_bin, ctx);
   if (fail) {
     LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "run_statement code: %d\n",
                     fail);
@@ -1559,7 +1558,7 @@ static void test_8(MYSQL_SESSION session, void *p) {
 
   PS_PARAM params[4];
   memset(params, 0, sizeof(params));
-  const std::string values[4]{"@my_v1", "@my_v2", "@my_v3", "@my_v4"};
+  std::string values[4]{"@my_v1", "@my_v2", "@my_v3", "@my_v4"};
   params[0].type = MYSQL_TYPE_STRING;
   params[0].unsigned_type = false;
   params[0].null_bit = false;

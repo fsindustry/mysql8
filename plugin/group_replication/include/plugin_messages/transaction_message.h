@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,11 +38,8 @@ class Transaction_message : public Transaction_message_interface {
     // Length of the payload item: variable
     PIT_TRANSACTION_DATA = 1,
 
-    // Length of the payload item: 8 bytes
-    PIT_SENT_TIMESTAMP = 2,
-
     // No valid type codes can appear after this one.
-    PIT_MAX = 3
+    PIT_MAX = 2
   };
 
   /**
@@ -83,18 +80,6 @@ class Transaction_message : public Transaction_message_interface {
   */
   Gcs_message_data *get_message_data_and_reset() override;
 
-  /**
-    Return the time at which the message contained in the buffer was sent.
-    @see Metrics_handler::get_current_time()
-
-    @param[in] buffer            the buffer to decode from.
-    @param[in] length            the buffer length
-
-    @return the time on which the message was sent.
-  */
-  static uint64_t get_sent_timestamp(const unsigned char *buffer,
-                                     size_t length);
-
  protected:
   /*
    Implementation of the template methods
@@ -105,7 +90,6 @@ class Transaction_message : public Transaction_message_interface {
 
  private:
   Gcs_message_data *m_gcs_message_data{nullptr};
-  static const uint64_t s_sent_timestamp_pit_size;
 };
 
 #endif /* TRANSACTION_MESSAGE_INCLUDED */

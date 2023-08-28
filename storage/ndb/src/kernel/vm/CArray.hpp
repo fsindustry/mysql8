@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,7 @@
 #ifndef CARRAY_HPP
 #define CARRAY_HPP
 
-#include "ErrorReporter.hpp"
 #include "ndbd_malloc.hpp"
-#include "Pool.hpp"
 
 #define JAM_FILE_ID 271
 

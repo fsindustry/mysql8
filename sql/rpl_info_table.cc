@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,16 +26,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_base.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/thread_type.h"
 #include "mysqld_error.h"
 #include "sql/dynamic_ids.h"  // Server_ids
@@ -52,7 +51,6 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql_string.h"
-#include "strmake.h"
 #include "thr_lock.h"
 
 Rpl_info_table::Rpl_info_table(uint nparam, const char *param_schema,
@@ -389,17 +387,15 @@ int Rpl_info_table::do_reset_info(uint nparam, const char *param_schema,
     table->field[fieldnr]->store(channel_name, strlen(channel_name),
                                  &my_charset_bin);
     uint key_len = key_info->key_part[0].store_length;
+    uchar *key_buf = table->field[fieldnr]->field_ptr();
 
-    uchar key[MAX_KEY_LENGTH];
-    key_copy(key, table->record[0], table->key_info,
-             table->key_info->key_length);
     if (!(handler_error = table->file->ha_index_read_map(
-              table->record[0], key, (key_part_map)1, HA_READ_KEY_EXACT))) {
+              table->record[0], key_buf, (key_part_map)1, HA_READ_KEY_EXACT))) {
       do {
         if ((handler_error = table->file->ha_delete_row(table->record[0])))
           break;
       } while (!(handler_error = table->file->ha_index_next_same(
-                     table->record[0], key, key_len)));
+                     table->record[0], key_buf, key_len)));
       if (handler_error != HA_ERR_END_OF_FILE) error = 1;
     } else {
       /*

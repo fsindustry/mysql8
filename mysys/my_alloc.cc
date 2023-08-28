@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -34,7 +34,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/types.h>
-#include <iterator>
 
 #include "my_alloc.h"
 #include "my_compiler.h"
@@ -49,13 +48,13 @@
 // For instrumented code: Always use malloc(); never reuse a chunk.
 // This gives a lot more memory chunks, each with a red-zone around them.
 #if defined(HAVE_VALGRIND) || defined(HAVE_ASAN)
-static constexpr bool MEM_ROOT_SINGLE_CHUNKS = true;
+#define MEM_ROOT_SINGLE_CHUNKS 1
 #else
-static constexpr bool MEM_ROOT_SINGLE_CHUNKS = false;
+#define MEM_ROOT_SINGLE_CHUNKS 0
 #endif
 
-MEM_ROOT::Block *MEM_ROOT::AllocBlock(size_t wanted_length,
-                                      size_t minimum_length) {
+std::pair<MEM_ROOT::Block *, size_t> MEM_ROOT::AllocBlock(
+    size_t wanted_length, size_t minimum_length) {
   DBUG_TRACE;
 
   size_t length = wanted_length;
@@ -79,29 +78,25 @@ MEM_ROOT::Block *MEM_ROOT::AllocBlock(size_t wanted_length,
         length = bytes_left;
       } else {
         // We don't have enough memory left to satisfy minimum_length.
-        return nullptr;
+        return {nullptr, 0};
       }
     }
   }
 
-  const size_t bytes_to_alloc = length + ALIGN_SIZE(sizeof(Block));
   Block *new_block = static_cast<Block *>(
-      my_malloc(m_psi_key, bytes_to_alloc, MYF(MY_WME | ME_FATALERROR)));
+      my_malloc(m_psi_key, length + ALIGN_SIZE(sizeof(Block)),
+                MYF(MY_WME | ME_FATALERROR)));
   if (new_block == nullptr) {
     if (m_error_handler) (m_error_handler)();
-    return nullptr;
+    return {nullptr, 0};
   }
-  TRASH(new_block, bytes_to_alloc);
-  new_block->end = pointer_cast<char *>(new_block) + bytes_to_alloc;
 
   m_allocated_size += length;
 
   // Make the default block size 50% larger next time.
   // This ensures O(1) total mallocs (assuming Clear() is not called).
-  if (!MEM_ROOT_SINGLE_CHUNKS) {
-    m_block_size += m_block_size / 2;
-  }
-  return new_block;
+  m_block_size += m_block_size / 2;
+  return {new_block, length};
 }
 
 void *MEM_ROOT::AllocSlow(size_t length) {
@@ -119,7 +114,7 @@ void *MEM_ROOT::AllocSlow(size_t length) {
     // since the new block isn't going to be used for the next allocation
     // anyway, we can just as well keep the previous one.
     Block *new_block =
-        AllocBlock(/*wanted_length=*/length, /*minimum_length=*/length);
+        AllocBlock(/*wanted_length=*/length, /*minimum_length=*/length).first;
     if (new_block == nullptr) return nullptr;
 
     if (m_current_block == nullptr) {
@@ -128,7 +123,8 @@ void *MEM_ROOT::AllocSlow(size_t length) {
       // unless ClearForReuse() is called.
       new_block->prev = nullptr;
       m_current_block = new_block;
-      m_current_free_end = new_block->end;
+      m_current_free_end = pointer_cast<char *>(new_block) +
+                           ALIGN_SIZE(sizeof(*new_block)) + length;
       m_current_free_start = m_current_free_end;
     } else {
       // Insert the new block in the second-to-last position.
@@ -150,11 +146,10 @@ void *MEM_ROOT::AllocSlow(size_t length) {
 }
 
 bool MEM_ROOT::ForceNewBlock(size_t minimum_length) {
-  if (MEM_ROOT_SINGLE_CHUNKS) {
-    assert(m_block_size == m_orig_block_size);
-  }
-  Block *new_block = AllocBlock(/*wanted_length=*/ALIGN_SIZE(m_block_size),
-                                minimum_length);  // Will modify block_size.
+  std::pair<Block *, size_t> block_and_length =
+      AllocBlock(/*wanted_length=*/ALIGN_SIZE(m_block_size),
+                 minimum_length);  // Will modify block_size.
+  Block *new_block = block_and_length.first;
   if (new_block == nullptr) return true;
 
   new_block->prev = m_current_block;
@@ -163,7 +158,7 @@ bool MEM_ROOT::ForceNewBlock(size_t minimum_length) {
   char *new_mem =
       pointer_cast<char *>(new_block) + ALIGN_SIZE(sizeof(*new_block));
   m_current_free_start = new_mem;
-  m_current_free_end = new_block->end;
+  m_current_free_end = new_mem + block_and_length.second;
   return false;
 }
 
@@ -202,7 +197,6 @@ void MEM_ROOT::ClearForReuse() {
   Block *start = m_current_block->prev;
   m_current_block->prev = nullptr;
   m_allocated_size = m_current_free_end - m_current_free_start;
-  TRASH(m_current_free_start, m_allocated_size);
 
   FreeBlocks(start);
 }
@@ -212,7 +206,6 @@ void MEM_ROOT::FreeBlocks(Block *start) {
   // touch it after we've started freeing.
   for (Block *block = start; block != nullptr;) {
     Block *prev = block->prev;
-    TRASH(block, std::distance(pointer_cast<char *>(block), block->end));
     my_free(block);
     block = prev;
   }

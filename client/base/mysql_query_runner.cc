@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,7 @@
 #include <atomic>
 #include <functional>
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "sql_string.h"
 #include "template_utils.h"
 
@@ -93,7 +93,7 @@ int64 Mysql_query_runner::run_query(
     std::string query, std::function<int64(const Row &)> *result_callback) {
   Mysql_query_runner copy(*this);
   copy.add_result_callback(result_callback);
-  const int64 result = copy.run_query(query);
+  int64 result = copy.run_query(query);
   delete result_callback;
   copy.m_result_callbacks.clear();
   return result;
@@ -113,7 +113,7 @@ int64 Mysql_query_runner::run_query(std::string query) {
                          Message_type_error);
     return this->report_message(message);
   }
-  const uint64 result = this->run_query_unguarded(query);
+  uint64 result = this->run_query_unguarded(query);
   *m_is_processing = false;
 
   return result;
@@ -140,13 +140,13 @@ int64 Mysql_query_runner::run_query_unguarded(string query) {
         }
       }
 
-      const unsigned int columns = mysql_field_count(m_connection);
+      unsigned int columns = mysql_field_count(m_connection);
       Row *processed_row = new Row(results, columns, row);
 
       vector<std::function<int64(const Row &)> *>::reverse_iterator it;
       for (it = m_result_callbacks.rbegin(); it != m_result_callbacks.rend();
-           ++it) {
-        const int64 callback_result = (**it)(*processed_row);
+           it++) {
+        int64 callback_result = (**it)(*processed_row);
         if (callback_result != 0) {
           mysql_free_result(results);
           return callback_result;
@@ -176,7 +176,7 @@ int64 Mysql_query_runner::run_query_unguarded(string query) {
       break;
     }
 
-    const unsigned int columns = mysql_field_count(m_connection);
+    unsigned int columns = mysql_field_count(m_connection);
     Row *processed_row = new Row(results, columns, row);
 
     Warning_data warning(
@@ -199,7 +199,7 @@ int64 Mysql_query_runner::report_mysql_error() {
 int64 Mysql_query_runner::report_message(Message_data &message) {
   for (auto it = m_message_callbacks.rbegin(); it != m_message_callbacks.rend();
        it++) {
-    const int64 callback_result = (*it->first)(message);
+    int64 callback_result = (*it->first)(message);
     if (callback_result < 0) {
       return 0;
     } else if (callback_result != 0) {
@@ -263,11 +263,11 @@ void Mysql_query_runner::append_escape_string(std::string *destination_string,
 void Mysql_query_runner::append_escape_string(std::string *destination_string,
                                               const char *original,
                                               size_t original_length) {
-  const size_t start_lenght = destination_string->size();
-  const size_t required_capacity = start_lenght + original_length * 2 + 1;
+  size_t start_lenght = destination_string->size();
+  size_t required_capacity = start_lenght + original_length * 2 + 1;
   destination_string->resize(required_capacity);
 
-  const int length = mysql_real_escape_string_quote(
+  int length = mysql_real_escape_string_quote(
       m_connection, &((*destination_string)[0]) + start_lenght, original,
       (ulong)original_length, '"');
   destination_string->resize(start_lenght + length);
@@ -276,12 +276,12 @@ void Mysql_query_runner::append_escape_string(std::string *destination_string,
 void Mysql_query_runner::append_hex_string(std::string *destination_string,
                                            const char *original,
                                            size_t original_length) {
-  const size_t start_lenght = destination_string->size();
-  const size_t required_capacity = start_lenght + original_length * 2 + 1;
+  size_t start_lenght = destination_string->size();
+  size_t required_capacity = start_lenght + original_length * 2 + 1;
   destination_string->resize(required_capacity);
 
-  const int length = mysql_hex_string(
-      &((*destination_string)[0]) + start_lenght, original, original_length);
+  int length = mysql_hex_string(&((*destination_string)[0]) + start_lenght,
+                                original, original_length);
   destination_string->resize(start_lenght + length);
 }
 
@@ -289,7 +289,7 @@ void Mysql_query_runner::cleanup_result(
     std::vector<const Mysql_query_runner::Row *> *result) {
   for (vector<const Mysql_query_runner::Row *>::const_iterator it =
            result->begin();
-       it != result->end(); ++it) {
+       it != result->end(); it++) {
     delete *it;
   }
   result->clear();
@@ -351,7 +351,7 @@ const char *Mysql_query_runner::Row::get_buffer(std::size_t index,
     start = m_buffer_starts[start_index];
   }
 
-  const std::size_t end = m_buffer_starts[index + 1];
+  std::size_t end = m_buffer_starts[index + 1];
   length = (end - start - 1);
   return &m_buffer[start];
 }

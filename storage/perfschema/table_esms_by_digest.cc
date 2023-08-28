@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -79,10 +79,6 @@ Plugin_table table_esms_by_digest::m_table_def(
     "  SUM_SORT_SCAN BIGINT unsigned not null,\n"
     "  SUM_NO_INDEX_USED BIGINT unsigned not null,\n"
     "  SUM_NO_GOOD_INDEX_USED BIGINT unsigned not null,\n"
-    "  SUM_CPU_TIME BIGINT unsigned not null,\n"
-    "  MAX_CONTROLLED_MEMORY BIGINT unsigned not null,\n"
-    "  MAX_TOTAL_MEMORY BIGINT unsigned not null,\n"
-    "  COUNT_SECONDARY BIGINT unsigned not null,\n"
     "  FIRST_SEEN TIMESTAMP(6) not null,\n"
     "  LAST_SEEN TIMESTAMP(6) not null,\n"
     "  QUANTILE_95 BIGINT unsigned not null,\n"
@@ -129,24 +125,24 @@ PFS_engine_table *table_esms_by_digest::create(PFS_engine_table_share *) {
   return new table_esms_by_digest();
 }
 
-int table_esms_by_digest::delete_all_rows() {
+int table_esms_by_digest::delete_all_rows(void) {
   reset_esms_by_digest();
   return 0;
 }
 
-ha_rows table_esms_by_digest::get_row_count() { return digest_max; }
+ha_rows table_esms_by_digest::get_row_count(void) { return digest_max; }
 
 table_esms_by_digest::table_esms_by_digest()
     : PFS_engine_table(&m_share, &m_pos), m_pos(0), m_next_pos(0) {
   m_normalizer = time_normalizer::get_statement();
 }
 
-void table_esms_by_digest::reset_position() {
+void table_esms_by_digest::reset_position(void) {
   m_pos = 0;
   m_next_pos = 0;
 }
 
-int table_esms_by_digest::rnd_next() {
+int table_esms_by_digest::rnd_next(void) {
   PFS_statements_digest_stat *digest_stat;
 
   if (statements_digest_stat_array == nullptr) {
@@ -194,7 +190,7 @@ int table_esms_by_digest::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_esms_by_digest::index_next() {
+int table_esms_by_digest::index_next(void) {
   PFS_statements_digest_stat *digest_stat;
 
   if (statements_digest_stat_array == nullptr) {
@@ -240,9 +236,9 @@ int table_esms_by_digest::make_row(PFS_statements_digest_stat *digest_stat) {
     m_row.m_p99 = 0;
     m_row.m_p999 = 0;
   } else {
-    const ulonglong count_95 = ((count_star * 95) + 99) / 100;
-    const ulonglong count_99 = ((count_star * 99) + 99) / 100;
-    const ulonglong count_999 = ((count_star * 999) + 999) / 1000;
+    ulonglong count_95 = ((count_star * 95) + 99) / 100;
+    ulonglong count_99 = ((count_star * 99) + 99) / 100;
+    ulonglong count_999 = ((count_star * 999) + 999) / 1000;
 
     assert(count_95 != 0);
     assert(count_95 <= count_star);
@@ -314,22 +310,22 @@ int table_esms_by_digest::read_row_values(TABLE *table, unsigned char *buf,
         case 2: /* DIGEST_TEXT */
           m_row.m_digest.set_field(f->field_index(), f);
           break;
-        case 31: /* FIRST_SEEN */
+        case 27: /* FIRST_SEEN */
           set_field_timestamp(f, m_row.m_first_seen);
           break;
-        case 32: /* LAST_SEEN */
+        case 28: /* LAST_SEEN */
           set_field_timestamp(f, m_row.m_last_seen);
           break;
-        case 33: /* QUANTILE_95 */
+        case 29: /* QUANTILE_95 */
           set_field_ulonglong(f, m_row.m_p95);
           break;
-        case 34: /* QUANTILE_99 */
+        case 30: /* QUANTILE_99 */
           set_field_ulonglong(f, m_row.m_p99);
           break;
-        case 35: /* QUANTILE_999 */
+        case 31: /* QUANTILE_999 */
           set_field_ulonglong(f, m_row.m_p999);
           break;
-        case 36: /* QUERY_SAMPLE_TEXT */
+        case 32: /* QUERY_SAMPLE_TEXT */
           if (m_row.m_query_sample.length())
             set_field_text(f, m_row.m_query_sample.ptr(),
                            m_row.m_query_sample.length(),
@@ -338,10 +334,10 @@ int table_esms_by_digest::read_row_values(TABLE *table, unsigned char *buf,
             f->set_null();
           }
           break;
-        case 37: /* QUERY_SAMPLE_SEEN */
+        case 33: /* QUERY_SAMPLE_SEEN */
           set_field_timestamp(f, m_row.m_query_sample_seen);
           break;
-        case 38: /* QUERY_SAMPLE_TIMER_WAIT */
+        case 34: /* QUERY_SAMPLE_TIMER_WAIT */
           set_field_ulonglong(f, m_row.m_query_sample_timer_wait);
           break;
         default: /* 3, ... COUNT/SUM/MIN/AVG/MAX */

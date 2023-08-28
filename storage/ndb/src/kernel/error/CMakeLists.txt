@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,12 +21,10 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/vm)
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_kernel.cmake)
 
 ADD_LIBRARY(ndberror STATIC
   TimeModule.cpp
   ErrorReporter.cpp
+  ndbd_exit_codes.cpp
   )

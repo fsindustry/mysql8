@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -131,7 +131,7 @@ int Server_ongoing_transactions_handler::
 */
 /* purecov: begin inspected */
 int Server_ongoing_transactions_handler::before_transaction_begin(
-    my_thread_id, ulong, ulong, enum_rpl_channel_type, const THD *) {
+    my_thread_id, ulong, ulong, enum_rpl_channel_type) {
   return 0;
 }
 

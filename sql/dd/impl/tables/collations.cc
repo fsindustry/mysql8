@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,8 +28,9 @@
 #include <set>
 #include <vector>
 
+#include "m_ctype.h"
+
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/cache/dictionary_client.h"     // dd::cache::Dictionary_...
 #include "sql/dd/dd.h"                          // dd::create_object
 #include "sql/dd/impl/cache/storage_adapter.h"  // Storage_adapter
@@ -54,7 +55,7 @@ const Collations &Collations::instance() {
 ///////////////////////////////////////////////////////////////////////////
 
 const CHARSET_INFO *Collations::name_collation() {
-  return &my_charset_utf8mb3_general_ci;
+  return &my_charset_utf8_general_ci;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -66,7 +67,7 @@ Collations::Collations() {
                          "id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT");
   m_target_def.add_field(FIELD_NAME, "FIELD_NAME",
                          "name VARCHAR(64) NOT NULL COLLATE " +
-                             String_type(name_collation()->m_coll_name));
+                             String_type(name_collation()->name));
   m_target_def.add_field(FIELD_CHARACTER_SET_ID, "FIELD_CHARACTER_SET_ID",
                          "character_set_id BIGINT UNSIGNED NOT NULL");
   m_target_def.add_field(FIELD_IS_COMPILED, "FIELD_IS_COMPILED",
@@ -123,21 +124,21 @@ bool Collations::populate(THD *thd) const {
   for (int internal_charset_id = 0;
        internal_charset_id < MY_ALL_CHARSETS_SIZE && !error;
        internal_charset_id++) {
-    const CHARSET_INFO *cs = all_charsets[internal_charset_id];
+    CHARSET_INFO *cs = all_charsets[internal_charset_id];
     if (cs && (cs->state & MY_CS_PRIMARY) && (cs->state & MY_CS_AVAILABLE) &&
         !(cs->state & MY_CS_HIDDEN)) {
       // We have identified a primary collation
       for (int internal_collation_id = 0;
            internal_collation_id < MY_ALL_CHARSETS_SIZE && !error;
            internal_collation_id++) {
-        const CHARSET_INFO *cl = all_charsets[internal_collation_id];
+        CHARSET_INFO *cl = all_charsets[internal_collation_id];
         if (cl && (cl->state & MY_CS_AVAILABLE) && my_charset_same(cs, cl)) {
           // Remove the id from the set of non-updated old ids.
           prev_coll_ids.erase(cl->number);
 
-          // Prepare the new collation object.
+          // Preapre the new collation object.
           new_collation->set_id(cl->number);
-          new_collation->set_name(cl->m_coll_name);
+          new_collation->set_name(cl->name);
 
           // The id of the primary collation is used as the character set id
           new_collation->set_charset_id(cs->number);

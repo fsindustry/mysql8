@@ -1,7 +1,7 @@
 #ifndef MB_WC_INCLUDED
 #define MB_WC_INCLUDED
 
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -38,7 +38,7 @@
   just a single byte load and a predictable compare) that the call overhead
   in a tight loop is significant, and these routines tend to take up a lot
   of CPU time when sorting. Typically, at the outermost level, you'd simply
-  compare cs->cset->mb_wc with my_mb_wc_{utf8mb3,utf8mb4}_thunk, and if so,
+  compare cs->cset->mb_wc with my_mb_wc_{utf8,utf8mb4}_thunk, and if so,
   instantiate your function with the given class. If it doesn't match,
   you can use Mb_wc_through_function_pointer, which calls through the
   function pointer as usual. (It will cache the function pointer for you,
@@ -48,31 +48,28 @@
   The Mb_wc_* classes should be sent by _value_, not by reference, since
   they are never larger than two pointers (and usually simply zero).
 */
-#include <cstdint>
 
-#include <string.h>
-
+#include "m_ctype.h"
 #include "my_compiler.h"
 #include "my_config.h"
-#include "mysql/strings/m_ctype.h"
 
 template <bool RANGE_CHECK, bool SUPPORT_MB4>
-static int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uint8_t *s,
-                                   const uint8_t *e);
+static int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uchar *s,
+                                   const uchar *e);
 
-static int my_mb_wc_utf8mb3(my_wc_t *pwc, const uint8_t *s, const uint8_t *e);
-static int my_mb_wc_utf8mb4(my_wc_t *pwc, const uint8_t *s, const uint8_t *e);
+static int my_mb_wc_utf8(my_wc_t *pwc, const uchar *s, const uchar *e);
+static int my_mb_wc_utf8mb4(my_wc_t *pwc, const uchar *s, const uchar *e);
 
 /**
   Functor that converts a UTF-8 multibyte sequence (up to three bytes)
   to a wide character.
 */
-struct Mb_wc_utf8mb3 {
-  Mb_wc_utf8mb3() = default;
+struct Mb_wc_utf8 {
+  Mb_wc_utf8() = default;
 
   ALWAYS_INLINE
-  int operator()(my_wc_t *pwc, const uint8_t *s, const uint8_t *e) const {
-    return my_mb_wc_utf8mb3(pwc, s, e);
+  int operator()(my_wc_t *pwc, const uchar *s, const uchar *e) const {
+    return my_mb_wc_utf8(pwc, s, e);
   }
 };
 
@@ -84,7 +81,7 @@ struct Mb_wc_utf8mb4 {
   Mb_wc_utf8mb4() = default;
 
   ALWAYS_INLINE
-  int operator()(my_wc_t *pwc, const uint8_t *s, const uint8_t *e) const {
+  int operator()(my_wc_t *pwc, const uchar *s, const uchar *e) const {
     return my_mb_wc_utf8mb4(pwc, s, e);
   }
 };
@@ -98,24 +95,24 @@ class Mb_wc_through_function_pointer {
   explicit Mb_wc_through_function_pointer(const CHARSET_INFO *cs)
       : m_funcptr(cs->cset->mb_wc), m_cs(cs) {}
 
-  int operator()(my_wc_t *pwc, const uint8_t *s, const uint8_t *e) const {
+  int operator()(my_wc_t *pwc, const uchar *s, const uchar *e) const {
     return m_funcptr(m_cs, pwc, s, e);
   }
 
  private:
-  typedef int (*mbwc_func_t)(const CHARSET_INFO *, my_wc_t *, const uint8_t *,
-                             const uint8_t *);
+  typedef int (*mbwc_func_t)(const CHARSET_INFO *, my_wc_t *, const uchar *,
+                             const uchar *);
 
   const mbwc_func_t m_funcptr;
   const CHARSET_INFO *const m_cs;
 };
 
 template <bool RANGE_CHECK, bool SUPPORT_MB4>
-static ALWAYS_INLINE int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uint8_t *s,
-                                                 const uint8_t *e) {
+static ALWAYS_INLINE int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uchar *s,
+                                                 const uchar *e) {
   if (RANGE_CHECK && s >= e) return MY_CS_TOOSMALL;
 
-  uint8_t c = s[0];
+  uchar c = s[0];
   if (c < 0x80) {
     *pwc = c;
     return 1;
@@ -138,7 +135,7 @@ static ALWAYS_INLINE int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uint8_t *s,
     if (RANGE_CHECK && s + 3 > e) return MY_CS_TOOSMALL3;
 
     // Next two bytes must be continuation bytes.
-    uint16_t two_bytes = 0;
+    uint16 two_bytes;
     memcpy(&two_bytes, s + 1, sizeof(two_bytes));
     if ((two_bytes & 0xc0c0) != 0x8080)  // Endianness does not matter.
       return MY_CS_ILSEQ;
@@ -163,7 +160,7 @@ static ALWAYS_INLINE int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uint8_t *s,
       This byte must be of the form 11110xxx, and the next three bytes
       must be continuation bytes.
     */
-    uint32_t four_bytes = 0;
+    uint32 four_bytes;
     memcpy(&four_bytes, s, sizeof(four_bytes));
 #ifdef WORDS_BIGENDIAN
     if ((four_bytes & 0xf8c0c0c0) != 0xf0808080)
@@ -191,15 +188,14 @@ static ALWAYS_INLINE int my_mb_wc_utf8_prototype(my_wc_t *pwc, const uint8_t *s,
   @return the number of bytes read from s, or a value <= 0 for failure
     (see m_ctype.h)
 */
-static inline int my_mb_wc_utf8mb3(my_wc_t *pwc, const uint8_t *s,
-                                   const uint8_t *e) {
+static inline int my_mb_wc_utf8(my_wc_t *pwc, const uchar *s, const uchar *e) {
   return my_mb_wc_utf8_prototype</*RANGE_CHECK=*/true, /*SUPPORT_MB4=*/false>(
       pwc, s, e);
 }
 
 /**
   Parses a single UTF-8 character from a byte string. The difference
-  between this and my_mb_wc_utf8mb3 is that this function also can handle
+  between this and my_mb_wc_utf8 is that this function also can handle
   four-byte UTF-8 characters.
 
   @param[out] pwc the parsed character, if any
@@ -209,20 +205,20 @@ static inline int my_mb_wc_utf8mb3(my_wc_t *pwc, const uint8_t *s,
   @return the number of bytes read from s, or a value <= 0 for failure
     (see m_ctype.h)
 */
-static ALWAYS_INLINE int my_mb_wc_utf8mb4(my_wc_t *pwc, const uint8_t *s,
-                                          const uint8_t *e) {
+static ALWAYS_INLINE int my_mb_wc_utf8mb4(my_wc_t *pwc, const uchar *s,
+                                          const uchar *e) {
   return my_mb_wc_utf8_prototype</*RANGE_CHECK=*/true, /*SUPPORT_MB4=*/true>(
       pwc, s, e);
 }
 
 // Non-inlined versions of the above. These are used as function pointers
-// in MY_CHARSET_HANDLER structs, and you can compare against them to see
+// in MY_CHARSET_HANDLER structs, and you can compare againt them to see
 // if using the Mb_wc_utf8* functors would be appropriate.
 
-extern "C" int my_mb_wc_utf8mb3_thunk(const CHARSET_INFO *cs, my_wc_t *pwc,
-                                      const uint8_t *s, const uint8_t *e);
+extern "C" int my_mb_wc_utf8_thunk(const CHARSET_INFO *cs, my_wc_t *pwc,
+                                   const uchar *s, const uchar *e);
 
 extern "C" int my_mb_wc_utf8mb4_thunk(const CHARSET_INFO *cs, my_wc_t *pwc,
-                                      const uint8_t *s, const uint8_t *e);
+                                      const uchar *s, const uchar *e);
 
 #endif  // MB_WC_INCLUDED

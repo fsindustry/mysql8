@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -96,7 +96,7 @@
   All subsequent calls will now be against db2.t1! Guess what? You don't
   have to perform an alter table!
 
-  This connection="connection string" is necessary for the handler to be
+  This connecton="connection string" is necessary for the handler to be
   able to connect to the foreign server, either by URL, or by server
   name.
 
@@ -115,8 +115,8 @@
   * Tables MUST be created on the foreign server prior to any action on those
     tables via the handler, first version. IMPORTANT: IF you MUST use the
     federated storage engine type on the REMOTE end, MAKE SURE [ :) ] That
-    the table you connect to IS NOT a table pointing BACK to your ORIGINAL
-    table! You know  and have heard the screeching of audio feedback? You
+    the table you connect to IS NOT a table pointing BACK to your ORIGNAL
+    table! You know  and have heard the screaching of audio feedback? You
     know putting two mirror in front of each other how the reflection
     continues for eternity? Well, need I say more?!
   * There will not be support for transactions.
@@ -243,7 +243,7 @@
 
     Once compiled, I did a 'make install' (not for the purpose of installing
     the binary, but to install all the files the binary expects to see in the
-    directory I specified in the build with --prefix,
+    diretory I specified in the build with --prefix,
     "/home/mysql/mysql-build/federated".
 
     Then, I started the foreign server:
@@ -294,7 +294,7 @@
     it turns off replication, and sets replication to ignore the test tables.
     After ensuring that you actually do have support for the federated storage
     handler, numerous queries/inserts/updates/deletes are run, many derived
-    from the MyISAM tests, plus some other tests which were meant to reveal
+    from the MyISAM tests, plus som other tests which were meant to reveal
     any issues that would be most likely to affect this handler. All tests
     should work! ;)
 
@@ -386,6 +386,7 @@
 #include <string>
 
 #include "lex_string.h"
+#include "m_string.h"
 #include "map_helpers.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
@@ -395,17 +396,12 @@
 #include "myisam.h"  // TT_USEFRM
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/m_ctype.h"
-#include "mysql/strings/my_strtoll10.h"
 #include "sql/current_thd.h"
 #include "sql/key.h"     // key_copy
 #include "sql/mysqld.h"  // my_localhost
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_servers.h"  // FOREIGN_SERVER, get_server_by_name
-#include "sql_common.h"
-#include "string_with_len.h"
-#include "strmake.h"
 #include "template_utils.h"
 #include "unsafe_string_append.h"
 
@@ -569,7 +565,7 @@ static bool append_ident(String *string, const char *name, size_t length,
     uint clen = 0;
 
     for (const char *name_end = name + length; name < name_end; name += clen) {
-      const char c = *name;
+      char c = *name;
 
       if (!(clen = my_mbcharlen(system_charset_info, c))) goto err;
 
@@ -948,7 +944,7 @@ uint ha_federated::convert_row_to_internal_format(uchar *record, MYSQL_ROW row,
 
         if ((*field)->is_flag_set(BLOB_FLAG)) {
           Field_blob *blob_field = down_cast<Field_blob *>(*field);
-          const size_t length = blob_field->get_length();
+          size_t length = blob_field->get_length();
           // BLOB data is not stored inside record. It only contains a
           // pointer to it. Copy the BLOB data into a separate memory
           // area so that it is not overwritten by subsequent calls to
@@ -993,13 +989,13 @@ static bool emit_key_part_element(String *to, KEY_PART_INFO *part,
     if (to->append((char *)buff, (uint)(buf - buff))) return true;
   } else if (part->key_part_flag & HA_BLOB_PART) {
     String blob;
-    const uint blob_length = uint2korr(ptr);
+    uint blob_length = uint2korr(ptr);
     blob.set_quick((char *)ptr + HA_KEY_BLOB_LENGTH, blob_length,
                    &my_charset_bin);
     if (append_escaped(to, &blob)) return true;
   } else if (part->key_part_flag & HA_VAR_LENGTH_PART) {
     String varchar;
-    const uint var_length = uint2korr(ptr);
+    uint var_length = uint2korr(ptr);
     varchar.set_quick((char *)ptr + HA_KEY_BLOB_LENGTH, var_length,
                       &my_charset_bin);
     if (append_escaped(to, &varchar)) return true;
@@ -1251,7 +1247,7 @@ Summary:
 
 Conclusion:
 
-1. Need logic to determine if a key is min or max when the flag is
+1. Need logic to determin if a key is min or max when the flag is
 HA_READ_AFTER_KEY, and handle appending correct operator accordingly
 
 2. Need a boolean flag to pass to create_where_from_key, used in the
@@ -1265,7 +1261,7 @@ bool ha_federated::create_where_from_key(String *to, KEY *key_info,
                                          const key_range *end_key,
                                          bool from_records_in_range,
                                          bool eq_range_arg) {
-  const bool both_not_null =
+  bool both_not_null =
       (start_key != nullptr && end_key != nullptr) ? true : false;
   uchar *ptr;
   uint remainder, length;
@@ -1296,8 +1292,8 @@ bool ha_federated::create_where_from_key(String *to, KEY *key_info,
         length = ranges[i]->length, ptr = const_cast<uchar *>(ranges[i]->key);
          ; remainder--, key_part++) {
       Field *field = key_part->field;
-      const uint store_length = key_part->store_length;
-      const uint part_length = min(store_length, length);
+      uint store_length = key_part->store_length;
+      uint part_length = min(store_length, length);
       needs_quotes = field->str_needs_quotes();
       DBUG_DUMP("key, start of loop", ptr, length);
 
@@ -1598,7 +1594,7 @@ int ha_federated::close(void) {
   results.clear();
 
   /*
-    Check to verify whether the connection is still alive or not.
+    Check to verify wheather the connection is still alive or not.
     FLUSH TABLES will quit the connection and if connection is broken,
     it will reconnect again and quit silently.
   */
@@ -1756,7 +1752,7 @@ int ha_federated::write_row(uchar *) {
       if ((*field)->is_null())
         values_string.append(STRING_WITH_LEN(" NULL "));
       else {
-        const bool needs_quote = (*field)->str_needs_quotes();
+        bool needs_quote = (*field)->str_needs_quotes();
         (*field)->val_str(&insert_field_value_string);
         if (needs_quote) values_string.append(value_quote_char);
         insert_field_value_string.print(&values_string);
@@ -1989,7 +1985,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
     this? Because we only are updating one record, and LIMIT enforces
     this.
   */
-  const bool has_a_primary_key = (table->s->primary_key != MAX_KEY);
+  bool has_a_primary_key = (table->s->primary_key != MAX_KEY);
 
   /*
     buffers for following strings
@@ -2034,7 +2030,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
 
   for (Field **field = table->field; *field; field++) {
     if (bitmap_is_set(table->write_set, (*field)->field_index())) {
-      const size_t field_name_length = strlen((*field)->field_name);
+      size_t field_name_length = strlen((*field)->field_name);
       append_ident(&update_string, (*field)->field_name, field_name_length,
                    ident_quote_char);
       update_string.append(STRING_WITH_LEN(" = "));
@@ -2044,7 +2040,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
       else {
         /* otherwise = */
         my_bitmap_map *old_map = tmp_use_all_columns(table, table->read_set);
-        const bool needs_quote = (*field)->str_needs_quotes();
+        bool needs_quote = (*field)->str_needs_quotes();
         (*field)->val_str(&field_value);
         if (needs_quote) update_string.append(value_quote_char);
         field_value.print(&update_string);
@@ -2056,13 +2052,13 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
     }
 
     if (bitmap_is_set(table->read_set, (*field)->field_index())) {
-      const size_t field_name_length = strlen((*field)->field_name);
+      size_t field_name_length = strlen((*field)->field_name);
       append_ident(&where_string, (*field)->field_name, field_name_length,
                    ident_quote_char);
       if ((*field)->is_null_in_record(old_data))
         where_string.append(STRING_WITH_LEN(" IS NULL "));
       else {
-        const bool needs_quote = (*field)->str_needs_quotes();
+        bool needs_quote = (*field)->str_needs_quotes();
         where_string.append(STRING_WITH_LEN(" = "));
 
         const bool is_json = (*field)->type() == MYSQL_TYPE_JSON;
@@ -2114,7 +2110,7 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
   either a previous rnd_next() or index call).
   If you keep a pointer to the last row or can access a primary key it will
   make doing the deletion quite a bit easier.
-  Keep in mind that the server does not guarantee consecutive deletions.
+  Keep in mind that the server does no guarentee consecutive deletions.
   ORDER BY clauses can be used.
 
   Called in sql_acl.cc and sql_udf.cc to manage internal table information.
@@ -2150,7 +2146,7 @@ int ha_federated::delete_row(const uchar *) {
       if (cur_field->is_null()) {
         delete_string.append(STRING_WITH_LEN(" IS NULL "));
       } else {
-        const bool needs_quote = cur_field->str_needs_quotes();
+        bool needs_quote = cur_field->str_needs_quotes();
         delete_string.append(STRING_WITH_LEN(" = "));
 
         const bool is_json = (*field)->type() == MYSQL_TYPE_JSON;
@@ -2199,7 +2195,7 @@ int ha_federated::index_read_idx_map(uchar *buf, uint index, const uchar *key,
     uchar *dummy_arg = nullptr;
     position(dummy_arg);
   }
-  const int error1 = index_end();
+  int error1 = index_end();
   return error ? error : error1;
 }
 
@@ -2425,7 +2421,7 @@ int ha_federated::rnd_init(bool scan) {
     then get called (this would be the result set we want to use).
 
     After this rnd_init (from sql_update.cc) would be called, it would then
-    unnecessarily call "select * from table" on the foreign table, then call
+    unecessarily call "select * from table" on the foreign table, then call
     mysql_store_result, which would wipe out the correct previous result set
     from the previous call of index_read_idx's that had the result set
     containing the correct record, hence update the wrong row!
@@ -2994,57 +2990,13 @@ int ha_federated::real_connect() {
 int ha_federated::real_query(const char *query, size_t length) {
   int rc = 0;
   DBUG_TRACE;
+
   if (!mysql && (rc = real_connect())) goto end;
 
   if (!query || !length) goto end;
 
   rc = mysql_real_query(mysql, query, static_cast<ulong>(length));
 
-  // Simulate as errors happened within the previous query
-  DBUG_EXECUTE_IF("bug33500956_simulate_out_of_order",
-                  DBUG_SET("-d,bug33500956_simulate_out_of_order");
-                  current_thd->get_stmt_da()->set_error_status(
-                      current_thd, ER_NET_PACKETS_OUT_OF_ORDER);
-                  mysql->net.last_errno = CR_SERVER_LOST; rc = 1;);
-  DBUG_EXECUTE_IF("bug33500956_simulate_read_error",
-                  DBUG_SET("-d,bug33500956_simulate_read_error");
-                  current_thd->get_stmt_da()->set_error_status(
-                      current_thd, ER_NET_READ_ERROR);
-                  mysql->net.last_errno = CR_SERVER_LOST; rc = 1;);
-  DBUG_EXECUTE_IF("bug33500956_simulate_read_interrupted",
-                  DBUG_SET("-d,bug33500956_simulate_read_interrupted");
-                  current_thd->get_stmt_da()->set_error_status(
-                      current_thd, ER_NET_READ_INTERRUPTED);
-                  mysql->net.last_errno = CR_SERVER_LOST; rc = 1;);
-  DBUG_EXECUTE_IF("bug33500956_simulate_write_error",
-                  DBUG_SET("-d,bug33500956_simulate_write_error");
-                  current_thd->get_stmt_da()->set_error_status(
-                      current_thd, ER_NET_ERROR_ON_WRITE);
-                  mysql->net.last_errno = CR_SERVER_LOST; rc = 1;);
-  DBUG_EXECUTE_IF("bug33500956_simulate_write_interrupted",
-                  DBUG_SET("-d,bug33500956_simulate_write_interrupted");
-                  current_thd->get_stmt_da()->set_error_status(
-                      current_thd, ER_NET_WRITE_INTERRUPTED);
-                  mysql->net.last_errno = CR_SERVER_LOST; rc = 1;);
-
-  // reconnect and retry on timeout
-  // (this fix will be obsoleted by WL#15232)
-  if (rc) {
-    Diagnostics_area *da = current_thd->get_stmt_da();
-    if (da->is_set()) {
-      const uint err = da->mysql_errno();
-      if ((err == ER_NET_PACKETS_OUT_OF_ORDER || err == ER_NET_ERROR_ON_WRITE ||
-           err == ER_NET_WRITE_INTERRUPTED || err == ER_NET_READ_ERROR ||
-           err == ER_NET_READ_INTERRUPTED) &&
-          mysql->net.last_errno == CR_SERVER_LOST) {
-        mysql_free_result(mysql_store_result(mysql));
-        da->reset_condition_info(current_thd);
-        da->reset_diagnostics_area();
-        mysql_reconnect(mysql);
-        rc = mysql_real_query(mysql, query, static_cast<ulong>(length));
-      }
-    }
-  }
 end:
   return rc;
 }
@@ -3184,22 +3136,6 @@ int ha_federated::execute_simple_query(const char *query, int len) {
   return 0;
 }
 
-int ha_federated::rnd_pos_by_record(uchar *record [[maybe_unused]]) {
-  int error;
-  assert(table_flags() & HA_PRIMARY_KEY_REQUIRED_FOR_POSITION);
-
-  error = ha_rnd_init(false);
-  if (error != 0) return error;
-
-  if (stored_result) {
-    position(record);
-    error = ha_rnd_pos(record, ref);
-  }
-
-  ha_rnd_end();
-  return error;
-}
-
 struct st_mysql_storage_engine federated_storage_engine = {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
@@ -3214,8 +3150,8 @@ mysql_declare_plugin(federated){
     nullptr,           /* Plugin check uninstall */
     federated_done,    /* Plugin Deinit */
     0x0100 /* 1.0 */,
-    nullptr,                /* status variables                */
-    nullptr,                /* system variables                */
-    nullptr,                /* config options                  */
-    PLUGIN_OPT_DEFAULT_OFF, /* flags            */
+    nullptr, /* status variables                */
+    nullptr, /* system variables                */
+    nullptr, /* config options                  */
+    0,       /* flags                           */
 } mysql_declare_plugin_end;

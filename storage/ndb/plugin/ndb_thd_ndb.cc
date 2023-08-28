@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 #include "storage/ndb/plugin/ndb_thd.h"
 
 /*
-  Default value for max number of transactions creatable against NDB from
+  Default value for max number of transactions createable against NDB from
   the handler. Should really be 2 but there is a transaction to much allocated
   when lock table is used, and one extra to used for global schema lock.
 */
@@ -44,24 +44,18 @@ Thd_ndb *Thd_ndb::seize(THD *thd) {
   DBUG_TRACE;
 
   Thd_ndb *thd_ndb = new Thd_ndb(thd);
-  if (thd_ndb == nullptr) {
-    return nullptr;
-  }
+  if (thd_ndb == NULL) return NULL;
 
   if (thd_ndb->ndb->init(MAX_TRANSACTIONS) != 0) {
+    DBUG_PRINT("error", ("Ndb::init failed, error: %d  message: %s",
+                         thd_ndb->ndb->getNdbError().code,
+                         thd_ndb->ndb->getNdbError().message));
+
     delete thd_ndb;
-    return nullptr;
+    thd_ndb = NULL;
+  } else {
+    thd_ndb->ndb->setCustomData64(thd_get_thread_id(thd));
   }
-
-  // Save mapping between Ndb and THD
-  thd_ndb->ndb->setCustomData64(thd_get_thread_id(thd));
-
-  // Init Applier state (if it will do applier work)
-  if (!thd_ndb->init_applier()) {
-    delete thd_ndb;
-    return nullptr;
-  }
-
   return thd_ndb;
 }
 
@@ -74,26 +68,24 @@ bool Thd_ndb::recycle_ndb(void) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("ndb: %p", ndb));
 
-  assert(global_schema_lock_trans == nullptr);
-  assert(trans == nullptr);
+  assert(global_schema_lock_trans == NULL);
+  assert(trans == NULL);
 
   delete ndb;
-
-  ndb = new Ndb(connection, "");
-  if (ndb == nullptr) {
-    // Dead code, failed new will terminate
+  if ((ndb = new Ndb(connection, "")) == NULL) {
+    DBUG_PRINT("error", ("failed to allocate Ndb object"));
     return false;
   }
 
   if (ndb->init(MAX_TRANSACTIONS) != 0) {
-    // Failed to init Ndb object, release the newly created Ndb
     delete ndb;
-    ndb = nullptr;
+    ndb = NULL;
+    DBUG_PRINT("error", ("Ndb::init failed, %d  message: %s",
+                         ndb->getNdbError().code, ndb->getNdbError().message));
     return false;
+  } else {
+    ndb->setCustomData64(thd_get_thread_id(m_thd));
   }
-
-  // Save mapping between Ndb and THD
-  ndb->setCustomData64(thd_get_thread_id(m_thd));
 
   /* Reset last commit epoch for this 'session'. */
   m_last_commit_epoch_session = 0;
@@ -203,7 +195,7 @@ void Thd_ndb::Trans_tables::update_cached_stats_with_committed() {
   for (auto &key_and_value : m_map) {
     NDB_SHARE *share = key_and_value.first;
     Stats &stat = key_and_value.second;
-    share->cached_stats.add_changed_rows(stat.uncommitted_rows);
+    share->update_cached_row_count(stat.uncommitted_rows);
     stat.uncommitted_rows = 0;
   }
   dbug_print(true);
@@ -214,27 +206,17 @@ bool Thd_ndb::check_option(Options option) const { return (options & option); }
 void Thd_ndb::set_option(Options option) { options |= option; }
 
 /*
-  This function is called after a row operation has been added to
-  the transaction. It will update the unsent byte counter and determine if batch
-  size threshold has been exceeded.
-
-  @param row_size Estimated number of bytes that has been added to transaction.
-
-  @return true Batch size threshold has been exceeded
-
+  Used for every additional row operation, to update the guesstimate
+  of pending bytes to send, and to check if it is now time to flush a batch.
 */
-bool Thd_ndb::add_row_check_if_batch_full(uint row_size) {
-  if (m_unsent_bytes == 0) {
-    // Clear batch buffer
-    m_batch_mem_root.ClearForReuse();
-  }
 
-  // Increment number of unsent bytes. NOTE! The row_size is assumed to be a
-  // fairly small number, basically limited by max record size of a table
-  m_unsent_bytes += row_size;
+bool Thd_ndb::add_row_check_if_batch_full(uint size) {
+  if (m_unsent_bytes == 0) m_batch_mem_root.ClearForReuse();
 
-  // Return true if unsent bytes has exceeded the batch size threshold.
-  return m_unsent_bytes >= m_batch_size;
+  uint unsent = m_unsent_bytes;
+  unsent += size;
+  m_unsent_bytes = unsent;
+  return unsent >= m_batch_size;
 }
 
 bool Thd_ndb::check_trans_option(Trans_options option) const {
@@ -245,6 +227,8 @@ void Thd_ndb::set_trans_option(Trans_options option) {
 #ifndef NDEBUG
   if (check_trans_option(TRANS_TRANSACTIONS_OFF))
     DBUG_PRINT("info", ("Disabling transactions"));
+  if (check_trans_option(TRANS_INJECTED_APPLY_STATUS))
+    DBUG_PRINT("info", ("Statement has written to ndb_apply_status"));
   if (check_trans_option(TRANS_NO_LOGGING))
     DBUG_PRINT("info", ("Statement is not using logging"));
 #endif
@@ -286,11 +270,7 @@ static void push_condition(THD *thd,
   // NOTE! This can be removed when BUG#27507543 has been implemented
   // and instead log these warnings in a more controlled/selective manner
   // in Ndb_local_connection.
-  if (ndb_thd_is_binlog_thread(thd) || ndb_thd_is_replica_thread(thd)) {
-    if (code == ER_REPLICA_SILENT_RETRY_TRANSACTION) {
-      // The warning should be handled silently
-      return;
-    }
+  if (ndb_thd_is_binlog_thread(thd)) {
     ndb_log_warning("%s", msg_buf);
   }
 }

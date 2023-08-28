@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -66,12 +66,9 @@ class THD;
 #include "storage/perfschema/pfs_events_waits.h"
 #include "storage/perfschema/pfs_instr_class.h"
 #include "storage/perfschema/pfs_lock.h"
-#include "storage/perfschema/pfs_name.h"
 #include "storage/perfschema/pfs_server.h"
 #include "storage/perfschema/pfs_stat.h"
 #include "violite.h" /* enum_vio_type */
-
-#include <mysql/components/services/mysql_server_telemetry_traces_service.h>
 
 extern PFS_single_stat *thread_instr_class_waits_array_start;
 extern PFS_single_stat *thread_instr_class_waits_array_end;
@@ -181,7 +178,9 @@ struct PFS_ALIGNED PFS_file : public PFS_instr {
   /** File identity */
   const void *m_identity;
   /** File name. */
-  PFS_file_name m_file_name;
+  char m_filename[FN_REFLEN];
+  /** File name length in bytes. */
+  uint m_filename_length;
   /** File class. */
   PFS_file_class *m_class;
   /** File usage statistics. */
@@ -243,19 +242,19 @@ struct PFS_ALIGNED PFS_table {
     @sa sanitized_aggregate_io
     @sa sanitized_aggregate_lock
   */
-  void sanitized_aggregate();
+  void sanitized_aggregate(void);
 
   /**
     Aggregate this table handle I/O statistics to the parents.
     This method is safe to call on handles not owned by the calling code.
   */
-  void sanitized_aggregate_io();
+  void sanitized_aggregate_io(void);
 
   /**
     Aggregate this table handle lock statistics to the parents.
     This method is safe to call on handles not owned by the calling code.
   */
-  void sanitized_aggregate_lock();
+  void sanitized_aggregate_lock(void);
 
   /** Internal lock. */
   pfs_lock m_lock;
@@ -279,9 +278,9 @@ struct PFS_ALIGNED PFS_table {
  private:
   static void safe_aggregate_io(const TABLE_SHARE *optional_server_share,
                                 PFS_table_stat *stat,
-                                PFS_table_share *table_share);
+                                PFS_table_share *safe_share);
   static void safe_aggregate_lock(PFS_table_stat *stat,
-                                  PFS_table_share *table_share);
+                                  PFS_table_share *safe_share);
 };
 
 /** Instrumented socket implementation. @see PSI_socket. */
@@ -372,7 +371,7 @@ extern size_t pfs_max_sqltext;
 
 /** Instrumented thread implementation. @see PSI_thread. */
 struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
-  static PFS_thread *get_current_thread();
+  static PFS_thread *get_current_thread(void);
 
   /** Thread instrumentation flag. */
   bool m_enabled;
@@ -574,20 +573,32 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
     User name.
     Protected by @c m_session_lock.
   */
-  PFS_user_name m_user_name;
-
+  char m_username[USERNAME_LENGTH];
+  /**
+    Length of @c m_username.
+    Protected by @c m_session_lock.
+  */
+  uint m_username_length;
   /**
     Host name.
     Protected by @c m_session_lock.
   */
-  PFS_host_name m_host_name;
-
+  char m_hostname[HOSTNAME_LENGTH];
+  /**
+    Length of @c m_hostname.
+    Protected by @c m_session_lock.
+  */
+  uint m_hostname_length;
   /**
     Database name.
     Protected by @c m_stmt_lock.
   */
-  PFS_schema_name m_db_name;
-
+  char m_dbname[NAME_LEN];
+  /**
+    Length of @c m_dbname.
+    Protected by @c m_stmt_lock.
+  */
+  uint m_dbname_length;
   /**
     Resource group name.
     Protected by @c m_session_lock.
@@ -631,9 +642,6 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
   */
   uint m_processlist_info_length;
 
-  /** Executed on secondary engine. */
-  bool m_secondary;
-
   PFS_events_stages m_stage_current;
 
   /** Size of @c m_events_statements_stack. */
@@ -643,7 +651,6 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
   PFS_events_transactions m_transaction_current;
 
   THD *m_thd;
-  THD *m_cnt_thd;
   PFS_host *m_host;
   PFS_user *m_user;
   PFS_account *m_account;
@@ -718,21 +725,6 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
     }
     return m_instr_class_memory_stats;
   }
-  void mem_cnt_alloc(size_t size);
-  void mem_cnt_free(size_t size);
-#ifndef NDEBUG
-  const char *current_key_name;
-#endif
-
-  PFS_session_all_memory_stat m_session_all_memory_stat;
-
-  /** Copy of g_telemetry. */
-  telemetry_t *m_telemetry;
-  telemetry_session_t *m_telemetry_session;
-
-#ifndef NDEBUG
-  bool m_debug_session_notified;
-#endif
 };
 
 void carry_global_memory_stat_alloc_delta(PFS_memory_stat_alloc_delta *delta,
@@ -757,7 +749,7 @@ int init_instruments(const PFS_global_param *param);
 void cleanup_instruments();
 int init_file_hash(const PFS_global_param *param);
 void cleanup_file_hash();
-PFS_mutex *create_mutex(PFS_mutex_class *klass, const void *identity);
+PFS_mutex *create_mutex(PFS_mutex_class *mutex_class, const void *identity);
 void destroy_mutex(PFS_mutex *pfs);
 PFS_rwlock *create_rwlock(PFS_rwlock_class *klass, const void *identity);
 void destroy_rwlock(PFS_rwlock *pfs);
@@ -788,7 +780,7 @@ PFS_table *create_table(PFS_table_share *share, PFS_thread *opening_thread,
                         const void *identity);
 void destroy_table(PFS_table *pfs);
 
-PFS_socket *create_socket(PFS_socket_class *klass, const my_socket *fd,
+PFS_socket *create_socket(PFS_socket_class *socket_class, const my_socket *fd,
                           const struct sockaddr *addr, socklen_t addr_len);
 void destroy_socket(PFS_socket *pfs);
 

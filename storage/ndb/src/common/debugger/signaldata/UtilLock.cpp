@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -25,18 +25,11 @@
 
 #include <signaldata/UtilLock.hpp>
 
-bool printUTIL_LOCK_REQ(FILE *output,
-                        const Uint32 *theData,
-                        Uint32 len,
-                        Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_LOCK_REQ (FILE * output, const Uint32 * theData,
+		    Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilLockReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilLockReq *const sig = (const UtilLockReq *)theData;
+  const UtilLockReq *const sig = (UtilLockReq *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -45,18 +38,11 @@ bool printUTIL_LOCK_REQ(FILE *output,
   return true;
 }
 
-bool printUTIL_LOCK_CONF(FILE *output,
-                         const Uint32 *theData,
-                         Uint32 len,
-                         Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_LOCK_CONF (FILE * output, const Uint32 * theData,
+		     Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilLockConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilLockConf *const sig = (const UtilLockConf *)theData;
+  const UtilLockConf *const sig = (UtilLockConf *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -64,18 +50,11 @@ bool printUTIL_LOCK_CONF(FILE *output,
   return true;
 }
 
-bool printUTIL_LOCK_REF(FILE *output,
-                        const Uint32 *theData,
-                        Uint32 len,
-                        Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_LOCK_REF (FILE * output, const Uint32 * theData,
+		    Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilLockRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilLockRef *const sig = (const UtilLockRef *)theData;
+  const UtilLockRef *const sig = (UtilLockRef *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -84,54 +63,33 @@ bool printUTIL_LOCK_REF(FILE *output,
   return true;
 }
 
-bool printUTIL_UNLOCK_REQ(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_UNLOCK_REQ (FILE * output, const Uint32 * theData,
+		      Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilUnlockReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilUnlockReq *const sig = (const UtilUnlockReq *)theData;
+  const UtilUnlockReq *const sig = (UtilUnlockReq *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
   return true;
 }
 
-bool printUTIL_UNLOCK_CONF(FILE *output,
-                           const Uint32 *theData,
-                           Uint32 len,
-                           Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_UNLOCK_CONF (FILE * output, const Uint32 * theData,
+		       Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilUnlockConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilUnlockConf *const sig = (const UtilUnlockConf *)theData;
+  const UtilUnlockConf *const sig = (UtilUnlockConf *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
   return true;
 }
 
-bool printUTIL_UNLOCK_REF(FILE *output,
-                          const Uint32 *theData,
-                          Uint32 len,
-                          Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_UNLOCK_REF (FILE * output, const Uint32 * theData,
+		      Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilUnlockRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilUnlockRef *const sig = (const UtilUnlockRef *)theData;
+  const UtilUnlockRef *const sig = (UtilUnlockRef *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -139,18 +97,11 @@ bool printUTIL_UNLOCK_REF(FILE *output,
   return true;
 }
 
-bool printUTIL_CREATE_LOCK_REQ(FILE *output,
-                               const Uint32 *theData,
-                               Uint32 len,
-                               Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_CREATE_LOCK_REQ (FILE * output, const Uint32 * theData,
+			   Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilCreateLockReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilCreateLockReq *const sig = (const UtilCreateLockReq *)theData;
+  const UtilCreateLockReq *const sig = (UtilCreateLockReq *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -158,18 +109,11 @@ bool printUTIL_CREATE_LOCK_REQ(FILE *output,
   return true;
 }
 
-bool printUTIL_CREATE_LOCK_REF(FILE *output,
-                               const Uint32 *theData,
-                               Uint32 len,
-                               Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_CREATE_LOCK_REF (FILE * output, const Uint32 * theData,
+			   Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilCreateLockRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilCreateLockRef *const sig = (const UtilCreateLockRef *)theData;
+  const UtilCreateLockRef *const sig = (UtilCreateLockRef *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -177,54 +121,33 @@ bool printUTIL_CREATE_LOCK_REF(FILE *output,
   return true;
 }
 
-bool printUTIL_CREATE_LOCK_CONF(FILE *output,
-                                const Uint32 *theData,
-                                Uint32 len,
-                                Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_CREATE_LOCK_CONF (FILE * output, const Uint32 * theData,
+			    Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilCreateLockConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilCreateLockConf *const sig = (const UtilCreateLockConf *)theData;
+  const UtilCreateLockConf *const sig = (UtilCreateLockConf *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
   return true;
 }
 
-bool printUTIL_DESTROY_LOCK_REQ(FILE *output,
-                                const Uint32 *theData,
-                                Uint32 len,
-                                Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_DESTROY_LOCK_REQ (FILE * output, const Uint32 * theData,
+			    Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilDestroyLockReq::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilDestroyLockReq *const sig = (const UtilDestroyLockReq *)theData;
+  const UtilDestroyLockReq *const sig = (UtilDestroyLockReq *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
   return true;
 }
 
-bool printUTIL_DESTROY_LOCK_REF(FILE *output,
-                                const Uint32 *theData,
-                                Uint32 len,
-                                Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_DESTROY_LOCK_REF (FILE * output, const Uint32 * theData,
+			    Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilDestroyLockRef::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilDestroyLockRef *const sig = (const UtilDestroyLockRef *)theData;
+  const UtilDestroyLockRef *const sig = (UtilDestroyLockRef *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);
@@ -232,18 +155,11 @@ bool printUTIL_DESTROY_LOCK_REF(FILE *output,
   return true;
 }
 
-bool printUTIL_DESTROY_LOCK_CONF(FILE *output,
-                                 const Uint32 *theData,
-                                 Uint32 len,
-                                 Uint16 /*receiverBlockNo*/)
+bool
+printUTIL_DESTROY_LOCK_CONF (FILE * output, const Uint32 * theData,
+			     Uint32 len, Uint16 receiverBlockNo)
 {
-  if (len < UtilDestroyLockConf::SignalLength)
-  {
-    assert(false);
-    return false;
-  }
-
-  const UtilDestroyLockConf *const sig = (const UtilDestroyLockConf *)theData;
+  const UtilDestroyLockConf *const sig = (UtilDestroyLockConf *) theData;
   fprintf (output, " senderData: %x\n", sig->senderData);
   fprintf (output, " senderRef: %x\n", sig->senderRef);
   fprintf (output, " lockId: %x\n", sig->lockId);

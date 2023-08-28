@@ -2,12 +2,12 @@
 .\"     Title: ndb_print_backup_file
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/21/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "NDB_PRINT_BACKUP_FILE" "1" "06/21/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "NDB_PRINT_BACKUP_FILE" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -41,7 +41,7 @@ obtains diagnostic information from a cluster backup file\&.
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&23.38.\ \&Command\-line options used with the program ndb_print_backup_file
+.B Table\ \&23.39.\ \&Command\-line options used with the program ndb_print_backup_file
 .TS
 allbox tab(:);
 lB lB lB.
@@ -74,59 +74,37 @@ lB l l
 lB l l
 lB l l
 lB l l
-lB l l
-lB l l
 lB l l.
 T{
 .PP
-\fB--backup-key=key\fR,
+\fB--backup-password=string\fR,
 .PP
-\fB \fR\fB-K password\fR\fB \fR
+\fB \fR\fB-P\fR\fB \fR
 T}:T{
 Use this password to decrypt file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.22
 T}
 T{
 .PP
-\fB \fR\fB--backup-key-from-stdin\fR\fB \fR
-T}:T{
-Get decryption key in a secure fashion from STDIN
-T}:T{
-.PP
-(Supported in all NDB releases based on MySQL 8.1)
-T}
-T{
-.PP
-\fB--backup-password=password\fR,
-.PP
-\fB \fR\fB-P password\fR\fB \fR
-T}:T{
-Use this password to decrypt file
-T}:T{
-.PP
-(Supported in all NDB releases based on MySQL 8.1)
-T}
-T{
-.PP
-\fB \fR\fB--backup-password-from-stdin\fR\fB \fR
+\fB \fR\fB--backup-password-from-stdin[=value]\fR\fB \fR
 T}:T{
 Get decryption password in a secure fashion from STDIN
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
 \fB--control-directory-number=#\fR,
 .PP
-\fB \fR\fB-c #\fR\fB \fR
+\fB \fR\fB-c\fR\fB \fR
 T}:T{
 Control directory number
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -135,7 +113,7 @@ T}:T{
 Read given file after global files are read
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -144,7 +122,7 @@ T}:T{
 Read default options from given file only
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -153,18 +131,18 @@ T}:T{
 Also read groups with concat(group, suffix)
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
 \fB--fragment-id=#\fR,
 .PP
-\fB \fR\fB-f #\fR\fB \fR
+\fB \fR\fB-f\fR\fB \fR
 T}:T{
 Fragment ID
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -179,7 +157,7 @@ T}:T{
 Print usage information
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -188,7 +166,7 @@ T}:T{
 Read given path from login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -197,7 +175,7 @@ T}:T{
 Do not read default options from any option file other than login file
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -208,7 +186,7 @@ T}:T{
 Do not print rows
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -217,7 +195,7 @@ T}:T{
 Print program argument list and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -228,7 +206,7 @@ T}:T{
 Print header words
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -237,7 +215,7 @@ T}:T{
 Print restored rows
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -248,7 +226,7 @@ T}:T{
 Print rows. Enabled by default; disable with --no-print-rows
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -257,18 +235,18 @@ T}:T{
 Print rows per page
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
-\fB--rowid-file=path\fR,
+\fB--rowid-file\fR,
 .PP
-\fB \fR\fB-n path\fR\fB \fR
+\fB \fR\fB-n\fR\fB \fR
 T}:T{
 File containing row ID to check for
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -279,18 +257,18 @@ T}:T{
 Show ignored rows
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
-\fB--table-id=#\fR,
+\fB--table-id\fR,
 .PP
-\fB \fR\fB-t #\fR\fB \fR
+\fB \fR\fB-t\fR\fB \fR
 T}:T{
-Table ID; used with --print-restored rows
+Table ID
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -301,7 +279,7 @@ T}:T{
 Display help text and exit; same as --help
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 T{
 .PP
@@ -312,7 +290,7 @@ T}:T{
 Verbosity level
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+ADDED: NDB 8.0.24
 T}
 T{
 .PP
@@ -323,7 +301,7 @@ T}:T{
 Display version information and exit
 T}:T{
 .PP
-(Supported in all NDB releases based on MySQL 8.1)
+(Supported in all NDB releases based on MySQL 8.0)
 T}
 .TE
 .sp 1
@@ -359,59 +337,14 @@ utilities that are intended to be run on a management server host or to connect 
 \fBndb_print_backup_file\fR
 must be run on a cluster data node, since it accesses the data node file system directly\&. Because it does not make use of the management server, this utility can be used when the management server is not running, and even when the cluster has been completely shut down\&.
 .PP
-This program can also be used to read undo log files\&.
+In NDB 8\&.0, this program can also be used to read undo log files\&.
 Options
 .PP
+Prior to NDB 8\&.0\&.24,
 \fBndb_print_backup_file\fR
-supports the options described in the following list\&.
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-backup\-key\fR,
-\fB\-K\fR
-.TS
-allbox tab(:);
-lB l.
-T{
-Command-Line Format
-T}:T{
---backup-key=key
-T}
-.TE
-.sp 1
-Specify the key needed to decrypt an encrypted backup\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-backup\-key\-from\-stdin\fR
-.TS
-allbox tab(:);
-lB l.
-T{
-Command-Line Format
-T}:T{
---backup-key-from-stdin
-T}
-.TE
-.sp 1
-Allow input of the decryption key from standard input, similar to entering a password after invoking
-\fBmysql\fR
-\fB\-\-password\fR
-with no password supplied\&.
-.RE
+supported only the
+\fB\-P\fR
+option\&. Beginning with NDB 8\&.0\&.24, the program supports a number of options, which are described in the following list\&.
 .sp
 .RS 4
 .ie n \{\
@@ -426,11 +359,17 @@ with no password supplied\&.
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---backup-password=password
+--backup-password=string
+T}
+T{
+Introduced
+T}:T{
+8.0.22-ndb-8.0.22
 T}
 T{
 Type
@@ -445,6 +384,8 @@ T}
 .TE
 .sp 1
 Specify the password needed to decrypt an encrypted backup\&.
+.sp
+The long form of this option is available beginning with NDB 8\&.0\&.24\&.
 .RE
 .sp
 .RS 4
@@ -458,11 +399,29 @@ Specify the password needed to decrypt an encrypted backup\&.
 \fB\-\-backup\-password\-from\-stdin\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---backup-password-from-stdin
+--backup-password-from-stdin[=value]
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -485,11 +444,17 @@ with no password supplied\&.
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --control-directory-number=#
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
 T}
 T{
 Type
@@ -622,11 +587,17 @@ Also read groups with concat(group, suffix)\&.
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --fragment-id=#
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
 T}
 T{
 Type
@@ -655,6 +626,9 @@ Fragment ID\&. Used together with
 \fB\-\-help\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
@@ -663,6 +637,20 @@ T}:T{
 --help
 .PP
 --usage
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
 T}
 .TE
 .sp 1
@@ -736,11 +724,29 @@ Do not read default options from any option file other than login file\&.
 \fB\-\-no\-print\-rows\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --no-print-rows
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -780,11 +786,29 @@ Print program argument list and exit\&.
 \fB\-\-print\-header\-words\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --print-header-words
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -802,11 +826,29 @@ Include header words in output\&.
 \fB\-\-print\-restored\-rows\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --print-restored-rows
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -864,11 +906,29 @@ is the fragment ID set using
 \fB\-\-print\-rows\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --print-rows
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+TRUE
 T}
 .TE
 .sp 1
@@ -887,11 +947,29 @@ Print rows\&. This option is enabled by default; to disable it, use
 \fB\-\-print\-rows\-per\-page\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --print-rows-per-page
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -911,11 +989,17 @@ Print rows per page\&.
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---rowid-file=path
+--rowid-file
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
 T}
 T{
 Type
@@ -943,11 +1027,29 @@ File to check for row ID\&.
 \fB\-\-show\-ignored\-rows\fR
 .TS
 allbox tab(:);
+lB l
+lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --show-ignored-rows
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
+T}
+T{
+Type
+T}:T{
+Boolean
+T}
+T{
+Default Value
+T}:T{
+FALSE
 T}
 .TE
 .sp 1
@@ -967,21 +1069,27 @@ Show ignored rows\&.
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
---table-id=#
+--table-id
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
 T}
 T{
 Type
 T}:T{
-Integer
+Boolean
 T}
 T{
 Default Value
 T}:T{
-[none]
+FALSE
 T}
 .TE
 .sp 1
@@ -1025,11 +1133,17 @@ Display help text and exit; same as
 allbox tab(:);
 lB l
 lB l
+lB l
 lB l.
 T{
 Command-Line Format
 T}:T{
 --verbose[=#]
+T}
+T{
+Introduced
+T}:T{
+8.0.24-ndb-8.0.24
 T}
 T{
 Type
@@ -1070,7 +1184,7 @@ Display version information and exit\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

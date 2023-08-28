@@ -170,43 +170,11 @@ utf32_turkish_ci	utf32	169		#	#	PAD SPACE
 utf32_unicode_520_ci	utf32	182		#	#	PAD SPACE
 utf32_unicode_ci	utf32	160		#	#	PAD SPACE
 utf32_vietnamese_ci	utf32	183		#	#	PAD SPACE
-utf8mb3_bin	utf8mb3	83		#	#	PAD SPACE
-utf8mb3_croatian_ci	utf8mb3	213		#	#	PAD SPACE
-utf8mb3_czech_ci	utf8mb3	202		#	#	PAD SPACE
-utf8mb3_danish_ci	utf8mb3	203		#	#	PAD SPACE
-utf8mb3_esperanto_ci	utf8mb3	209		#	#	PAD SPACE
-utf8mb3_estonian_ci	utf8mb3	198		#	#	PAD SPACE
-utf8mb3_general_ci	utf8mb3	33	Yes	#	#	PAD SPACE
-utf8mb3_general_mysql500_ci	utf8mb3	223		#	#	PAD SPACE
-utf8mb3_german2_ci	utf8mb3	212		#	#	PAD SPACE
-utf8mb3_hungarian_ci	utf8mb3	210		#	#	PAD SPACE
-utf8mb3_icelandic_ci	utf8mb3	193		#	#	PAD SPACE
-utf8mb3_latvian_ci	utf8mb3	194		#	#	PAD SPACE
-utf8mb3_lithuanian_ci	utf8mb3	204		#	#	PAD SPACE
-utf8mb3_persian_ci	utf8mb3	208		#	#	PAD SPACE
-utf8mb3_polish_ci	utf8mb3	197		#	#	PAD SPACE
-utf8mb3_romanian_ci	utf8mb3	195		#	#	PAD SPACE
-utf8mb3_roman_ci	utf8mb3	207		#	#	PAD SPACE
-utf8mb3_sinhala_ci	utf8mb3	211		#	#	PAD SPACE
-utf8mb3_slovak_ci	utf8mb3	205		#	#	PAD SPACE
-utf8mb3_slovenian_ci	utf8mb3	196		#	#	PAD SPACE
-utf8mb3_spanish2_ci	utf8mb3	206		#	#	PAD SPACE
-utf8mb3_spanish_ci	utf8mb3	199		#	#	PAD SPACE
-utf8mb3_swedish_ci	utf8mb3	200		#	#	PAD SPACE
-utf8mb3_tolower_ci	utf8mb3	76		#	#	PAD SPACE
-utf8mb3_turkish_ci	utf8mb3	201		#	#	PAD SPACE
-utf8mb3_unicode_520_ci	utf8mb3	214		#	#	PAD SPACE
-utf8mb3_unicode_ci	utf8mb3	192		#	#	PAD SPACE
-utf8mb3_vietnamese_ci	utf8mb3	215		#	#	PAD SPACE
 utf8mb4_0900_ai_ci	utf8mb4	255	Yes	#	#	NO PAD
 utf8mb4_0900_as_ci	utf8mb4	305		#	#	NO PAD
 utf8mb4_0900_as_cs	utf8mb4	278		#	#	NO PAD
 utf8mb4_0900_bin	utf8mb4	309		#	#	NO PAD
-utf8mb4_bg_0900_ai_ci	utf8mb4	318		#	#	NO PAD
-utf8mb4_bg_0900_as_cs	utf8mb4	319		#	#	NO PAD
 utf8mb4_bin	utf8mb4	46		#	#	PAD SPACE
-utf8mb4_bs_0900_ai_ci	utf8mb4	316		#	#	NO PAD
-utf8mb4_bs_0900_as_cs	utf8mb4	317		#	#	NO PAD
 utf8mb4_croatian_ci	utf8mb4	245		#	#	PAD SPACE
 utf8mb4_cs_0900_ai_ci	utf8mb4	266		#	#	NO PAD
 utf8mb4_cs_0900_as_cs	utf8mb4	289		#	#	NO PAD
@@ -228,8 +196,6 @@ utf8mb4_et_0900_ai_ci	utf8mb4	262		#	#	NO PAD
 utf8mb4_et_0900_as_cs	utf8mb4	285		#	#	NO PAD
 utf8mb4_general_ci	utf8mb4	45		#	#	PAD SPACE
 utf8mb4_german2_ci	utf8mb4	244		#	#	PAD SPACE
-utf8mb4_gl_0900_ai_ci	utf8mb4	320		#	#	NO PAD
-utf8mb4_gl_0900_as_cs	utf8mb4	321		#	#	NO PAD
 utf8mb4_hr_0900_ai_ci	utf8mb4	275		#	#	NO PAD
 utf8mb4_hr_0900_as_cs	utf8mb4	298		#	#	NO PAD
 utf8mb4_hungarian_ci	utf8mb4	242		#	#	PAD SPACE
@@ -248,12 +214,6 @@ utf8mb4_lt_0900_ai_ci	utf8mb4	268		#	#	NO PAD
 utf8mb4_lt_0900_as_cs	utf8mb4	291		#	#	NO PAD
 utf8mb4_lv_0900_ai_ci	utf8mb4	258		#	#	NO PAD
 utf8mb4_lv_0900_as_cs	utf8mb4	281		#	#	NO PAD
-utf8mb4_mn_cyrl_0900_ai_ci	utf8mb4	322		#	#	NO PAD
-utf8mb4_mn_cyrl_0900_as_cs	utf8mb4	323		#	#	NO PAD
-utf8mb4_nb_0900_ai_ci	utf8mb4	310		#	#	NO PAD
-utf8mb4_nb_0900_as_cs	utf8mb4	311		#	#	NO PAD
-utf8mb4_nn_0900_ai_ci	utf8mb4	312		#	#	NO PAD
-utf8mb4_nn_0900_as_cs	utf8mb4	313		#	#	NO PAD
 utf8mb4_persian_ci	utf8mb4	240		#	#	PAD SPACE
 utf8mb4_pl_0900_ai_ci	utf8mb4	261		#	#	NO PAD
 utf8mb4_pl_0900_as_cs	utf8mb4	284		#	#	NO PAD
@@ -273,8 +233,6 @@ utf8mb4_sl_0900_ai_ci	utf8mb4	260		#	#	NO PAD
 utf8mb4_sl_0900_as_cs	utf8mb4	283		#	#	NO PAD
 utf8mb4_spanish2_ci	utf8mb4	238		#	#	PAD SPACE
 utf8mb4_spanish_ci	utf8mb4	231		#	#	PAD SPACE
-utf8mb4_sr_latn_0900_ai_ci	utf8mb4	314		#	#	NO PAD
-utf8mb4_sr_latn_0900_as_cs	utf8mb4	315		#	#	NO PAD
 utf8mb4_sv_0900_ai_ci	utf8mb4	264		#	#	NO PAD
 utf8mb4_sv_0900_as_cs	utf8mb4	287		#	#	NO PAD
 utf8mb4_swedish_ci	utf8mb4	232		#	#	PAD SPACE
@@ -287,13 +245,41 @@ utf8mb4_vietnamese_ci	utf8mb4	247		#	#	PAD SPACE
 utf8mb4_vi_0900_ai_ci	utf8mb4	277		#	#	NO PAD
 utf8mb4_vi_0900_as_cs	utf8mb4	300		#	#	NO PAD
 utf8mb4_zh_0900_as_cs	utf8mb4	308		#	#	NO PAD
+utf8_bin	utf8	83		#	#	PAD SPACE
+utf8_croatian_ci	utf8	213		#	#	PAD SPACE
+utf8_czech_ci	utf8	202		#	#	PAD SPACE
+utf8_danish_ci	utf8	203		#	#	PAD SPACE
+utf8_esperanto_ci	utf8	209		#	#	PAD SPACE
+utf8_estonian_ci	utf8	198		#	#	PAD SPACE
+utf8_general_ci	utf8	33	Yes	#	#	PAD SPACE
+utf8_general_mysql500_ci	utf8	223		#	#	PAD SPACE
+utf8_german2_ci	utf8	212		#	#	PAD SPACE
+utf8_hungarian_ci	utf8	210		#	#	PAD SPACE
+utf8_icelandic_ci	utf8	193		#	#	PAD SPACE
+utf8_latvian_ci	utf8	194		#	#	PAD SPACE
+utf8_lithuanian_ci	utf8	204		#	#	PAD SPACE
+utf8_persian_ci	utf8	208		#	#	PAD SPACE
+utf8_polish_ci	utf8	197		#	#	PAD SPACE
+utf8_romanian_ci	utf8	195		#	#	PAD SPACE
+utf8_roman_ci	utf8	207		#	#	PAD SPACE
+utf8_sinhala_ci	utf8	211		#	#	PAD SPACE
+utf8_slovak_ci	utf8	205		#	#	PAD SPACE
+utf8_slovenian_ci	utf8	196		#	#	PAD SPACE
+utf8_spanish2_ci	utf8	206		#	#	PAD SPACE
+utf8_spanish_ci	utf8	199		#	#	PAD SPACE
+utf8_swedish_ci	utf8	200		#	#	PAD SPACE
+utf8_tolower_ci	utf8	76		#	#	PAD SPACE
+utf8_turkish_ci	utf8	201		#	#	PAD SPACE
+utf8_unicode_520_ci	utf8	214		#	#	PAD SPACE
+utf8_unicode_ci	utf8	192		#	#	PAD SPACE
+utf8_vietnamese_ci	utf8	215		#	#	PAD SPACE
 CREATE DATABASE d10 DEFAULT CHARACTER SET utf8;
 Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -301,11 +287,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_general_ci;
 Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -317,8 +303,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -326,11 +312,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_general_ci;
 Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -342,8 +328,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -351,11 +337,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_bin;
 Warnings:
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_bin	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_bin	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -367,8 +353,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -376,11 +362,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_bin;
 Warnings:
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_bin	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_bin	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -392,8 +378,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -401,11 +387,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_unicode_ci;
 Warnings:
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_unicode_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_unicode_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -417,8 +403,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -426,11 +412,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_unicode_ci;
 Warnings:
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_unicode_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_unicode_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -442,8 +428,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -451,11 +437,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_icelandic_ci;
 Warnings:
-Warning	3778	'utf8mb3_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_icelandic_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_icelandic_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -467,8 +453,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -476,11 +462,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_icelandic_ci;
 Warnings:
-Warning	3778	'utf8mb3_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_icelandic_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_icelandic_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -492,8 +478,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -501,11 +487,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_latvian_ci;
 Warnings:
-Warning	3778	'utf8mb3_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_latvian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_latvian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -517,8 +503,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -526,11 +512,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_latvian_ci;
 Warnings:
-Warning	3778	'utf8mb3_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_latvian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_latvian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -542,8 +528,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -551,11 +537,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_romanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_romanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_romanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -567,8 +553,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -576,11 +562,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_romanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_romanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_romanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -592,8 +578,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -601,11 +587,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_slovenian_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovenian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovenian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -617,8 +603,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -626,11 +612,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_slovenian_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovenian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovenian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -642,8 +628,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -651,11 +637,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_polish_ci;
 Warnings:
-Warning	3778	'utf8mb3_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_polish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_polish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -667,8 +653,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -676,11 +662,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_polish_ci;
 Warnings:
-Warning	3778	'utf8mb3_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_polish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_polish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -692,8 +678,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -701,11 +687,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_estonian_ci;
 Warnings:
-Warning	3778	'utf8mb3_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_estonian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_estonian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -717,8 +703,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -726,11 +712,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_estonian_ci;
 Warnings:
-Warning	3778	'utf8mb3_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_estonian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_estonian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -742,8 +728,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -751,11 +737,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_spanish_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -767,8 +753,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -776,11 +762,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_spanish_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -792,8 +778,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -801,11 +787,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_swedish_ci;
 Warnings:
-Warning	3778	'utf8mb3_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_swedish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_swedish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -817,8 +803,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -826,11 +812,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_swedish_ci;
 Warnings:
-Warning	3778	'utf8mb3_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_swedish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_swedish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -842,8 +828,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -851,11 +837,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_turkish_ci;
 Warnings:
-Warning	3778	'utf8mb3_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_turkish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_turkish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -867,8 +853,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -876,11 +862,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_turkish_ci;
 Warnings:
-Warning	3778	'utf8mb3_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_turkish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_turkish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -892,8 +878,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -901,11 +887,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_czech_ci;
 Warnings:
-Warning	3778	'utf8mb3_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_czech_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_czech_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -917,8 +903,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -926,11 +912,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_czech_ci;
 Warnings:
-Warning	3778	'utf8mb3_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_czech_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_czech_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -942,8 +928,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -951,11 +937,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_danish_ci;
 Warnings:
-Warning	3778	'utf8mb3_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_danish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_danish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -967,8 +953,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -976,11 +962,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_danish_ci;
 Warnings:
-Warning	3778	'utf8mb3_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_danish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_danish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -992,8 +978,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1001,11 +987,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_lithuanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_lithuanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_lithuanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1017,8 +1003,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1026,11 +1012,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_lithuanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_lithuanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_lithuanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1042,8 +1028,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1051,11 +1037,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_slovak_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovak_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovak_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1067,8 +1053,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1076,11 +1062,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_slovak_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovak_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovak_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1092,8 +1078,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1101,11 +1087,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_spanish2_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish2_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish2_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1117,8 +1103,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1126,11 +1112,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_spanish2_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish2_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish2_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1142,8 +1128,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1151,11 +1137,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_roman_ci;
 Warnings:
-Warning	3778	'utf8mb3_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_roman_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_roman_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1167,8 +1153,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1176,11 +1162,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_roman_ci;
 Warnings:
-Warning	3778	'utf8mb3_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_roman_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_roman_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1192,8 +1178,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1201,11 +1187,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_persian_ci;
 Warnings:
-Warning	3778	'utf8mb3_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_persian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_persian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1217,8 +1203,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1226,11 +1212,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_persian_ci;
 Warnings:
-Warning	3778	'utf8mb3_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_persian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_persian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1242,8 +1228,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1251,11 +1237,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_esperanto_ci;
 Warnings:
-Warning	3778	'utf8mb3_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_esperanto_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_esperanto_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1267,8 +1253,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1276,11 +1262,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_esperanto_ci;
 Warnings:
-Warning	3778	'utf8mb3_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_esperanto_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_esperanto_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1292,8 +1278,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1301,11 +1287,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10   COLLATE utf8_hungarian_ci;
 Warnings:
-Warning	3778	'utf8mb3_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_hungarian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_hungarian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1317,8 +1303,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1326,11 +1312,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER DATABASE d10 DEFAULT COLLATE utf8_hungarian_ci;
 Warnings:
-Warning	3778	'utf8mb3_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_hungarian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_hungarian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1342,8 +1328,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1351,11 +1337,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_general_ci;
 Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1367,8 +1353,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1376,11 +1362,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_general_ci;
 Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1392,8 +1378,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1401,11 +1387,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_bin;
 Warnings:
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_bin	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_bin	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1417,8 +1403,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1426,11 +1412,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_bin;
 Warnings:
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_bin	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_bin	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1442,8 +1428,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1451,11 +1437,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_unicode_ci;
 Warnings:
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_unicode_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_unicode_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1467,8 +1453,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1476,11 +1462,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_unicode_ci;
 Warnings:
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_unicode_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_unicode_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1492,8 +1478,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1501,11 +1487,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_icelandic_ci;
 Warnings:
-Warning	3778	'utf8mb3_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_icelandic_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_icelandic_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1517,8 +1503,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1526,11 +1512,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_icelandic_ci;
 Warnings:
-Warning	3778	'utf8mb3_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_icelandic_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_icelandic_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_icelandic_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1542,8 +1528,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1551,11 +1537,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_latvian_ci;
 Warnings:
-Warning	3778	'utf8mb3_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_latvian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_latvian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1567,8 +1553,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1576,11 +1562,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_latvian_ci;
 Warnings:
-Warning	3778	'utf8mb3_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_latvian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_latvian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_latvian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1592,8 +1578,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1601,11 +1587,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_romanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_romanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_romanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1617,8 +1603,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1626,11 +1612,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_romanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_romanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_romanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_romanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1642,8 +1628,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1651,11 +1637,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_slovenian_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovenian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovenian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1667,8 +1653,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1676,11 +1662,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_slovenian_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovenian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovenian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovenian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1692,8 +1678,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1701,11 +1687,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_polish_ci;
 Warnings:
-Warning	3778	'utf8mb3_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_polish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_polish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1717,8 +1703,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1726,11 +1712,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_polish_ci;
 Warnings:
-Warning	3778	'utf8mb3_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_polish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_polish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_polish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1742,8 +1728,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1751,11 +1737,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_estonian_ci;
 Warnings:
-Warning	3778	'utf8mb3_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_estonian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_estonian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1767,8 +1753,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1776,11 +1762,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_estonian_ci;
 Warnings:
-Warning	3778	'utf8mb3_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_estonian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_estonian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_estonian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1792,8 +1778,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1801,11 +1787,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_spanish_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1817,8 +1803,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1826,11 +1812,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_spanish_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1842,8 +1828,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1851,11 +1837,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_swedish_ci;
 Warnings:
-Warning	3778	'utf8mb3_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_swedish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_swedish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1867,8 +1853,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1876,11 +1862,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_swedish_ci;
 Warnings:
-Warning	3778	'utf8mb3_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_swedish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_swedish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_swedish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1892,8 +1878,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1901,11 +1887,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_turkish_ci;
 Warnings:
-Warning	3778	'utf8mb3_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_turkish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_turkish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1917,8 +1903,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1926,11 +1912,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_turkish_ci;
 Warnings:
-Warning	3778	'utf8mb3_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_turkish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_turkish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_turkish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1942,8 +1928,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1951,11 +1937,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_czech_ci;
 Warnings:
-Warning	3778	'utf8mb3_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_czech_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_czech_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1967,8 +1953,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1976,11 +1962,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_czech_ci;
 Warnings:
-Warning	3778	'utf8mb3_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_czech_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_czech_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_czech_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -1992,8 +1978,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2001,11 +1987,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_danish_ci;
 Warnings:
-Warning	3778	'utf8mb3_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_danish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_danish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2017,8 +2003,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2026,11 +2012,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_danish_ci;
 Warnings:
-Warning	3778	'utf8mb3_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_danish_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_danish_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_danish_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2042,8 +2028,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2051,11 +2037,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_lithuanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_lithuanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_lithuanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2067,8 +2053,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2076,11 +2062,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_lithuanian_ci;
 Warnings:
-Warning	3778	'utf8mb3_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_lithuanian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_lithuanian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_lithuanian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2092,8 +2078,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2101,11 +2087,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_slovak_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovak_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovak_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2117,8 +2103,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2126,11 +2112,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_slovak_ci;
 Warnings:
-Warning	3778	'utf8mb3_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_slovak_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_slovak_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_slovak_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2142,8 +2128,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2151,11 +2137,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_spanish2_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish2_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish2_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2167,8 +2153,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2176,11 +2162,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_spanish2_ci;
 Warnings:
-Warning	3778	'utf8mb3_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_spanish2_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_spanish2_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_spanish2_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2192,8 +2178,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2201,11 +2187,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_roman_ci;
 Warnings:
-Warning	3778	'utf8mb3_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_roman_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_roman_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2217,8 +2203,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2226,11 +2212,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_roman_ci;
 Warnings:
-Warning	3778	'utf8mb3_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_roman_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_roman_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_roman_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2242,8 +2228,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2251,11 +2237,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_persian_ci;
 Warnings:
-Warning	3778	'utf8mb3_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_persian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_persian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2267,8 +2253,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2276,11 +2262,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_persian_ci;
 Warnings:
-Warning	3778	'utf8mb3_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_persian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_persian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_persian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2292,8 +2278,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2301,11 +2287,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_esperanto_ci;
 Warnings:
-Warning	3778	'utf8mb3_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_esperanto_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_esperanto_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2317,8 +2303,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2326,11 +2312,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_esperanto_ci;
 Warnings:
-Warning	3778	'utf8mb3_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_esperanto_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_esperanto_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_esperanto_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2342,8 +2328,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2351,11 +2337,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10   COLLATE utf8_hungarian_ci;
 Warnings:
-Warning	3778	'utf8mb3_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_hungarian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_hungarian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2367,8 +2353,8 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_general_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_general_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
@@ -2376,11 +2362,11 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 ALTER SCHEMA d10 DEFAULT COLLATE utf8_hungarian_ci;
 Warnings:
-Warning	3778	'utf8mb3_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3778	'utf8_hungarian_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH	DEFAULT_ENCRYPTION
-def	d10	utf8mb3	utf8mb3_hungarian_ci	NULL	NO
-def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
+def	d10	utf8	utf8_hungarian_ci	NULL	NO
+def	information_schema	utf8	utf8_general_ci	NULL	NO
 def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO

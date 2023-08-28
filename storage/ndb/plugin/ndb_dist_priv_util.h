@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,8 +50,7 @@ class Ndb_dist_priv_util {
 #endif
     };
 
-    if (m_iter_curr_table >= (sizeof(tables) / sizeof(tables[0])))
-      return nullptr;
+    if (m_iter_curr_table >= (sizeof(tables) / sizeof(tables[0]))) return NULL;
     m_iter_curr_table++;
     return tables[m_iter_curr_table - 1];
   }

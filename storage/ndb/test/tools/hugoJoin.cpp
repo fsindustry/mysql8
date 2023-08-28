@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -48,42 +48,33 @@ static const char * _db = "TEST_DB";
 
 static struct my_option my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::connect_retry_delay,
-  NdbStdOpt::connect_retries,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS("hugoJoin"),
   { "database", 'd', "Database",
-    &_db, &_db,
+    (uchar**) &_db, (uchar**) &_db,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   { "options", 'o', "comma separated list of options",
-    &_options, &_options,
+    (uchar**) &_options, (uchar**) &_options,
     0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   { "loops", 'l', "Loops",
-    &_loops, 0,
+    (uchar**) &_loops, 0,
     0, GET_INT, REQUIRED_ARG, _loops, 0, 0, 0, 0, 0},
   { "verbose", 'v', "verbosity",
-    &_verbose, 0,
+    (uchar**) &_verbose, 0,
     0, GET_INT, REQUIRED_ARG, _verbose, 0, 0, 0, 0, 0},
   { "loops_per_query", 'q', "Recreate query each #loops",
-    &_loops_per_query, 0,
+    (uchar**) &_loops_per_query, 0,
     0, GET_INT, REQUIRED_ARG, _loops_per_query, 0, 0, 0, 0, 0},
   { "batch", 'b', "Batch size (for lookups)",
-    &_batch, 0,
+    (uchar**) &_batch, 0,
     0, GET_INT, REQUIRED_ARG, _batch, 0, 0, 0, 0, 0},
   { "records", 'r', "Records (for lookups)",
-    &_records, 0,
+    (uchar**) &_records, 0,
     0, GET_INT, REQUIRED_ARG, _records, 0, 0, 0, 0, 0},
   { "join-depth", 'j', "Join depth",
-    &_depth, 0,
+    (uchar**) &_depth, 0,
     0, GET_INT, REQUIRED_ARG, _depth, 0, 0, 0, 0, 0},
   { "seed", NDB_OPT_NOSHORT, "Random seed",
-    &_seed, &_seed, 0,
+    (uchar **) &_seed, (uchar **) &_seed, 0,
     GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };

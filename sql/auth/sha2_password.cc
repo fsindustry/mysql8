@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +46,8 @@
 #include "my_macros.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/bits/psi_rwlock_bits.h"
 #include "mysql/components/services/log_builtins.h"
+#include "mysql/components/services/psi_rwlock_bits.h"
 #include "mysql/mysql_lex_string.h"
 #include "mysql/plugin.h"
 #include "mysql/plugin_audit.h"
@@ -64,7 +64,6 @@
 #include "sql/auth/i_sha2_password_common.h"
 #include "sql/auth/sql_auth_cache.h" /* ACL_USER                    */
 #include "sql/auth/sql_authentication.h"
-#include "sql/debug_sync.h"       // DEBUG_SYNC
 #include "sql/protocol_classic.h" /* Protocol_classic            */
 #include "sql/sql_class.h"
 #include "sql/sql_const.h" /* MAX_FIELD_WIDTH             */
@@ -303,7 +302,7 @@ std::pair<bool, bool> Caching_sha2_password::authenticate(
         return std::make_pair(false, second);
       }
 
-      const rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
+      rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
       if (m_cache.add(authorization_id, fast_digest)) {
         sha2_cache_entry stored_digest;
         m_cache.search(authorization_id, stored_digest);
@@ -314,7 +313,7 @@ std::pair<bool, bool> Caching_sha2_password::authenticate(
           return std::make_pair(false, second);
 
         /* Update the digest. */
-        const uint retain_index = i ? 0 : 1;
+        uint retain_index = i ? 0 : 1;
         memcpy(fast_digest.digest_buffer[retain_index],
                stored_digest.digest_buffer[retain_index],
                sizeof(fast_digest.digest_buffer[retain_index]));
@@ -361,7 +360,7 @@ std::pair<bool, bool> Caching_sha2_password::fast_authenticate(
     return std::make_pair(true, false);
   }
 
-  const rwlock_scoped_lock rdlock(&m_cache_lock, false, __FILE__, __LINE__);
+  rwlock_scoped_lock rdlock(&m_cache_lock, false, __FILE__, __LINE__);
   sha2_cache_entry digest;
 
   if (m_cache.search(authorization_id, digest)) {
@@ -396,7 +395,7 @@ std::pair<bool, bool> Caching_sha2_password::fast_authenticate(
 
 void Caching_sha2_password::remove_cached_entry(
     const std::string authorization_id) {
-  const rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
+  rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
   /* It is possible that entry is not present at all, but we don't care */
   (void)m_cache.remove(authorization_id);
 }
@@ -448,7 +447,7 @@ bool Caching_sha2_password::deserialize(const std::string &serialized_string,
     DBUG_PRINT("info", ("Digest string is not in expected format."));
     return true;
   }
-  const std::string digest_type_info =
+  std::string digest_type_info =
       serialized_string.substr(delimiter + 1, DIGEST_INFO_LENGTH);
   if (digest_type_info == "A")
     digest_type = Digest_info::SHA256_DIGEST;
@@ -465,14 +464,14 @@ bool Caching_sha2_password::deserialize(const std::string &serialized_string,
                         "Missing iteration count information."));
     return true;
   }
-  const std::string::size_type delimiter_2 =
+  std::string::size_type delimiter_2 =
       serialized_string.find(DELIMITER, delimiter + 1);
   if (delimiter_2 == std::string::npos || delimiter_2 - delimiter != 4) {
     DBUG_PRINT("info", ("Digest string is not in expected format."
                         "Invalid iteration count information."));
     return true;
   }
-  const std::string iteration_info =
+  std::string iteration_info =
       serialized_string.substr(delimiter + 1, ITERATION_LENGTH);
   iterations =
       std::min((std::stoul(iteration_info, nullptr, 16)) * ITERATION_MULTIPLIER,
@@ -686,14 +685,14 @@ bool Caching_sha2_password::generate_sha2_multi_hash(const std::string &source,
 
 size_t Caching_sha2_password::get_cache_count() {
   DBUG_TRACE;
-  const rwlock_scoped_lock rdlock(&m_cache_lock, false, __FILE__, __LINE__);
+  rwlock_scoped_lock rdlock(&m_cache_lock, false, __FILE__, __LINE__);
   return m_cache.size();
 }
 
 /** Clear the password cache */
 void Caching_sha2_password::clear_cache() {
   DBUG_TRACE;
-  const rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
+  rwlock_scoped_lock wrlock(&m_cache_lock, true, __FILE__, __LINE__);
   m_cache.clear_cache();
 }
 
@@ -877,7 +876,7 @@ static char perform_full_authentication = '\4';
        if (Client: Connection check) then
          -[#red]-> [Priority#1:\nTCP with TLS OR Socket Or\nShared Memory connection:\nSend password to server] "Server: received password"
        else
-         if (Priority#2:\nPublic key available) then
+         if (Priorty#2:\nPublic key available) then
            -[#yellow]-> [yes] "Client: Public key available"
          else
            if (No\nPriority#3: Should client get\nserver's public key) then
@@ -928,13 +927,8 @@ static int caching_sha2_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   char scramble[SCRAMBLE_LENGTH + 1];
   int cipher_length = 0;
   unsigned char plain_text[MAX_CIPHER_LENGTH + 1];
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  EVP_PKEY *private_key = nullptr;
-  EVP_PKEY *public_key = nullptr;
-#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *private_key = nullptr;
   RSA *public_key = nullptr;
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   generate_user_salt(scramble, SCRAMBLE_LENGTH + 1);
 
@@ -1051,7 +1045,7 @@ static int caching_sha2_password_authenticate(MYSQL_PLUGIN_VIO *vio,
       encrypting the password.
     */
     if (pkt_len == 1 && *pkt == request_public_key) {
-      const uint pem_length = static_cast<uint>(
+      uint pem_length = static_cast<uint>(
           strlen(g_caching_sha2_rsa_keys->get_public_key_as_pem()));
       if (vio->write_packet(
               vio,
@@ -1070,9 +1064,8 @@ static int caching_sha2_password_authenticate(MYSQL_PLUGIN_VIO *vio,
     if (pkt_len != cipher_length) return CR_ERROR;
 
     /* Decrypt password */
-    if (decrypt_RSA_private_key(pkt, cipher_length, plain_text,
-                                sizeof(plain_text) - 1, private_key))
-      return CR_ERROR;
+    RSA_private_decrypt(cipher_length, pkt, plain_text, private_key,
+                        RSA_PKCS1_OAEP_PADDING);
 
     plain_text[cipher_length] = '\0';  // safety
     xor_string((char *)plain_text, cipher_length, (char *)scramble,
@@ -1086,13 +1079,13 @@ static int caching_sha2_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   }  // if(!my_vio_is_encrypted())
 
   /* Fetch user authentication_string and extract the password salt */
-  const std::string serialized_string[] = {
+  std::string serialized_string[] = {
       std::string(info->auth_string, info->auth_string_length),
       std::string(info->additional_auth_string_length
                       ? info->additional_auth_string
                       : "",
                   info->additional_auth_string_length)};
-  const std::string plaintext_password((char *)pkt, pkt_len - 1);
+  std::string plaintext_password((char *)pkt, pkt_len - 1);
   std::pair<bool, bool> auth_success = g_caching_sha2_password->authenticate(
       authorization_id, serialized_string, plaintext_password);
   if (auth_success.first) return CR_AUTH_USER_CREDENTIALS;
@@ -1129,7 +1122,7 @@ static int caching_sha2_password_generate(char *outbuf, unsigned int *buflen,
                                           unsigned int inbuflen) {
   DBUG_TRACE;
   std::string digest;
-  const std::string source(inbuf, inbuflen);
+  std::string source(inbuf, inbuflen);
   std::string random;
   std::string serialized_string;
 
@@ -1185,7 +1178,7 @@ static int caching_sha2_password_generate(char *outbuf, unsigned int *buflen,
 static int caching_sha2_password_validate(char *const inbuf,
                                           unsigned int buflen) {
   DBUG_TRACE;
-  const std::string serialized_string(inbuf, buflen);
+  std::string serialized_string(inbuf, buflen);
   if (g_caching_sha2_password->validate_hash(serialized_string)) return 1;
   return 0;
 }
@@ -1271,8 +1264,8 @@ static int compare_caching_sha2_password_with_hash(
     unsigned long cleartext_length, int *is_error) {
   DBUG_TRACE;
 
-  const std::string serialized_string(hash, hash_length);
-  const std::string plaintext_password(cleartext, cleartext_length);
+  std::string serialized_string(hash, hash_length);
+  std::string plaintext_password(cleartext, cleartext_length);
   std::string random;
   std::string digest;
   std::string generated_digest;
@@ -1298,8 +1291,8 @@ static int compare_caching_sha2_password_with_hash(
   }
 
   *is_error = 0;
-  const int result = memcmp(digest.c_str(), generated_digest.c_str(),
-                            sha2_password::STORED_SHA256_DIGEST_LENGTH);
+  int result = memcmp(digest.c_str(), generated_digest.c_str(),
+                      sha2_password::STORED_SHA256_DIGEST_LENGTH);
 
   return result;
 }
@@ -1394,7 +1387,7 @@ static int sha2_cache_cleaner_notify(MYSQL_THD, mysql_event_class_t event_class,
     const struct mysql_event_authentication *authentication_event =
         (const struct mysql_event_authentication *)event;
 
-    const mysql_event_authentication_subclass_t subclass =
+    mysql_event_authentication_subclass_t subclass =
         authentication_event->event_subclass;
 
     /*
@@ -1474,7 +1467,7 @@ mysql_declare_plugin(caching_sha2_password){
     0x0100,                                 /* version (1.0)                 */
     caching_sha2_password_status_variables, /* status variables              */
     caching_sha2_password_sysvars,          /* system variables              */
-    nullptr,                                /* reserved                      */
+    nullptr,                                /* reserverd                     */
     0,                                      /* flags                         */
 },
     {
@@ -1490,6 +1483,6 @@ mysql_declare_plugin(caching_sha2_password){
         0x0100,                            /* version (1.0)                 */
         nullptr,                           /* status variables              */
         nullptr,                           /* system variables              */
-        nullptr,                           /* reserved                      */
+        nullptr,                           /* reserverd                     */
         0                                  /* flags                         */
     } mysql_declare_plugin_end;

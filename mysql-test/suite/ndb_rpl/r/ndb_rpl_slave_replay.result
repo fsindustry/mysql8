@@ -1,14 +1,18 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 use test;
 create table test.t1 (a int primary key, content varchar(1000)) engine=ndb;
 reset master;
-STOP REPLICA;
+STOP SLAVE;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE TO SOURCE_LOG_POS=4;
-START REPLICA;
+START SLAVE;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 Capture current count of epoch decline warnings
 insert into test.t1 values (6, repeat('B', 1000));
 insert into test.t1 values (5, repeat('B', 1000));
@@ -32,9 +36,13 @@ repeat_err_count
 skipped_err_count
 0
 Now stop and manually replay old binlog.
-STOP REPLICA;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE to SOURCE_LOG_POS=4;
-START REPLICA;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 Any slave positioning warnings?
 Should be one
 lower_warn_count
@@ -46,9 +54,13 @@ repeat_err_count
 skipped_err_count
 0
 Repeat
-STOP REPLICA;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE to SOURCE_LOG_POS=4;
-START REPLICA;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 Any slave positioning warnings?
 Should be two
 lower_warn_count
@@ -60,8 +72,12 @@ repeat_err_count
 skipped_err_count
 0
 Now try re-positioning after RESET SLAVE
-STOP REPLICA;
-RESET REPLICA;
+STOP SLAVE;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
+RESET SLAVE;
+Warnings:
+Warning	1287	'RESET SLAVE' is deprecated and will be removed in a future release. Please use RESET REPLICA instead
 include/rpl_start_slaves.inc
 Any slave positioning warnings?
 Should be two, e.g. no extras after the RESET SLAVE
@@ -104,10 +120,13 @@ skipped_err_count
 Now check that we can manually restart the slave
 set global debug = @old_debug;
 reset master;
-START REPLICA SQL_THREAD UNTIL SQL_AFTER_MTS_GAPS;
-STOP REPLICA;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE to SOURCE_LOG_POS=4;
-START REPLICA;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 insert into test.t1 values (13, repeat('A', 1000));
 Check slave warnings now, should be no extras
 e.g. 2 warnings, 1 error
@@ -150,10 +169,13 @@ skipped_err_count
 Now check that we can manually restart the slave
 set global debug = @old_debug;
 reset master;
-START REPLICA SQL_THREAD UNTIL SQL_AFTER_MTS_GAPS;
-STOP REPLICA;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE to SOURCE_LOG_POS=4;
-START REPLICA;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 insert into test.t1 values (13, repeat('A', 1000));
 Check slave warnings now, should be no extras
 lower_warn_count
@@ -194,10 +216,13 @@ skipped_err_count
 Now check that we can manually restart the slave
 set global debug = @old_debug;
 reset master;
-START REPLICA SQL_THREAD UNTIL SQL_AFTER_MTS_GAPS;
-STOP REPLICA;
+stop slave;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 CHANGE REPLICATION SOURCE to SOURCE_LOG_POS=4;
-START REPLICA;
+start slave;
+Warnings:
+Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 insert into test.t1 values (13, repeat('A', 1000));
 Check slave warnings now, should be no extras
 lower_warn_count

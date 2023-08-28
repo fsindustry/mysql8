@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -26,12 +26,7 @@ ADD_SUBDIRECTORY(dbdih)
 ADD_SUBDIRECTORY(dblqh)
 ADD_SUBDIRECTORY(dbtup)
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/error
-  ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/vm)
-
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_kernel.cmake)
 
 IF(WIN32)
   SET(EXTRA_SRC ndbfs/Win32AsyncFile.cpp)
@@ -39,7 +34,7 @@ ELSE()
   SET(EXTRA_SRC ndbfs/PosixAsyncFile.cpp)
 ENDIF()
 
-ADD_STATIC_LIBRARY(ndbblocks
+ADD_LIBRARY(ndbblocks STATIC
   LocalProxy.cpp
   PgmanProxy.cpp
   RestoreProxy.cpp
@@ -99,6 +94,7 @@ ADD_STATIC_LIBRARY(ndbblocks
   dbtux/Dbqtux.cpp
   dbtux/DbqtuxProxy.cpp
   dbtux/DbtuxBuild.cpp
+  dbtux/DbtuxCmp.cpp
   dbtux/DbtuxDebug.cpp
   dbtux/DbtuxGen.cpp
   dbtux/DbtuxMaint.cpp
@@ -133,7 +129,6 @@ ADD_STATIC_LIBRARY(ndbblocks
   trpman.cpp
   tsman.cpp
   ${EXTRA_SRC}
-  LINK_LIBRARIES ext::zlib
   )
 
 MYSQL_ADD_EXECUTABLE(ndb_print_file
@@ -142,5 +137,5 @@ MYSQL_ADD_EXECUTABLE(ndb_print_file
   dbtup/tuppage.cpp
   COMPONENT ClusterTools
   ENABLE_EXPORTS
-  LINK_LIBRARIES ndbclient_static ext::zlib
+  LINK_LIBRARIES ndbclient_static
   )

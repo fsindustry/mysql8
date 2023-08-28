@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <AtrtClient.hpp>
 #include "atrt.hpp"
 #include "process_management.hpp"
@@ -88,6 +87,8 @@ static BaseString set_env_var(const BaseString& existing, const BaseString& name
   return newEnv;
 }
 
+Vector<atrt_process> g_saved_procs;
+
 static bool do_change_prefix(atrt_config& config, SqlResultSet& command) {
   const char* new_prefix = g_prefix1 ? g_prefix1 : g_prefix0;
   const char* process_args = command.column("process_args");
@@ -126,7 +127,7 @@ static bool do_change_prefix(atrt_config& config, SqlResultSet& command) {
   proc.m_proc.m_path =
       g_resources.getExecutableFullPath(exename.c_str(), new_prefix_idx).c_str();
   if (proc.m_proc.m_path == "") {
-    // Attempt to dynamically find executable that was not previously registered
+    // Atempt to dynamically find executable that was not previously registered
     proc.m_proc.m_path =
         g_resources.findExecutableFullPath(exename.c_str(), new_prefix_idx).c_str();
   }
@@ -337,3 +338,5 @@ bool do_command(ProcessManagement& processManagement, atrt_config& config) {
 
   return true;
 }
+
+template class Vector<atrt_process>;

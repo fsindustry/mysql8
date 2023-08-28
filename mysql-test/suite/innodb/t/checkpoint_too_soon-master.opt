@@ -1,4 +1,5 @@
---innodb-redo-log-capacity=8388608
+--innodb-log-files-in-group=2
+--innodb-log-file-size=4194304
 --innodb-buffer-pool-chunk-size=134217728
 --innodb-buffer-pool-size=134217728
 --innodb-monitor-enable=log_lsn_checkpoint_age

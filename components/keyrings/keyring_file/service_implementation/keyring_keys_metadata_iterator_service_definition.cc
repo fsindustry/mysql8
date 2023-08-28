@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -44,9 +44,8 @@ namespace service_definition {
 DEFINE_BOOL_METHOD(Keyring_keys_metadata_iterator_service_impl::init,
                    (my_h_keyring_keys_metadata_iterator * forward_iterator)) {
   std::unique_ptr<Iterator<Data>> it;
-  const bool retval =
-      init_keys_metadata_iterator_template<Keyring_file_backend>(
-          it, *g_keyring_operations, *g_component_callbacks);
+  bool retval = init_keys_metadata_iterator_template<Keyring_file_backend>(
+      it, *g_keyring_operations, *g_component_callbacks);
   if (retval == false)
     *forward_iterator =
         reinterpret_cast<my_h_keyring_keys_metadata_iterator>(it.release());
@@ -65,7 +64,7 @@ DEFINE_BOOL_METHOD(Keyring_keys_metadata_iterator_service_impl::is_valid,
                    (my_h_keyring_keys_metadata_iterator forward_iterator)) {
   std::unique_ptr<Iterator<Data>> it;
   it.reset(reinterpret_cast<Iterator<Data> *>(forward_iterator));
-  const bool retval = keys_metadata_iterator_is_valid<Keyring_file_backend>(
+  bool retval = keys_metadata_iterator_is_valid<Keyring_file_backend>(
       it, *g_keyring_operations, *g_component_callbacks);
   /* Make sure we don't free the pointer */
   (void)it.release();
@@ -76,7 +75,7 @@ DEFINE_BOOL_METHOD(Keyring_keys_metadata_iterator_service_impl::next,
                    (my_h_keyring_keys_metadata_iterator forward_iterator)) {
   std::unique_ptr<Iterator<Data>> it;
   it.reset(reinterpret_cast<Iterator<Data> *>(forward_iterator));
-  const bool retval = keys_metadata_iterator_next<Keyring_file_backend>(
+  bool retval = keys_metadata_iterator_next<Keyring_file_backend>(
       it, *g_keyring_operations, *g_component_callbacks);
   /* Make sure we don't free the pointer */
   (void)it.release();
@@ -88,7 +87,7 @@ DEFINE_BOOL_METHOD(Keyring_keys_metadata_iterator_service_impl::get_length,
                     size_t *data_id_length, size_t *auth_id_length)) {
   std::unique_ptr<Iterator<Data>> it;
   it.reset(reinterpret_cast<Iterator<Data> *>(forward_iterator));
-  const bool retval = keys_metadata_get_length_template<Keyring_file_backend>(
+  bool retval = keys_metadata_get_length_template<Keyring_file_backend>(
       it, data_id_length, auth_id_length, *g_keyring_operations,
       *g_component_callbacks);
   /* Make sure we don't free the pointer */
@@ -102,7 +101,7 @@ DEFINE_BOOL_METHOD(Keyring_keys_metadata_iterator_service_impl::get,
                     size_t auth_id_length)) {
   std::unique_ptr<Iterator<Data>> it;
   it.reset(reinterpret_cast<Iterator<Data> *>(forward_iterator));
-  const bool retval = keys_metadata_get_template<Keyring_file_backend>(
+  bool retval = keys_metadata_get_template<Keyring_file_backend>(
       it, data_id, data_id_length, auth_id, auth_id_length,
       *g_keyring_operations, *g_component_callbacks);
   /* Make sure we don't free the pointer */

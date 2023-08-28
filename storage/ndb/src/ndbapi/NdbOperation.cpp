@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@
  * Return Value:  None
  * Parameters:    aNdb: Pointers to the Ndb object.
  *                aTable: Pointers to the Table object
- * Remark:        Create an object of NdbOperation. 
+ * Remark:        Creat an object of NdbOperation. 
  ****************************************************************************/
 NdbOperation::NdbOperation(Ndb* aNdb, NdbOperation::Type aType) :
   m_type(aType),
@@ -40,28 +40,28 @@ NdbOperation::NdbOperation(Ndb* aNdb, NdbOperation::Type aType) :
   theErrorLine(0),
   theNdb(aNdb),
   //theTable(aTable),
-  theNdbCon(nullptr),
-  theNext(nullptr),
-  theTCREQ(nullptr),
-  theFirstATTRINFO(nullptr),
-  theCurrentATTRINFO(nullptr),
+  theNdbCon(NULL),
+  theNext(NULL),
+  theTCREQ(NULL),
+  theFirstATTRINFO(NULL),
+  theCurrentATTRINFO(NULL),
   theTotalCurrAI_Len(0),
   theAI_LenInCurrAI(0),
-  theLastKEYINFO(nullptr),
+  theLastKEYINFO(NULL),
 
-  theFirstLabel(nullptr),
-  theLastLabel(nullptr),
-  theFirstBranch(nullptr),
-  theLastBranch(nullptr),
-  theFirstCall(nullptr),
-  theLastCall(nullptr),
-  theFirstSubroutine(nullptr),
-  theLastSubroutine(nullptr),
+  theFirstLabel(NULL),
+  theLastLabel(NULL),
+  theFirstBranch(NULL),
+  theLastBranch(NULL),
+  theFirstCall(NULL),
+  theLastCall(NULL),
+  theFirstSubroutine(NULL),
+  theLastSubroutine(NULL),
   theNoOfLabels(0),
   theNoOfSubroutines(0),
 
-  m_currentTable(nullptr), //theTableId(0xFFFF),
-  m_accessTable(nullptr), //theAccessTableId(0xFFFF),
+  m_currentTable(NULL), //theTableId(0xFFFF),
+  m_accessTable(NULL), //theAccessTableId(0xFFFF),
   //theSchemaVersion(0), 
   theTotalNrOfKeyWordInSignal(8),
   theTupKeyLen(0),
@@ -73,15 +73,15 @@ NdbOperation::NdbOperation(Ndb* aNdb, NdbOperation::Type aType) :
   m_tcReqGSN(GSN_TCKEYREQ),
   m_keyInfoGSN(GSN_KEYINFO),
   m_attrInfoGSN(GSN_ATTRINFO),
-  theBlobList(nullptr),
+  theBlobList(NULL),
   m_abortOption(-1),
   m_noErrorPropagation(false),
-  theLockHandle(nullptr),
+  theLockHandle(NULL),
   m_blob_lock_upgraded(false)
 {
   theReceiver.init(NdbReceiver::NDB_OPERATION, this);
   theError.code = 0;
-  m_customData = nullptr;
+  m_customData = NULL;
 }
 /*****************************************************************************
  * ~NdbOperation();
@@ -90,7 +90,7 @@ NdbOperation::NdbOperation(Ndb* aNdb, NdbOperation::Type aType) :
  *****************************************************************************/
 NdbOperation::~NdbOperation( )
 {
-  assert(theRequest == nullptr);  // The same as theTCREQ
+  assert(theRequest == NULL);  // The same as theTCREQ
 }
 /******************************************************************************
  *void setErrorCode(int anErrorCode);
@@ -153,9 +153,9 @@ NdbOperation::init(const NdbTableImpl* tab, NdbTransaction* myConnection)
     for (int j=0; j<3; j++)
       theTupleKeyDefined[i][j] = 0;
 
-  theFirstATTRINFO    = nullptr;
-  theCurrentATTRINFO  = nullptr;
-  theLastKEYINFO      = nullptr;  
+  theFirstATTRINFO    = NULL;
+  theCurrentATTRINFO  = NULL;
+  theLastKEYINFO      = NULL;  
   
 
   theTupKeyLen	    = 0;
@@ -173,16 +173,16 @@ NdbOperation::init(const NdbTableImpl* tab, NdbTransaction* myConnection)
   theScanInfo        	= 0;
   theTotalNrOfKeyWordInSignal = 8;
   theMagicNumber        = getMagicNumber();
-  m_attribute_record= nullptr;
-  theBlobList = nullptr;
+  m_attribute_record= NULL;
+  theBlobList = NULL;
   m_abortOption = -1;
   m_noErrorPropagation = false;
   m_flags = 0;
   m_flags |= OF_NO_DISK;
-  m_interpreted_code = nullptr;
-  m_extraSetValues = nullptr;
+  m_interpreted_code = NULL;
+  m_extraSetValues = NULL;
   m_numExtraSetValues = 0;
-  m_customData = nullptr;
+  m_customData = NULL;
 
   if (theReceiver.init(NdbReceiver::NDB_OPERATION, this))
   {
@@ -191,7 +191,7 @@ NdbOperation::init(const NdbTableImpl* tab, NdbTransaction* myConnection)
   }
 
   NdbApiSignal* tSignal = theNdb->getSignal();
-  if (tSignal == nullptr)
+  if (tSignal == NULL)
   {
     setErrorCode(4000);
     return -1;
@@ -227,16 +227,16 @@ NdbOperation::release()
   postExecuteRelease();
 
   tBlob = theBlobList;
-  while (tBlob != nullptr)
+  while (tBlob != NULL)
   {
     tSaveBlob = tBlob;
     tBlob = tBlob->theNext;
     theNdb->releaseNdbBlob(tSaveBlob);
   }
-  theBlobList = nullptr;
+  theBlobList = NULL;
   theReceiver.release();
 
-  theLockHandle = nullptr;
+  theLockHandle = NULL;
   m_blob_lock_upgraded = false;
 
 #ifndef NDEBUG
@@ -262,14 +262,14 @@ NdbOperation::postExecuteRelease()
   NdbSubroutine* tSaveSubroutine;
 
   tSignal = theRequest; /* TCKEYREQ/TCINDXREQ/SCANTABREQ */
-  while (tSignal != nullptr)
+  while (tSignal != NULL)
   {
     tSaveSignal = tSignal;
     tSignal = tSignal->next();
     theNdb->releaseSignal(tSaveSignal);
   }				
-  theRequest = nullptr;
-  theLastKEYINFO = nullptr;
+  theRequest = NULL;
+  theLastKEYINFO = NULL;
 #ifdef TODO
   /**
    * Compute correct #cnt signals between theFirstATTRINFO/theCurrentATTRINFO
@@ -280,41 +280,41 @@ NdbOperation::postExecuteRelease()
   }
 #else
   tSignal = theFirstATTRINFO;
-  while (tSignal != nullptr)
+  while (tSignal != NULL)
   {
     tSaveSignal = tSignal;
     tSignal = tSignal->next();
     theNdb->releaseSignal(tSaveSignal);
   }
 #endif
-  theFirstATTRINFO = nullptr;
-  theCurrentATTRINFO = nullptr;
+  theFirstATTRINFO = NULL;
+  theCurrentATTRINFO = NULL;
 
   if (theInterpretIndicator == 1)
   {
     tBranch = theFirstBranch;
-    while (tBranch != nullptr)
+    while (tBranch != NULL)
     {
       tSaveBranch = tBranch;
       tBranch = tBranch->theNext;
       theNdb->releaseNdbBranch(tSaveBranch);
     }
     tLabel = theFirstLabel;
-    while (tLabel != nullptr)
+    while (tLabel != NULL)
     {
       tSaveLabel = tLabel;
       tLabel = tLabel->theNext;
       theNdb->releaseNdbLabel(tSaveLabel);
     }
     tCall = theFirstCall;
-    while (tCall != nullptr)
+    while (tCall != NULL)
     {
       tSaveCall = tCall;
       tCall = tCall->theNext;
       theNdb->releaseNdbCall(tSaveCall);
     }
     tSubroutine = theFirstSubroutine;
-    while (tSubroutine != nullptr)
+    while (tSubroutine != NULL)
     {
       tSaveSubroutine = tSubroutine;
       tSubroutine = tSubroutine->theNext;
@@ -343,14 +343,14 @@ NdbOperation::getValue(const NdbDictionary::Column* col, char* aValue)
   
   setErrorCodeAbort(4508);
   /* GetValue not allowed for NdbRecord defined operation */
-  return nullptr;
+  return NULL;
 }
 
 int
 NdbOperation::equal(const char* anAttrName, const char* aValuePassed)
 {
   const NdbColumnImpl* col = m_accessTable->getColumn(anAttrName);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
     return -1;
@@ -365,7 +365,7 @@ int
 NdbOperation::equal(Uint32 anAttrId, const char* aValuePassed)
 {
     const NdbColumnImpl* col = m_accessTable->getColumn(anAttrId);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
     return -1;
@@ -380,7 +380,7 @@ int
 NdbOperation::setValue(const char* anAttrName, const char* aValuePassed)
 {
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrName);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
     return -1;
@@ -396,7 +396,7 @@ int
 NdbOperation::setValue(Uint32 anAttrId, const char* aValuePassed)
 {
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrId);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
     return -1;
@@ -414,10 +414,10 @@ NdbOperation::getBlobHandle(const char* anAttrName)
   // by delegating to the non-const variant of internal getBlobHandle(...),
   // which may create a new BlobHandle
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrName);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
-    return nullptr;
+    return NULL;
   }
   else
   {
@@ -432,10 +432,10 @@ NdbOperation::getBlobHandle(Uint32 anAttrId)
   // by delegating to the non-const variant of internal getBlobHandle(...),
   // which may create a new BlobHandle
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrId);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
-    return nullptr;
+    return NULL;
   }
   else
   {
@@ -447,10 +447,10 @@ NdbBlob*
 NdbOperation::getBlobHandle(const char* anAttrName) const
 {
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrName);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
-    return nullptr;
+    return NULL;
   }
   else
   {
@@ -462,10 +462,10 @@ NdbBlob*
 NdbOperation::getBlobHandle(Uint32 anAttrId) const
 {
   const NdbColumnImpl* col = m_currentTable->getColumn(anAttrId);
-  if (col == nullptr)
+  if (col == NULL)
   {
     setErrorCode(4004);
-    return nullptr;
+    return NULL;
   }
   else
   {
@@ -602,7 +602,7 @@ NdbOperation::getLockHandle()
 {
   if (likely (! m_blob_lock_upgraded))
   {
-    if (theLockHandle == nullptr)
+    if (theLockHandle == NULL)
     {
       int rc = getLockHandleImpl();
       
@@ -611,7 +611,7 @@ NdbOperation::getLockHandle()
       else
       {
         setErrorCode(rc);
-        return nullptr;
+        return NULL;
       }
     }
     /* Return existing LockHandle */
@@ -623,7 +623,7 @@ NdbOperation::getLockHandle()
      * read
      */
     setErrorCode(4549);
-    return nullptr;
+    return NULL;
   } 
 }
   

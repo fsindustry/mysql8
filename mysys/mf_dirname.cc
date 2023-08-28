@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,12 +28,12 @@
 #include <stddef.h>
 
 #ifdef _WIN32
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #endif
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_io.h"
 #include "my_sys.h"  // IWYU pragma: keep
-#include "strmake.h"
 
 /**
   @file mysys/mf_dirname.cc
@@ -43,101 +43,34 @@
   Get the string length of the directory part of name, including the
   last FN_LIBCHAR. If name is not a path, return 0.
 
-  On Windows, we special-case Shift-JIS (or more specifically,
-  Windows code-page 932).
+  Pre-condition: 'name' is a '\0'-terminated byte buffer.
 
-  Everything else (i.e. anything that's not CP932 and on Windows)
-  is considered binary. Specifically, we assume that drive and directory
-  separators are single-byte (and as defined by FN_LIBCHAR / FN_LIBCHAR2),
-  and that the string is '\0' terminated. Therefore, latin-*, UTF-8, and
-  other arguments that behave sufficiently like ASCII will work, whereas
-  e.g. UTF-16 would break as the separators would have '\0' as part of the
-  UTF-16 character. Fortunately, CP932 does not use '\0' as part of a
-  multi-byte character.
-
-  @param name  path to calculate directory length for.
-  @return length of directory part (including the last separator), or 0
+  @param name path to calculate directory length for.
+  @return length of directory part
  */
 size_t dirname_length(const char *name) {
-  const char *pos = name;     // position in input as we iterate over it
-  const char *sep = nullptr;  // position of most recent separator character
-
 #ifdef _WIN32
-  // If we're on Windows ...
-
-  /*
-    At present, the character set for file-paths is either CP932
-    (a 1/2 byte variable length charset) or considered binary.
-    (See the function comment on more information about what "binary"
-    implies in this context.)
-
-    fs_character_set() gets this info from GetLocaleInfo(), so it's not
-    something we configure within the server, we just roll with what we
-    find.
-
-    There is some non-standard oddness in Win's take on Shift-JIS, but
-    the important part is that characters we'd be interested in (like
-    '\0' '/' '\' ':') are single-width (1 byte).
-  */
   CHARSET_INFO *fs = fs_character_set();
-
-  /*
-    If a drive letter separator is defined (e.g. ':'), see whether it
-    is present in the path. If so, skip the drive letter.
-    Luckily, ':' does not appear as part of a CP932 MB character, any
-    matches are genuine.
-  */
+#endif
+  const char *pos = name - 1;
 #ifdef FN_DEVCHAR
-  const char *devchar_pos = strrchr(name, FN_DEVCHAR);  // find ':' if present
-
-  if (devchar_pos != nullptr) {
-    sep = devchar_pos;      // ':' counts as last character of path for now
-    pos = devchar_pos + 1;  // position behind ':'
-  }
+  const char *devchar_pos = strrchr(name, FN_DEVCHAR);
+  if (devchar_pos != nullptr) pos = devchar_pos;
 #endif
 
-  for (; *pos; pos++)  // Find last FN_LIBCHAR.
+  const char *gpos = pos++;
+  for (; *pos; pos++) /* Find last FN_LIBCHAR */
   {
-    /*
-      Check whether it's a multi-byte character.
-      If it is a MB character, then by definition it can't be a directory
-      separator, so we'll skip over it.
-
-      By definition (or rather, due to the way fs_character_set() works),
-      use_mb() is true for cp932, and false otherwise ("considered binary").
-
-      For well-formed cp932, if the character pointed at is a valid
-      multi-byte char header, the next character is guaranteed to be
-      not '\0', but we guard against malformedness.
-    */
+#ifdef _WIN32
     uint l;
-    if (use_mb(fs) && pos[1] &&
-        (l = my_ismbchar(fs, pos, pos + fs->mbmaxlen))) {
-      pos += l - 1;  // skip character. length-1 to account for loop's pos++.
+    if (use_mb(fs) && (l = my_ismbchar(fs, pos, pos + 3))) {
+      pos += l - 1;
       continue;
     }
-
-    if (is_directory_separator(*pos)) {  // If it's a directory separator,
-      sep = pos;                         // save its position.
-    }
-  }
-
-#else
-  // not Windows ...
-  // FN_DEVCHAR should be undefined here, so we're not checking for it.
-
-  for (; *pos; pos++)  // Find last FN_LIBCHAR
-  {
-    if (is_directory_separator(*pos)) {  // If it's a directory separator,
-      sep = pos;                         // save its position.
-    }
-  }
 #endif
-
-  if (sep == nullptr)  // No directory separator found:
-    return 0;          // return 0
-
-  return (sep - name) + 1;  // Otherwise, return length including separator
+    if (is_directory_separator(*pos)) gpos = pos;
+  }
+  return gpos + 1 - name;
 }
 
 /**
@@ -190,7 +123,7 @@ size_t dirname_part(char *to, const char *name, size_t *to_res_length) {
   Adds a FN_LIBCHAR to end if the result string if there isn't one
   and the last isn't dev_char.
   Copies data from 'from' until ASCII(0) for until from == from_end
-  If you want to use the whole 'from' string, just send nullptr as the
+  If you want to use the whole 'from' string, just send NullS as the
   last argument.
 
   If the result string is larger than FN_REFLEN -1, then it's cut.
@@ -210,7 +143,7 @@ char *convert_dirname(char *to, const char *from, const char *from_end) {
 #endif
   DBUG_TRACE;
 
-  /* We use -2 here, because we need place for the last FN_LIBCHAR */
+  /* We use -2 here, becasue we need place for the last FN_LIBCHAR */
   if (!from_end || (from_end - from) > FN_REFLEN - 2)
     from_end = from + FN_REFLEN - 2;
 
@@ -237,7 +170,7 @@ char *convert_dirname(char *to, const char *from, const char *from_end) {
     *to = 0;
   }
 #else
-  /* This is ok even if to == from, because we need to cut the string */
+  /* This is ok even if to == from, becasue we need to cut the string */
   to = strmake(to, from, (size_t)(from_end - from));
 #endif
 

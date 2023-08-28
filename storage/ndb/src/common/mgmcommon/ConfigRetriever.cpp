@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,8 +37,6 @@
 #include <ConfigValues.hpp>
 #include <DnsCache.hpp>
 #include <EventLogger.hpp>
-#include "portlib/NdbTCP.h"
-#include "portlib/ndb_sockaddr.h"
 
 //****************************************************************************
 //****************************************************************************
@@ -61,7 +59,7 @@ ConfigRetriever::ConfigRetriever(const char * _connect_string,
 
   m_handle= ndb_mgm_create_handle();
 
-  if (m_handle == nullptr) {
+  if (m_handle == 0) {
     setError(CR_ERROR, "Unable to allocate mgm handle");
     DBUG_VOID_RETURN;
   }
@@ -138,24 +136,9 @@ int
 ConfigRetriever::do_connect(int no_retries,
 			    int retry_delay_in_seconds, int verbose)
 {
-  if (ndb_mgm_connect(m_handle, no_retries, retry_delay_in_seconds, verbose) == 0)
-  {
-    return 0;
-  }
-  else
-  {
-    const int err = ndb_mgm_get_latest_error(m_handle);
-    if (err == NDB_MGM_ILLEGAL_CONNECT_STRING)
-    {
-      BaseString tmp(ndb_mgm_get_latest_error_msg(m_handle));
-      tmp.append(" : ");
-      tmp.append(ndb_mgm_get_latest_error_desc(m_handle));
-      setError(CR_ERROR, tmp.c_str());
-      return -2;
-    }
-    return -1;
-  }
-
+  return
+    (ndb_mgm_connect(m_handle,no_retries,retry_delay_in_seconds,verbose)==0) ?
+    0 : -1;
 }
 
 int
@@ -218,28 +201,18 @@ ConfigRetriever::getConfig(NdbMgmHandle mgm_handle)
 ndb_mgm::config_ptr
 ConfigRetriever::getConfig(const char * filename)
 {
-  BaseString err;
-  ndb_mgm::config_ptr conf = getConfig(filename, err);
-  if (!conf)
-  {
-    setError(CR_ERROR, err);
-  }
-  return conf;
-}
-
-ndb_mgm::config_ptr
-ConfigRetriever::getConfig(const char * filename, BaseString& err)
-{
   if (access(filename, F_OK))
   {
-    err.assfmt("Could not find file '%s'", filename);
+    BaseString err;
+    err.assfmt("Could not find file: '%s'", filename);
+    setError(CR_ERROR, err);
     return {};
   }
 
   FILE * f = fopen(filename, "rb");
-  if(f == nullptr)
+  if(f == 0)
   {
-    err.assfmt("Failed to open file '%s'", filename);
+    setError(CR_ERROR, "Failed to open file");
     return {};
   }
 
@@ -250,8 +223,7 @@ ConfigRetriever::getConfig(const char * filename, BaseString& err)
   {
     if (config_buf.append(read_buf, read_sz) != 0)
     {
-      err.assfmt("Out of memory when appending read data from file '%s'",
-                 filename);
+      setError(CR_ERROR, "Out of memory when appending read data");
       fclose(f);
       return {};
     }
@@ -261,7 +233,7 @@ ConfigRetriever::getConfig(const char * filename, BaseString& err)
   ConfigValuesFactory cvf;
   if(!cvf.unpack_buf(config_buf))
   {
-    err.assfmt("Error while unpacking file '%s'", filename);
+    setError(CR_ERROR,  "Error while unpacking");
     return {};
   }
   return ndb_mgm::config_ptr(
@@ -283,7 +255,7 @@ ConfigRetriever::setError(ErrorType et, BaseString err){
 
 void
 ConfigRetriever::resetError(){
-  setError(CR_NO_ERROR,nullptr);
+  setError(CR_NO_ERROR,0);
 }
 
 int
@@ -320,9 +292,7 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
   }
 
   if(_type != (unsigned int)m_node_type){
-    const char *alias_s, *alias_s2;
-    const char *type_s = nullptr;
-    const char *type_s2 = nullptr;
+    const char *type_s, *alias_s, *type_s2, *alias_s2;
     alias_s=
       ndb_mgm_get_node_type_alias_string((enum ndb_mgm_node_type)m_node_type,
                                          &type_s);
@@ -345,29 +315,15 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     return false;
   }
 
-  if (hostname && hostname[0] != 0) {
-    ndb_sockaddr addr;
-    if (Ndb_getAddr(&addr, hostname))
-    {
-      BaseString::snprintf(buf, 255,
-                           "The hostname this node should have according "
-                           "to the configuration could not be resolved. "
-                           "Attempt to bind '%s' "
-                           "failed with error: %d '%s'",
-                           hostname, errno, strerror(errno));
-      setError(CR_ERROR, buf);
-      return false;
-    }
-    if (!SocketServer::tryBind(addr)) {
-      BaseString::snprintf(buf, 255,
-                           "The hostname this node should have according "
-                           "to the configuration does not match a local "
-                           "interface. Attempt to bind '%s' "
-                           "failed with error: %d '%s'",
-                           hostname, errno, strerror(errno));
-      setError(CR_ERROR, buf);
-      return false;
-    }
+  if (hostname && hostname[0] != 0 && !SocketServer::tryBind(0, hostname)) {
+    BaseString::snprintf(buf, 255,
+                         "The hostname this node should have according "
+                         "to the configuration does not match a local "
+                         "interface. Attempt to bind '%s' "
+                         "failed with error: %d '%s'",
+                         hostname, errno, strerror(errno));
+    setError(CR_ERROR, buf);
+    return false;
   }
 
   /**
@@ -388,9 +344,8 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
       return false;
     }
 
-    ndb_sockaddr addr(port);
     char msg[150];
-    if (!SocketServer::tryBind(addr, msg, sizeof(msg))) {
+    if (!SocketServer::tryBind(port, NULL, msg, sizeof(msg))) {
       BaseString::snprintf(buf, 255,
                            "Mgmd node is started on port that is "
                            "already in use. Attempt to bind '*:%d' "
@@ -412,12 +367,13 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     Uint32 type = CONNECTION_TYPE_TCP + 1;
     if(iter.get(CFG_TYPE_OF_SECTION, &type)) continue;
     if(type != CONNECTION_TYPE_TCP) continue;
-
-    Uint32 nodeId1, nodeId2;
+    
+    Uint32 nodeId1, nodeId2, remoteNodeId;
     if(iter.get(CFG_CONNECTION_NODE_1, &nodeId1)) continue;
     if(iter.get(CFG_CONNECTION_NODE_2, &nodeId2)) continue;
     
     if(nodeId1 != nodeid && nodeId2 != nodeid) continue;
+    remoteNodeId = (nodeid == nodeId1 ? nodeId2 : nodeId1);
 
     Uint32 allow_unresolved = false;
     iter.get(CFG_CONNECTION_UNRES_HOSTS, & allow_unresolved);
@@ -440,7 +396,7 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     }
 
     const char * name;
-    ndb_sockaddr addr;
+    struct in6_addr addr;
     if(!iter.get(CFG_CONNECTION_HOSTNAME_1, &name) && strlen(name)){
       if(dnsCache.getAddress(&addr, name) != 0){
 	tmp.assfmt("Could not resolve hostname [node %d]: %s", nodeId1, name);
@@ -492,7 +448,7 @@ ConfigRetriever::allocNodeId(int no_retries, int retry_delay_in_seconds,
         ndb_mgm_alloc_nodeid(m_handle, m_version, m_node_type,
                              no_retries == 0 /* only log last retry */);
       if (res >= 0)
-        return (Uint32)res; // Success!!
+        return (Uint32)res; // Sucess!!
     }
 
     error = ndb_mgm_get_latest_error(m_handle);

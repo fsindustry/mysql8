@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -285,7 +285,7 @@ int check_source(const char *file_name) {
 
   @retval  number of detected issues
 */
-int check_stdin() {
+int check_stdin(void) {
   int count = 0;
 
   std::string line;
@@ -299,16 +299,15 @@ int check_stdin() {
 int main(int argc, char **argv) {
   if (argc == 1) {
     return check_stdin();
-  }
-  if (argc == 2) {
+  } else if (argc == 2) {
     return check_source(argv[1]);
+  } else {
+    std::cerr << argv[0] << " [</path/to/source_file.cc>]"
+              << "\n\n"
+              << "If no source file is given, we will read file names, "
+              << "one per line, from stdin."
+              << "\n";
   }
-
-  std::cerr << argv[0] << " [</path/to/source_file.cc>]"
-            << "\n\n"
-            << "If no source file is given, we will read file names, "
-            << "one per line, from stdin."
-            << "\n";
 
   return 0;
 }

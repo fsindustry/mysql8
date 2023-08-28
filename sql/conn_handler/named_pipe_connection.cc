@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,6 @@
 #include "connection_handler_manager.h"  // Connection_handler_manager
 #include "init_net_server_extension.h"   // init_net_server_extension
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/strings/int2str.h"
 #include "sql/log.h"
 #include "sql/mysqld.h"      // global_system_variables
 #include "sql/named_pipe.h"  // create_server_named_pipe.
@@ -51,7 +50,7 @@ class Channel_info_named_pipe : public Channel_info {
   HANDLE m_handle;
 
  protected:
-  Vio *create_and_init_vio() const override {
+  virtual Vio *create_and_init_vio() const {
     return vio_new_win32pipe(m_handle);
   }
 
@@ -63,7 +62,7 @@ class Channel_info_named_pipe : public Channel_info {
   */
   Channel_info_named_pipe(HANDLE handle) : m_handle(handle) {}
 
-  THD *create_thd() override {
+  virtual THD *create_thd() {
     THD *thd = Channel_info::create_thd();
 
     if (thd != NULL) {
@@ -73,8 +72,8 @@ class Channel_info_named_pipe : public Channel_info {
     return thd;
   }
 
-  void send_error_and_close_channel(uint errorcode, int error,
-                                    bool senderror) override {
+  virtual void send_error_and_close_channel(uint errorcode, int error,
+                                            bool senderror) {
     Channel_info::send_error_and_close_channel(errorcode, error, senderror);
 
     DisconnectNamedPipe(m_handle);
@@ -130,7 +129,7 @@ Channel_info *Named_pipe_listener::listen_for_connection_event() {
         NMPWAIT_USE_DEFAULT_WAIT, mp_sa_pipe_security);
     mysql_rwlock_unlock(&LOCK_named_pipe_full_access_group);
     if (m_pipe_handle == INVALID_HANDLE_VALUE) {
-      const DWORD last_error_num = GetLastError();
+      DWORD last_error_num = GetLastError();
       FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     NULL, last_error_num,
@@ -156,7 +155,7 @@ Channel_info *Named_pipe_listener::listen_for_connection_event() {
       mp_sa_pipe_security);
   mysql_rwlock_unlock(&LOCK_named_pipe_full_access_group);
   if (m_pipe_handle == INVALID_HANDLE_VALUE) {
-    const DWORD last_error_num = GetLastError();
+    DWORD last_error_num = GetLastError();
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS |
                       FORMAT_MESSAGE_MAX_WIDTH_MASK,
                   NULL, last_error_num,
@@ -215,7 +214,7 @@ bool Named_pipe_listener::update_named_pipe_full_access_group(
                                    &dacl_present_in_descriptor, &pdacl,
                                    &dacl_defaulted) ||
         !dacl_present_in_descriptor) {
-      const DWORD last_error_num = GetLastError();
+      DWORD last_error_num = GetLastError();
       FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                     NULL, last_error_num,
                     MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), last_error_msg,
@@ -225,7 +224,7 @@ bool Named_pipe_listener::update_named_pipe_full_access_group(
                   "GetSecurityDescriptorDacl failed", last_error_msg);
       return true;
     }
-    const DWORD res =
+    DWORD res =
         SetSecurityInfo(m_pipe_handle, SE_KERNEL_OBJECT,
                         DACL_SECURITY_INFORMATION, NULL, NULL, pdacl, NULL);
     if (res != ERROR_SUCCESS) {

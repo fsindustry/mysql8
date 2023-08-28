@@ -1,7 +1,7 @@
 #ifndef ITEM_ROW_INCLUDED
 #define ITEM_ROW_INCLUDED
 
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -97,7 +97,7 @@ class Item_row : public Item {
     */
     set_data_type(MYSQL_TYPE_INVALID);
   }
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
 
   enum Type type() const override { return ROW_ITEM; }
   void illegal_method_call(const char *) const MY_ATTRIBUTE((cold));

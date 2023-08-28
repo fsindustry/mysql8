@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,8 +32,6 @@
 #include "sql/regexp/regexp_engine.h"
 #include "sql_string.h"
 #include "template_utils.h"
-
-struct CHARSET_INFO;
 
 namespace regexp {
 
@@ -84,7 +82,7 @@ static bool EvalExprToCharset(Item *expr, std::u16string *out, int skip = 0) {
     */
     my_error(ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR, MYF(0));
     out->clear();
-    return true;
+    return false;
   }
   if (expr->collation.collation != regexp_lib_charset) {
     // Character set conversion is called for.

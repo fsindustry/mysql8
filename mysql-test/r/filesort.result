@@ -133,10 +133,10 @@ EXPLAIN
         -> Nested loop inner join
             -> Nested loop inner join
                 -> Nested loop inner join
-                    -> Constant row from SUBQUERY1_t2
+                    -> Constant row from SUBQUERY1_t2  (cost=0.17..0.17 rows=1)
                     -> Table scan on table2
-                -> Covering index scan on SUBQUERY1_t1 using PRIMARY
-            -> Covering index scan on t1 using PRIMARY
+                -> Index scan on SUBQUERY1_t1 using PRIMARY
+            -> Index scan on t1 using PRIMARY
 
 DROP TABLE t1, t2;
 #
@@ -195,24 +195,3 @@ LIMIT 1
 );
 ERROR 22023: Invalid GIS data provided to function st_astext.
 DROP TABLE t;
-#
-# Bug #32738705: "OUT OF SORT MEMORY ERROR" HAS AN INCONSISTENT RELATIONSHIP WITH THE BUFFER SIZE
-#
-CREATE TABLE t1 ( a INTEGER, b TEXT );
-INSERT INTO t1 VALUES (1, REPEAT('x', 40001));
-INSERT INTO t1 VALUES (2, REPEAT('x', 40002));
-INSERT INTO t1 VALUES (3, REPEAT('x', 40003));
-INSERT INTO t1 VALUES (4, REPEAT('x', 40005));
-INSERT INTO t1 VALUES (5, REPEAT('x', 40008));
-INSERT INTO t1 VALUES (6, REPEAT('x', 40013));
-SET sort_buffer_size=65536;
-SELECT a, LENGTH(b) FROM t1 ORDER BY a DESC;
-a	LENGTH(b)
-6	40013
-5	40008
-4	40005
-3	40003
-2	40002
-1	40001
-SET sort_buffer_size=DEFAULT;
-DROP TABLE t1;

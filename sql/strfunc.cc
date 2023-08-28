@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,10 +26,10 @@
 
 #include <string.h>
 
+#include "m_ctype.h"  // my_charset_latin1
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"  // my_charset_latin1
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
 #include "sql_string.h"
@@ -83,8 +83,8 @@ ulonglong find_set(const TYPELIB *lib, const char *str, size_t length,
         for (; pos != end && *pos != field_separator; pos++)
           ;
       var_len = (uint)(pos - start);
-      const uint find = cs ? find_type2(lib, start, var_len, cs)
-                           : find_type(lib, start, var_len, false);
+      uint find = cs ? find_type2(lib, start, var_len, cs)
+                     : find_type(lib, start, var_len, false);
       if (!find && *err_len == 0)  // report the first error with length > 0
       {
         *err_pos = start;

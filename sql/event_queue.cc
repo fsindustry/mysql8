@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,9 +29,9 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_systime.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_sp.h"
@@ -306,7 +306,7 @@ void Event_queue::drop_matching_events(LEX_CSTRING pattern,
     We don't call mysql_cond_broadcast(&COND_queue_state);
     If we remove the top event:
     1. The queue is empty. The scheduler will wake up at some time and
-       realize that the queue is empty. If create_event() comes in between
+       realize that the queue is empty. If create_event() comes inbetween
        it will signal the scheduler
     2. The queue is not empty, but the next event after the previous top,
        won't be executed any time sooner than the element we removed. Hence,
@@ -387,7 +387,7 @@ void Event_queue::recalculate_activation_times(THD *thd) {
     Prevent InnoDB from automatically committing the InnoDB transaction after
     updating the data-dictionary table.
   */
-  const Disable_autocommit_guard autocommit_guard(thd);
+  Disable_autocommit_guard autocommit_guard(thd);
 
   /*
     The disabled elements are moved to the end during the `fix`.
@@ -396,8 +396,8 @@ void Event_queue::recalculate_activation_times(THD *thd) {
     have removed all. The queue has been ordered in a way the disabled
     events are at the end.
   */
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
-  const Implicit_substatement_state_guard substatement_guard(thd);
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  Implicit_substatement_state_guard substatement_guard(thd);
   std::vector<std::unique_ptr<Event_queue_element>> events_to_drop;
   for (size_t i = queue.size(); i > 0; i--) {
     Event_queue_element *element = queue[i - 1];

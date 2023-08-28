@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,9 @@
 #include <string.h>
 #include <algorithm>
 
+#include "m_ctype.h"
+
 #include "my_table_map.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysqld_error.h"
 #include "sql/derror.h"  // ER_THD
@@ -46,12 +47,11 @@
 #include "sql/sql_optimizer.h"  // JOIN class
 #include "sql/sql_select.h"
 #include "sql/table.h"
-#include "string_with_len.h"
 
 struct MEM_ROOT;
 
 /**
-  Information about hints. Should be
+  Information about hints. Sould be
   synchronized with opt_hints_enum enum.
 
   Note: Hint name depends on hint state. 'NO_' prefix is added
@@ -97,8 +97,8 @@ const LEX_CSTRING sys_qb_prefix = {"select#", 7};
 /*
   Compare LEX_CSTRING objects.
 
-  @param s     The 1st string
-  @param t     The 2nd string
+  @param s     Pointer to LEX_CSTRING
+  @param t     Pointer to LEX_CSTRING
   @param cs    Pointer to character set
 
   @return  0 if strings are equal
@@ -106,10 +106,11 @@ const LEX_CSTRING sys_qb_prefix = {"select#", 7};
           -1 if t is greater
 */
 
-int cmp_lex_string(const LEX_CSTRING &s, const LEX_CSTRING &t,
+int cmp_lex_string(const LEX_CSTRING *s, const LEX_CSTRING *t,
                    const CHARSET_INFO *cs) {
-  return cs->coll->strnncollsp(cs, pointer_cast<const uchar *>(s.str), s.length,
-                               pointer_cast<const uchar *>(t.str), t.length);
+  return cs->coll->strnncollsp(cs, pointer_cast<const uchar *>(s->str),
+                               s->length, pointer_cast<const uchar *>(t->str),
+                               t->length);
 }
 
 bool Opt_hints::get_switch(opt_hints_enum type_arg) const {
@@ -125,7 +126,7 @@ Opt_hints *Opt_hints::find_by_name(const LEX_CSTRING *name_arg,
                                    const CHARSET_INFO *cs) const {
   for (uint i = 0; i < child_array.size(); i++) {
     const LEX_CSTRING *name = child_array[i]->get_print_name();
-    if (!cmp_lex_string(*name, *name_arg, cs)) return child_array[i];
+    if (!cmp_lex_string(name, name_arg, cs)) return child_array[i];
   }
   return nullptr;
 }
@@ -133,7 +134,7 @@ Opt_hints *Opt_hints::find_by_name(const LEX_CSTRING *name_arg,
 void Opt_hints::print(const THD *thd, String *str, enum_query_type query_type) {
   for (uint i = 0; i < MAX_HINT_ENUM; i++) {
     if (opt_hint_info[i].irregular_hint) continue;
-    const opt_hints_enum hint = static_cast<opt_hints_enum>(i);
+    opt_hints_enum hint = static_cast<opt_hints_enum>(i);
     /*
        If printing a normalized query, also unresolved hints will be printed.
        (This is needed by query rewrite plugins which request
@@ -221,7 +222,7 @@ PT_hint *Opt_hints_qb::get_complex_hints(opt_hints_enum type) {
   return nullptr;
 }
 
-Opt_hints_table *Opt_hints_qb::adjust_table_hints(Table_ref *tr) {
+Opt_hints_table *Opt_hints_qb::adjust_table_hints(TABLE_LIST *tr) {
   const LEX_CSTRING str = {tr->alias, strlen(tr->alias)};
   Opt_hints_table *tab =
       static_cast<Opt_hints_table *>(find_by_name(&str, table_alias_charset));
@@ -307,17 +308,17 @@ static void print_join_order_warn(THD *thd, opt_hints_enum type,
 }
 
 /**
-  Function compares hint table name and Table_ref table name.
+  Function compares hint table name and TABLE_LIST table name.
   Query block name is taken into account.
 
   @param hint_table         hint table name
-  @param table              pointer to Table_ref object
+  @param table              pointer to TABLE_LIST object
 
   @return false if table names are equal, true otherwise.
 */
 
 static bool compare_table_name(const Hint_param_table *hint_table,
-                               const Table_ref *table) {
+                               const TABLE_LIST *table) {
   const LEX_CSTRING *hint_qb_name = &hint_table->opt_query_block;
   const LEX_CSTRING *hint_table_name = &hint_table->table;
 
@@ -326,11 +327,11 @@ static bool compare_table_name(const Hint_param_table *hint_table,
   const LEX_CSTRING table_name = {table->alias, strlen(table->alias)};
 
   if (table_qb_name && table_qb_name->length > 0 && hint_qb_name->length > 0) {
-    if (cmp_lex_string(*hint_qb_name, *table_qb_name, system_charset_info))
+    if (cmp_lex_string(hint_qb_name, table_qb_name, system_charset_info))
       return true;
   }
 
-  if (cmp_lex_string(*hint_table_name, table_name, system_charset_info))
+  if (cmp_lex_string(hint_table_name, &table_name, system_charset_info))
     return true;
 
   return false;
@@ -353,12 +354,13 @@ static table_map get_other_dep(opt_hints_enum type, table_map hint_tab_map,
     case JOIN_PREFIX_HINT_ENUM:
       if (hint_tab_map & table_map)  // Hint table: No additional dependencies
         return 0;
-      // Other tables: depend on all hint tables
-      return hint_tab_map;
+      else  // Other tables: depend on all hint tables
+        return hint_tab_map;
     case JOIN_SUFFIX_HINT_ENUM:
       if (hint_tab_map & table_map)  // Hint table: depends on all other tables
         return ~hint_tab_map;
-      return 0;
+      else
+        return 0;
     case JOIN_ORDER_HINT_ENUM:
       return 0;  // No additional dependencies
     default:
@@ -369,7 +371,7 @@ static table_map get_other_dep(opt_hints_enum type, table_map hint_tab_map,
 }
 
 /**
-  Auxiliary class is used to save/restore table dependencies.
+  Auxiluary class is used to save/restore table dependencies.
 */
 
 class Join_order_hint_handler {
@@ -429,7 +431,7 @@ class Join_order_hint_handler {
 
 static void update_nested_join_deps(JOIN *join, const JOIN_TAB *hint_tab,
                                     table_map hint_tab_map) {
-  const Table_ref *table = hint_tab->table_ref;
+  const TABLE_LIST *table = hint_tab->table_ref;
   if (table->embedding) {
     for (uint i = 0; i < join->tables; i++) {
       JOIN_TAB *tab = &join->join_tab[i];
@@ -446,7 +448,7 @@ static void update_nested_join_deps(JOIN *join, const JOIN_TAB *hint_tab,
 /**
   Function resolves hint tables, checks and sets table dependencies
   according to the hint. If the hint is ignored due to circular table
-  dependencies, original dependencies are restored.
+  dependencies, orginal dependencies are restored.
 
   @param join             pointer to JOIN object
   @param hint_table_list  hint table list
@@ -474,7 +476,7 @@ static bool set_join_hint_deps(JOIN *join,
        hint_table < hint_table_list->end(); hint_table++) {
     bool hint_table_found = false;
     for (uint i = 0; i < join->tables; i++) {
-      const Table_ref *table = join->join_tab[i].table_ref;
+      const TABLE_LIST *table = join->join_tab[i].table_ref;
       if (!compare_table_name(hint_table, table)) {
         hint_table_found = true;
         /*
@@ -486,7 +488,7 @@ static bool set_join_hint_deps(JOIN *join,
         if (join->const_table_map & table->map()) break;
 
         JOIN_TAB *tab = &join->join_tab[i];
-        // Hint tables are always dependent on preceding tables
+        // Hint tables are always dependent on preceeding tables
         tab->dependent |= hint_tab_map;
         update_nested_join_deps(join, tab, hint_tab_map);
         hint_tab_map |= tab->table_ref->map();
@@ -503,7 +505,7 @@ static bool set_join_hint_deps(JOIN *join,
   // Add dependencies that are related to non-hint tables
   for (uint i = 0; i < join->tables; i++) {
     JOIN_TAB *tab = &join->join_tab[i];
-    const table_map dependent_tables =
+    table_map dependent_tables =
         get_other_dep(type, hint_tab_map, tab->table_ref->map());
     update_nested_join_deps(join, tab, dependent_tables);
     tab->dependent |= dependent_tables;
@@ -525,7 +527,7 @@ void Opt_hints_qb::apply_join_order_hints(JOIN *join) {
   }
 }
 
-void Opt_hints_table::adjust_key_hints(Table_ref *tr) {
+void Opt_hints_table::adjust_key_hints(TABLE_LIST *tr) {
   set_resolved();
   if (child_array_ptr()->size() == 0)  // No key level hints
   {
@@ -534,7 +536,7 @@ void Opt_hints_table::adjust_key_hints(Table_ref *tr) {
   }
 
   /*
-    Make sure that adjustment is done only once.
+    Make sure that adjustement is done only once.
     Table has already been processed if keyinfo_array is not empty.
   */
   if (keyinfo_array.size()) return;
@@ -551,7 +553,7 @@ void Opt_hints_table::adjust_key_hints(Table_ref *tr) {
     KEY *key_info = table->key_info;
     for (uint j = 0; j < table->s->keys; j++, key_info++) {
       const LEX_CSTRING key_name = {key_info->name, strlen(key_info->name)};
-      if (!cmp_lex_string(*(*hint)->get_name(), key_name,
+      if (!cmp_lex_string((*hint)->get_name(), &key_name,
                           system_charset_info)) {
         (*hint)->set_resolved();
         keyinfo_array[j] = static_cast<Opt_hints_key *>(*hint);
@@ -583,7 +585,7 @@ PT_hint *Opt_hints_table::get_complex_hints(opt_hints_enum type) {
 
 bool Opt_hints_table::is_hint_conflicting(Opt_hints_key *key_hint,
                                           opt_hints_enum type) {
-  if ((key_hint == nullptr) && is_specified(type)) return true;
+  if ((key_hint == NULL) && is_specified(type)) return true;
   return (key_hint && key_hint->is_specified(type));
 }
 
@@ -647,7 +649,7 @@ bool Opt_hints_table::update_index_hint_maps(THD *thd, TABLE *tbl) {
   tbl->keys_in_use_for_query = tbl->keys_in_use_for_group_by =
       tbl->keys_in_use_for_order_by = usable_index_map;
 
-  const bool force_index = is_force_index_hint(INDEX_HINT_ENUM);
+  bool force_index = is_force_index_hint(INDEX_HINT_ENUM);
   tbl->force_index = (force_index || is_force_index_hint(JOIN_INDEX_HINT_ENUM));
   tbl->force_index_group =
       (force_index || is_force_index_hint(GROUP_INDEX_HINT_ENUM));
@@ -735,10 +737,10 @@ static void print_hint_from_var(const THD *thd, String *str, set_var *var) {
   @param sys_var_value  Variable value
 */
 
-static void print_hint_specified(String *str, const std::string &sys_var_name,
+static void print_hint_specified(String *str, LEX_CSTRING *sys_var_name,
                                  Item *sys_var_value) {
   str->append(STRING_WITH_LEN("SET_VAR("));
-  str->append(sys_var_name);
+  str->append(sys_var_name->str, sys_var_name->length);
   str->append(STRING_WITH_LEN("="));
   char buff[STRING_BUFFER_USUAL_SIZE];
   String str_buff(buff, sizeof(buff), system_charset_info), *str_res;
@@ -752,22 +754,16 @@ static void print_hint_specified(String *str, const std::string &sys_var_name,
   str->append(STRING_WITH_LEN(") "));
 }
 
-bool Sys_var_hint::add_var(THD *thd, const System_variable_tracker &var_tracker,
-                           Item *sys_var_value) {
+bool Sys_var_hint::add_var(THD *thd, sys_var *sys_var, Item *sys_var_value) {
   for (uint i = 0; i < var_list.size(); i++) {
     const Hint_set_var *hint_var = var_list[i];
     set_var *var = hint_var->var;
-    std::string existent_name{var->m_var_tracker.get_var_name()};
-    std::string new_name{var_tracker.get_var_name()};
     /*
       Issue a warning if system variable is already present in hint list.
     */
-    if (!cmp_lex_string(
-            LEX_CSTRING{existent_name.c_str(), existent_name.size()},
-            LEX_CSTRING{new_name.c_str(), new_name.size()},
-            system_charset_info)) {
+    if (!cmp_lex_string(&var->var->name, &sys_var->name, system_charset_info)) {
       String str;
-      print_hint_specified(&str, existent_name, sys_var_value);
+      print_hint_specified(&str, &var->var->name, sys_var_value);
       push_warning_printf(
           thd, Sql_condition::SL_WARNING, ER_WARN_CONFLICTING_HINT,
           ER_THD(thd, ER_WARN_CONFLICTING_HINT), str.c_ptr_safe());
@@ -775,8 +771,8 @@ bool Sys_var_hint::add_var(THD *thd, const System_variable_tracker &var_tracker,
     }
   }
 
-  set_var *var =
-      new (thd->mem_root) set_var(OPT_SESSION, var_tracker, sys_var_value);
+  set_var *var = new (thd->mem_root)
+      set_var(OPT_SESSION, sys_var, sys_var->name, sys_var_value);
   if (!var) return true;
 
   Hint_set_var *hint_var = new (thd->mem_root) Hint_set_var(var);
@@ -795,12 +791,7 @@ void Sys_var_hint::update_vars(THD *thd) {
     Hint_set_var *hint_var = var_list[i];
     set_var *var = hint_var->var;
     if (!var->resolve(thd) && !var->check(thd)) {
-      auto f = [thd](const System_variable_tracker &, sys_var *v) -> Item * {
-        return v->copy_value(thd);
-      };
-      Item *save_value =
-          var->m_var_tracker.access_system_variable<Item *>(thd, f).value_or(
-              nullptr);
+      Item *save_value = var->var->copy_value(thd);
       if (!var->update(thd)) hint_var->save_value = save_value;
     }
     thd->pop_internal_handler();
@@ -815,7 +806,7 @@ void Sys_var_hint::restore_vars(THD *thd) {
     Hint_set_var *hint_var = var_list[i];
     set_var *var = hint_var->var;
     if (hint_var->save_value) {
-      /* Restore original value for update */
+      /* Restore original vaule for update */
       std::swap(var->value, hint_var->save_value);
       /*
         There should be no error since original value is restored.
@@ -827,7 +818,7 @@ void Sys_var_hint::restore_vars(THD *thd) {
       (void)var->check(thd);
       (void)var->update(thd);
 #endif
-      /* Restore hint value for further executions */
+      /* Restore hint vaule for further executions */
       std::swap(var->value, hint_var->save_value);
     }
   }
@@ -843,7 +834,7 @@ void Sys_var_hint::print(const THD *thd, String *str) {
 
 /**
   Function returns hint value depending on
-  the specified hint level. If hint is specified
+  the specfied hint level. If hint is specified
   on current level, current level hint value is
   returned, otherwise parent level hint is checked.
 
@@ -865,9 +856,8 @@ static bool get_hint_state(Opt_hints *hint, Opt_hints *parent_hint,
     if (hint && hint->is_specified(type_arg)) {
       *ret_val = hint->get_switch(type_arg);
       return true;
-    }
-    if (opt_hint_info[type_arg].check_upper_lvl &&
-        parent_hint->is_specified(type_arg)) {
+    } else if (opt_hint_info[type_arg].check_upper_lvl &&
+               parent_hint->is_specified(type_arg)) {
       *ret_val = parent_hint->get_switch(type_arg);
       return true;
     }
@@ -887,7 +877,7 @@ static bool get_hint_state(Opt_hints *hint, Opt_hints *parent_hint,
   return false;
 }
 
-bool hint_key_state(const THD *thd, const Table_ref *table, uint keyno,
+bool hint_key_state(const THD *thd, const TABLE_LIST *table, uint keyno,
                     opt_hints_enum type_arg, uint optimizer_switch) {
   Opt_hints_table *table_hints = table->opt_hints_table;
 
@@ -904,7 +894,7 @@ bool hint_key_state(const THD *thd, const Table_ref *table, uint keyno,
   return thd->optimizer_switch_flag(optimizer_switch);
 }
 
-bool hint_table_state(const THD *thd, const Table_ref *table_list,
+bool hint_table_state(const THD *thd, const TABLE_LIST *table_list,
                       opt_hints_enum type_arg, uint optimizer_switch) {
   if (table_list->opt_hints_qb) {
     bool ret_val = false;
@@ -948,7 +938,7 @@ bool compound_hint_key_enabled(const TABLE *table, uint keyno,
 
 bool idx_merge_hint_state(THD *thd, const TABLE *table,
                           bool *use_cheapest_index_merge) {
-  const bool force_index_merge =
+  bool force_index_merge =
       hint_table_state(thd, table->pos_in_table_list, INDEX_MERGE_HINT_ENUM, 0);
   if (force_index_merge) {
     assert(table->pos_in_table_list->opt_hints_table);

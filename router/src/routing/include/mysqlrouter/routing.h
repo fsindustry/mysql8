@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,113 +25,74 @@
 #ifndef MYSQLROUTER_ROUTING_INCLUDED
 #define MYSQLROUTER_ROUTING_INCLUDED
 
-#include "mysqlrouter/mysql_session.h"
-#include "mysqlrouter/routing_export.h"
-
 #include <chrono>
 #include <map>
 #include <string>
 
 namespace routing {
 
-/** Timeout for idling clients (in seconds).
+/** @brief Timeout for idling clients (in seconds)
  *
  * Constant defining how long (in seconds) a client can keep the connection
  * idling. This is similar to the wait_timeout variable in the MySQL Server.
- *
- * 0 == no timeout used.
  */
-constexpr const int kDefaultWaitTimeout{0};
+extern const int kDefaultWaitTimeout;
 
-/** Max number of active routes for this routing instance.
- *
- * 0 == no limit per route
- */
-constexpr const int kDefaultMaxConnections{0};
+/** @brief Max number of active routes for this routing instance */
+extern const int kDefaultMaxConnections;
 
-/** Timeout connecting to destination (in seconds).
+/** @brief Timeout connecting to destination (in seconds)
  *
  * Constant defining how long we wait to establish connection with the server
  * before we give up.
  */
-constexpr const std::chrono::seconds kDefaultDestinationConnectionTimeout{
-    mysqlrouter::MySQLSession::kDefaultConnectTimeout};
+extern const std::chrono::seconds kDefaultDestinationConnectionTimeout;
 
-/** Maximum connect or handshake errors per host.
+/** @brief Maximum connect or handshake errors per host
  *
  * Maximum connect or handshake errors after which a host will be
  * blocked. Such errors can happen when the client does not reply
  * the handshake, sends an incorrect packet, or garbage.
+ *
  */
-constexpr const unsigned long long kDefaultMaxConnectErrors{100};
+extern const unsigned long long kDefaultMaxConnectErrors;
 
-/**
- * Default bind address.
+/** @brief Maximum connect or handshake errors per host
+ *
+ * Maximum connect or handshake errors after which a host will be
+ * blocked. Such errors can happen when the client does not reply
+ * the handshake, sends an incorrect packet, or garbage.
+ *
  */
-constexpr const std::string_view kDefaultBindAddress{"127.0.0.1"};
+extern const unsigned long long kDefaultMaxConnectErrors;
 
-/** Default net buffer length.
+/** @brief Default bind address
+ *
+ */
+extern const std::string kDefaultBindAddress;
+
+/** @brief Default net buffer length
  *
  * Default network buffer length which can be set in the MySQL Server.
  *
  * This should match the default of the latest MySQL Server.
  */
-constexpr const unsigned int kDefaultNetBufferLength{16384};
+extern const unsigned int kDefaultNetBufferLength;
 
-/**
- * Timeout waiting for handshake response from client.
+/** @brief Timeout waiting for handshake response from client
  *
  * The number of seconds that MySQL Router waits for a handshake response.
  * The default value is 9 seconds (default MySQL Server minus 1).
+ *
  */
-constexpr const std::chrono::seconds kDefaultClientConnectTimeout{9};
-
-/**
- * delay in milliseconds before an idling connection may be moved to the pool
- * when connection sharing is allowed.
- */
-constexpr const std::chrono::milliseconds kDefaultConnectionSharingDelay{1000};
-
-/**
- * The number of seconds that MySQL Router waits between checking for
- * reachability of an unreachable destination.
- */
-constexpr const std::chrono::seconds
-    kDefaultUnreachableDestinationRefreshInterval{1};
-
-/**
- * Default SSL session cache mode.
- */
-constexpr const bool kDefaultSslSessionCacheMode{true};
-
-/**
- * Default SSL session cache size.
- */
-constexpr const unsigned int kDefaultSslSessionCacheSize{1024};
-
-/**
- * Default SSL session cache timeout.
- */
-constexpr const std::chrono::seconds kDefaultSslSessionCacheTimeout{300};
-
-/**
- * Default Connect Retry timeout.
- */
-constexpr const std::chrono::seconds kDefaultConnectRetryTimeout{7};
+extern const std::chrono::seconds kDefaultClientConnectTimeout;
 
 /** @brief Modes supported by Routing plugin */
-enum class RoutingMode {
+enum class AccessMode {
   kUndefined = 0,
   kReadWrite = 1,
   kReadOnly = 2,
 };
-
-// the declaration of RoutingMode and then renaming to Mode works around a bug
-// in doxygen which otherwise reports:
-//
-// storage/innobase/include/buf0dblwr.h:365: warning:
-// documented symbol 'bool dblwr::Mode::is_atomic' was not declared or defined.
-using Mode = RoutingMode;
 
 /** @brief Routing strategies supported by Routing plugin */
 enum class RoutingStrategy {
@@ -142,32 +103,30 @@ enum class RoutingStrategy {
   kRoundRobinWithFallback = 4,
 };
 
-/**
- * Get comma separated list of all access mode names.
- */
-std::string ROUTING_EXPORT get_mode_names();
-
-/**
- * Returns Mode for its literal representation.
+/** @brief Get comma separated list of all access mode names
  *
- * If no Mode is found for given string,
- * Mode::kUndefined is returned.
+ */
+std::string get_access_mode_names();
+
+/** @brief Returns AccessMode for its literal representation
+ *
+ * If no AccessMode is found for given string,
+ * AccessMode::kUndefined is returned.
  *
  * @param value literal representation of the access mode
- * @return Mode for the given string or Mode::kUndefined
+ * @return AccessMode for the given string or AccessMode::kUndefined
  */
-Mode ROUTING_EXPORT get_mode(const std::string &value);
+AccessMode get_access_mode(const std::string &value);
 
-/**
- * Returns literal name of given access mode.
+/** @brief Returns literal name of given access mode
  *
  * Returns literal name of given access mode as a std:string. When
  * the access mode is not found, empty string is returned.
  *
- * @param access_mode  mode to look up
+ * @param access_mode Access mode to look up
  * @return Name of access mode as std::string or empty string
  */
-std::string ROUTING_EXPORT get_mode_name(Mode access_mode) noexcept;
+std::string get_access_mode_name(AccessMode access_mode) noexcept;
 
 /** @brief Get comma separated list of all routing stategy names
  *         for a given routing type (metadata cache or static)
@@ -177,7 +136,7 @@ std::string ROUTING_EXPORT get_mode_name(Mode access_mode) noexcept;
  *                       strategies supported for metadata_cache
  *                        or static routing
  */
-std::string ROUTING_EXPORT get_routing_strategy_names(bool metadata_cache);
+std::string get_routing_strategy_names(bool metadata_cache);
 
 /** @brief Returns RoutingStrategy for its literal representation
  *
@@ -187,7 +146,7 @@ std::string ROUTING_EXPORT get_routing_strategy_names(bool metadata_cache);
  * @param value literal representation of the access mode
  * @return RoutingStrategy for the given string or RoutingStrategy::kUndefined
  */
-RoutingStrategy ROUTING_EXPORT get_routing_strategy(const std::string &value);
+RoutingStrategy get_routing_strategy(const std::string &value);
 
 /** @brief Returns literal name of given routing strategy
  *
@@ -197,8 +156,8 @@ RoutingStrategy ROUTING_EXPORT get_routing_strategy(const std::string &value);
  * @param routing_strategy Routing strategy to look up
  * @return Name of routing strategy as std::string or empty string
  */
-std::string ROUTING_EXPORT
-get_routing_strategy_name(RoutingStrategy routing_strategy) noexcept;
+std::string get_routing_strategy_name(
+    RoutingStrategy routing_strategy) noexcept;
 
 }  // namespace routing
 

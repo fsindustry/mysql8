@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -180,11 +180,11 @@ public:
    * requires some context info.
    * setSize() must be called before the HashMap is used.
    */
-  HashMap2(void* _allocatorContext = nullptr)
+  HashMap2(void* _allocatorContext = NULL)
     : tableSize(0),
       elementCount(0),
       allocatorContext(_allocatorContext),
-      table(nullptr)
+      table(NULL)
   {
   }
 
@@ -219,7 +219,7 @@ public:
     if (table)
     {
       A::mem_free(allocatorContext, table);
-      table = nullptr;
+      table = NULL;
     }
 
     /* TODO : Consider using only power-of-2 + bitmask instead of mod */
@@ -233,7 +233,7 @@ public:
     }
 
     for (Uint32 i=0; i < tableSize; i++)
-      table[i] = nullptr;
+      table[i] = NULL;
 
     return true;
   }
@@ -256,7 +256,7 @@ public:
 
     KV* bucket = table[bucketIdx];
 
-    if (bucket != nullptr)
+    if (bucket != NULL)
     {
       if (unique)
       {
@@ -278,15 +278,15 @@ public:
       /* Can insert at head of list, as either no uniqueness
        * guarantee, or uniqueness checked.
        */
-      assert(KVOP::getNext(keyVal) == nullptr);
+      assert(KVOP::getNext(keyVal) == NULL);
       KVOP::setNext(keyVal, bucket);
       table[bucketIdx] = keyVal;
     }
     else
     {
       /* First element in bucket */
-      assert(KVOP::getNext(keyVal) == nullptr);
-      KVOP::setNext(keyVal, nullptr);
+      assert(KVOP::getNext(keyVal) == NULL);
+      KVOP::setNext(keyVal, NULL);
       table[bucketIdx] = keyVal;
     }
 
@@ -304,10 +304,10 @@ public:
 
     KV* bucket = table[bucketIdx];
 
-    if (bucket != nullptr)
+    if (bucket != NULL)
     {
       KV* chainElement = bucket;
-      KV* prev = nullptr;
+      KV* prev = NULL;
       while (chainElement)
       {
         if (KVOP::equal(key, chainElement))
@@ -327,7 +327,7 @@ public:
             table[bucketIdx] = n;
           }
 
-          KVOP::setNext(chainElement, nullptr);
+          KVOP::setNext(chainElement, NULL);
           elementCount--;
 
           return chainElement;
@@ -337,7 +337,7 @@ public:
       }
     }
 
-    return nullptr;
+    return NULL;
   }
 
   /**
@@ -396,7 +396,7 @@ public:
       assert(table);
       for (Uint32 i=0; i < tableSize; i++)
       {
-        table[i] = nullptr;
+        table[i] = NULL;
       }
 
       elementCount = 0;
@@ -431,7 +431,7 @@ public:
   public:
     Iterator(HashMap2& hashMap)
       : m_hash(&hashMap),
-        curr_element(nullptr),
+        curr_element(NULL),
         curr_bucket(0)
     {}
 
@@ -443,7 +443,7 @@ public:
     {
       while (curr_bucket < m_hash->tableSize)
       {
-        if (curr_element == nullptr)
+        if (curr_element == NULL)
         {
           /* First this bucket */
           curr_element = m_hash->table[ curr_bucket ];
@@ -461,11 +461,11 @@ public:
         curr_bucket++;
       }
 
-      return nullptr;
+      return NULL;
     }
     void reset()
     {
-      curr_element = nullptr;
+      curr_element = NULL;
       curr_bucket = 0;
     }
   private:

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "client/client_priv.h"
 #include "my_sys.h"
 #include "print_version.h"
 #include "welcome_copyright_notice.h"
@@ -46,7 +45,6 @@ static const int INPUT_BUFFER_SIZE = 1024 * 1024;
 static const int OUTPUT_BUFFER_SIZE = 1024 * 1024;
 
 int main(int argc, char **argv) {
-  CLIENT_WARN_DEPRECATED_NO_REPLACEMENT("lz4_decompress");
   MY_INIT(argv[0]);
   if (argc != 3) {
     usage();
@@ -54,12 +52,12 @@ int main(int argc, char **argv) {
   }
   FILE *input_file = fopen(argv[1], "rb");
   FILE *output_file = fopen(argv[2], "wb");
-  if (input_file == nullptr) {
+  if (input_file == NULL) {
     fprintf(stderr,
             "lz4_decompress: [Error] Cannot open input file for reading.\n");
     exit(1);
   }
-  if (output_file == nullptr) {
+  if (output_file == NULL) {
     fprintf(stderr, "lz4_decompress: [Error] Cannot create output file.\n");
     exit(1);
   }
@@ -100,13 +98,7 @@ int main(int argc, char **argv) {
 
       if (bytes_to_write == 0) break;
 
-      if (fwrite(output_buffer, 1, bytes_to_write, output_file) !=
-          bytes_to_write) {
-        fprintf(stderr,
-                "lz4_decompress: [Error] Encountered problem during "
-                "writing to buffer.\n");
-        exit(1);
-      }
+      fwrite(output_buffer, 1, bytes_to_write, output_file);
     }
   }
 

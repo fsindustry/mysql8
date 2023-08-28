@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +33,7 @@
 
 #ifdef _WIN32
 inline unsigned long long my_double2ulonglong(double d) {
-  const double t = d - (double)0x8000000000000000ULL;
+  double t = d - (double)0x8000000000000000ULL;
 
   if (t >= 0) return ((unsigned long long)t) + 0x8000000000000000ULL;
   return (unsigned long long)d;

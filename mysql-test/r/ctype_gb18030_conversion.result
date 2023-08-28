@@ -9,8 +9,6 @@ CREATE TEMPORARY TABLE head AS SELECT concat(b1.b, b2.b) AS head FROM t1 b1, t1 
 CREATE TEMPORARY TABLE tail AS SELECT concat(b1.b, b2.b) AS tail FROM t1 b1, t1 b2;
 DROP TABLE t1;
 CREATE TABLE t1 (code char(1)) CHARACTER SET UCS2 ENGINE=INNODB;
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 SELECT UNHEX(CONCAT(head, tail)) FROM head, tail ORDER BY
 head, tail;
 CREATE TABLE t2 (b VARCHAR(2));
@@ -67664,8 +67662,7 @@ SELECT HEX(code) FROM t1 WHERE
 HEX(code)
 # Test for differences between upper(ucs2_to_utf8mb4(_ucs2 x)) and gb18030_to_utf8mb4(upper(ucs2_to_gb18030(_ucs2 x)) for BMP
 SELECT HEX(code), UPPER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci), CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4) FROM t1 WHERE
-(code < 0xD800 OR code >= 0xE000) AND
-UPPER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci) <> CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4);
+UPPER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci) <> CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4) AND (code < 0xD800 OR code >= 0xE000);
 HEX(code)	UPPER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci)	CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4)
 023F		Ȿ
 0240		Ɀ
@@ -67677,8 +67674,7 @@ HEX(code)	UPPER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode
 027D		Ɽ
 # Test for differences between lower(ucs2_to_utf8mb4(_ucs2 x)) and gb18030_to_utf8mb4(lower(ucs2_to_gb18030(_ucs2 x)) for BMP
 SELECT HEX(code), LOWER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci), CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4) FROM t1 WHERE
-(code < 0xD800 OR code >= 0xE000) AND
-LOWER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci) <> CONVERT(LOWER(CONVERT(code USING gb18030)) USING utf8mb4);
+LOWER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci) <> CONVERT(LOWER(CONVERT(code USING gb18030)) USING utf8mb4) AND (code < 0xD800 OR code >= 0xE000);
 HEX(code)	LOWER(CAST(code AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_520_ci)	CONVERT(UPPER(CONVERT(code USING gb18030)) USING utf8mb4)
 023A		Ⱥ
 023E		Ⱦ

@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 call mtr.add_suppression("Found 2 prepared XA transactions");
 CALL mtr.add_suppression("Statement is unsafe because it is being used inside a XA transaction");
@@ -11,17 +11,13 @@ CREATE DATABASE d2;
 CREATE TABLE d1.t (a INT) ENGINE=innodb;
 CREATE TABLE d2.t (a INT) ENGINE=innodb;
 SET @@session.binlog_format= statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 XA START '1-stmt';
 INSERT INTO d1.t VALUES (1);
 Warnings:
-Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. Statement is unsafe because it is being used inside a XA transaction. Concurrent XA transactions may deadlock on replicas when replicated using statements.
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. Statement is unsafe because it is being used inside a XA transaction. Concurrent XA transactions may deadlock on slaves when replicated using statements.
 XA END '1-stmt';
 XA PREPARE '1-stmt';
 SET @@session.binlog_format= 'row';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 XA START '1-row';
 INSERT INTO d2.t VALUES (1);
 XA END '1-row';
@@ -66,17 +62,13 @@ master-bin.000001	#	Query	#	#	XA COMMIT X'312d73746d74',X'',1
 include/sync_slave_sql_with_master.inc
 include/stop_slave.inc
 SET @@session.binlog_format= statement;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 XA START '3-stmt';
 INSERT INTO d1.t VALUES (3);
 Warnings:
-Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. Statement is unsafe because it is being used inside a XA transaction. Concurrent XA transactions may deadlock on replicas when replicated using statements.
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. Statement is unsafe because it is being used inside a XA transaction. Concurrent XA transactions may deadlock on slaves when replicated using statements.
 XA END '3-stmt';
 XA PREPARE '3-stmt';
 SET @@session.binlog_format= 'row';
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 XA START '3-row';
 INSERT INTO d2.t VALUES (4);
 XA END '3-row';

@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -128,7 +128,7 @@ METADATA("mysql.author", "Oracle Corporation"),
 DECLARE_COMPONENT(mysql_minimal_chassis, "mysql_minimal_chassis")
 /* There are no initialization/deinitialization functions, they will not be
   called as this component is not a regular one. */
-nullptr, nullptr END_DECLARE_COMPONENT();
+NULL, NULL END_DECLARE_COMPONENT();
 
 /**
   This is the entry function for minimal_chassis static library, which has to be
@@ -156,7 +156,7 @@ bool minimal_chassis_init(SERVICE_TYPE_NO_CONST(registry) * *registry,
     as well as other main bootstrap dynamic loader service implementations. */
   for (int inx = 0;
        mysql_component_mysql_minimal_chassis.provides[inx].implementation !=
-       nullptr;
+       NULL;
        ++inx) {
     if (imp_mysql_minimal_chassis_registry_registration.register_service(
             mysql_component_mysql_minimal_chassis.provides[inx].name,
@@ -167,7 +167,7 @@ bool minimal_chassis_init(SERVICE_TYPE_NO_CONST(registry) * *registry,
     }
   }
 
-  if (registry != nullptr) {
+  if (registry != NULL) {
     my_h_service registry_handle;
     if (imp_mysql_minimal_chassis_registry.acquire("registry",
                                                    &registry_handle)) {
@@ -190,9 +190,8 @@ bool minimal_chassis_init(SERVICE_TYPE_NO_CONST(registry) * *registry,
 
   mysql_dynamic_loader_scheme_file_imp::init();
 
-  if (comp_ref != nullptr) {
-    for (int inx = 0; comp_ref->provides[inx].implementation != nullptr;
-         ++inx) {
+  if (comp_ref != NULL) {
+    for (int inx = 0; comp_ref->provides[inx].implementation != NULL; ++inx) {
       if (imp_mysql_minimal_chassis_registry_registration.register_service(
               comp_ref->provides[inx].name,
               reinterpret_cast<my_h_service>(
@@ -228,9 +227,8 @@ bool minimal_chassis_deinit(SERVICE_TYPE_NO_CONST(registry) * registry,
   imp_mysql_minimal_chassis_registry.release(h_err_service);
   mysql_dynamic_loader_scheme_file_imp::deinit();
 
-  if (comp_ref != nullptr) {
-    for (int inx = 0; comp_ref->provides[inx].implementation != nullptr;
-         ++inx) {
+  if (comp_ref != NULL) {
+    for (int inx = 0; comp_ref->provides[inx].implementation != NULL; ++inx) {
       if (imp_mysql_minimal_chassis_registry_registration.unregister(
               comp_ref->provides[inx].name)) {
         return true;
@@ -238,14 +236,14 @@ bool minimal_chassis_deinit(SERVICE_TYPE_NO_CONST(registry) * registry,
     }
   }
 
-  if (registry != nullptr) {
+  if (registry != NULL) {
     imp_mysql_minimal_chassis_registry.release(
         reinterpret_cast<my_h_service>(registry));
-    registry = nullptr;
+    registry = NULL;
   }
   for (int inx = 0;
        mysql_component_mysql_minimal_chassis.provides[inx].implementation !=
-       nullptr;
+       NULL;
        ++inx) {
     if (imp_mysql_minimal_chassis_registry_registration.unregister(
             mysql_component_mysql_minimal_chassis.provides[inx].name)) {
@@ -265,7 +263,7 @@ bool minimal_chassis_deinit(SERVICE_TYPE_NO_CONST(registry) * registry,
   service implementations else they are loaded with the default service
   implementations
 
-  @param use_related Used to decide which service implementation to load
+  @param use_related Used to decide which service implementaion to load
          for globals.
 */
 void minimal_chassis_services_refresh(bool use_related) {

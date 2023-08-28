@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,7 @@ class client_query_attributes {
  public:
   client_query_attributes() = default;
   ~client_query_attributes() { clear(); }
-  bool push_param(const char *name, const char *value);
+  bool push_param(char *name, char *value);
   int set_params(MYSQL *mysql);
 
   void clear(MYSQL *mysql = nullptr);

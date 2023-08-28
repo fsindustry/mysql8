@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -32,23 +32,22 @@
 #include <vector>
 
 #include "lex_string.h"
+#include "m_ctype.h"  // CHARSET_INFO
 #include "m_string.h"
 #include "my_dbug.h"
+#include "my_loglevel.h"
 #include "my_macros.h"
 #include "my_sys.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/bits/psi_memory_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
+#include "mysql/components/services/psi_memory_bits.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_sp.h"
 #include "mysql/psi/mysql_stage.h"
 #include "mysql/psi/mysql_thread.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"  // CHARSET_INFO
 #include "mysql_com.h"
 #include "mysqld_error.h"  // ER_*
 #include "sql/auth/auth_acls.h"
@@ -85,7 +84,6 @@
 #include "sql/transaction.h"
 #include "sql/tztime.h"  // Time_zone
 #include "sql_string.h"  // String
-#include "string_with_len.h"
 
 /**
   @addtogroup Event_Scheduler
@@ -149,14 +147,14 @@ static bool load_events_from_db(THD *thd, Event_queue *event_queue);
     1   s > t
 */
 
-int sortcmp_lex_string(LEX_CSTRING s, LEX_CSTRING t, const CHARSET_INFO *cs) {
+int sortcmp_lex_string(LEX_CSTRING s, LEX_CSTRING t, CHARSET_INFO *cs) {
   return cs->coll->strnncollsp(cs, pointer_cast<const uchar *>(s.str), s.length,
                                pointer_cast<const uchar *>(t.str), t.length);
 }
 
 /*
   Reconstructs interval expression from interval type and expression
-  value that is in form of a value of the smallest entity:
+  value that is in form of a value of the smalles entity:
   For
     YEAR_MONTH - expression is in months
     DAY_MINUTE - expression is in minutes
@@ -367,9 +365,9 @@ bool Events::create_event(THD *thd, Event_parse_data *parse_data,
     When we are going out of the function scope, the original binary
     format state will be restored.
   */
-  const Save_and_Restore_binlog_format_state binlog_format_state(thd);
+  Save_and_Restore_binlog_format_state binlog_format_state(thd);
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   if (Event_db_repository::create_event(thd, parse_data, if_not_exists,
                                         &event_already_exists)) {
     /* On error conditions my_error() is called so no need to handle here */
@@ -525,9 +523,9 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
     When we are going out of the function scope, the original binary
     format state will be restored.
   */
-  const Save_and_Restore_binlog_format_state binlog_format_state(thd);
+  Save_and_Restore_binlog_format_state binlog_format_state(thd);
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   if (Event_db_repository::update_event(thd, parse_data, new_dbname,
                                         new_name)) {
     /* On error conditions my_error() is called so no need to handle here */
@@ -542,8 +540,8 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
       goto err_with_rollback;
     }
 
-    const LEX_CSTRING dbname = new_dbname ? *new_dbname : parse_data->dbname;
-    const LEX_CSTRING name = new_name ? *new_name : parse_data->name;
+    LEX_CSTRING dbname = new_dbname ? *new_dbname : parse_data->dbname;
+    LEX_CSTRING name = new_name ? *new_name : parse_data->name;
     if (Event_db_repository::load_named_event(thd, dbname, name,
                                               new_element.get()))
       goto err_with_rollback;
@@ -564,13 +562,6 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
   if (DBUG_EVALUATE_IF("simulate_alter_event_failure", true, false) ||
       trans_commit_stmt(thd) || trans_commit(thd))
     goto err_with_rollback;
-
-  if (new_dbname != nullptr) {
-    /* RENAME: Drop the old event instrumentation. */
-    MYSQL_DROP_SP(to_uint(enum_sp_type::EVENT), parse_data->dbname.str,
-                  parse_data->dbname.length, parse_data->name.str,
-                  parse_data->name.length);
-  }
 
   // Update element in event queue.
   if (event_queue && new_element != nullptr) {
@@ -648,7 +639,7 @@ bool Events::drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
 
   DEBUG_SYNC(thd, "after_acquiring_exclusive_lock_on_the_event");
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   bool event_exists;
   if (Event_db_repository::drop_event(thd, dbname, name, if_exists,
                                       &event_exists)) {
@@ -726,7 +717,7 @@ bool Events::lock_schema_events(THD *thd, const dd::Schema &schema) {
   /*
     Ensure that we don't hold memory used by MDL_requests after locks have
     been acquired. This reduces memory usage in cases when we have DROP
-    DATABASE that needs to drop lots of different objects.
+    DATABASE tha needs to drop lots of different objects.
   */
   MEM_ROOT mdl_reqs_root(key_memory_rm_db_mdl_reqs_root, MEM_ROOT_BLOCK_SIZE);
 
@@ -825,14 +816,14 @@ static bool send_show_create_event(THD *thd, Event_timed *et,
                          system_charset_info);
   protocol->store_string(show_str.c_ptr(), show_str.length(),
                          et->m_creation_ctx->get_client_cs());
-  const char *csname = et->m_creation_ctx->get_client_cs()->csname;
+  const char *csname =
+      replace_utf8_utf8mb3(et->m_creation_ctx->get_client_cs()->csname);
   protocol->store_string(csname, strlen(csname), system_charset_info);
-  protocol->store_string(
-      et->m_creation_ctx->get_connection_cl()->m_coll_name,
-      strlen(et->m_creation_ctx->get_connection_cl()->m_coll_name),
-      system_charset_info);
-  protocol->store_string(et->m_creation_ctx->get_db_cl()->m_coll_name,
-                         strlen(et->m_creation_ctx->get_db_cl()->m_coll_name),
+  protocol->store_string(et->m_creation_ctx->get_connection_cl()->name,
+                         strlen(et->m_creation_ctx->get_connection_cl()->name),
+                         system_charset_info);
+  protocol->store_string(et->m_creation_ctx->get_db_cl()->name,
+                         strlen(et->m_creation_ctx->get_db_cl()->name),
                          system_charset_info);
 
   if (protocol->end_row()) return true;
@@ -1150,7 +1141,7 @@ static bool load_events_from_db(THD *thd, Event_queue *event_queue) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("thd: %p", thd));
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
   // Fetch all Schemas
   std::vector<const dd::Schema *> schemas;
@@ -1170,7 +1161,7 @@ static bool load_events_from_db(THD *thd, Event_queue *event_queue) {
     if (lower_case_table_names == 2) {
       // Lower case table names == 2 is tested on OSX.
       my_stpcpy(name_buf, converted_schema_name);
-      my_casedn_str(&my_charset_utf8mb3_tolower_ci, name_buf);
+      my_casedn_str(&my_charset_utf8_tolower_ci, name_buf);
       converted_schema_name = name_buf;
     }
 

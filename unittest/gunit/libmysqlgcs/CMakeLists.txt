@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -19,10 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-
-IF (DEFINED WITHOUT_GROUP_REPLICATION AND WITHOUT_GROUP_REPLICATION)
-  RETURN()
-ENDIF()
 
 IF(NOT WIN32)
   MYSQL_CHECK_RPC()
@@ -86,8 +82,6 @@ SET(GCS_XCOM_TESTS
   xcom/gcs_xcom_network_provider
   xcom/gcs_xcom_network_provider_manager
   xcom/gcs_xcom_xcom_single_writer
-  xcom/gcs_xcom_statistics_manager
-  xcom/gcs_xcom_statistics_storage_impl
 )
 
 # When binding using IPv6 the way XCom does (dual stack IPv4/IPv6), it
@@ -95,11 +89,6 @@ SET(GCS_XCOM_TESTS
 # previous port. As such, this test cannot run on Solaris
 IF(SOLARIS)
   LIST(REMOVE_ITEM GCS_XCOM_TESTS xcom/gcs_xcom_network_provider)
-ENDIF()
-
-IF(WIN32)
-  # UINT8_MAX: macro redefinition
-  ADD_COMPILE_FLAGS(xcom/gcs_xcom_site_def-t.cc COMPILE_FLAGS "/wd4005")
 ENDIF()
 
 ###
@@ -111,7 +100,7 @@ FOREACH(tpath ${GCS_INTERFACE_TESTS} ${GCS_XCOM_TESTS})
   MYSQL_ADD_EXECUTABLE(${test}-t ${tpath}-t.cc
     ADD_TEST ${test}
     ENABLE_EXPORTS
-    LINK_LIBRARIES gunit_small mysqlgcs ext::lz4
+    LINK_LIBRARIES gunit_small mysqlgcs ${LZ4_LIBRARY}
     )
   SET(GCS_UNIT_TESTS "${GCS_UNIT_TESTS}" "${test}-t")
   IF(WIN32)
@@ -130,5 +119,5 @@ ADD_CUSTOM_TARGET(
   libmysqlgcs-tests
   DEPENDS
   mysqlgcs
-  ext::lz4
+  ${LZ4_LIBRARY}
   ${GCS_UNIT_TESTS})

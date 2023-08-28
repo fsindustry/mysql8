@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,27 +26,21 @@
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
-#include <cstddef>
-#include <initializer_list>
-#include <iterator>
-#include <new>
 #include <ostream>
 #include <string>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "lex_string.h"
 #include "my_alloc.h"
 #include "my_bitmap.h"
+
 #include "my_inttypes.h"
-#include "my_sys.h"
 #include "mysql_com.h"
 #include "sql/current_thd.h"
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/key.h"
-#include "sql/sql_array.h"
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"
 #include "sql/sql_lex.h"
@@ -66,13 +60,12 @@ using ::testing::NiceMock;
 static const uint MAX_TABLE_COLUMNS = sizeof(int) * 8;
 
 /*
-  A fake class for setting up Table_ref object, required for table id
-  mgmt.
+  A fake class for setting up TABLE_LIST object, required for table id mgmt.
 */
-class Fake_Table_ref : public Table_ref {
+class Fake_TABLE_LIST : public TABLE_LIST {
  public:
-  Fake_Table_ref() = default;
-  ~Fake_Table_ref() = default;
+  Fake_TABLE_LIST() = default;
+  ~Fake_TABLE_LIST() = default;
 };
 
 /*
@@ -102,7 +95,6 @@ class Fake_TABLE_SHARE : public TABLE_SHARE {
     bitmap_set_above(&all_set, 0, true);
   }
   ~Fake_TABLE_SHARE() = default;
-  void set_secondary_engine(bool enable) { m_secondary_engine = enable; }
 };
 
 /*
@@ -116,8 +108,8 @@ class Fake_TABLE : public TABLE {
   // make room for up to 8 keyparts per index
   KEY_PART_INFO m_key_part_infos[max_keys][8];
 
-  uchar m_record[MAX_FIELD_WIDTH * MAX_TABLE_COLUMNS];
-  uchar m_null_flags[MAX_TABLE_COLUMNS + 7 / 8];
+  static const int max_record_length = MAX_FIELD_WIDTH * MAX_TABLE_COLUMNS;
+  uchar m_record[max_record_length];
 
   Fake_TABLE_SHARE table_share;
   // Storage space for the handler's handlerton
@@ -126,8 +118,8 @@ class Fake_TABLE : public TABLE {
   uint32 write_set_buf;
   MY_BITMAP read_set_struct;
   uint32 read_set_buf;
-  uint32 tmp_set_buf;
   Field *m_field_array[MAX_TABLE_COLUMNS]{};
+  Mock_field_long *m_mock_field_array[MAX_TABLE_COLUMNS];
 
   // Counter for creating unique index id's. See create_index().
   int highest_index_id;
@@ -141,28 +133,23 @@ class Fake_TABLE : public TABLE {
     new (as_table) TABLE();
     s = &table_share;
     in_use = current_thd;
-    null_row = false;
+    null_row = '\0';
     read_set = &read_set_struct;
     write_set = &write_set_struct;
     next_number_field = nullptr;  // No autoinc column
-    pos_in_table_list = new (*THR_MALLOC) Fake_Table_ref();
+    pos_in_table_list = new (*THR_MALLOC) Fake_TABLE_LIST();
     pos_in_table_list->table = this;
     pos_in_table_list->query_block =
         new (&mem_root) Query_block(&mem_root, nullptr, nullptr);
     EXPECT_EQ(0, bitmap_init(write_set, &write_set_buf, s->fields));
     EXPECT_EQ(0, bitmap_init(read_set, &read_set_buf, s->fields));
-    EXPECT_EQ(0, bitmap_init(&tmp_set, &tmp_set_buf, s->fields));
-    read_set_internal = *read_set;
 
     const_table = false;
     pos_in_table_list->set_tableno(highest_table_id);
     highest_table_id = (highest_table_id + 1) % MAX_TABLES;
     key_info = &m_keys[0];
     record[0] = &m_record[0];
-    memset(record[0], 0, sizeof(m_record));
-    null_flags = m_null_flags;
-    memset(null_flags, 0, sizeof(m_null_flags));
-    s->null_bytes = sizeof(m_null_flags);
+    memset(record[0], 0, max_record_length);
     for (int i = 0; i < max_keys; i++)
       key_info[i].key_part = m_key_part_infos[i];
     highest_index_id = 0;
@@ -262,43 +249,35 @@ class Fake_TABLE : public TABLE {
     */
   }
 
-  // Defines an index over column and generates a unique id.
-  int create_index(Field *column, ulong key_flags = 0) {
-    return create_index({column}, key_flags);
+  // Defines an index over (column1, column2) and generates a unique id.
+  int create_index(Field *column1, Field *column2, bool unique = false) {
+    return create_index(column1, column2, unique ? ulong{HA_NOSAME} : 0);
   }
 
-  int create_index(std::initializer_list<Field *> columns,
-                   ulong key_flags = 0) {
-    assert(!empty(columns));
-    const int index_id = highest_index_id++;
+  int create_index(Field *column1, Field *column2, ulong key_flags) {
+    column1->set_flag(PART_KEY_FLAG);
+    int index_id = highest_index_id++;
+    column1->key_start.set_bit(index_id);
     keys_in_use_for_query.set_bit(index_id);
+    column1->part_of_key.set_bit(index_id);
 
-    bool first = true;
-    for (Field *column : columns) {
-      if (first) {
-        column->key_start.set_bit(index_id);
-        first = false;
-      }
-      column->set_flag(PART_KEY_FLAG);
-      column->part_of_key.set_bit(index_id);
+    if (column2 != nullptr) {
+      column2->set_flag(PART_KEY_FLAG);
+      column2->part_of_key.set_bit(index_id);
     }
 
-    KEY &key = m_keys[index_id];
-    key.table = this;
-    string key_name = "key" + std::to_string(index_id);
-    key.name = strmake_root(&mem_root, key_name.data(), key_name.length());
-    key.flags = key.actual_flags = key_flags;
-    key.actual_key_parts = key.user_defined_key_parts = columns.size();
-
-    for (size_t i = 0; i < columns.size(); ++i) {
-      key.key_part[i].init_from_field(data(columns)[i]);
-      ++s->key_parts;
+    KEY *key = &m_keys[index_id];
+    key->table = this;
+    key->flags = key->actual_flags = key_flags;
+    key->actual_key_parts = key->user_defined_key_parts = 1;
+    key->key_part[0].field = column1;
+    key->key_part[0].store_length = 8;
+    if (column2 != nullptr) {
+      key->actual_key_parts = key->user_defined_key_parts = 2;
+      key->key_part[1].field = column2;
+      key->key_part[1].store_length = 8;
     }
-
-    for (const KEY_PART_INFO &key_part :
-         make_array(key.key_part, key.actual_key_parts)) {
-      key.key_length += key_part.length;
-    }
+    key->name = "unittest_index";
 
     ++s->keys;
     s->visible_indexes.set_bit(index_id);
@@ -320,9 +299,9 @@ class Fake_TABLE : public TABLE {
     new_field->set_field_index(pos);
     bitmap_set_bit(read_set, pos);
     const ptrdiff_t field_offset = pos * MAX_FIELD_WIDTH;
-    new_field->set_field_ptr(record[0] + field_offset);
+    new_field->set_field_ptr(record[0] + field_offset + 1);
     if (new_field->get_null_ptr() != nullptr)
-      new_field->set_null_ptr(null_flags + pos / 8, 1 << (pos % 8));
+      new_field->set_null_ptr(record[0] + field_offset, 1);
   }
 };
 

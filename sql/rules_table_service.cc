@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,12 +28,12 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
 #include "my_base.h"
 #include "my_bitmap.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
 #include "mysql/service_rules_table.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/sql_base.h"
@@ -75,8 +75,8 @@ Cursor::Cursor(THD *mysql_thd)
       m_table_list(nullptr),
       m_is_finished(true),
       m_table_is_malformed(true) {
-  m_table_list = new Table_ref(db_name, strlen(db_name), table_name,
-                               strlen(table_name), "alias", TL_WRITE_DEFAULT);
+  m_table_list = new TABLE_LIST(db_name, strlen(db_name), table_name,
+                                strlen(table_name), "alias", TL_WRITE_DEFAULT);
   if (m_table_list == nullptr) return;  // Error
 
   m_table_list->updating = true;
@@ -141,7 +141,7 @@ const char *Cursor::fetch_string(int fieldno) {
   if (field->is_null()) return nullptr;
   String value_buf;
   String *value = field->val_str(&value_buf);
-  const size_t length = value->length();
+  size_t length = value->length();
   char *res = new char[length + 1];
   strncpy(res, value->ptr(), length);
   res[length] = '\0';
@@ -164,7 +164,7 @@ void Cursor::set(int colno, const char *str, size_t length) {
   TABLE *table = m_table_list->table;
   Field *field = table->field[colno];
 
-  const CHARSET_INFO *charset = &my_charset_utf8mb3_unicode_ci;
+  const CHARSET_INFO *charset = &my_charset_utf8_unicode_ci;
   if (str == nullptr)
     field->set_null(0);
   else {

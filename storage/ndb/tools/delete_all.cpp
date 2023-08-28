@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,29 +43,20 @@ static bool _diskscan = 0;
 
 static struct my_option my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::connect_retry_delay,
-  NdbStdOpt::connect_retries,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS("ndb_desc"),
   { "database", 'd', "Name of database table is in",
-    &_dbname, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_dbname, (uchar**) &_dbname, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "transactional", 't', "Single transaction (may run out of operations)",
-    &_transactional, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_transactional, (uchar**) &_transactional, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "tupscan", NDB_OPT_NOSHORT, "Run tupscan",
-    &_tupscan, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_tupscan, (uchar**) &_tupscan, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "diskscan", NDB_OPT_NOSHORT, "Run diskcan",
-    &_diskscan, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
-  NdbStdOpt::end_of_options
+    (uchar**) &_diskscan, (uchar**) &_diskscan, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
 int main(int argc, char** argv)

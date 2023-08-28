@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,11 +45,8 @@ class Transaction_prepared_message : public Plugin_gcs_message {
     // Optional item.
     PIT_TRANSACTION_PREPARED_SID = 2,
 
-    // Length of the payload item: 8 bytes
-    PIT_SENT_TIMESTAMP = 3,
-
     // No valid type codes can appear after this one.
-    PIT_MAX = 4
+    PIT_MAX = 3
   };
 
   /**
@@ -72,18 +69,6 @@ class Transaction_prepared_message : public Plugin_gcs_message {
   const rpl_sid *get_sid();
 
   rpl_gno get_gno();
-
-  /**
-    Return the time at which the message contained in the buffer was sent.
-    @see Metrics_handler::get_current_time()
-
-    @param[in] buffer            the buffer to decode from.
-    @param[in] length            the buffer length
-
-    @return the time on which the message was sent.
-  */
-  static uint64_t get_sent_timestamp(const unsigned char *buffer,
-                                     size_t length);
 
  protected:
   /*

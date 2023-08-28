@@ -23,16 +23,13 @@ ts
 2003-03-29 06:00:00
 2003-03-30 02:30:00
 drop table t1;
-select Name from mysql.time_zone_name where Name in
-('UTC','Universal','MET','Europe/Moscow','leap/Europe/Moscow','Japan','CET','US/Pacific');
+select Name from mysql.time_zone_name where Name in 
+('UTC','Universal','MET','Europe/Moscow','leap/Europe/Moscow');
 Name
-CET
 Europe/Moscow
-Japan
 leap/Europe/Moscow
 MET
 Universal
-US/Pacific
 UTC
 create table t1 (i int, ts timestamp);
 set time_zone='MET';
@@ -230,6 +227,12 @@ convert_tz('2003-10-26 04:00:00', 'MET', 'UTC')
 select convert_tz('2038-01-19 04:14:07', 'MET', 'UTC');
 convert_tz('2038-01-19 04:14:07', 'MET', 'UTC')
 2038-01-19 03:14:07
+select convert_tz('2038-01-19 04:14:08', 'MET', 'UTC');
+convert_tz('2038-01-19 04:14:08', 'MET', 'UTC')
+2038-01-19 04:14:08
+select convert_tz('2103-01-01 04:00:00', 'MET', 'UTC');
+convert_tz('2103-01-01 04:00:00', 'MET', 'UTC')
+2103-01-01 04:00:00
 create table t1 (tz varchar(3));
 insert into t1 (tz) values ('MET'), ('UTC');
 select tz, convert_tz('2003-12-31 00:00:00',tz,'UTC'), convert_tz('2003-12-31 00:00:00','UTC',tz) from t1 order by tz;
@@ -268,11 +271,7 @@ convert_tz(NULL, NULL, NULL)
 NULL
 drop table t1;
 SET @old_log_bin_trust_function_creators = @@global.log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 SET GLOBAL log_bin_trust_function_creators = 1;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 create table t1 (ldt datetime, udt datetime);
 create function f1(i datetime) returns datetime
 return convert_tz(i, 'UTC', 'Europe/Moscow');
@@ -288,8 +287,6 @@ ldt	ldt2
 drop table t1;
 drop function f1;
 SET @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (t TIMESTAMP);
 INSERT INTO t1 VALUES (NULL), (NULL);
@@ -354,33 +351,3 @@ SELECT f1();
 f1()
 NULL
 DROP FUNCTION f1;
-#
-# Bug#33840652 Wrong result for UNIX_TIMESTAMP for time zones west of UTC close to
-#           UNIX epoch 1970-01-01
-# Bug#33837691 UNIX_TIMESTAMP() works differently in 8.0.28 than in previous versions
-#
-#
-# Test west of UTC at and around UNIX epoch.
-# We cannot test at max value here since it differs between 32 and 64
-# bits time OSes. Refer to specific tests func_unixtime_{32,64}bits
-#
-SET time_zone = "US/Pacific";
-SELECT FROM_UNIXTIME(0);
-FROM_UNIXTIME(0)
-1969-12-31 16:00:00
-SELECT UNIX_TIMESTAMP("1969-12-31 15:59:59");
-UNIX_TIMESTAMP("1969-12-31 15:59:59")
-0
-SELECT UNIX_TIMESTAMP("1969-12-31 16:00:00");
-UNIX_TIMESTAMP("1969-12-31 16:00:00")
-0
-SELECT UNIX_TIMESTAMP("1969-12-31 16:00:01");
-UNIX_TIMESTAMP("1969-12-31 16:00:01")
-1
-SELECT UNIX_TIMESTAMP("1970-01-01 00:00:01");
-UNIX_TIMESTAMP("1970-01-01 00:00:01")
-28801
-SELECT UNIX_TIMESTAMP("2022-01-01 16:00:01");
-UNIX_TIMESTAMP("2022-01-01 16:00:01")
-1641081601
-SET time_zone = DEFAULT;

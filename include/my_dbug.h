@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,18 +40,6 @@
 #include <assert.h>  // IWYU pragma: keep
 #include <stdio.h>
 #endif
-
-/**
-  Calls our own implementation of abort, if specified, or std's abort().
- */
-[[noreturn]] void my_abort();
-/**
-  Sets a new function to be called on my_abort().
-
-  @param new_my_abort_func pointer to a new my_abort function. It can't be
-  [[noreturn]] as pointers to methods can't have attributes.
- */
-void set_my_abort(void (*new_my_abort_func)());
 
 #if !defined(NDEBUG)
 
@@ -143,7 +131,7 @@ class AutoDebugTrace {
 };
 
 #define DBUG_TRACE \
-  const AutoDebugTrace _db_trace(DBUG_PRETTY_FUNCTION, __FILE__, __LINE__)
+  AutoDebugTrace _db_trace(DBUG_PRETTY_FUNCTION, __FILE__, __LINE__)
 
 #endif
 
@@ -198,14 +186,14 @@ class AutoDebugTrace {
 #define DBUG_EXPLAIN(buf, len) _db_explain_(0, (buf), (len))
 #define DBUG_EXPLAIN_INITIAL(buf, len) _db_explain_init_((buf), (len))
 #ifndef _WIN32
-#define DBUG_ABORT() (_db_flush_(), my_abort())
+#define DBUG_ABORT() (_db_flush_(), abort())
 #define DBUG_EXIT() (_db_flush_(), exit(2))
 #else
 #include <crtdbg.h>
 
 #define DBUG_ABORT()                                                     \
   (_db_flush_(), (void)_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE), \
-   (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR), my_abort())
+   (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR), abort())
 #define DBUG_EXIT()                                                      \
   (_db_flush_(), (void)_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE), \
    (void)_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR), _exit(2))
@@ -222,7 +210,7 @@ class AutoDebugTrace {
 #ifdef _WIN32
 #define DBUG_SUICIDE() DBUG_EXIT()
 #else
-[[noreturn]] extern void _db_suicide_();
+extern void _db_suicide_() MY_ATTRIBUTE((noreturn));
 extern void _db_flush_gcov_();
 #define DBUG_SUICIDE() (_db_flush_(), _db_suicide_())
 #endif
@@ -313,7 +301,6 @@ extern void _db_flush_gcov_();
 
 #define DBUG_LOG(keyword, v)                           \
   do {                                                 \
-    _db_pargs_(__LINE__, keyword);                     \
     if (_db_enabled_()) {                              \
       std::ostringstream sout;                         \
       sout << v;                                       \
@@ -321,24 +308,10 @@ extern void _db_flush_gcov_();
     }                                                  \
   } while (0)
 
-/**
-  Shortcut for printing a variable name and its value in DBUG_LOG output.
-
-  Use like:
-
-  DBUG_LOG("info", DBUG_VAR(i) << " " << DBUG_VAR(thd->query));
-
-  Example output for the above might be:
-
-  i=[4711] thd->query=[INSERT INTO t VALUES (1)]
-*/
-#define DBUG_VAR(v) #v << "=[" << (v) << "]"
-
 #else /* NDEBUG */
 #define DBUG_LOG(keyword, v) \
   do {                       \
   } while (0)
-#define DBUG_VAR(v) ""
 #endif /* NDEBUG */
 
 /**

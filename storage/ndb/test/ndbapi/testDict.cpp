@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <NDBT.hpp>
 #include <NDBT_Test.hpp>
 #include <HugoTransactions.hpp>
@@ -240,7 +239,7 @@ int runCreateTheTable(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;
   }
 
-  // Verify that table is in db
+  // Verify that table is in db     
   const NdbDictionary::Table* pTab2 = 
     NDBT_Table::discoverTableFromDb(pNdb, pTab->getName());
   if (pTab2 == NULL){
@@ -1301,7 +1300,7 @@ int runTestFragmentTypes(NDBT_Context* ctx, NDBT_Step* step){
   }
 /**
    This test does not work since fragmentation is
-   decided by the kernel, hence the fragmentation
+   decided by the kernel, hence the fragementation
    attribute on the column will differ
 
   if (newTab.equal(*pTab3) == false){
@@ -2383,47 +2382,6 @@ runColumnRenameSR(NDBT_Context* ctx, NDBT_Step* step){
   return result;
 }
 
-/**
- * Set CFG_DB_LCP_INTERVAL to 0 in order to increase the chances to have
- * an ALTER TABLE changing the number of columns of a table between
- * GET_TABINFOCONF and BACKUP_FRAGMENT_REQ when a LCP is performed.
- */
-static int
-changeLCPInterval(NDBT_Context *ctx, NDBT_Step *step)
-{
-  Config conf;
-  NdbRestarter restarter;
-  Uint32 new_cfg_db_lcp_interval = 0;
-
-  Uint32 cfg_db_lcp_interval = ctx->getProperty("LCPINTERVAL",
-                                                (Uint32)new_cfg_db_lcp_interval);
-
-  NdbMgmd mgmd;
-  Uint32 saved_old_value = 0;
-  CHECK3(mgmd.change_config32(cfg_db_lcp_interval, &saved_old_value,
-                            CFG_SECTION_NODE,
-                            CFG_DB_LCP_INTERVAL),
-         "Change config failed");
-
-  if(new_cfg_db_lcp_interval != saved_old_value)
-  {
-    // Save old config value in the test case context
-    ctx->setProperty("LCPINTERVAL", Uint32(saved_old_value));
-
-    g_err << "Restarting nodes to change CFG_DB_LCP_INTERVAL from "
-          << saved_old_value << " to " << new_cfg_db_lcp_interval << endl;
-
-    CHECK3(restarter.restartAll() == 0,
-           "Restart all failed");
-    CHECK3(restarter.waitClusterStarted(120) == 0,
-           "Cluster has not started");
-    CHK_NDB_READY(GETNDB(step));
-    g_err << "Nodes restarted with new config." << endl;
-
-  }
-  return NDBT_OK;
-}
-
 /*
   Run online alter table add attributes.
  */
@@ -2440,8 +2398,6 @@ runTableAddAttrs(NDBT_Context* ctx, NDBT_Step* step){
   ndbout << "|- " << ctx->getTab()->getName() << endl;  
 
   NdbDictionary::Table myTab= *(ctx->getTab());
-  const bool testMaxRecSz = 
-    (ctx->getProperty("checkMaxRecSz", Uint32(0)) != 0);
 
   for (int l = 0; l < loops && result == NDBT_OK ; l++){
     // Try to create table in db
@@ -2490,16 +2446,9 @@ runTableAddAttrs(NDBT_Context* ctx, NDBT_Step* step){
 
     // Add attributes to table.
     BaseString pTabName(pTab2->getName());
-
-    NdbRestarter restarter;
-    if(testMaxRecSz)
-    {
-      ndbout << "Delay on handling BACKUP_FRAGMENT_CONF in LQH" << endl;
-      restarter.insertErrorInAllNodes(5109);
-    }
+    
     const NdbDictionary::Table * oldTable = dict->getTable(pTabName.c_str());
-    if (oldTable)
-    {
+    if (oldTable) {
       NdbDictionary::Table newTable= *oldTable;
 
       NDBT_Attribute newcol1("NEWKOL1", NdbDictionary::Column::Unsigned, 1,
@@ -2528,7 +2477,7 @@ runTableAddAttrs(NDBT_Context* ctx, NDBT_Step* step){
       result = NDBT_FAILED;
     }
 
-    ndbout << "Altered table completed " << endl;
+    ndbout << "Altered table completed" << endl;
     {
       const NdbDictionary::Table* pTab = dict->getTable(pTabName.c_str());
       CHECK2(pTab != NULL, "Table not found");
@@ -2537,27 +2486,16 @@ runTableAddAttrs(NDBT_Context* ctx, NDBT_Step* step){
       ndbout << "delete...";
       if (afterTrans.clearTable(pNdb) != 0)
       {
-        if(testMaxRecSz)
-        {
-          restarter.insertErrorInAllNodes(0);
-        }
         return NDBT_FAILED;
       }
       ndbout << endl;
 
       ndbout << "insert...";
       if (afterTrans.loadTable(pNdb, records) != 0){
-        if(testMaxRecSz)
-        {
-          restarter.insertErrorInAllNodes(0);
-        }
         return NDBT_FAILED;
       }
       ndbout << endl;
-      if(testMaxRecSz)
-      {
-        restarter.insertErrorInAllNodes(0);
-      }
+
       ndbout << "update...";
       if (afterTrans.scanUpdateRecords(pNdb, records) != 0)
       {
@@ -2572,9 +2510,7 @@ runTableAddAttrs(NDBT_Context* ctx, NDBT_Step* step){
       }
       ndbout << endl;
     }
-
-    CHECK2(restarter.waitClusterStarted() == 0, "waitClusterStarted failed");
-
+    
     // Drop table.
     dict->dropTable(pTabName.c_str());
   }
@@ -9169,7 +9105,7 @@ runBug53944(NDBT_Context* ctx, NDBT_Step* step)
 
   /**
    * With Bug53944 - none of the table-id have been reused in this scenario
-   *   check that at least 15 of the 25 have been to return OK
+   *   check that atleast 15 of the 25 have been to return OK
    */
   unsigned reused = 0;
   for (unsigned i = 0; i<ids.size(); i++)
@@ -10101,17 +10037,12 @@ runBug13416603(NDBT_Context* ctx, NDBT_Step* step)
     ndbout_c("%u - poll_listener", __LINE__);
     chk2((ret = is.poll_listener(pNdb, 10000)) != -1, is.getNdbError());
     chk1(ret == 1);
-    // At least one event is expected from the above update_stat()
+    // one event is expected
     ndbout_c("%u - next_listener", __LINE__);
     chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
     chk1(ret == 1);
-    // Clear event queue as there may be additional events created by auto
-    // updates
-    while (ret == 1)
-    {
-      ndbout_c("%u - next_listener", __LINE__);
-      chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
-    }
+    ndbout_c("%u - next_listener", __LINE__);
+    chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
     chk1(ret == 0);
   }
 
@@ -10140,17 +10071,12 @@ runBug13416603(NDBT_Context* ctx, NDBT_Step* step)
         ndbout_c("%u - poll_listener", __LINE__);
         chk2((ret = is.poll_listener(pNdb, 10000)) != -1, is.getNdbError());
         chk1(ret == 1);
-        // At least one event is expected from the above update_stat()
+        // one event is expected
         ndbout_c("%u - next_listener", __LINE__);
         chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
         chk1(ret == 1);
-        // Clear event queue as there may be additional events created by auto
-        // updates
-        while (ret == 1)
-        {
-          ndbout_c("%u - next_listener", __LINE__);
-          chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
-        }
+        ndbout_c("%u - next_listener", __LINE__);
+        chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
         chk1(ret == 0);
       }
 
@@ -10176,17 +10102,13 @@ runBug13416603(NDBT_Context* ctx, NDBT_Step* step)
       ndbout << is.getNdbError() << endl;
       ndbout_c("%u - poll_listener", __LINE__);
       chk2((ret = is.poll_listener(pNdb, 10000)) != -1, is.getNdbError());
-      // Clear event queue
-      while (ret == 1)
+      if (ret == 1)
       {
         /* After the new api is introduced, pollEvents() (old api version)
          * returns 1 when empty epoch is at the head of the event queue.
          * pollEvents2() (new api version) returns 1 when exceptional
          * epoch is at the head of the event queue.
          * So next_listener() must be called to handle them.
-         *
-         * In addition, there may be more events queued due to index
-         * stats auto updates.
          */
         chk2((ret = is.next_listener(pNdb)) != -1, is.getNdbError());
       }
@@ -10510,8 +10432,8 @@ runBug14645319(NDBT_Context* ctx, NDBT_Step* step)
     int expected_buckets;
   };
 
-  static_assert(NDB_DEFAULT_HASHMAP_BUCKETS % 240 == 0);
-  static_assert(NDB_DEFAULT_HASHMAP_BUCKETS % 260 != 0);
+  STATIC_ASSERT(NDB_DEFAULT_HASHMAP_BUCKETS % 240 == 0);
+  STATIC_ASSERT(NDB_DEFAULT_HASHMAP_BUCKETS % 260 != 0);
   test_case test_cases[] = {
     { "Simulate online reorg, may or may not change hashmap depending on default fragment count",
       3, 120, 0, NDB_DEFAULT_HASHMAP_BUCKETS, 0 },
@@ -10643,7 +10565,7 @@ struct Fkdef {
   static const int colmax = 5;
   static const int indmax = 5;
   static const int keymax = tabmax * 5;
-  static const int strmax = 32; // at least 2 dec (10 chars) aligned up
+  static const int strmax = 10;
   struct Ob {
     bool retrieved;
     int id;
@@ -11901,7 +11823,7 @@ runDictTO_1(NDBT_Context* ctx, NDBT_Step* step)
         }
       }
 
-      // this should give master failure...but trans should rollforward
+      // this should give master failuer...but trans should rollforward
       if (pDic->endSchemaTrans() != 0)
       {
         ndbout << "ERROR: line: " << __LINE__ << endl;
@@ -12160,7 +12082,7 @@ runDropTableSpaceLG(NDBT_Context* ctx, NDBT_Step* step)
 }
 
 /**
- * Create up to the number of data files given in the test case until
+ * Create upto the number of data files given in the test case until
  * DiskPageBufferMemory gets exhausted, indicated by error code 1517.
  *
  * Drop data files.
@@ -12227,69 +12149,6 @@ runCreateManyDataFiles(NDBT_Context* ctx, NDBT_Step* step)
   }
 
   return result;
-}
-
-int
-runManyNdbObjectsGetTable(NDBT_Context* ctx, NDBT_Step* step)
-{
-  Ndb* pNdb = GETNDB(step);
-  NdbDictionary::Dictionary *pDict = pNdb->getDictionary();
-  const NdbDictionary::Table* pTab = ctx->getTab();
-
-  if (pDict->createTable(* pTab) != 0)
-  {
-    ndbout << "ERROR: line: " << __LINE__ << endl;
-    ndbout << pDict->getNdbError();
-    return NDBT_FAILED;
-  }
-
-  BaseString db_name = pNdb->getDatabaseName();
-  BaseString tab_name = pTab->getName();
-
-  /*
-   * The below created Ndb objects will most likely get consecutive blocknumbers.
-   * In that case eigth of them (0x12, 0x52, 0x92, 0xd2, 0x111, 0x151, 0x191,
-   * 0x1d1) will if treated as data node block numbers be mapped to block
-   * number of V_QUERY.
-   * By provoking a GET_TABINFOREQ to be sent from each Ndb object will
-   * demonstrate Bug#35154637.
-   */
-  constexpr Uint32 object_count = 512;
-  Ndb* ndb_objects[object_count];
-  for (Uint32 i = 0; i < object_count; i++)
-  {
-    ndb_objects[i] = new Ndb(&ctx->m_cluster_connection, db_name.c_str());
-    if (ndb_objects[i]->init() != 0)
-    {
-      ndbout << "ERROR: line: " << __LINE__ << endl;
-      ndbout << ndb_objects[i]->getNdbError();
-      return NDBT_FAILED;
-    }
-  }
-  for (Uint32 i = object_count; i > 0;)
-  {
-    i--;
-    NdbDictionary::Dictionary *dict = ndb_objects[i]->getDictionary();
-    dict->invalidateTable(tab_name.c_str());
-    const NdbDictionary::Table* tab = dict->getTable(tab_name.c_str());
-    if (tab == nullptr)
-    {
-      ndbout << "ERROR: line: " << __LINE__ << endl;
-      ndbout << dict->getNdbError();
-      return NDBT_FAILED;
-    }
-  }
-  for (Uint32 i = 0; i < object_count; i++)
-  {
-    delete ndb_objects[i];
-  }
-  if (pDict->dropTable(tab_name.c_str()) != 0)
-  {
-    ndbout << "ERROR: line: " << __LINE__ << endl;
-    ndbout << pDict->getNdbError();
-    return NDBT_FAILED;
-  }
-  return NDBT_OK;
 }
 
 NDBT_TESTSUITE(testDict);
@@ -12736,21 +12595,6 @@ TESTCASE("CreateManyDataFiles", "Test lack of DiskPageBufferMemory "
   INITIALIZER(runCreateManyDataFiles);
   FINALIZER(runDropTableSpaceLG);
   FINALIZER(changeStartDiskPageBufMem);
-}
-TESTCASE("ManyNdbObjectsGetTable", "Have many Ndb objects to get table "
-         "definition.")
-{
-  STEP(runManyNdbObjectsGetTable);
-}
-
-TESTCASE("TableAddAttrsUpdateMaxRecSzForLCP", "Adding attributes to an existing"
-         "table will change maxRecordSize when alter table commits. Check"
-         "whether LCP picks up the new maxRecordSize")
-{
-  TC_PROPERTY("checkMaxRecSz", (Uint32)1);
-  INITIALIZER(changeLCPInterval);
-  INITIALIZER(runTableAddAttrs);
-  FINALIZER(changeLCPInterval);
 }
 
 NDBT_TESTSUITE_END(testDict)

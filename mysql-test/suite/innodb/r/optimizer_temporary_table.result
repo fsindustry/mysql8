@@ -1468,10 +1468,8 @@ EXPLAIN
   "query_block": {
     "union_result": {
       "using_temporary_table": true,
-      "select_id": 3,
       "table_name": "<union1,2>",
       "access_type": "ALL",
-      "using_filesort": true,
       "query_specifications": [
         {
           "dependent": false,
@@ -2266,7 +2264,7 @@ x
 102
 SET @@optimizer_switch=@optimizer_switch_saved;
 SET GLOBAL innodb_fast_shutdown = 0;
-# restart: --innodb-read-only --big-tables=1
+# restart: --big-tables=1 --innodb-read-only
 SET @optimizer_switch_saved= @@optimizer_switch;
 SET @@optimizer_switch="derived_merge=off";
 explain format = json select sql_buffer_result * from t1;
@@ -3360,10 +3358,8 @@ EXPLAIN
   "query_block": {
     "union_result": {
       "using_temporary_table": true,
-      "select_id": 3,
       "table_name": "<union1,2>",
       "access_type": "ALL",
-      "using_filesort": true,
       "query_specifications": [
         {
           "dependent": false,

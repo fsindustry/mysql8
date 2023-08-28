@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,19 +28,20 @@
 #include <utility>
 
 #include "field_types.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_sys.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
-#include "sql-common/json_dom.h"
-#include "sql-common/json_path.h"
 #include "sql/error_handler.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/item_json_func.h"
+#include "sql/json_dom.h"
+#include "sql/json_path.h"
 #include "sql/psi_memory_key.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_exception_handler.h"
@@ -51,7 +52,6 @@
 #include "sql/table.h"
 #include "sql/thd_raii.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 
 /******************************************************************************
   Implementation of Table_function
@@ -126,7 +126,7 @@ bool Table_function_json::init_json_table_col_lists(uint *nest_idx,
     This need to be set up once per statement, as it doesn't change between
     EXECUTE calls.
   */
-  const Prepared_stmt_arena_holder ps_arena_holder(current_thd);
+  Prepared_stmt_arena_holder ps_arena_holder(current_thd);
 
   while ((col = li++)) {
     String buffer;
@@ -160,9 +160,9 @@ bool Table_function_json::init_json_table_col_lists(uint *nest_idx,
               col->m_default_empty_string->val_str(&buffer);
           assert(default_string != nullptr);
           Json_dom_ptr dom;  //@< we'll receive a DOM here
-          JsonParseDefaultErrorHandler parse_handler("JSON_TABLE", 0);
-          if (parse_json(*default_string, &dom, true, parse_handler,
-                         JsonDocumentDefaultDepthHandler) ||
+          bool parse_error;
+          if (parse_json(*default_string, 0, "JSON_TABLE", &dom, true,
+                         &parse_error) ||
               (col->sql_type != MYSQL_TYPE_JSON && !dom->is_scalar())) {
             my_error(ER_INVALID_DEFAULT, MYF(0), col->field_name);
             return true;
@@ -174,9 +174,9 @@ bool Table_function_json::init_json_table_col_lists(uint *nest_idx,
               col->m_default_error_string->val_str(&buffer);
           assert(default_string != nullptr);
           Json_dom_ptr dom;  //@< we'll receive a DOM here
-          JsonParseDefaultErrorHandler parse_handler("JSON_TABLE", 0);
-          if (parse_json(*default_string, &dom, true, parse_handler,
-                         JsonDocumentDefaultDepthHandler) ||
+          bool parse_error;
+          if (parse_json(*default_string, 0, "JSON_TABLE", &dom, true,
+                         &parse_error) ||
               (col->sql_type != MYSQL_TYPE_JSON && !dom->is_scalar())) {
             my_error(ER_INVALID_DEFAULT, MYF(0), col->field_name);
             return true;
@@ -245,11 +245,6 @@ bool Table_function_json::do_init_args() {
     my_error(ER_WRONG_ARGUMENTS, MYF(0), "JSON_TABLE");
     return true;
   }
-
-  if (source->check_cols(1)) {
-    return true;
-  }
-
   try {
     /*
       Check whether given JSON source is a const and it's valid, see also
@@ -358,7 +353,7 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
             Json_array *a = new (std::nothrow) Json_array();
             if (!a) return true;
             for (Json_wrapper &w : data_v) {
-              if (a->append_alias(w.clone_dom())) {
+              if (a->append_alias(w.clone_dom(thd))) {
                 delete a; /* purecov: inspected */
                 return true;
               }
@@ -433,7 +428,6 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
         fld->store(1, true);
       else
         fld->store(0, true);
-      if (current_thd->is_error()) return true;
       fld->set_notnull();
       break;
     }
@@ -483,7 +477,7 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
 
 Json_table_column::~Json_table_column() {
   // Reset paths and wrappers to free allocated memory.
-  m_path_json = Json_path(key_memory_JSON);
+  m_path_json = Json_path();
   if (m_on_empty == Json_on_response_type::DEFAULT)
     m_default_empty_json = Json_wrapper();
   if (m_on_error == Json_on_response_type::DEFAULT)
@@ -677,7 +671,7 @@ static bool print_json_table_column_type(const Field *field, String *str) {
     // character set.
     if ((field->charset()->state & MY_CS_PRIMARY) == 0 &&
         (str->append(STRING_WITH_LEN(" collate ")) ||
-         str->append(field->charset()->m_coll_name)))
+         str->append(field->charset()->name)))
       return true;
   }
   return false;

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,11 +22,10 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <algorithm>
 
 #include <ndb_global.h>
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include <ndb_opts.h>
 #include <NdbApi.hpp>
 #include <NdbIndexStat.hpp>
@@ -2168,60 +2167,53 @@ dodisconnect()
 static struct my_option
 my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::connect_retry_delay,
-  NdbStdOpt::connect_retries,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS("testIndexStat"),
   { "loglevel", NDB_OPT_NOSHORT,
     "Logging level in this program 0-3 (default 0)",
-    &g_opts.loglevel, &g_opts.loglevel, 0,
+    (uchar **)&g_opts.loglevel, (uchar **)&g_opts.loglevel, 0,
     GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "seed", NDB_OPT_NOSHORT, "Random seed (default 0=random, 1=loop number)",
-    &g_opts.seed, &g_opts.seed, 0,
+    (uchar **)&g_opts.seed, (uchar **)&g_opts.seed, 0,
     GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "loops", NDB_OPT_NOSHORT, "Number of test loops (default 1, 0=forever)",
-    &g_opts.loops, &g_opts.loops, 0,
+    (uchar **)&g_opts.loops, (uchar **)&g_opts.loops, 0,
     GET_INT, REQUIRED_ARG, 1, 0, 0, 0, 0, 0 },
   { "rows", NDB_OPT_NOSHORT, "Number of rows (default 10000)",
-    &g_opts.rows, &g_opts.rows, 0,
+    (uchar **)&g_opts.rows, (uchar **)&g_opts.rows, 0,
     GET_UINT, REQUIRED_ARG, 100000, 0, 0, 0, 0, 0 },
   { "ops", NDB_OPT_NOSHORT,"Number of index scans per loop (default 100)",
-    &g_opts.ops, &g_opts.ops, 0,
+    (uchar **)&g_opts.ops, (uchar **)&g_opts.ops, 0,
     GET_UINT, REQUIRED_ARG, 1000, 0, 0, 0, 0, 0 },
   { "nullkeys", NDB_OPT_NOSHORT, "Pct nulls in each key attribute (default 10)",
-    &g_opts.nullkeys, &g_opts.nullkeys, 0,
+    (uchar **)&g_opts.nullkeys, (uchar **)&g_opts.nullkeys, 0,
     GET_UINT, REQUIRED_ARG, 10, 0, 0, 0, 0, 0 },
   { "rpk", NDB_OPT_NOSHORT, "Avg records per full key (default 10)",
-    &g_opts.rpk, &g_opts.rpk, 0,
+    (uchar **)&g_opts.rpk, (uchar **)&g_opts.rpk, 0,
     GET_UINT, REQUIRED_ARG, 10, 0, 0, 0, 0, 0 },
   { "rpkvar", NDB_OPT_NOSHORT, "Vary rpk by factor (default 10, none 1)",
-    &g_opts.rpkvar, &g_opts.rpkvar, 0,
+    (uchar **)&g_opts.rpkvar, (uchar **)&g_opts.rpkvar, 0,
     GET_UINT, REQUIRED_ARG, 10, 0, 0, 0, 0, 0 },
   { "scanpct", NDB_OPT_NOSHORT,
     "Preferred max pct of total rows per scan (default 10)",
-    &g_opts.scanpct, &g_opts.scanpct, 0,
+    (uchar **)&g_opts.scanpct, (uchar **)&g_opts.scanpct, 0,
     GET_UINT, REQUIRED_ARG, 5, 0, 0, 0, 0, 0 },
   { "eqscans", NDB_OPT_NOSHORT,
     "Pct scans for partial/full equality (default 30)",
-    &g_opts.eqscans, &g_opts.eqscans, 0,
+    (uchar **)&g_opts.eqscans, (uchar **)&g_opts.eqscans, 0,
     GET_UINT, REQUIRED_ARG, 50, 0, 0, 0, 0, 0 },
   { "keeptable", NDB_OPT_NOSHORT,
     "Do not drop table at exit",
-    &g_opts.keeptable, &g_opts.keeptable, 0,
+    (uchar **)&g_opts.keeptable, (uchar **)&g_opts.keeptable, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "abort", NDB_OPT_NOSHORT, "Dump core on any error",
-    &g_opts.abort, &g_opts.abort, 0,
+    (uchar **)&g_opts.abort, (uchar **)&g_opts.abort, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "dump", NDB_OPT_NOSHORT, "Write CSV files name.* of keys,ranges,stats",
-    &g_opts.dump, &g_opts.dump, 0,
+    (uchar **)&g_opts.dump, (uchar **)&g_opts.dump, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-  NdbStdOpt::end_of_options
+  { 0, 0, 0,
+    0, 0, 0,
+    GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0 }
 };
 
 static void

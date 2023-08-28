@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 
 #include "my_inttypes.h"
 #include "mysql/plugin.h"
-#include "mysql/strings/m_ctype.h"
 #include "storage/innobase/include/fts0tokenize.h"
 
 /* We are following InnoDB coding guidelines. */
@@ -223,7 +222,7 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
             ret = ngram_parse(param, reinterpret_cast<char *>(word.pos),
                               word.len, &bool_info);
           } else {
-            /* Term search */
+            /* Term serach */
             ret = ngram_term_convert(param, reinterpret_cast<char *>(word.pos),
                                      word.len, &bool_info);
             assert(bool_info.quot == nullptr);

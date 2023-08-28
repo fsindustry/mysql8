@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,12 +41,13 @@
 
 #include "field_types.h"  // enum_field_types
 #include "lex_string.h"
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_loglevel.h"
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/plugin.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client
 #include "sql/dd/dd_schema.h"                // dd::Schema_MDL_locker
@@ -77,9 +78,6 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/thd_raii.h"
-#include "string_with_len.h"
-
-struct CHARSET_INFO;
 
 namespace {
 
@@ -427,16 +425,15 @@ bool update_plugins_I_S_metadata(THD *thd) {
   Create INFORMATION_SCHEMA system views.
 */
 bool create_system_views(THD *thd, bool is_non_dd_based) {
-  // Force use of utf8mb3 charset.
+  // Force use of utf8 charset.
   const CHARSET_INFO *client_cs = thd->variables.character_set_client;
   const CHARSET_INFO *cs = thd->variables.collation_connection;
   const CHARSET_INFO *m_client_cs, *m_connection_cl;
   Disable_binlog_guard binlog_guard(thd);
   Implicit_substatement_state_guard substatement_guard(thd);
 
-  resolve_charset("utf8mb3", system_charset_info, &m_client_cs);
-  resolve_collation("utf8mb3_general_ci", system_charset_info,
-                    &m_connection_cl);
+  resolve_charset("utf8", system_charset_info, &m_client_cs);
+  resolve_collation("utf8_general_ci", system_charset_info, &m_connection_cl);
 
   thd->variables.character_set_client = m_client_cs;
   thd->variables.collation_connection = m_connection_cl;

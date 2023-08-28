@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -28,11 +28,8 @@ INCLUDE(ndb_downgrade_warnings)
 IF(MY_COMPILER_IS_GNU_OR_CLANG)
   INCLUDE(CheckCXXCompilerFlag)
   FOREACH(warning
-      "cast-qual"
-      "maybe-uninitialized"
-      "restrict"
-      "unused-but-set-variable"
-      "unused-parameter"
+      # Downgrade -Werror=restrict for gcc10 optimized build
+      "error=restrict"
       )
     MY_CHECK_CXX_COMPILER_WARNING("${warning}" HAS_WARN_FLAG)
     IF(HAS_WARN_FLAG)

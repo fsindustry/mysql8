@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,8 +39,8 @@
 #include <stddef.h>
 
 #include "my_compiler.h"
+#include "my_loglevel.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/my_loglevel.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/psi_memory.h"
@@ -50,6 +50,7 @@
 /* get memory in hunks */
 constexpr uint ONCE_ALLOC_INIT = 4096 - MALLOC_OVERHEAD;
 
+PSI_memory_key key_memory_charset_file;
 PSI_memory_key key_memory_charset_loader;
 PSI_memory_key key_memory_lf_node;
 PSI_memory_key key_memory_lf_dynarray;
@@ -95,7 +96,7 @@ namespace file_info {
 
    @param pt previous file_type (only relevant when assigning an fd to a stream
    in my_fdopen):
-   @param ct current file type (to differentiate between streams and files).
+   @param ct current file type (to differentiate betweeen streams and files).
  */
 void CountFileOpen(OpenType pt, OpenType ct) {
   mysql_mutex_assert_owner(&THR_LOCK_open);
@@ -135,7 +136,7 @@ void CountFileOpen(OpenType pt, OpenType ct) {
    Decrement status variables.
    @relates file_info::CountFileClose
 
-   @param ft file type (to differentiate between streams and files).
+   @param ft file type (to differentiate betweeen streams and files).
  */
 void CountFileClose(OpenType ft) {
   mysql_mutex_assert_owner(&THR_LOCK_open);

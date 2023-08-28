@@ -1,5 +1,5 @@
 /* -*- c-basic-offset: 4; -*- */
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,8 +22,9 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <ndb_global.h>
-#include "my_config.h"
+
 #include <time.h>
+
 #include "getarg.h"
 
 #ifndef HAVE_STRLCPY
@@ -322,9 +323,9 @@ arg_printusage (struct getargs *args,
 }
 
 static void
-add_string(getarg_strings *s, const char *value)
+add_string(getarg_strings *s, char *value)
 {
-    s->strings = (const char **)realloc(s->strings, (s->num_strings + 1) * sizeof(*s->strings));
+    s->strings = (char **)realloc(s->strings, (s->num_strings + 1) * sizeof(*s->strings));
     s->strings[s->num_strings] = value;
     s->num_strings++;
 }
@@ -398,12 +399,12 @@ arg_match_long(struct getargs *args, size_t num_args,
     }
     case arg_string:
     {
-	*(const char**)current->value = optarg + 1;
+	*(char**)current->value = (char*)optarg + 1;
 	return 0;
     }
     case arg_strings:
     {
-	add_string((getarg_strings*)current->value, optarg + 1);
+	add_string((getarg_strings*)current->value, (char*)optarg + 1);
 	return 0;
     }
     case arg_flag:
@@ -467,7 +468,7 @@ arg_match_short (struct getargs *args, size_t num_args,
 
     for(j = 1; j > 0 && j < (int)strlen(rargv[*optind]); j++) {
 	for(k = 0; k < (int)num_args; k++) {
-	    const char *optarg;
+	    char *optarg;
 
 	    if(args[k].short_name == 0)
 		continue;
@@ -509,7 +510,7 @@ arg_match_short (struct getargs *args, size_t num_args,
 		    *(int*)args[k].value = tmp;
 		    return 0;
 		} else if(args[k].type == arg_string) {
-		    *(const char**)args[k].value = optarg;
+		    *(char**)args[k].value = optarg;
 		    return 0;
 		} else if(args[k].type == arg_strings) {
 		    add_string((getarg_strings*)args[k].value, optarg);

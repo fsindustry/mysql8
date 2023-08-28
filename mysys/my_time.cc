@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -82,6 +82,12 @@ const ulonglong log_10_int[20] = {1,
 
 const char my_zero_datetime6[] = "0000-00-00 00:00:00.000000";
 
+/**
+   Position for YYYY-DD-MM HH-MM-DD.FFFFFF AM in default format.
+*/
+static constexpr const uchar internal_format_positions[] = {0, 1, 2, 3,
+                                                            4, 5, 6, 255};
+
 static constexpr const char time_separator = ':';
 
 /** Day number with 1970-01-01 as  base. */
@@ -93,7 +99,7 @@ const uchar days_in_month[] = {31, 28, 31, 30, 31, 30, 31,
    Offset of system time zone from UTC in seconds used to speed up
    work of my_system_gmt_sec() function.
 */
-static my_time_t my_time_zone = 0;
+static long my_time_zone = 0;
 
 // Right-shift of a negative value is implementation-defined
 // Assert that we have arithmetic shift of negative numbers
@@ -232,8 +238,7 @@ bool check_time_mmssff_range(const MYSQL_TIME &my_time) {
   @retval        true if value is out of range.
 */
 bool check_time_range_quick(const MYSQL_TIME &my_time) {
-  const longlong hour =
-      static_cast<longlong>(my_time.hour) + 24LL * my_time.day;
+  longlong hour = static_cast<longlong>(my_time.hour) + 24LL * my_time.day;
   /* The input value should not be fatally bad */
   assert(!check_time_mmssff_range(my_time));
   if (hour <= TIME_MAX_HOUR &&
@@ -278,18 +283,18 @@ bool time_zone_displacement_to_seconds(const char *str, size_t length,
                                        int *result) {
   if (length < 6) return true;
 
-  const int sign = str[0] == '+' ? 1 : (str[0] == '-' ? -1 : 0);
+  int sign = str[0] == '+' ? 1 : (str[0] == '-' ? -1 : 0);
   if (sign == 0) return true;
 
   if (!(std::isdigit(str[1]) && std::isdigit(str[2]))) return true;
-  const int hours = (str[1] - '0') * 10 + str[2] - '0';
+  int hours = (str[1] - '0') * 10 + str[2] - '0';
 
   if (str[3] != ':') return true;
 
   if (!(std::isdigit(str[4]) && std::isdigit(str[5]))) return true;
-  const int minutes = (str[4] - '0') * 10 + str[5] - '0';
+  int minutes = (str[4] - '0') * 10 + str[5] - '0';
   if (minutes >= MINS_PER_HOUR) return true;
-  const int seconds = hours * SECS_PER_HOUR + minutes * SECS_PER_MIN;
+  int seconds = hours * SECS_PER_HOUR + minutes * SECS_PER_MIN;
 
   if (seconds > MAX_TIME_ZONE_HOURS * SECS_PER_HOUR) return true;
 
@@ -307,7 +312,7 @@ bool time_zone_displacement_to_seconds(const char *str, size_t length,
    Convert a timestamp string to a MYSQL_TIME value.
 
    DESCRIPTION
-      At least the following formats are recognized (based on number of digits)
+      At least the following formats are recogniced (based on number of digits)
       YYMMDD, YYYYMMDD, YYMMDDHHMMSS, YYYYMMDDHHMMSS
       YY-MM-DD, YYYY-MM-DD, YY-MM-DD HH.MM.SS
       YYYYMMDDTHHMMSS  where T is a the character T (ISO8601)
@@ -344,14 +349,14 @@ bool time_zone_displacement_to_seconds(const char *str, size_t length,
       MYSQL_TIMESTAMP_ERROR       Timestamp with wrong values.
                                   All elements in l_time is set to 0
 
-      flags is a bit field with the following possible values:
+      flags is a bit field with the follwing possible values:
        TIME_FUZZY_DATE
        TIME_DATETIME_ONLY
        TIME_NO_ZERO_IN_DATE
        TIME_NO_ZERO_DATE
        TIME_INVALID_DATES
 
-    @param str_arg      String to parse
+    @param str          String to parse
     @param length       Length of string
     @param[out] l_time  Date is stored here
     @param flags        Bitfield
@@ -362,42 +367,37 @@ bool time_zone_displacement_to_seconds(const char *str, size_t length,
     @retval false Ok
     @retval true  Error
   */
-bool str_to_datetime(const char *const str_arg, std::size_t length,
-                     MYSQL_TIME *l_time, my_time_flags_t flags,
-                     MYSQL_TIME_STATUS *status) {
+bool str_to_datetime(const char *str, std::size_t length, MYSQL_TIME *l_time,
+                     my_time_flags_t flags, MYSQL_TIME_STATUS *status) {
   uint field_length = 0;
   uint year_length = 0;
   uint digits;
+  uint i;
   uint number_of_fields;
   uint date[MAX_DATE_PARTS];
   uint date_len[MAX_DATE_PARTS];
+  uint add_hours = 0;
   uint start_loop;
   ulong not_zero_date;
-  // Hyphen is mandated after digit sequence 1 and 2, e.g. 2000-12-23, i.e.
-  // after the year part and after the month part.
-  constexpr ulong allow_hyphen = (1 << 0) | (1 << 1);
-  // Colon is mandated after digit sequence 4 and 5, e.g. 2000-12-23 14:44:10,
-  // after the hour part and after the minutes part.
-  constexpr ulong allow_colon = (1 << 3) | (1 << 4);
+  ulong allow_space;
   bool is_internal_format = false;
   const char *pos;
   const char *last_field_pos = nullptr;
-  const char *end = str_arg + length;
+  const char *end = str + length;
+  const uchar *format_position;
   bool found_delimiter = false;
   bool found_space = false;
   bool found_displacement = false;
   uint frac_pos;
   uint frac_len;
   int displacement = 0;
-  const char *str = str_arg;
 
   assert(status->warnings == 0 && status->fractional_digits == 0 &&
          status->nanoseconds == 0);
 
   /* Skip space at start */
   for (; str != end && isspace_char(*str); str++)
-    status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                            str_arg, end, str);
+    ;
   if (str == end || !isdigit_char(*str)) {
     status->warnings = MYSQL_TIME_WARN_TRUNCATED;
     l_time->time_type = MYSQL_TIMESTAMP_NONE;
@@ -406,6 +406,7 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
 
   is_internal_format = false;
   /* This has to be changed if want to activate different timestamp formats */
+  format_position = internal_format_positions;
 
   /*
     Calculate number of digits in first part.
@@ -416,28 +417,58 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
     ;
 
   digits = static_cast<uint>(pos - str);
-  start_loop = 0;  /* Start of scan loop */
-  date_len[0] = 0; /* Length of year field */
+  start_loop = 0;                   /* Start of scan loop */
+  date_len[format_position[0]] = 0; /* Length of year field */
   if (pos == end || *pos == '.') {
     /* Found date in internal format (only numbers like YYYYMMDD) */
     year_length = (digits == 4 || digits == 8 || digits >= 14) ? 4 : 2;
     field_length = year_length;
     is_internal_format = true;
+    format_position = internal_format_positions;
   } else {
-    field_length = 4;
+    if (format_position[0] >= 3) /* If year is after HHMMDD */
+    {
+      /*
+        If year is not in first part then we have to determinate if we got
+        a date field or a datetime field.
+        We do this by checking if there is two numbers separated by
+        space in the input.
+      */
+      while (pos < end && !isspace_char(*pos)) pos++;
+      while (pos < end && !isdigit_char(*pos)) pos++;
+      if (pos == end) {
+        if (flags & TIME_DATETIME_ONLY) {
+          status->warnings = MYSQL_TIME_WARN_TRUNCATED;
+          l_time->time_type = MYSQL_TIMESTAMP_NONE;
+          return true; /* Can't be a full datetime */
+        }
+        /* Date field.  Set hour, minutes and seconds to 0 */
+        date[0] = 0;
+        date[1] = 0;
+        date[2] = 0;
+        date[3] = 0;
+        date[4] = 0;
+        start_loop = 5; /* Start with first date part */
+      }
+    }
+
+    field_length = format_position[0] == 0 ? 4 : 2;
   }
 
   /*
     Only allow space in the first "part" of the datetime field and:
     - after days, part seconds
+    - before and after AM/PM (handled by code later)
 
-    2003-03-03 20:00:20.44
+    2003-03-03 20:00:20 AM
+    20:00:20.000000 AM 03-03-2000
   */
+  i = *std::max_element(format_position, format_position + 3);
 
-  const ulong allow_space = ((1 << 2) | (1 << 6));
+  allow_space = ((1 << i) | (1 << format_position[6]));
+  allow_space &= (1 | 2 | 4 | 8 | 64);
 
   not_zero_date = 0;
-  uint i;
   for (i = start_loop;
        i < MAX_DATE_PARTS - 1 && str != end && isdigit_char(*str); i++) {
     const char *start = str;
@@ -450,7 +481,7 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       zeroes are significant, and where we never process more than six
       digits.
     */
-    const bool scan_until_delim = !is_internal_format && (i != 6);
+    bool scan_until_delim = !is_internal_format && (i != format_position[6]);
 
     while (str != end && isdigit_char(str[0]) &&
            (scan_until_delim || --field_length)) {
@@ -469,18 +500,18 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
     not_zero_date |= tmp_value;
 
     /* Length of next field */
-    field_length = 2;
+    field_length = format_position[i + 1] == 0 ? 4 : 2;
 
     if ((last_field_pos = str) == end) {
       i++; /* Register last found part */
       break;
     }
     /* Allow a 'T' after day to allow CCYYMMDDT type of fields */
-    if (i == 2 && *str == 'T') {
+    if (i == format_position[2] && *str == 'T') {
       str++; /* ISO8601:  CCYYMMDDThhmmss */
       continue;
     }
-    if (i == 5) /* Seconds */
+    if (i == format_position[5]) /* Seconds */
     {
       if (*str == '.') /* Followed by part seconds */
       {
@@ -512,7 +543,7 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       }
       continue;
     }
-    if (i == 6 && (str[0] == '+' || str[0] == '-')) {
+    if (i == format_position[6] && (str[0] == '+' || str[0] == '-')) {
       if (!time_zone_displacement_to_seconds(str, end - str, &displacement)) {
         found_displacement = true;
         str += end - str;
@@ -524,70 +555,41 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       }
     }
 
-    bool one_delim_seen = false;
     while (str != end && (ispunct_char(*str) || isspace_char(*str))) {
-      if (one_delim_seen) {
-        status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                                str_arg, end, str);
-      }
       if (isspace_char(*str)) {
         if (!(allow_space & (1 << i))) {
           status->warnings = MYSQL_TIME_WARN_TRUNCATED;
           l_time->time_type = MYSQL_TIMESTAMP_NONE;
           return true;
         }
-        if (i == 6) {
-          status->set_deprecation(
-              MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS, str_arg, end,
-              str);
-        }
         found_space = true;
-        if (*str != ' ') {
-          status->set_deprecation(
-              MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_SPACE, str_arg, end,
-              str);
-        }
-      } else if (!((*str == '-' && allow_hyphen & (1 << i)) ||
-                   (*str == ':' && allow_colon & (1 << i))) &&
-                 i != 2) {
-        if (is_internal_format && year_length == 2 && date_len[0] == 1) {
-          // skip deprecation the case of year given as 4.12.3, because
-          // changing it to 4-12-3 would yield a different year (2004-12-03 vs
-          // 0004-12-03).  We will deprecate short years in WL#13603 instead.
-        } else {
-          status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_KIND,
-                                  str_arg, end, str, i > 1);
-        }
-      } else if (i == 2 && (*str != '.' || !is_internal_format)) {
-        // Corner case: i == 2 is the position between date and time. Sometimes
-        // in internal format it will be a period, but we can't flag that
-        // here. Example: In '10101.5' > date'2021-10-12', the ".5" is accepted
-        // but discarded silently. Substituting a space here will not parse,
-        // so we stay silent.
-        status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_SPACE,
-                                str_arg, end, str);
       }
       str++;
-      one_delim_seen = true;
       found_delimiter = true; /* Should be a 'normal' date */
     }
     /* Check if next position is AM/PM */
-    if (i == 6) /* Seconds, time for AM/PM */
+    if (i == format_position[6]) /* Seconds, time for AM/PM */
     {
-      i++; /* Skip AM/PM part */
+      i++;                           /* Skip AM/PM part */
+      if (format_position[7] != 255) /* If using AM/PM */
+      {
+        if (str + 2 <= end && (str[1] == 'M' || str[1] == 'm')) {
+          if (str[0] == 'p' || str[0] == 'P')
+            add_hours = 12;
+          else if (str[0] != 'a' && str[0] != 'A')
+            continue; /* Not AM/PM */
+          str += 2;   /* Skip AM/PM */
+          /* Skip space after AM/PM */
+          while (str != end && isspace_char(*str)) str++;
+        }
+      }
     }
     last_field_pos = str;
   }
-  if (found_delimiter) {
-    if (found_space && i == 3 && str == end) {
-      // superfluous space at end of date (and no time given)
-      status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                              str_arg, end, str - 1);
-    } else if (!found_space && (flags & TIME_DATETIME_ONLY)) {
-      status->warnings = MYSQL_TIME_WARN_TRUNCATED;
-      l_time->time_type = MYSQL_TIMESTAMP_NONE;
-      return true; /* Can't be a datetime */
-    }
+  if (found_delimiter && !found_space && (flags & TIME_DATETIME_ONLY)) {
+    status->warnings = MYSQL_TIME_WARN_TRUNCATED;
+    l_time->time_type = MYSQL_TIMESTAMP_NONE;
+    return true; /* Can't be a datetime */
   }
 
   str = last_field_pos;
@@ -599,7 +601,7 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
   }
 
   if (!is_internal_format) {
-    year_length = date_len[0];
+    year_length = date_len[static_cast<uint>(format_position[0])];
     if (!year_length) /* Year must be specified */
     {
       status->warnings = MYSQL_TIME_WARN_TRUNCATED;
@@ -607,21 +609,29 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       return true;
     }
 
-    l_time->year = date[static_cast<uint>(0)];
-    l_time->month = date[static_cast<uint>(1)];
-    l_time->day = date[static_cast<uint>(2)];
-    l_time->hour = date[static_cast<uint>(3)];
-    l_time->minute = date[static_cast<uint>(4)];
-    l_time->second = date[static_cast<uint>(5)];
+    l_time->year = date[static_cast<uint>(format_position[0])];
+    l_time->month = date[static_cast<uint>(format_position[1])];
+    l_time->day = date[static_cast<uint>(format_position[2])];
+    l_time->hour = date[static_cast<uint>(format_position[3])];
+    l_time->minute = date[static_cast<uint>(format_position[4])];
+    l_time->second = date[static_cast<uint>(format_position[5])];
     l_time->time_zone_displacement = displacement;
 
-    frac_pos = static_cast<uint>(6);
+    frac_pos = static_cast<uint>(format_position[6]);
     frac_len = date_len[frac_pos];
     status->fractional_digits = frac_len;
     if (frac_len < 6)
       date[frac_pos] *=
           static_cast<uint>(log_10_int[DATETIME_MAX_DECIMALS - frac_len]);
     l_time->second_part = date[frac_pos];
+
+    if (format_position[7] != static_cast<uchar>(255)) {
+      if (l_time->hour > 12) {
+        status->warnings = MYSQL_TIME_WARN_TRUNCATED;
+        goto err;
+      }
+      l_time->hour = l_time->hour % 12 + add_hours;
+    }
   } else {
     l_time->year = date[0];
     l_time->month = date[1];
@@ -699,9 +709,6 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       status->warnings = MYSQL_TIME_WARN_TRUNCATED;
       break;
     }
-    // superfluous space at end
-    status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                            str_arg, end, str);
   }
 
   return false;
@@ -745,18 +752,12 @@ bool str_to_time(const char *str, std::size_t length, MYSQL_TIME *l_time,
   uint state;
   const char *start;
   bool seen_colon = false;
-  const char *str_arg = str;
 
   assert(status->warnings == 0 && status->fractional_digits == 0 &&
          status->nanoseconds == 0);
 
-  l_time->time_type = MYSQL_TIMESTAMP_NONE;
   l_time->neg = false;
-  for (; str != end && isspace_char(*str); str++) {
-    length--;
-    status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                            str_arg, end, str);
-  }
+  for (; str != end && isspace_char(*str); str++) length--;
   if (str != end && *str == '-') {
     l_time->neg = true;
     str++;
@@ -774,9 +775,7 @@ bool str_to_time(const char *str, std::size_t length, MYSQL_TIME *l_time,
                           (TIME_FUZZY_DATE | TIME_DATETIME_ONLY), &tmpstatus);
     if (l_time->time_type >= MYSQL_TIMESTAMP_ERROR) {
       *status = tmpstatus;
-      const bool error = l_time->time_type == MYSQL_TIMESTAMP_ERROR;
-      if (error) status->squelch_deprecation();
-      return error;
+      return l_time->time_type == MYSQL_TIMESTAMP_ERROR;
     }
     assert(status->warnings == 0 && status->fractional_digits == 0 &&
            status->nanoseconds == 0);
@@ -790,13 +789,9 @@ bool str_to_time(const char *str, std::size_t length, MYSQL_TIME *l_time,
 
   /* Skip all space after 'days' */
   end_of_days = str;
-  int spaces = 0;
-  for (; str != end && isspace_char(str[0]); str++) spaces++;
+  for (; str != end && isspace_char(str[0]); str++)
+    ;
 
-  if (spaces > 1 || (spaces == 1 && str == end)) {
-    status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                            str_arg, end, end_of_days);
-  }
   state = 0;
   found_days = found_hours = false;
   if (static_cast<uint>(end - str) > 1 && str != end_of_days &&
@@ -837,7 +832,7 @@ bool str_to_time(const char *str, std::size_t length, MYSQL_TIME *l_time,
   if (state != 4) { /* Not HH:MM:SS */
     /* Fix the date to assume that seconds was given */
     if (!found_hours && !found_days) {
-      const std::size_t len = sizeof(long) * (state - 1);
+      std::size_t len = sizeof(long) * (state - 1);
       memmove(pointer_cast<uchar *>(date + 4) - len,
               pointer_cast<uchar *>(date + state) - len, len);
       memset(date, 0, sizeof(long) * (4 - state));
@@ -880,6 +875,18 @@ fractional:
                                 (end - str) > 2 && isdigit_char(str[2]))))
     return true;
 
+  if (internal_format_positions[7] != 255) {
+    /* Read a possible AM/PM */
+    while (str != end && isspace_char(*str)) str++;
+    if (str + 2 <= end && (str[1] == 'M' || str[1] == 'm')) {
+      if (str[0] == 'p' || str[0] == 'P') {
+        str += 2;
+        date[1] = date[1] % 12 + 12;
+      } else if (str[0] == 'a' || str[0] == 'A')
+        str += 2;
+    }
+  }
+
   /* Integer overflow checks */
   if (date[0] > UINT_MAX || date[1] > UINT_MAX || date[2] > UINT_MAX ||
       date[3] > UINT_MAX || date[4] > UINT_MAX)
@@ -905,7 +912,6 @@ fractional:
 
   if (check_time_mmssff_range(*l_time)) {
     status->warnings |= MYSQL_TIME_WARN_OUT_OF_RANGE;
-    l_time->time_type = MYSQL_TIMESTAMP_ERROR;
     return true;
   }
 
@@ -923,9 +929,6 @@ fractional:
           return true;
         }
         break;
-      } else {
-        status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                                str_arg, end, str);
       }
     } while (++str != end);
   }
@@ -946,7 +949,7 @@ bool number_to_time(longlong nr, MYSQL_TIME *ltime, int *warnings) {
     /* For huge numbers try full DATETIME, like str_to_time does. */
     if (nr >= 10000000000LL) /* '0001-00-00 00-00-00' */
     {
-      const int warnings_backup = *warnings;
+      int warnings_backup = *warnings;
       if (number_to_datetime(nr, ltime, 0, warnings) != -1LL) return false;
       *warnings = warnings_backup;
     }
@@ -1059,11 +1062,11 @@ long calc_daynr(uint year, uint month, uint day) {
 
 /**
   Convert time in MYSQL_TIME representation in system time zone to its
-  my_time_t form (number of seconds in UTC since beginning of Unix Epoch).
+  my_time_t form (number of seconds in UTC since begginning of Unix Epoch).
 
   @param my_time         - time value to be converted
-  @param my_timezone     - pointer to a my_time_t where offset of system time
-  zone from UTC will be stored for caching
+  @param my_timezone     - pointer to long where offset of system time zone
+                           from UTC will be stored for caching
   @param in_dst_time_gap - set to true if time falls into spring time-gap
 
   @note
@@ -1076,7 +1079,7 @@ long calc_daynr(uint year, uint month, uint day) {
 
   @return Time in UTC seconds since Unix Epoch representation.
 */
-my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
+my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, long *my_timezone,
                             bool *in_dst_time_gap) {
   uint loop;
   time_t tmp = 0;
@@ -1085,7 +1088,7 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
   MYSQL_TIME *t = &tmp_time;
   struct tm *l_time;
   struct tm tm_tmp;
-  my_time_t diff, current_timezone;
+  long diff, current_timezone;
 
   /*
     Use temp variable to avoid trashing input data, which could happen in
@@ -1094,7 +1097,7 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
   // memcpy(&tmp_time, &my_time, sizeof(MYSQL_TIME));
   tmp_time = my_time;
 
-  if (!validate_my_time(*t)) return 0;
+  if (!validate_timestamp_range(*t)) return 0;
 
   /*
     Calculate the gmt time based on current time and timezone
@@ -1110,13 +1113,13 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
     from real value (we assume that localtime_r(tmp) will return something
     within 24 hrs from t) which is probably true for all current time zones.
 
-    Note2: For the dates, which have time_t representation close to MAX_INT32
-    (efficient time_t limit for 32 bits time platforms) we should do a small
-    trick to avoid overflow. That is, convert the date, which is two days
-    earlier, and then add these days to the final value.
+    Note2: For the dates, which have time_t representation close to
+    MAX_INT32 (efficient time_t limit for supported platforms), we should
+    do a small trick to avoid overflow. That is, convert the date, which is
+    two days earlier, and then add these days to the final value.
 
     The same trick is done for the values close to 0 in time_t
-    representation for platforms with unsigned time_t (QNX).
+    representation for platfroms with unsigned time_t (QNX).
 
     To be more verbose, here is a sample (extracted from the code below):
     (calc_daynr(2038, 1, 19) - (long) days_at_timestart)*86400L + 4*3600L
@@ -1128,9 +1131,9 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
     will give -3600.
 
     On some platforms, (E.g. on QNX) time_t is unsigned and localtime(-3600)
-    will give us a date around 2106 year. Which is no good.
+    wil give us a date around 2106 year. Which is no good.
 
-    Theoretically, there could be problems with the latter conversion:
+    Theoreticaly, there could be problems with the latter conversion:
     there are at least two timezones, which had time switches near 1 Jan
     of 1970 (because of political reasons). These are America/Hermosillo and
     America/Mazatlan time zones. They changed their offset on
@@ -1143,12 +1146,10 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
     historical information for localtime_r() etc. That is, the problem is not
     relevant to QNX.
 
-    For 32 bits time platforms, We are safe with shifts close to MAX_INT32,
-    as there are no known time switches on Jan 2038 yet :)
+    We are safe with shifts close to MAX_INT32, as there are no known
+    time switches on Jan 2038 yet :)
   */
-  if (t->year > MYTIME_MAX_YEAR) {
-    return 0;  // out of range
-  } else if ((t->year == MYTIME_MAX_YEAR) && (t->month == 1) && (t->day > 4)) {
+  if ((t->year == TIMESTAMP_MAX_YEAR) && (t->month == 1) && (t->day > 4)) {
     /*
       Below we will pass static_cast<uint>(t->day - shift) to calc_daynr.
       As we don't want to get an overflow here, we will shift
@@ -1158,16 +1159,14 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
     shift = 2;
   }
 
-  my_time_t tmp_days =
-      calc_daynr(static_cast<uint>(t->year), static_cast<uint>(t->month),
-                 static_cast<uint>(t->day));
-  tmp_days = tmp_days - static_cast<my_time_t>(days_at_timestart);
-  const my_time_t tmp_seconds =
-      tmp_days * SECONDS_IN_24H +
-      (static_cast<int64_t>(t->hour) * 3600 +
-       static_cast<int64_t>(t->minute * 60 + t->second));
-  // This will be a narrowing on 32 bit time platforms, but checked range above
-  tmp = static_cast<time_t>(tmp_seconds + my_time_zone - 3600);
+  tmp = static_cast<time_t>(
+      ((calc_daynr(static_cast<uint>(t->year), static_cast<uint>(t->month),
+                   static_cast<uint>(t->day)) -
+        static_cast<long>(days_at_timestart)) *
+           SECONDS_IN_24H +
+       static_cast<long>(t->hour) * 3600L +
+       static_cast<long>(t->minute * 60 + t->second)) +
+      static_cast<time_t>(my_time_zone) - 3600);
 
   current_timezone = my_time_zone;
   localtime_r(&tmp, &tm_tmp);
@@ -1225,6 +1224,16 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
   /* shift back, if we were dealing with boundary dates */
   tmp += shift * SECONDS_IN_24H;
 
+  /*
+    This is possible for dates, which slightly exceed boundaries.
+    Conversion will pass ok for them, but we don't allow them.
+    First check will pass for platforms with signed time_t.
+    instruction above (tmp+= shift*86400L) could exceed
+    MAX_INT32 (== TIMESTAMP_MAX_VALUE) and overflow will happen.
+    So, tmp < TIMESTAMP_MIN_VALUE will be triggered. On platfroms
+    with unsigned time_t tmp+= shift*86400L might result in a number,
+    larger then TIMESTAMP_MAX_VALUE, so another check will work.
+  */
   if (!is_time_t_valid_for_timestamp(tmp)) tmp = 0;
 
   return static_cast<my_time_t>(tmp);
@@ -1369,7 +1378,7 @@ int my_datetime_to_str(const MYSQL_TIME &my_time, char *to, uint dec) {
   int len = TIME_to_datetime_str(my_time, to);
   if (dec) len += my_useconds_to_str(to + len, my_time.second_part, dec);
   if (my_time.time_type == MYSQL_TIMESTAMP_DATETIME_TZ) {
-    const int tzd = my_time.time_zone_displacement;
+    int tzd = my_time.time_zone_displacement;
     len += sprintf(to + len, "%+02i:%02i", tzd / SECS_PER_HOUR,
                    std::abs(tzd) / SECS_PER_MIN % MINS_PER_HOUR);
   } else
@@ -1415,9 +1424,9 @@ int my_TIME_to_str(const MYSQL_TIME &my_time, char *to, uint dec) {
   @param      dec Precision, in the range 0..6.
   @return         The length of the result string.
 */
-int my_timeval_to_str(const my_timeval *tm, char *to, uint dec) {
-  int len = sprintf(to, "%lld", static_cast<long long>(tm->m_tv_sec));
-  if (dec) len += my_useconds_to_str(to + len, tm->m_tv_usec, dec);
+int my_timeval_to_str(const struct timeval *tm, char *to, uint dec) {
+  int len = sprintf(to, "%d", static_cast<int>(tm->tv_sec));
+  if (dec) len += my_useconds_to_str(to + len, tm->tv_usec, dec);
   return len;
 }
 
@@ -1689,10 +1698,9 @@ Format: Suhhhhhh.hhhhmmmm.mmssssss.ffffffff.ffffffff.ffffffff
 */
 longlong TIME_to_longlong_time_packed(const MYSQL_TIME &my_time) {
   /* If month is 0, we mix day with hours: "1 00:10:10" -> "24:00:10" */
-  const long hms =
-      (((my_time.month ? 0 : my_time.day * 24) + my_time.hour) << 12) |
-      (my_time.minute << 6) | my_time.second;
-  const longlong tmp = my_packed_time_make(hms, my_time.second_part);
+  long hms = (((my_time.month ? 0 : my_time.day * 24) + my_time.hour) << 12) |
+             (my_time.minute << 6) | my_time.second;
+  longlong tmp = my_packed_time_make(hms, my_time.second_part);
   return my_time.neg ? -tmp : tmp;
 }
 
@@ -1779,7 +1787,7 @@ longlong my_time_packed_from_binary(const uchar *ptr, uint dec) {
   switch (dec) {
     case 0:
     default: {
-      const longlong intpart = mi_uint3korr(ptr) - TIMEF_INT_OFS;
+      longlong intpart = mi_uint3korr(ptr) - TIMEF_INT_OFS;
       return my_packed_time_make_int(intpart);
     }
     case 1:
@@ -1860,11 +1868,9 @@ Format: SYYYYYYY.YYYYYYYY.YYdddddh.hhhhmmmm.mmssssss.ffffffff.ffffffff.ffffffff
   @return       Packed numeric representation of my_time.
 */
 longlong TIME_to_longlong_datetime_packed(const MYSQL_TIME &my_time) {
-  const longlong ymd = ((my_time.year * 13 + my_time.month) << 5) | my_time.day;
-  const longlong hms =
-      (my_time.hour << 12) | (my_time.minute << 6) | my_time.second;
-  const longlong tmp =
-      my_packed_time_make(((ymd << 17) | hms), my_time.second_part);
+  longlong ymd = ((my_time.year * 13 + my_time.month) << 5) | my_time.day;
+  longlong hms = (my_time.hour << 12) | (my_time.minute << 6) | my_time.second;
+  longlong tmp = my_packed_time_make(((ymd << 17) | hms), my_time.second_part);
   assert(!check_datetime_range(my_time)); /* Make sure no overflow */
   return my_time.neg ? -tmp : tmp;
 }
@@ -1878,7 +1884,7 @@ longlong TIME_to_longlong_datetime_packed(const MYSQL_TIME &my_time) {
   @return      Packed numeric representation of ltime.
 */
 longlong TIME_to_longlong_date_packed(const MYSQL_TIME &my_time) {
-  const longlong ymd = ((my_time.year * 13 + my_time.month) << 5) | my_time.day;
+  longlong ymd = ((my_time.year * 13 + my_time.month) << 5) | my_time.day;
   return my_packed_time_make_int(ymd << 17);
 }
 
@@ -1889,7 +1895,7 @@ longlong TIME_to_longlong_date_packed(const MYSQL_TIME &my_time) {
   @return packed value for date YYYY-00-00.
 */
 longlong year_to_longlong_datetime_packed(long year) {
-  const longlong ymd = ((year * 13) << 5);
+  longlong ymd = ((year * 13) << 5);
   return my_packed_time_make_int(ymd << 17);
 }
 
@@ -1939,7 +1945,7 @@ void TIME_from_longlong_date_packed(MYSQL_TIME *ltime, longlong tmp) {
 
 /**
   On disk we store as unsigned number with DATETIMEF_INT_OFS offset,
-  for HA_KETYPE_BINARY compatibility purposes.
+  for HA_KETYPE_BINARY compatibilty purposes.
 */
 #define DATETIMEF_INT_OFS 0x8000000000LL
 
@@ -1952,7 +1958,7 @@ void TIME_from_longlong_date_packed(MYSQL_TIME *ltime, longlong tmp) {
   @return      In-memory packed numeric datetime representation.
 */
 longlong my_datetime_packed_from_binary(const uchar *ptr, uint dec) {
-  const longlong intpart = mi_uint5korr(ptr) - DATETIMEF_INT_OFS;
+  longlong intpart = mi_uint5korr(ptr) - DATETIMEF_INT_OFS;
   int frac;
   assert(dec <= DATETIME_MAX_DECIMALS);
   switch (dec) {
@@ -2017,25 +2023,25 @@ void my_datetime_packed_to_binary(longlong nr, uchar *ptr, uint dec) {
   @param      ptr The pointer to read the value from.
   @param      dec Precision.
 */
-void my_timestamp_from_binary(my_timeval *tm, const uchar *ptr, uint dec) {
+void my_timestamp_from_binary(struct timeval *tm, const uchar *ptr, uint dec) {
   assert(dec <= DATETIME_MAX_DECIMALS);
-  tm->m_tv_sec = mi_uint4korr(ptr);
+  tm->tv_sec = mi_uint4korr(ptr);
   switch (dec) {
     case 0:
     default:
-      tm->m_tv_usec = 0;
+      tm->tv_usec = 0;
       break;
     case 1:
     case 2:
-      tm->m_tv_usec = (static_cast<int>(ptr[4])) * 10000;
+      tm->tv_usec = (static_cast<int>(ptr[4])) * 10000;
       break;
     case 3:
     case 4:
-      tm->m_tv_usec = mi_sint2korr(ptr + 4) * 100;
+      tm->tv_usec = mi_sint2korr(ptr + 4) * 100;
       break;
     case 5:
     case 6:
-      tm->m_tv_usec = mi_sint3korr(ptr + 4);
+      tm->tv_usec = mi_sint3korr(ptr + 4);
   }
 }
 
@@ -2046,12 +2052,12 @@ void my_timestamp_from_binary(my_timeval *tm, const uchar *ptr, uint dec) {
   @param [out]  ptr  The pointer to store the value to.
   @param        dec  Precision.
 */
-void my_timestamp_to_binary(const my_timeval *tm, uchar *ptr, uint dec) {
+void my_timestamp_to_binary(const struct timeval *tm, uchar *ptr, uint dec) {
   assert(dec <= DATETIME_MAX_DECIMALS);
   /* Stored value must have been previously properly rounded or truncated */
-  assert((tm->m_tv_usec %
+  assert((tm->tv_usec %
           static_cast<int>(log_10_int[DATETIME_MAX_DECIMALS - dec])) == 0);
-  mi_int4store(ptr, tm->m_tv_sec);
+  mi_int4store(ptr, tm->tv_sec);
   switch (dec) {
     case 0:
     default:
@@ -2059,16 +2065,16 @@ void my_timestamp_to_binary(const my_timeval *tm, uchar *ptr, uint dec) {
     case 1:
     case 2:
       ptr[4] =
-          static_cast<unsigned char>(static_cast<char>(tm->m_tv_usec / 10000));
+          static_cast<unsigned char>(static_cast<char>(tm->tv_usec / 10000));
       break;
     case 3:
     case 4:
-      mi_int2store(ptr + 4, tm->m_tv_usec / 100);
+      mi_int2store(ptr + 4, tm->tv_usec / 100);
       break;
       /* Impossible second precision. Fall through */
     case 5:
     case 6:
-      mi_int3store(ptr + 4, tm->m_tv_usec);
+      mi_int3store(ptr + 4, tm->tv_usec);
   }
 }
 /**
@@ -2078,7 +2084,7 @@ void my_timestamp_to_binary(const my_timeval *tm, uchar *ptr, uint dec) {
   @param [out]  ptr   The pointer to store the value to.
 */
 void my_date_to_binary(const MYSQL_TIME *ltime, uchar *ptr) {
-  const long tmp = ltime->day + ltime->month * 32 + ltime->year * 16 * 32;
+  long tmp = ltime->day + ltime->month * 32 + ltime->year * 16 * 32;
   int3store(ptr, tmp);
 }
 
@@ -2110,9 +2116,6 @@ longlong TIME_to_longlong_packed(const MYSQL_TIME &my_time) {
 /**
     Change a daynr to year, month and day. Daynr 0 is returned as date
     00.00.00
-
-    This function is called from mysqld's print_fatal_signal().
-    Do not make changes to this function that make that call unsafe.
 */
 void get_date_from_daynr(int64_t daynr, uint *ret_year, uint *ret_month,
                          uint *ret_day) {
@@ -2138,8 +2141,7 @@ void get_date_from_daynr(int64_t daynr, uint *ret_year, uint *ret_month,
     if (days_in_year == 366) {
       if (day_of_year > 31 + 28) {
         day_of_year--;
-        if (day_of_year == 31 + 28)
-          leap_day = 1; /* Handle leap year's leap day */
+        if (day_of_year == 31 + 28) leap_day = 1; /* Handle leapyears leapday */
       }
     }
     *ret_month = 1;
@@ -2174,7 +2176,7 @@ int calc_weekday(long daynr, bool sunday_first_day_of_week) {
         a date at start of january) In this case one can get 53 for the
         first week of next year.  This flag ensures that the week is
         relevant for the given year. Note that this flag is only
-        relevant if WEEK_JANUARY is not set.
+        releveant if WEEK_JANUARY is not set.
 
                           If set	 Week is in range 1-53.
 
@@ -2195,17 +2197,17 @@ int calc_weekday(long daynr, bool sunday_first_day_of_week) {
    @param my_time         Source time value
    @param week_behaviour  Parameter controlling how weeks are counted
    @param[out] year       The year of the week number (which may be different
-                          from my_time.year as described above)
+                          from my_time.year as descibed above)
 
    @return week number
 */
 uint calc_week(const MYSQL_TIME &my_time, uint week_behaviour, uint *year) {
   uint days;
-  const ulong daynr = calc_daynr(my_time.year, my_time.month, my_time.day);
+  ulong daynr = calc_daynr(my_time.year, my_time.month, my_time.day);
   ulong first_daynr = calc_daynr(my_time.year, 1, 1);
-  const bool monday_first = (week_behaviour & WEEK_MONDAY_FIRST);
+  bool monday_first = (week_behaviour & WEEK_MONDAY_FIRST);
   bool week_year = (week_behaviour & WEEK_YEAR);
-  const bool first_weekday = (week_behaviour & WEEK_FIRST_WEEKDAY);
+  bool first_weekday = (week_behaviour & WEEK_FIRST_WEEKDAY);
 
   uint weekday = calc_weekday(first_daynr, !monday_first);
   *year = my_time.year;
@@ -2286,7 +2288,7 @@ bool date_add_interval(MYSQL_TIME *ltime, interval_type int_type,
                        Interval interval, int *warnings) {
   ltime->neg = false;
 
-  const long long sign = (interval.neg ? -1 : 1);
+  long long sign = (interval.neg ? -1 : 1);
 
   switch (int_type) {
     case INTERVAL_SECOND:
@@ -2524,7 +2526,7 @@ bool datetime_add_nanoseconds_with_round(MYSQL_TIME *ltime, uint nanoseconds,
 }
 
 /**
-  Add nanoseconds to time and round or truncate as indicated by argument.
+  Add nanoseconds to time and round or tuncate as indicated by argument.
 
   @param [in,out] ltime        MYSQL_TIME variable to add to.
   @param          nanoseconds  Nanosecons value.
@@ -2542,7 +2544,7 @@ bool time_add_nanoseconds_adjust_frac(MYSQL_TIME *ltime, uint nanoseconds,
 }
 
 /**
-   Add nanoseconds to datetime and round or truncate as indicated by argument.
+   Add nanoseconds to datetime and round or tuncate as indicated by argument.
 
   @param [in,out] ltime        MYSQL_TIME variable to add to.
   @param          nanoseconds  Nanoseconds value.
@@ -2576,8 +2578,8 @@ bool my_time_adjust_frac(MYSQL_TIME *ltime, uint dec, bool truncate) {
   int warnings = 0;
   assert(dec <= DATETIME_MAX_DECIMALS);
   /* Add half away from zero */
-  const bool rc = time_add_nanoseconds_adjust_frac(ltime, msec_round_add[dec],
-                                                   &warnings, truncate);
+  bool rc = time_add_nanoseconds_adjust_frac(ltime, msec_round_add[dec],
+                                             &warnings, truncate);
 
   /* Truncate non-significant digits */
   my_time_trunc(ltime, dec);
@@ -2598,8 +2600,8 @@ bool my_datetime_adjust_frac(MYSQL_TIME *ltime, uint dec, int *warnings,
                              bool truncate) {
   assert(dec <= DATETIME_MAX_DECIMALS);
   /* Add half away from zero */
-  const bool rc = datetime_add_nanoseconds_adjust_frac(
-      ltime, msec_round_add[dec], warnings, truncate);
+  bool rc = datetime_add_nanoseconds_adjust_frac(ltime, msec_round_add[dec],
+                                                 warnings, truncate);
   /* Truncate non-significant digits */
   my_time_trunc(ltime, dec);
   return rc;
@@ -2612,16 +2614,16 @@ bool my_datetime_adjust_frac(MYSQL_TIME *ltime, uint dec, int *warnings,
   @param           decimals Precision.
   @return                   False on success, true on error.
 */
-bool my_timeval_round(struct my_timeval *tv, uint decimals) {
+bool my_timeval_round(struct timeval *tv, uint decimals) {
   assert(decimals <= DATETIME_MAX_DECIMALS);
-  const uint nanoseconds = msec_round_add[decimals];
-  tv->m_tv_usec += (nanoseconds + 500) / 1000;
-  if (tv->m_tv_usec < 1000000) goto ret;
+  uint nanoseconds = msec_round_add[decimals];
+  tv->tv_usec += (nanoseconds + 500) / 1000;
+  if (tv->tv_usec < 1000000) goto ret;
 
-  tv->m_tv_usec = 0;
-  tv->m_tv_sec++;
-  if (!is_time_t_valid_for_timestamp(tv->m_tv_sec)) {
-    tv->m_tv_sec = MYTIME_MAX_VALUE;
+  tv->tv_usec = 0;
+  tv->tv_sec++;
+  if (!is_time_t_valid_for_timestamp(tv->tv_sec)) {
+    tv->tv_sec = TIMESTAMP_MAX_VALUE;
     return true;
   }
 
@@ -2653,7 +2655,7 @@ void mix_date_and_time(MYSQL_TIME *ldate, const MYSQL_TIME &my_time) {
     /* Complex case: TIME is negative or outside of 24 hours internal. */
     longlong seconds;
     long days, useconds;
-    const int sign = my_time.neg ? 1 : -1;
+    int sign = my_time.neg ? 1 : -1;
     ldate->neg = calc_time_diff(*ldate, my_time, sign, &seconds, &useconds);
     assert(!ldate->neg);
 
@@ -2713,16 +2715,16 @@ void calc_time_from_sec(MYSQL_TIME *to, longlong seconds, long microseconds) {
 
   @param my_time1         - TIME/DATE/DATETIME value
   @param my_time2         - TIME/DATE/DATETIME value
-  @param l_sign           - 1 absolute values are subtracted, -1 absolute
+  @param l_sign           - 1 absolute values are substracted, -1 absolute
   values are added.
   @param[out] seconds_out - where difference between my_time1 and my_time2
                             in seconds is stored.
   @param[out] microseconds_out - where microsecond part of difference between
                                  my_time1 and my_time2 is stored.
 
-  @note This function calculates the difference between my_time1 and
+  @note This function calculates difference between my_time1 and
     my_time2 absolute values. So one should set l_sign and correct
-    the result if signs are to be taken into account (i.e. for MYSQL_TIME
+    result if he want to take signs into account (i.e. for MYSQL_TIME
     values).
 
   @returns Sign of difference.
@@ -2784,8 +2786,8 @@ bool calc_time_diff(const MYSQL_TIME &my_time1, const MYSQL_TIME &my_time2,
    @retval 1 if b comes before a
  */
 int my_time_compare(const MYSQL_TIME &my_time_a, const MYSQL_TIME &my_time_b) {
-  const ulonglong a_t = TIME_to_ulonglong_datetime(my_time_a);
-  const ulonglong b_t = TIME_to_ulonglong_datetime(my_time_b);
+  ulonglong a_t = TIME_to_ulonglong_datetime(my_time_a);
+  ulonglong b_t = TIME_to_ulonglong_datetime(my_time_b);
 
   if (a_t < b_t) return -1;
   if (a_t > b_t) return 1;
@@ -2888,7 +2890,7 @@ longlong longlong_from_datetime_packed(enum enum_field_types type,
 */
 double double_from_datetime_packed(enum enum_field_types type,
                                    longlong packed_value) {
-  const longlong result = longlong_from_datetime_packed(type, packed_value);
+  longlong result = longlong_from_datetime_packed(type, packed_value);
   return result +
          (static_cast<double>(my_packed_time_get_frac_part(packed_value))) /
              1000000;

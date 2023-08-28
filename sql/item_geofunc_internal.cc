@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,12 +37,11 @@
 #include <boost/geometry/strategies/strategies.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_byteorder.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/item_func.h"
@@ -143,7 +142,7 @@ class Rtree_entry_compare {
 };
 
 inline void reassemble_geometry(Geometry *g) {
-  const Geometry::wkbType gtype = g->get_geotype();
+  Geometry::wkbType gtype = g->get_geotype();
   if (gtype == Geometry::wkb_polygon)
     down_cast<Gis_polygon *>(g)->to_wkb_unparsed();
   else if (gtype == Geometry::wkb_multilinestring)
@@ -175,7 +174,7 @@ bool post_fix_result(BG_result_buf_mgr *resbuf_mgr, BG_geotype &geout,
     /*
       The memory for the result is owned by a BG_result_buf_mgr,
       so use String::set(char*, size_t, const CHARSET_INFO)
-      which points the internal buffer to the input argument,
+      which points the internall buffer to the input argument,
       and sets m_is_alloced = false, signifying the String object
       does not own the buffer.
     */
@@ -229,7 +228,7 @@ class Is_empty_geometry : public WKB_scanner_event_handler {
 bool is_empty_geocollection(const Geometry *g) {
   if (g->get_geotype() != Geometry::wkb_geometrycollection) return false;
 
-  const uint32 num = uint4korr(g->get_cptr());
+  uint32 num = uint4korr(g->get_cptr());
   if (num == 0) return true;
 
   Is_empty_geometry checker;
@@ -242,7 +241,7 @@ bool is_empty_geocollection(const Geometry *g) {
 bool is_empty_geocollection(const String &wkbres) {
   if (wkbres.ptr() == nullptr) return true;
 
-  const uint32 geotype = uint4korr(wkbres.ptr() + SRID_SIZE + 1);
+  uint32 geotype = uint4korr(wkbres.ptr() + SRID_SIZE + 1);
 
   if (geotype != static_cast<uint32>(Geometry::wkb_geometrycollection))
     return false;

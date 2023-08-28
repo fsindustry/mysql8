@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,33 +24,31 @@
 #define SQL_INSERT_INCLUDED
 
 #include <assert.h>
+#include <stddef.h>
 #include <sys/types.h>
 
-#include "mem_root_deque.h"
 #include "my_inttypes.h"
 #include "my_sqlcommand.h"
+#include "sql/current_thd.h"
 #include "sql/query_result.h"     // Query_result_interceptor
 #include "sql/sql_cmd_dml.h"      // Sql_cmd_dml
 #include "sql/sql_data_change.h"  // enum_duplicates
+#include "sql/sql_list.h"
 #include "sql/table.h"
-#include "sql/thr_malloc.h"
 
 class Alter_info;
 class Field;
 class Item;
 class Query_expression;
-class Select_lex_visitor;
 class THD;
 struct HA_CREATE_INFO;
 struct handlerton;
-struct MYSQL_LEX_CSTRING;
-struct MY_BITMAP;
 
 using List_item = mem_root_deque<Item *>;
 struct MYSQL_LOCK;
 
 bool check_that_all_fields_are_given_values(THD *thd, TABLE *entry,
-                                            Table_ref *table_list);
+                                            TABLE_LIST *table_list);
 void prepare_triggers_for_insert_stmt(THD *thd, TABLE *table);
 bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update);
 bool validate_default_values_of_unset_fields(THD *thd, TABLE *table);
@@ -58,7 +56,7 @@ bool validate_default_values_of_unset_fields(THD *thd, TABLE *table);
 class Query_result_insert : public Query_result_interceptor {
  public:
   /// The table used for insertion of rows
-  Table_ref *table_list;
+  TABLE_LIST *table_list;
   TABLE *table{nullptr};
 
  private:
@@ -124,7 +122,7 @@ are found inside the COPY_INFO.
      target_columns is columns1, if not empty then 'info' must manage defaults
      of other columns than columns1.
   */
-  Query_result_insert(Table_ref *table_list_par,
+  Query_result_insert(TABLE_LIST *table_list_par,
                       mem_root_deque<Item *> *target_columns,
                       mem_root_deque<Item *> *target_or_source_columns,
                       mem_root_deque<Item *> *update_fields,
@@ -150,9 +148,10 @@ are found inside the COPY_INFO.
   bool start_execution(THD *thd) override;
   bool send_data(THD *thd, const mem_root_deque<Item *> &items) override;
   virtual void store_values(THD *thd, const mem_root_deque<Item *> &values);
+  void send_error(THD *thd, uint errcode, const char *err) override;
   bool send_eof(THD *thd) override;
   void abort_result_set(THD *thd) override;
-  void cleanup() override;
+  void cleanup(THD *thd) override;
 
  private:
   /**
@@ -169,14 +168,14 @@ are found inside the COPY_INFO.
 */
 class Query_result_create final : public Query_result_insert {
   /// Handle for table to be created
-  Table_ref *create_table;
+  TABLE_LIST *create_table;
   /// Contains further information for table creation
   HA_CREATE_INFO *create_info{nullptr};
   /// Contains further information for table creation
   Alter_info *alter_info{nullptr};
   Field **field;
   /// List of tables that are select from
-  Table_ref *select_tables;
+  TABLE_LIST *select_tables;
   /// Pointer to first field in table generated from query expression
   Field **table_fields{nullptr};
   /// lock data for tmp table
@@ -191,13 +190,14 @@ class Query_result_create final : public Query_result_insert {
   handlerton *m_post_ddl_ht{nullptr};
 
  public:
-  Query_result_create(Table_ref *create_table_arg,
+  Query_result_create(TABLE_LIST *create_table_arg,
                       mem_root_deque<Item *> *fields, enum_duplicates duplic,
-                      Table_ref *select_tables_arg);
+                      TABLE_LIST *select_tables_arg);
 
   bool prepare(THD *thd, const mem_root_deque<Item *> &list,
                Query_expression *u) override;
   void store_values(THD *thd, const mem_root_deque<Item *> &values) override;
+  void send_error(THD *thd, uint errcode, const char *err) override;
   bool send_eof(THD *thd) override;
   void abort_result_set(THD *thd) override;
   bool create_table_for_query_block(THD *thd) override;
@@ -279,7 +279,7 @@ class Sql_cmd_insert_base : public Sql_cmd_dml {
   /**
     ON DUPLICATE KEY UPDATE reference to VALUES.. as a derived table.
   */
-  Table_ref *values_table{nullptr};
+  TABLE_LIST *values_table{nullptr};
   Create_col_name_list *values_column_list{nullptr};
 
   /**

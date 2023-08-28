@@ -20,12 +20,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -51,12 +50,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	3
@@ -82,12 +80,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -116,12 +113,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -150,12 +146,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -184,12 +179,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	5
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -221,12 +215,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -256,12 +249,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	12
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -290,12 +282,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -325,13 +316,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	5
 Handler_write	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -362,12 +352,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -393,12 +382,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	2
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -424,11 +412,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -452,11 +439,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -480,11 +466,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -509,11 +494,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	3
@@ -536,12 +520,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -562,13 +545,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	1
 Handler_read_next	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	3
@@ -599,14 +581,13 @@ FLUSH TABLES;
 Variable_name	Value
 Warnings:
 Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	1
 Warnings:
 Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -633,14 +614,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
 Handler_read_rnd_next	11
 Sort_rows	1
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -675,13 +655,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	12
 Handler_read_next	3
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	8
@@ -712,12 +691,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -747,12 +725,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	30
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	3
@@ -778,12 +755,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	12
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	3
@@ -809,12 +785,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	6
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -840,12 +815,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	6
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -874,13 +848,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	4
 Handler_read_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	5
@@ -909,12 +882,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -938,12 +910,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	8
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -971,12 +942,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -998,7 +968,6 @@ Note	1003	insert into `test`.`t1` (`test`.`t1`.`i`) values (10)
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -1019,7 +988,6 @@ Note	1003	replace into `test`.`t1` (`test`.`t1`.`i`) values (10)
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -1046,11 +1014,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -1079,14 +1046,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	27
 Sort_rows	5
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	5
@@ -1119,13 +1085,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	4
 Handler_read_next	26
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -1159,13 +1124,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	4
 Handler_read_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	5
@@ -1198,14 +1162,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_rnd_next	27
 Sort_rows	1
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -1240,14 +1203,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_rnd_next	27
 Sort_rows	1
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -1281,7 +1243,7 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -1289,7 +1251,6 @@ Handler_read_next	7
 Handler_read_rnd	4
 Sort_rows	4
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	4
@@ -1322,11 +1283,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	1
@@ -1355,14 +1315,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
 Handler_read_rnd_next	27
 Sort_rows	5
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	5
@@ -1396,13 +1355,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
 Handler_read_last	1
 Handler_read_prev	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	5
@@ -1433,11 +1391,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	3
@@ -1469,14 +1426,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_rnd_next	27
 Sort_rows	5
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -1509,13 +1465,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	4
 Handler_read_next	26
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	4
@@ -1549,13 +1504,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	4
 Handler_read_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_first	1
@@ -1589,14 +1543,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_rnd_next	27
 Sort_rows	1
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	4
@@ -1630,14 +1583,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_rnd_next	27
 Sort_rows	1
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	4
@@ -1670,7 +1622,7 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -1678,7 +1630,6 @@ Handler_read_next	7
 Handler_read_rnd	4
 Sort_rows	4
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -1711,11 +1662,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	3
@@ -1745,14 +1695,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
 Handler_read_rnd_next	27
 Sort_rows	5
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	3
@@ -1786,13 +1735,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	3
 Handler_read_last	1
 Handler_read_prev	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	3
@@ -1826,14 +1774,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_next	2
 Sort_rows	2
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	4
@@ -1858,14 +1805,13 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	4
 Handler_read_next	2
 Sort_rows	2
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	2
@@ -1894,12 +1840,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Handler_read_next	2
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -1928,12 +1873,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -1955,12 +1899,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
 Handler_read_rnd_next	4
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -1990,13 +1933,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	6
 Handler_read_next	2
 Handler_read_rnd_next	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	6
@@ -2067,12 +2009,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	6
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -2097,12 +2038,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	9
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -2132,13 +2072,12 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_first	1
 Handler_read_key	1
 Handler_read_next	3
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	3
@@ -2170,12 +2109,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	7
 Handler_read_rnd_next	5
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	4
@@ -2207,12 +2145,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	7
 Handler_read_rnd_next	5
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_delete	4
@@ -2240,10 +2177,9 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	1
@@ -2271,12 +2207,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	1
 Handler_read_rnd_next	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -2306,7 +2241,7 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2314,7 +2249,6 @@ Handler_read_rnd_next	8
 Handler_write	1
 Sort_rows	3
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2342,7 +2276,7 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2350,7 +2284,6 @@ Handler_read_rnd_next	8
 Handler_write	1
 Sort_rows	3
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2377,7 +2310,7 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2385,7 +2318,6 @@ Handler_read_rnd_next	8
 Handler_write	1
 Sort_rows	3
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	5
@@ -2457,11 +2389,10 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2
@@ -2482,12 +2413,11 @@ Variable_name	Value
 FLUSH STATUS;
 FLUSH TABLES;
 Variable_name	Value
-# This line exists only to help --skip_if_hypergraph diffing.
+#
 # Status of "equivalent" SELECT query execution:
 Variable_name	Value
 Handler_read_key	2
 Sort_scan	1
-# This line exists only to help --skip_if_hypergraph diffing.
 # Status of testing query execution:
 Variable_name	Value
 Handler_read_key	2

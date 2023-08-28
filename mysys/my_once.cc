@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -97,7 +97,7 @@ void *my_once_alloc(size_t Size, myf MyFlags) {
 } /* my_once_alloc */
 
 char *my_once_strdup(const char *src, myf myflags) {
-  const size_t len = strlen(src) + 1;
+  size_t len = strlen(src) + 1;
   uchar *dst = static_cast<uchar *>(my_once_alloc(len, myflags));
   if (dst) memcpy(dst, src, len);
   return (char *)dst;

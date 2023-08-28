@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -72,8 +72,6 @@
  *	 end()
  *
  */
-
-#include "config.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -250,7 +248,7 @@ int scan_delete(Ndb* myNdb,
   /**
    * Loop as long as :
    *  retryMax not reached
-   *  failed operations due to TEMPORARY errors
+   *  failed operations due to TEMPORARY erros
    *
    * Exit loop;
    *  retyrMax reached
@@ -302,7 +300,7 @@ int scan_delete(Ndb* myNdb,
     } 
     
     /**
-     * Use NdbScanFilter to define search criteria
+     * Use NdbScanFilter to define a search critera
      */ 
     NdbScanFilter filter(myScanOp) ;   
     if(filter.begin(NdbScanFilter::AND) < 0  || 
@@ -433,7 +431,7 @@ int scan_update(Ndb* myNdb,
   /**
    * Loop as long as :
    *  retryMax not reached
-   *  failed operations due to TEMPORARY errors
+   *  failed operations due to TEMPORARY erros
    *
    * Exit loop;
    *  retryMax reached
@@ -486,7 +484,7 @@ int scan_update(Ndb* myNdb,
     } 
 
     /**
-     * Use NdbScanFilter to define search criteria
+     * Use NdbScanFilter to define a search critera
      */ 
     NdbScanFilter filter(myScanOp) ;   
     if(filter.begin(NdbScanFilter::AND) < 0  || 
@@ -624,7 +622,7 @@ int scan_print(Ndb * myNdb)
   /**
    * Loop as long as :
    *  retryMax not reached
-   *  failed operations due to TEMPORARY errors
+   *  failed operations due to TEMPORARY erros
    *
    * Exit loop;
    *  retyrMax reached
@@ -680,7 +678,7 @@ int scan_print(Ndb * myNdb)
      * Define storage for fetched attributes.
      * E.g., the resulting attributes of executing
      * myOp->getValue("REG_NO") is placed in myRecAttr[0].
-     * No data exists in myRecAttr until transaction has committed!
+     * No data exists in myRecAttr until transaction has commited!
      */
     myRecAttr[0] = myScanOp->getValue("REG_NO");
     myRecAttr[1] = myScanOp->getValue("BRAND");

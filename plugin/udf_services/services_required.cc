@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -137,7 +137,7 @@ bool Character_set_converter::convert(const std::string &out_charset_name,
                                       char *out_buffer) {
   if (!h_service->is_valid()) return true;
   my_h_string out_string = nullptr;
-  const my_service<SERVICE_TYPE(mysql_string_factory)> h_string_factory(
+  my_service<SERVICE_TYPE(mysql_string_factory)> h_string_factory(
       "mysql_string_factory", Registry_service::get());
   if (h_string_factory.is_valid() && h_string_factory->create(&out_string)) {
     s_message = "Create string failed.";

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -55,11 +55,17 @@ struct row_threads {
   /** Length in bytes of @c m_name. */
   uint m_name_length;
   /** Column PROCESSLIST_USER. */
-  PFS_user_name m_user_name;
+  char m_username[USERNAME_LENGTH];
+  /** Length in bytes of @c m_username. */
+  uint m_username_length;
   /** Column PROCESSLIST_HOST. */
-  PFS_host_name m_host_name;
+  char m_hostname[HOSTNAME_LENGTH];
+  /** Length in bytes of @c m_hostname. */
+  uint m_hostname_length;
   /** Column PROCESSLIST_DB. */
-  PFS_schema_name m_db_name;
+  char m_dbname[NAME_LEN];
+  /** Length in bytes of @c m_dbname. */
+  uint m_dbname_length;
   /** Column PROCESSLIST_COMMAND. */
   int m_command;
   /** Column PROCESSLIST_TIME. */
@@ -88,12 +94,6 @@ struct row_threads {
   char m_groupname[NAME_LEN];
   /** Length in bytes of @c m_groupname. */
   uint m_groupname_length;
-  /** Column EXECUTION_ENGINE. */
-  bool m_secondary;
-  /** CURRENT_CONTROLLED_MEMORY, ... */
-  PFS_session_all_memory_stat_row m_session_all_memory_row;
-  /** Column TELEMETRY_ACTIVE (read). */
-  bool m_telemetry_active;
 };
 
 class PFS_index_threads_by_thread_id : public PFS_index_threads {

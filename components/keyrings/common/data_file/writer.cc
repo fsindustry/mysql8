@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,7 +45,7 @@ bool File_writer::write_data_to_file(const std::string &file,
                                      const std::string &data) {
   std::ofstream file_stream(file.c_str());
   if (!file_stream.is_open()) return false;
-  const bool retval = !(file_stream.write(data.c_str(), data.length())).fail();
+  bool retval = !(file_stream.write(data.c_str(), data.length())).fail();
   file_stream.close();
   return retval;
 }

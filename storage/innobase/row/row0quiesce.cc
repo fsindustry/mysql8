@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+Copyright (c) 2012, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -33,10 +33,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <errno.h>
 #include <my_aes.h>
 
-#include "dd/cache/dictionary_client.h"
-#include "sql/dd/dictionary.h"
-#include "sql/dd/types/column_type_element.h"
-
 #include "dict0dd.h"
 #include "fsp0sysspace.h"
 #include "ha_prototypes.h"
@@ -58,7 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 {
   /* This row will store prefix_len, fixed_len,
   and in IB_EXPORT_CFG_VERSION_V4, is_ascending */
-  byte row[sizeof(uint32_t) * 3];
+  byte row[sizeof(ib_uint32_t) * 3];
   size_t row_len = sizeof(row);
 
   for (ulint i = 0; i < index->n_fields; ++i) {
@@ -66,28 +62,28 @@ this program; if not, write to the Free Software Foundation, Inc.,
     const dict_field_t *field = &index->fields[i];
 
     mach_write_to_4(ptr, field->prefix_len);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, field->fixed_len);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     /* In IB_EXPORT_CFG_VERSION_V4 we also write the is_ascending boolean. */
     mach_write_to_4(ptr, field->is_ascending);
 
     DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
-                    row_len = sizeof(uint32_t) * 2;);
+                    row_len = sizeof(ib_uint32_t) * 2;);
 
     DBUG_EXECUTE_IF("ib_export_io_write_failure_9", close(fileno(file)););
 
     if (fwrite(row, 1, row_len, file) != row_len) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing index fields.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing index fields.");
 
       return (DB_IO_ERROR);
     }
 
     /* Include the NUL byte in the length. */
-    uint32_t len = static_cast<uint32_t>(strlen(field->name) + 1);
+    ib_uint32_t len = static_cast<ib_uint32_t>(strlen(field->name) + 1);
     ut_a(len > 1);
 
     mach_write_to_4(row, len);
@@ -96,8 +92,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
     if (fwrite(row, 1, sizeof(len), file) != sizeof(len) ||
         fwrite(field->name, 1, len, file) != len) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing index column.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing index column.");
 
       return (DB_IO_ERROR);
     }
@@ -106,9 +102,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
   return (DB_SUCCESS);
 }
 /** Write the meta data config file index information
-@param[in]      index   write metadata for this index
-@param[in,out]  file    file to write to
-@param[in,out]  thd     session
+@param[in]	index	write metadata for this index
+@param[in,out]	file	file to write to
+@param[in,out]	thd	session
 @return DB_SUCCESS or error code. */
 [[nodiscard]] static dberr_t row_quiesce_write_one_index(
     const dict_index_t *index, FILE *file, THD *thd) {
@@ -118,7 +114,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
   ptr = row;
 
-  static_assert(sizeof(space_index_t) == 8);
+  ut_ad(sizeof(space_index_t) == 8);
   mach_write_to_8(ptr, index->id);
   ptr += sizeof(space_index_t);
 
@@ -148,8 +144,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
   DBUG_EXECUTE_IF("ib_export_io_write_failure_12", close(fileno(file)););
 
   if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing index meta-data.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing index meta-data.");
 
     return (DB_IO_ERROR);
   }
@@ -165,7 +161,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
   if (fwrite(row, 1, sizeof(len), file) != sizeof(len) ||
       fwrite(index->name, 1, len, file) != len) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing index name.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing index name.");
 
     return (DB_IO_ERROR);
   }
@@ -201,7 +198,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
   DBUG_EXECUTE_IF("ib_export_io_write_failure_11", close(fileno(file)););
 
   if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing index count.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing index count.");
 
     return (DB_IO_ERROR);
   }
@@ -234,146 +232,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** Write the metadata (table columns) config file. Serialise the contents
 of dict_col_t default value part if exists.
-@param[in]  col         column to which the default value belongs
-@param[in]  col_name    column name
-@param[in,out]  file        file to write to
-@param[in]  dict_table  InnoDB table cache
-@param[in]  thd         THD
-@return DB_SUCCESS or DB_IO_ERROR. */
-static dberr_t row_quiesce_write_dropped_col_metadata(
-    const dict_col_t *col, const char *col_name, FILE *file,
-    const dict_table_t *dict_table, THD *thd) {
-  /* Total metadata to be written
-    1 byte for is NULLABLE
-    1 byte for is_unsigned
-    4 bytes for char_length
-    4 bytes for column type
-    4 bytes for numeric scale
-    8 bytes for collation id */
-  constexpr size_t METADATA_SIZE = 22;
-
-  byte row[METADATA_SIZE];
-
-  ut_ad(col->is_instant_dropped());
-
-  const dd::Table *dd_table = nullptr;
-  dd::cache::Dictionary_client *client = dd::get_dd_client(thd);
-  dd::cache::Dictionary_client::Auto_releaser releaser(client);
-
-  /* Find schema and table name */
-  std::string dict_name(dict_table->name.m_name);
-  std::string schema_name;
-  std::string table_name;
-  size_t table_begin = dict_name.find(dict_name::SCHEMA_SEPARATOR);
-  /* schema name must be part of table name */
-  ut_ad(table_begin != std::string::npos);
-
-  schema_name.assign(dict_name.substr(0, table_begin));
-  table_begin += dict_name::SCHEMA_SEPARATOR_LEN;
-
-  /* If partition table, skip partition name. */
-  size_t part_name_begin = dict_name.find(dict_name::PART_SEPARATOR);
-  if (part_name_begin != std::string::npos) {
-    table_name.assign(dict_name, table_begin, part_name_begin - table_begin);
-  } else {
-    table_name.assign(dict_name.substr(table_begin));
-  }
-
-  if (client->acquire(dd::String_type(schema_name.c_str()),
-                      dd::String_type(table_name.c_str()), &dd_table)) {
-    ut_ad(false);
-    return (DB_ERROR);
-  }
-
-  if (dd_table == nullptr) {
-    ut_ad(false);
-    return DB_ERROR;
-  }
-
-  const dd::Column *column = dd_find_column(dd_table, col_name);
-  ut_ad(column != nullptr);
-
-  byte *ptr = row;
-
-  /* 1 byte for is NULLABLE */
-  mach_write_to_1(ptr, column->is_nullable());
-  ptr++;
-
-  /* 1 byte for is_unsigned */
-  mach_write_to_1(ptr, column->is_unsigned());
-  ptr++;
-
-  /* 4 bytes for char_length() */
-  mach_write_to_4(ptr, column->char_length());
-  ptr += 4;
-
-  /* 4 bytes for column type */
-  mach_write_to_4(ptr, (uint32_t)column->type());
-  ptr += 4;
-
-  /* 4 bytes for numeric scale */
-  mach_write_to_4(ptr, column->numeric_scale());
-  ptr += 4;
-
-  /* 8 bytes for collation id */
-  mach_write_to_8(ptr, column->collation_id());
-  ptr += 8;
-
-  if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-    return (DB_IO_ERROR);
-  }
-
-  /* Write elements for enum column type.
-  [4]     bytes : number of elements
-  For each element
-    [4]     bytes : element name length (len+1)
-    [len+1] bytes : element name */
-  if (column->type() == dd::enum_column_types::ENUM ||
-      column->type() == dd::enum_column_types::SET) {
-    byte _row[sizeof(uint32_t)];
-
-    /* Write element count */
-    mach_write_to_4(_row, column->elements().size());
-    if (fwrite(_row, 1, sizeof(_row), file) != sizeof(_row)) {
-      std::ostringstream msg;
-      msg << "while writing enum/set column element count for column "
-          << col_name << ".";
-
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
-
-      return (DB_IO_ERROR);
-    }
-
-    /* Write out the enum/set column element name as [len, byte array]. */
-    for (const auto *source_elem : column->elements()) {
-      const auto elem_name = source_elem->name();
-
-      /* Column charset: non-ASCII, can't use string functions like strlen */
-      const uint32_t len_with_null = elem_name.length() + 1;
-
-      mach_write_to_4(_row, len_with_null);
-
-      /* Write length, element name with \0 for backward compatibility */
-      if (fwrite(_row, sizeof(len_with_null), 1, file) != 1 ||
-          fwrite(elem_name.c_str(), len_with_null, 1, file) != 1) {
-        std::ostringstream msg;
-        msg << "while writing enum/set column element name for column "
-            << col_name << ".";
-
-        ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
-
-        return (DB_IO_ERROR);
-      }
-    }
-  }
-
-  return (DB_SUCCESS);
-}
-
-/** Write the metadata (table columns) config file. Serialise the contents
-of dict_col_t default value part if exists.
-@param[in]      col     column to which the default value belongs
-@param[in]      file    file to write to
+@param[in]	col	column to which the default value belongs
+@param[in]	file	file to write to
 @return DB_SUCCESS or DB_IO_ERROR. */
 [[nodiscard]] static dberr_t row_quiesce_write_default_value(
     const dict_col_t *col, FILE *file) {
@@ -410,7 +270,7 @@ of dict_col_t default value part if exists.
 
 /** Write the meta data (table columns) config file. Serialise the contents of
  dict_col_t structure, along with the column name. All fields are serialized
- as uint32_t.
+ as ib_uint32_t.
  @return DB_SUCCESS or error code. */
 [[nodiscard]] static dberr_t row_quiesce_write_table(
     const dict_table_t *table, /*!< in: write the meta
@@ -419,51 +279,51 @@ of dict_col_t default value part if exists.
     THD *thd)                  /*!< in/out: session */
 {
   dict_col_t *col;
-  byte row[sizeof(uint32_t) * 7];
+  byte row[sizeof(ib_uint32_t) * 7];
 
   col = table->cols;
 
-  for (ulint i = 0; i < table->get_total_cols(); ++i, ++col) {
+  for (ulint i = 0; i < table->n_cols; ++i, ++col) {
     byte *ptr = row;
 
     mach_write_to_4(ptr, col->prtype);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->mtype);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->len);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->mbminmaxlen);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->ind);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->ord_part);
-    ptr += sizeof(uint32_t);
+    ptr += sizeof(ib_uint32_t);
 
     mach_write_to_4(ptr, col->max_prefix);
 
     DBUG_EXECUTE_IF("ib_export_io_write_failure_2", close(fileno(file)););
 
     if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing table column data.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing table column data.");
 
       return (DB_IO_ERROR);
     }
 
     /* Write out the column name as [len, byte array]. The len
     includes the NUL byte. */
-    uint32_t len;
+    ib_uint32_t len;
     const char *col_name;
 
     col_name = table->get_col_name(dict_col_get_no(col));
 
     /* Include the NUL byte in the length. */
-    len = static_cast<uint32_t>(strlen(col_name) + 1);
+    len = static_cast<ib_uint32_t>(strlen(col_name) + 1);
     ut_a(len > 1);
 
     mach_write_to_4(row, len);
@@ -472,60 +332,15 @@ of dict_col_t default value part if exists.
 
     if (fwrite(row, 1, sizeof(len), file) != sizeof(len) ||
         fwrite(col_name, 1, len, file) != len) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing column name.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing column name.");
 
       return (DB_IO_ERROR);
     }
 
-    /* Write column's INSTANT metadata */
-    uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V7;
-    DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
-                    cfg_version = IB_EXPORT_CFG_VERSION_V3;);
-    DBUG_EXECUTE_IF("ib_export_use_cfg_version_99",
-                    cfg_version = IB_EXPORT_CFG_VERSION_V99;);
-    if (cfg_version >= IB_EXPORT_CFG_VERSION_V7) {
-      byte row[2 + sizeof(uint32_t)];
-      byte *ptr = row;
-
-      /* version added */
-      byte value =
-          col->is_instant_added() ? col->get_version_added() : UINT8_UNDEFINED;
-      mach_write_to_1(ptr, value);
-      ptr++;
-
-      /* version dropped */
-      value = col->is_instant_dropped() ? col->get_version_dropped()
-                                        : UINT8_UNDEFINED;
-      mach_write_to_1(ptr, value);
-      ptr++;
-
-      /* physical position */
-      mach_write_to_4(ptr, col->get_phy_pos());
-
-      if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-        ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                            "while writing table column instant metadata.");
-
-        return (DB_IO_ERROR);
-      }
-
-      /* Write DD::Column specific info for dropped columns */
-      if (col->is_instant_dropped()) {
-        const char *col_name = table->get_col_name(dict_col_get_no(col));
-        if (row_quiesce_write_dropped_col_metadata(col, col_name, file, table,
-                                                   thd) != DB_SUCCESS) {
-          ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                              "while writing dropped column metadata.");
-
-          return (DB_IO_ERROR);
-        }
-      }
-    }
-
     if (row_quiesce_write_default_value(col, file) != DB_SUCCESS) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing table column default.");
-
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing table column default.");
       return (DB_IO_ERROR);
     }
   }
@@ -534,16 +349,17 @@ of dict_col_t default value part if exists.
 }
 
 /** Write the meta data config file header.
-@param[in]      table   write the meta data for this table
-@param[in]      file    file to write to
-@param[in,out]  thd     session
-@return DB_SUCCESS or error code. */
-[[nodiscard]] static dberr_t row_quiesce_write_header(const dict_table_t *table,
-                                                      FILE *file, THD *thd) {
-  byte value[sizeof(uint32_t)];
+ @return DB_SUCCESS or error code. */
+[[nodiscard]] static dberr_t row_quiesce_write_header(
+    const dict_table_t *table, /*!< in: write the meta
+                               data for this table */
+    FILE *file,                /*!< in: file to write to */
+    THD *thd)                  /*!< in/out: session */
+{
+  byte value[sizeof(ib_uint32_t)];
 
   /* Write the current meta-data version number. */
-  uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V7;
+  uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V6;
   DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
                   cfg_version = IB_EXPORT_CFG_VERSION_V3;);
   DBUG_EXECUTE_IF("ib_export_use_cfg_version_99",
@@ -553,13 +369,14 @@ of dict_col_t default value part if exists.
   DBUG_EXECUTE_IF("ib_export_io_write_failure_4", close(fileno(file)););
 
   if (fwrite(&value, 1, sizeof(value), file) != sizeof(value)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing meta-data version number.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing meta-data version number.");
 
     return (DB_IO_ERROR);
   }
 
   /* Write the server hostname. */
+  ib_uint32_t len;
   const char *hostname = server_get_hostname();
 
   /* Play it safe and check for NULL. */
@@ -572,21 +389,22 @@ of dict_col_t default value part if exists.
   }
 
   /* The server hostname includes the NUL byte. */
-  uint32_t len = static_cast<uint32_t>(strlen(hostname) + 1);
+  len = static_cast<ib_uint32_t>(strlen(hostname) + 1);
   mach_write_to_4(value, len);
 
   DBUG_EXECUTE_IF("ib_export_io_write_failure_5", close(fileno(file)););
 
   if (fwrite(&value, 1, sizeof(value), file) != sizeof(value) ||
       fwrite(hostname, 1, len, file) != len) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing hostname.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing hostname.");
 
     return (DB_IO_ERROR);
   }
 
   /* The table name includes the NUL byte. */
   ut_a(table->name.m_name != nullptr);
-  len = static_cast<uint32_t>(strlen(table->name.m_name) + 1);
+  len = static_cast<ib_uint32_t>(strlen(table->name.m_name) + 1);
 
   /* Write the table name. */
   mach_write_to_4(value, len);
@@ -595,21 +413,22 @@ of dict_col_t default value part if exists.
 
   if (fwrite(&value, 1, sizeof(value), file) != sizeof(value) ||
       fwrite(table->name.m_name, 1, len, file) != len) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing table name.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing table name.");
 
     return (DB_IO_ERROR);
   }
 
-  byte row[sizeof(uint32_t) * 3];
+  byte row[sizeof(ib_uint32_t) * 3];
 
   /* Write the next autoinc value. */
   mach_write_to_8(row, table->autoinc);
 
   DBUG_EXECUTE_IF("ib_export_io_write_failure_7", close(fileno(file)););
 
-  if (fwrite(row, 1, sizeof(uint64_t), file) != sizeof(uint64_t)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing table autoinc value.");
+  if (fwrite(row, 1, sizeof(ib_uint64_t), file) != sizeof(ib_uint64_t)) {
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing table autoinc value.");
 
     return (DB_IO_ERROR);
   }
@@ -618,64 +437,31 @@ of dict_col_t default value part if exists.
 
   /* Write the system page size. */
   mach_write_to_4(ptr, UNIV_PAGE_SIZE);
-  ptr += sizeof(uint32_t);
+  ptr += sizeof(ib_uint32_t);
 
   /* Write the table->flags. */
   mach_write_to_4(ptr, table->flags);
-  ptr += sizeof(uint32_t);
+  ptr += sizeof(ib_uint32_t);
 
-  /* Write the number of columns in the table. In case of INSTANT, include
-  dropped columns as well. */
-  mach_write_to_4(ptr, table->get_total_cols());
+  /* Write the number of columns in the table. */
+  mach_write_to_4(ptr, table->n_cols);
 
   DBUG_EXECUTE_IF("ib_export_io_write_failure_8", close(fileno(file)););
 
   if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing table meta-data.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing table meta-data.");
 
     return (DB_IO_ERROR);
   }
 
   if (cfg_version >= IB_EXPORT_CFG_VERSION_V5) {
     /* write number of nullable column before first instant column */
-    mach_write_to_4(value, table->first_index()->get_instant_nullable());
+    mach_write_to_4(value, table->first_index()->n_instant_nullable);
 
     if (fwrite(&value, 1, sizeof(value), file) != sizeof(value)) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing table meta-data.");
-
-      return (DB_IO_ERROR);
-    }
-  }
-
-  /* Write table instant metadata */
-  if (cfg_version >= IB_EXPORT_CFG_VERSION_V7) {
-    byte row[sizeof(uint32_t) * 5];
-    byte *ptr = row;
-
-    /* Write initial column count */
-    mach_write_to_4(ptr, table->initial_col_count);
-    ptr += sizeof(uint32_t);
-
-    /* Write current column count */
-    mach_write_to_4(ptr, table->current_col_count);
-    ptr += sizeof(uint32_t);
-
-    /* Write total column count */
-    mach_write_to_4(ptr, table->total_col_count);
-    ptr += sizeof(uint32_t);
-
-    /* Write number of instantly dropped columns */
-    mach_write_to_4(ptr, table->get_n_instant_drop_cols());
-    ptr += sizeof(uint32_t);
-
-    /* Write current row version */
-    mach_write_to_4(ptr, table->current_row_version);
-
-    if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing table meta-data.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing table meta-data.");
 
       return (DB_IO_ERROR);
     }
@@ -687,7 +473,8 @@ of dict_col_t default value part if exists.
   mach_write_to_4(value, space_flags);
 
   if (fwrite(&value, 1, sizeof(value), file) != sizeof(value)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing space_flags.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing space_flags.");
 
     return (DB_IO_ERROR);
   }
@@ -699,8 +486,8 @@ of dict_col_t default value part if exists.
     mach_write_to_1(value, compression_type);
 
     if (fwrite(&value, 1, sizeof(uint8_t), file) != sizeof(uint8_t)) {
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                          "while writing compression type info.");
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), "while writing compression type info.");
 
       return DB_IO_ERROR;
     }
@@ -721,12 +508,13 @@ of dict_col_t default value part if exists.
 
   dd_get_meta_data_filename(table, nullptr, name, sizeof(name));
 
-  ib::info(ER_IB_IMPORT_START_CFG_NAME, name);
+  ib::info(ER_IB_MSG_1014) << "Writing table metadata to '" << name << "'";
 
   FILE *file = fopen(name, "w+b");
 
   if (file == nullptr) {
-    ib::send_errno_warn(thd, ER_CANT_CREATE_FILE, name);
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_CANT_CREATE_FILE, name, errno,
+                strerror(errno));
 
     err = DB_IO_ERROR;
   } else {
@@ -741,17 +529,21 @@ of dict_col_t default value part if exists.
     }
 
     if (fflush(file) != 0) {
-      std::ostringstream msg;
-      msg << name << " flush() failed";
+      char msg[BUFSIZ];
 
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
+      snprintf(msg, sizeof(msg), "%s flush() failed", name);
+
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), msg);
     }
 
     if (fclose(file) != 0) {
-      std::ostringstream msg;
-      msg << name << " flose() failed";
+      char msg[BUFSIZ];
 
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
+      snprintf(msg, sizeof(msg), "%s flose() failed", name);
+
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), msg);
     }
   }
 
@@ -759,25 +551,27 @@ of dict_col_t default value part if exists.
 }
 
 /** Write the transfer key to CFP file.
-@param[in]      encryption_metadata  the encryption key and iv to store in file
-@param[in]      file            file to write to
-@param[in]      thd             session
+@param[in]	table		write the data for this table
+@param[in]	file		file to write to
+@param[in]	thd		session
 @return DB_SUCCESS or error code. */
 [[nodiscard]] static MY_ATTRIBUTE((nonnull)) dberr_t
-    row_quiesce_write_transfer_key(
-        const Encryption_metadata &encryption_metadata, FILE *file, THD *thd) {
-  byte key_size[sizeof(uint32_t)];
+    row_quiesce_write_transfer_key(const dict_table_t *table, FILE *file,
+                                   THD *thd) {
+  byte key_size[sizeof(ib_uint32_t)];
   byte row[Encryption::KEY_LEN * 3];
   byte *ptr = row;
   byte *transfer_key = ptr;
   lint elen;
-  ut_a(encryption_metadata.can_encrypt());
+
+  ut_ad(table->encryption_key != nullptr && table->encryption_iv != nullptr);
 
   /* Write the encryption key size. */
   mach_write_to_4(key_size, Encryption::KEY_LEN);
 
   if (fwrite(&key_size, 1, sizeof(key_size), file) != sizeof(key_size)) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing key size.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing key size.");
 
     return (DB_IO_ERROR);
   }
@@ -786,7 +580,8 @@ of dict_col_t default value part if exists.
   Encryption::random_value(transfer_key);
   if (fwrite(transfer_key, 1, Encryption::KEY_LEN, file) !=
       Encryption::KEY_LEN) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while writing transfer key.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing transfer key.");
 
     return (DB_IO_ERROR);
   }
@@ -794,41 +589,42 @@ of dict_col_t default value part if exists.
   ptr += Encryption::KEY_LEN;
 
   /* Encrypt tablespace key. */
-  elen = my_aes_encrypt(encryption_metadata.m_key, Encryption::KEY_LEN, ptr,
-                        transfer_key, Encryption::KEY_LEN, my_aes_256_ecb,
-                        nullptr, false);
+  elen = my_aes_encrypt(
+      reinterpret_cast<unsigned char *>(table->encryption_key),
+      Encryption::KEY_LEN, ptr, reinterpret_cast<unsigned char *>(transfer_key),
+      Encryption::KEY_LEN, my_aes_256_ecb, nullptr, false);
 
   if (elen == MY_AES_BAD_DATA) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while encrypt tablespace key.");
-
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while encrypt tablespace key.");
     return (DB_ERROR);
   }
 
   /* Write encrypted tablespace key */
   if (fwrite(ptr, 1, Encryption::KEY_LEN, file) != Encryption::KEY_LEN) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing encrypted tablespace key.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing encrypted tablespace key.");
 
     return (DB_IO_ERROR);
   }
   ptr += Encryption::KEY_LEN;
 
   /* Encrypt tablespace iv. */
-  elen = my_aes_encrypt(encryption_metadata.m_iv, Encryption::KEY_LEN, ptr,
-                        transfer_key, Encryption::KEY_LEN, my_aes_256_ecb,
-                        nullptr, false);
+  elen = my_aes_encrypt(reinterpret_cast<unsigned char *>(table->encryption_iv),
+                        Encryption::KEY_LEN, ptr,
+                        reinterpret_cast<unsigned char *>(transfer_key),
+                        Encryption::KEY_LEN, my_aes_256_ecb, nullptr, false);
 
   if (elen == MY_AES_BAD_DATA) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, "while encrypt tablespace iv.");
-
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while encrypt tablespace iv.");
     return (DB_ERROR);
   }
 
   /* Write encrypted tablespace iv */
   if (fwrite(ptr, 1, Encryption::KEY_LEN, file) != Encryption::KEY_LEN) {
-    ib::send_errno_warn(thd, ER_IO_WRITE_ERROR,
-                        "while writing encrypted tablespace iv.");
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                strerror(errno), "while writing encrypted tablespace iv.");
 
     return (DB_IO_ERROR);
   }
@@ -837,8 +633,8 @@ of dict_col_t default value part if exists.
 }
 
 /** Write the encryption data after quiesce.
-@param[in]      table           write the data for this table
-@param[in]      thd             session
+@param[in]	table		write the data for this table
+@param[in]	thd		session
 @return DB_SUCCESS or error code */
 [[nodiscard]] static MY_ATTRIBUTE((nonnull)) dberr_t
     row_quiesce_write_cfp(dict_table_t *table, THD *thd) {
@@ -855,9 +651,24 @@ of dict_col_t default value part if exists.
   we need to save the encryption information into table, otherwise,
   this information will be lost in fil_discard_tablespace along
   with fil_space_free(). */
+  if (table->encryption_key == nullptr) {
+    lint old_size = mem_heap_get_size(table->heap);
 
-  fil_space_t *space = fil_space_get(table->space);
-  ut_ad(space != nullptr && FSP_FLAGS_GET_ENCRYPTION(space->flags));
+    table->encryption_key =
+        static_cast<byte *>(mem_heap_alloc(table->heap, Encryption::KEY_LEN));
+
+    table->encryption_iv =
+        static_cast<byte *>(mem_heap_alloc(table->heap, Encryption::KEY_LEN));
+
+    lint new_size = mem_heap_get_size(table->heap);
+    dict_sys->size += new_size - old_size;
+
+    fil_space_t *space = fil_space_get(table->space);
+    ut_ad(space != nullptr && FSP_FLAGS_GET_ENCRYPTION(space->flags));
+
+    memcpy(table->encryption_key, space->encryption_key, Encryption::KEY_LEN);
+    memcpy(table->encryption_iv, space->encryption_iv, Encryption::KEY_LEN);
+  }
 
   srv_get_encryption_data_filename(table, name, sizeof(name));
 
@@ -867,31 +678,38 @@ of dict_col_t default value part if exists.
   FILE *file = fopen(name, "w+b");
 
   if (file == nullptr) {
-    ib::send_errno_warn(thd, ER_CANT_CREATE_FILE, name);
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_CANT_CREATE_FILE, name, errno,
+                strerror(errno));
 
     err = DB_IO_ERROR;
   } else {
-    err =
-        row_quiesce_write_transfer_key(space->m_encryption_metadata, file, thd);
+    err = row_quiesce_write_transfer_key(table, file, thd);
 
     if (fflush(file) != 0) {
-      std::ostringstream msg;
-      msg << name << " flush() failed";
+      char msg[BUFSIZ];
 
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
+      snprintf(msg, sizeof(msg), "%s flush() failed", name);
+
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), msg);
 
       err = DB_IO_ERROR;
     }
 
     if (fclose(file) != 0) {
-      std::ostringstream msg;
-      msg << name << " flose() failed";
+      char msg[BUFSIZ];
 
-      ib::send_errno_warn(thd, ER_IO_WRITE_ERROR, msg.str());
+      snprintf(msg, sizeof(msg), "%s flose() failed", name);
 
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
+                  strerror(errno), msg);
       err = DB_IO_ERROR;
     }
   }
+
+  /* Clean the encryption information */
+  table->encryption_key = nullptr;
+  table->encryption_iv = nullptr;
 
   return (err);
 }
@@ -1086,23 +904,9 @@ dberr_t row_quiesce_set_state(
                 " FTS auxiliary tables will not be flushed.");
   }
 
-  if (srv_thread_is_active(srv_threads.m_trx_recovery_rollback)) {
-    /* We should wait until rollback after recovery end,
-    to lock the table consistently. */
-    srv_threads.m_trx_recovery_rollback.wait();
-  }
-  if (trx_purge_state() != PURGE_STATE_DISABLED) {
-    /* We should stop purge to lock the table consistently. */
-    trx_purge_stop();
-  }
-
-  row_mysql_lock_data_dictionary(trx, UT_LOCATION_HERE);
+  row_mysql_lock_data_dictionary(trx);
 
   dict_table_x_lock_indexes(table);
-
-  if (trx_purge_state() != PURGE_STATE_DISABLED) {
-    trx_purge_run();
-  }
 
   switch (state) {
     case QUIESCE_START:

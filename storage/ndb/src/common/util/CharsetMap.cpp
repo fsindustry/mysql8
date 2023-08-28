@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+ Copyright (c) 2010, 2021, Oracle and/or its affiliates.
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,7 @@
 #include "CharsetMapImpl.h"
 #include "mysql.h"
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 
 bool m_false_result = false;
 bool m_true_result = true;
@@ -38,7 +38,7 @@ bool m_true_result = true;
 /* _map is a static pointer visible only within the scope of this file.
    A singleton CharsetMapImpl serves every instance of CharsetMap.
 */
-static CharsetMapImpl *_map = nullptr;
+static CharsetMapImpl *_map = 0;
 
 
 /* Initialization allocates the CharsetMapImpl and initializes its mutex.
@@ -49,7 +49,7 @@ static CharsetMapImpl *_map = nullptr;
 
 void CharsetMap::init() 
 {
-    if(_map == nullptr) _map = new CharsetMapImpl;
+    if(_map == 0) _map = new CharsetMapImpl;
 }
 
 
@@ -58,7 +58,7 @@ void CharsetMap::init()
 void CharsetMap::unload() 
 {
     delete _map;
-    _map = nullptr;
+    _map = 0;
 }
 
 
@@ -83,7 +83,7 @@ const char * CharsetMap::getName(int csnum) const
 const char * CharsetMap::getMysqlName(int csnum) const 
 {
     CHARSET_INFO *cs = get_charset(csnum, MYF(0));
-    return cs ? cs->csname : nullptr;
+    return cs ? cs->csname : 0;
 }
 
 
@@ -107,7 +107,7 @@ int CharsetMap::getCharsetNumber(const char *name) const
 const bool * CharsetMap::isMultibyte(int cs_number) const
 {
   CHARSET_INFO * cset = get_charset(cs_number, MYF(0));
-  if(cset == nullptr) return nullptr;
+  if(cset == 0) return 0;
   return use_mb(cset) ? & m_true_result : & m_false_result;
 }
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,9 +50,9 @@ Ndb::checkFailedNode()
        * Release all connections in idle list (for node)
        */
       NdbTransaction * tNdbCon = theConnectionArray[node_id];
-      theConnectionArray[node_id] = nullptr;
-      theConnectionArrayLast[node_id] = nullptr;
-      while (tNdbCon != nullptr) {
+      theConnectionArray[node_id] = NULL;
+      theConnectionArrayLast[node_id] = NULL;
+      while (tNdbCon != NULL) {
         NdbTransaction* tempNdbCon = tNdbCon;
         tNdbCon = tNdbCon->next();
         releaseNdbCon(tempNdbCon);
@@ -67,7 +67,7 @@ Ndb::checkFailedNode()
  * int createConIdleList(int aNrOfCon);
  * 
  * Return Value:   Return the number of created connection object 
- *                 if createConIdleList was successful
+ *                 if createConIdleList was succesful
  *                 Return -1: In all other case.  
  * Parameters:     aNrOfCon : Number of connections offered to the application.
  * Remark:         Create connection idlelist with NdbTransaction objects.
@@ -86,7 +86,7 @@ Ndb::createConIdleList(int aNrOfCon)
  * int createOpIdleList(int aNrOfOp);
  *
  * Return Value:   Return the number of created operation object if 
- *                 createOpIdleList was successful.
+ *                 createOpIdleList was succesful.
  *                 Return -1: In all other case.
  * Parameters:     aNrOfOp:  Number of operations offered to the application. 
  * Remark:         Create  operation idlelist with NdbOperation objects..
@@ -185,7 +185,7 @@ Ndb::getNdbSubroutine()
 /***************************************************************************
 NdbOperation* getOperation();
 
-Return Value:   Return theOpList : if the  getOperation was successful.
+Return Value:   Return theOpList : if the  getOperation was succesful.
                 Return NULL : In all other case.  
 Remark:         Get an operation from theOpIdleList and return the object .
 ***************************************************************************/ 
@@ -198,7 +198,7 @@ Ndb::getOperation()
 /***************************************************************************
 NdbScanOperation* getScanOperation();
 
-Return Value:   Return theOpList : if the  getScanOperation was successful.
+Return Value:   Return theOpList : if the  getScanOperation was succesful.
                 Return NULL : In all other case.  
 Remark:         Get an operation from theScanOpIdleList and return the object .
 ***************************************************************************/ 
@@ -211,7 +211,7 @@ Ndb::getScanOperation()
 /***************************************************************************
 NdbIndexOperation* getIndexOperation();
 
-Return Value:   Return theOpList : if the  getIndexOperation was successful.
+Return Value:   Return theOpList : if the  getIndexOperation was succesful.
                 Return NULL : In all other case.  
 Remark:         Get an operation from theIndexOpIdleList and return the object .
 ***************************************************************************/ 
@@ -231,13 +231,13 @@ NdbRecAttr*
 Ndb::getRecAttr()
 {
   NdbRecAttr* tRecAttr = theImpl->theRecAttrIdleList.seize(this);
-  if (tRecAttr != nullptr) 
+  if (tRecAttr != NULL) 
   {
     tRecAttr->init();
     return tRecAttr;
   }
 
-  return nullptr;
+  return NULL;
 }
 
 /***************************************************************************
@@ -358,12 +358,12 @@ void
 Ndb::releaseOperation(NdbOperation* anOperation)
 {
   if(anOperation->m_tcReqGSN == GSN_TCKEYREQ){
-    anOperation->theNdbCon = nullptr;
+    anOperation->theNdbCon = NULL;
     anOperation->theMagicNumber = 0xFE11D0;
     theImpl->theOpIdleList.release(anOperation);
   } else {
     assert(anOperation->m_tcReqGSN == GSN_TCINDXREQ);
-    anOperation->theNdbCon = nullptr;
+    anOperation->theNdbCon = NULL;
     anOperation->theMagicNumber = 0xFE11D1;
     theImpl->theIndexOpIdleList.release((NdbIndexOperation*)anOperation);
   }
@@ -388,7 +388,7 @@ Ndb::releaseScanOperation(NdbIndexScanOperation* aScanOperation)
     }
   }
 #endif
-  aScanOperation->theNdbCon = nullptr;
+  aScanOperation->theNdbCon = NULL;
   aScanOperation->theMagicNumber = 0xFE11D2;
   theImpl->theScanOpIdleList.release(aScanOperation);
   DBUG_VOID_RETURN;
@@ -418,7 +418,7 @@ Ndb::releaseSignal(NdbApiSignal* aSignal)
 {
 #if defined VM_TRACE
   // Check that signal is not null
-  assert(aSignal != nullptr);
+  assert(aSignal != NULL);
 #if 0
   // Check that signal is not already in list
   NdbApiSignal* tmp = theSignalIdleList;
@@ -446,7 +446,7 @@ Ndb::releaseSignals(Uint32 cnt, NdbApiSignal* head, NdbApiSignal* tail)
 void
 Ndb::releaseSignalsInList(NdbApiSignal** pList){
   NdbApiSignal* tmp;
-  while (*pList != nullptr){
+  while (*pList != NULL){
     tmp = *pList;
     *pList = (*pList)->next();
     releaseSignal(tmp);
@@ -484,7 +484,7 @@ Ndb::releaseConnectToNdb(NdbTransaction* a_con)
 // I need to close the connection irrespective of whether I
 // manage to reach NDB or not.
 
-  if (a_con == nullptr)
+  if (a_con == NULL)
     DBUG_VOID_RETURN;
 
   Uint32 node_id = a_con->getConnectedNodeId();
@@ -536,12 +536,12 @@ update(Ndb::Free_list_usage* curr,
 Ndb::Free_list_usage*
 Ndb::get_free_list_usage(Ndb::Free_list_usage* curr)
 {
-  if (curr == nullptr)
+  if (curr == 0)
   {
-    return nullptr;
+    return 0;
   } 
 
-  if(curr->m_name == nullptr)
+  if(curr->m_name == 0)
   {
     update(curr, theImpl->theConIdleList, "NdbTransaction");
   }
@@ -595,7 +595,7 @@ Ndb::get_free_list_usage(Ndb::Free_list_usage* curr)
   }
   else if(!strcmp(curr->m_name, "NdbLockHandle"))
   {
-    return nullptr;
+    return 0;
   }
   else
   {

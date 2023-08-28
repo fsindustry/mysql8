@@ -1,4 +1,4 @@
-# Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -36,26 +36,30 @@ IF(HAS_WARN_FLAG)
   STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
 ENDIF()
 
+# googlemock uses GTEST_DISALLOW_ASSIGN_ which will generate:
+# definition of implicit copy constructor for  ....
+# is deprecated because it has a user-declared copy assignment operator
+IF(MY_COMPILER_IS_CLANG)
+  ADD_COMPILE_FLAGS(
+    account_verification_handler_t.cc
+    admin_cmd_index_t.cc
+    index_field_t.cc
+    listener_unix_socket_t.cc
+    protocol_decoder_t.cc
+    timeouts_t.cc
+    COMPILE_FLAGS "-Wno-deprecated"
+    )
+ENDIF()
+
 IF(MYSQLX_ADDITIONAL_TESTS_ENABLE)
   INCLUDE(mysql_function_names.cmake)
   LIST(APPEND XPL_TEST_SRC "${MYSQLX_GENERATE_DIR}/mysql_function_names_t.cc")
 ENDIF()
 
-# Fixes "C1128: number of sections exceeded object file format limit" in MSVC
-IF(MSVC)
-  ADD_COMPILE_FLAGS(
-    mock/mock.cc
-    COMPILE_FLAGS "/bigobj"
-    )
-ENDIF()
-
-ADD_STATIC_LIBRARY(xpl_test_src ${XPL_TEST_SRC}
-  DEPENDENCIES mysqlx
-  LINK_LIBRARIES ext::zlib ext::lz4 ext::zstd extra::rapidjson ext::icu)
 
 MYSQL_ADD_EXECUTABLE(${XPL_UNIT_TESTS}
   ../test_main.cc
-  LINK_LIBRARIES xpl_test_src
+  ${XPL_TEST_SRC}
   ADD_TEST xplugin
 )
 SET_TESTS_PROPERTIES(xplugin PROPERTIES TIMEOUT 180)
@@ -63,6 +67,11 @@ SET_TESTS_PROPERTIES(xplugin PROPERTIES TIMEOUT 180)
 ADD_COMPILE_FLAGS(${XPL_TEST_SRC}
   COMPILE_FLAGS "${MYSQLX_PROTOCOL_FLAGS}"
 )
+
+IF(DISABLE_MYSQLX_PROTOBUF_LITE)
+  MY_ADD_COMPILE_DEFINITIONS(${XPL_TEST_SRC}
+    COMPILE_DEFINITIONS USE_MYSQLX_FULL_PROTO)
+ENDIF()
 
 ADD_DEPENDENCIES(${XPL_UNIT_TESTS}
   mysqlx

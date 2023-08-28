@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -119,7 +119,7 @@ bool Converter::convert_data(char const *data, size_t data_size, Arch src,
     // load file length values, convert them and append
     for (size_t i = 0; i < LENGTHS_COUNT; i++) {
       // convert value to different architecture
-      const size_t converted_width = convert(data + loc, number, src, dst);
+      size_t converted_width = convert(data + loc, number, src, dst);
       if (i > 0) key_content.append(number, converted_width);
 
       // determine length integer value
@@ -133,7 +133,7 @@ bool Converter::convert_data(char const *data, size_t data_size, Arch src,
     }
 
     // real size without padding has to be smaller that total size
-    const size_t real_size = lengths[1] + lengths[2] + lengths[3] + lengths[4];
+    size_t real_size = lengths[1] + lengths[2] + lengths[3] + lengths[4];
     if (lengths[0] < real_size) return true;
 
     // we also have to have at least remaining key data
@@ -145,7 +145,7 @@ bool Converter::convert_data(char const *data, size_t data_size, Arch src,
 
     // append required padding to destination
     auto total = LENGTHS_COUNT * dst_width + real_size;
-    const size_t padding = (dst_width - total % dst_width) % dst_width;
+    size_t padding = (dst_width - total % dst_width) % dst_width;
     key_content.append(padding, '\0');
 
     // new key package size is waranted
@@ -263,9 +263,9 @@ Converter::Arch Converter::detect_native_arch() {
   // determine bit width
   const size_t bit_width = 8 * sizeof(size_t);
 
-  // determine endianness
+  // determine endianess
   size_t number = 1;
-  const bool isLittleEndian = *(char *)(&number);
+  bool isLittleEndian = *(char *)(&number);
 
   // assign architecture type based on findings
   switch (bit_width) {
@@ -288,11 +288,11 @@ Converter::Arch Converter::detect_native_arch() {
 }
 
 /**
-  (static) determines endianness of architecture
+  (static) determines endianess of architecture
 
-  @param arch   - architecture to return endianness of
+  @param arch   - architecture to return endianess of
 
-  @return       - endianness of the architecture
+  @return       - endianess of the architecture
 */
 Converter::Endian Converter::get_endian(Arch arch) {
   if (arch == Arch::LE_64 || arch == Arch::LE_32) return Endian::LITTLE;

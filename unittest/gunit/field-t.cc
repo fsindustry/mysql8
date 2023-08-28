@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,13 +24,11 @@
 #include <sys/types.h>
 
 #include "my_inttypes.h"
-#include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
 #include "sql/my_decimal.h"
 #include "sql/protocol.h"
 #include "sql/sql_class.h"
 #include "sql/sql_time.h"
-#include "strings/m_ctype_internals.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/mysys_util.h"
 #include "unittest/gunit/test_utils.h"
@@ -293,10 +291,10 @@ TEST_F(FieldTest, FieldTimef) {
 
   Mock_table m_table(thd());
   f->table = &m_table;
-  my_timeval tv;
+  struct timeval tv;
   int warnings = 0;
   EXPECT_FALSE(f->get_timestamp(&tv, &warnings));
-  EXPECT_EQ(123400, tv.m_tv_usec);
+  EXPECT_EQ(123400, tv.tv_usec);
 
   destroy(field);
 }
@@ -507,8 +505,7 @@ class Mock_charset : public CHARSET_INFO {
  public:
   mutable bool strnxfrm_called;
   Mock_charset() : strnxfrm_called(false) {
-    CHARSET_INFO *ci = get_charset_by_name("latin1_general_ci", MYF(0));
-    cset = ci->cset;
+    cset = &my_charset_8bit_handler;
     coll = &mock_collation;
     mbmaxlen = 1;
     pad_attribute = PAD_SPACE;

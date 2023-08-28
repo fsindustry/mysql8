@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,22 +25,13 @@
 #ifndef METADATA_CACHE_CLUSTER_METADATA_GR_INCLUDED
 #define METADATA_CACHE_CLUSTER_METADATA_GR_INCLUDED
 
-#include "mysqlrouter/metadata_cache_export.h"
-
 #include "cluster_metadata.h"
 #include "gr_notifications_listener.h"
 
 struct GroupReplicationMember;
 class GRMetadataBackend;
 
-enum class GRClusterStatus {
-  AvailableWritable,
-  AvailableReadOnly,
-  UnavailableRecovering,
-  Unavailable
-};
-
-class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
+class METADATA_API GRClusterMetadata : public ClusterMetadata {
  public:
   /** @brief Constructor
    *
@@ -76,10 +67,10 @@ class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
    * metadata
    * @param needs_writable_node flag indicating if the caller needs us to query
    * for writable node
+   * @param group_name Cluster Replication Group name (if bootstrapped as a
+   * single Cluster)
    * @param clusterset_id UUID of the ClusterSet the Cluster belongs to (if
    * bootstrapped as a ClusterSet)
-   * @param whole_topology return all usable nodes, ignore potential metadata
-   * filters or policies (like target_cluster etc.)
    * @param [out] instance_id of the server the metadata was fetched from
    * @return object containing cluster topology information in case of success,
    * or error code in case of failure
@@ -90,22 +81,24 @@ class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
       const std::atomic<bool> &terminated,
       mysqlrouter::TargetCluster &target_cluster, const unsigned router_id,
       const metadata_cache::metadata_servers_list_t &metadata_servers,
-      bool needs_writable_node, const std::string &clusterset_id,
-      bool whole_topology, std::size_t &instance_id) override;
+      bool needs_writable_node, const std::string &group_name,
+      const std::string &clusterset_id, std::size_t &instance_id) override;
 
   /** @brief Initializes the notifications listener thread (if a given cluster
    * type supports it)
    *
-   * @param cluster_topology current topology of the monitored Cluster(s)
+   * @param instances vector of the current cluster nodes
+   * @param target_cluster object identifying the Cluster this operation refers
    * to
    * @param callback  callback function to get called when the GR notification
    *                  was received
    */
   void setup_notifications_listener(
-      const metadata_cache::ClusterTopology &cluster_topology,
+      const std::vector<metadata_cache::ManagedInstance> &instances,
+      const mysqlrouter::TargetCluster &target_cluster,
       const GRNotificationListener::NotificationClb &callback) override {
     if (gr_notifications_listener_)
-      gr_notifications_listener_->setup(cluster_topology, callback);
+      gr_notifications_listener_->setup(instances, target_cluster, callback);
   }
 
   /** @brief Deinitializes the notifications listener thread
@@ -126,37 +119,40 @@ class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
    *
    * @param target_cluster information about the Cluster that this information
    * is retrieved for
-   * @param md_server address of the metadata server to get the data from
+   * @param cluster_type_specific_id additional information about the Cluster
+   * that this information is retrieved for (clusterset_id in case of
+   * clusterset)
    *
    * @returns authentication data of the rest users stored in the metadata
    */
   auth_credentials_t fetch_auth_credentials(
-      const metadata_cache::metadata_server_t &md_server,
-      const mysqlrouter::TargetCluster &target_cluster) override;
+      const mysqlrouter::TargetCluster &target_cluster,
+      const std::string &cluster_type_specific_id) override;
 
  protected:
   /** @brief Queries the metadata server for the list of instances that belong
    * to the desired cluster.
    */
-  metadata_cache::ClusterTopology fetch_instances_from_metadata_server(
+  metadata_cache::ManagedCluster fetch_instances_from_metadata_server(
       const mysqlrouter::TargetCluster &target_cluster,
       const std::string &cluster_type_specific_id);
 
   /** Query the GR performance_schema tables for live information about a
    * cluster.
    *
-   * update_cluster_status_from_gr() calls check_cluster_status_in_gr() for some
-   * of its processing. Together, they:
+   * update_cluster_status() calls check_cluster_status() for some of its
+   * processing. Together, they:
    * - check current topology (status) returned from a cluster node
    * - update 'instances' with this state
    * - get other metadata about the cluster
    *
    * The information is pulled from GR maintained performance_schema tables.
    */
-  void update_cluster_status_from_gr(metadata_cache::ManagedCluster &cluster);
+  void update_cluster_status(const mysqlrouter::TargetCluster &target_cluster,
+                             metadata_cache::ManagedCluster &cluster);
 
-  GRClusterStatus check_cluster_status_in_gr(
-      std::vector<metadata_cache::ManagedInstance *> &instances,
+  metadata_cache::ClusterStatus check_cluster_status(
+      std::vector<metadata_cache::ManagedInstance> &instances,
       const std::map<std::string, GroupReplicationMember> &member_status,
       bool &metadata_gr_discrepancy) const noexcept;
 
@@ -171,6 +167,31 @@ class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
 
   friend class GRMetadataBackend;
   friend class GRClusterSetMetadataBackend;
+
+#ifdef FRIEND_TEST
+  FRIEND_TEST(MetadataTest, FetchInstancesFromMetadataServer);
+  FRIEND_TEST(MetadataTest,
+              UpdateClusterStatus_PrimaryMember_FailConnectOnNode2);
+  FRIEND_TEST(MetadataTest,
+              UpdateClusterStatus_PrimaryMember_FailConnectOnAllNodes);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_PrimaryMember_FailQueryOnNode1);
+  FRIEND_TEST(MetadataTest,
+              UpdateClusterStatus_PrimaryMember_FailQueryOnAllNodes);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_Status_FailQueryOnNode1);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_Status_FailQueryOnAllNodes);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_SimpleSunnyDayScenario);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_1Online1RecoveringNotInMetadata);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_3NodeSetup);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_VariableNodeSetup);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_VariousStatuses);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_PrimaryMember_EmptyOnNode1);
+  FRIEND_TEST(MetadataTest, UpdateClusterStatus_PrimaryMember_EmptyOnAllNodes);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_Recovering);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_ErrorAndOther);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_Cornercase2of5Alive);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_Cornercase3of5Alive);
+  FRIEND_TEST(MetadataTest, CheckClusterStatus_Cornercase1Common);
+#endif
 };
 
 #endif  // METADATA_CACHE_CLUSTER_METADATA_GR_INCLUDED

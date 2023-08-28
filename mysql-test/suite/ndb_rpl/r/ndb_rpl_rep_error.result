@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 Wrong schema for the table, too few pks
 create table t1 (a int key, X int) engine ndb;
@@ -29,9 +29,9 @@ create table test.t1 (a int primary key) engine=ndb;
 show warnings;
 Level	Code	Message
 drop table test.t1;
-MySQLD error output for server 1.1 matching pattern %Binlog: logging%
+MySQLD error output for server 1.1 matching pattern %NDB Binlog: logging%
 relevant
-[system] binlog: logging ./test/t1 (full,use_update)
+[note] ndb binlog: logging ./test/t1 (full,use_update)
 delete from mysql.ndb_replication;
 Check that NULL uses server defaults
 show variables like 'ndb_log_update_as_write';
@@ -45,9 +45,9 @@ create table test.t1 (a int primary key) engine=ndb;
 show warnings;
 Level	Code	Message
 drop table test.t1;
-MySQLD error output for server 1.1 matching pattern %Binlog: logging%
+MySQLD error output for server 1.1 matching pattern %NDB Binlog: logging%
 relevant
-[system] binlog: logging ./test/t1 (updated,use_write)
+[note] ndb binlog: logging ./test/t1 (updated,use_write)
 Correct schema for the table but other errors
 insert into mysql.ndb_replication values ("test", "t1", 0, NULL, "NDB$X(X)");
 create table t1 (a int key, X int) engine ndb;

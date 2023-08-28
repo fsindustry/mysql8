@@ -2,12 +2,12 @@
 .\"     Title: mysqlimport
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/20/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "MYSQLIMPORT" "1" "06/20/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "MYSQLIMPORT" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -43,7 +43,7 @@ SQL statement\&. Most options to
 correspond directly to clauses of
 LOAD DATA
 syntax\&. See
-Section\ \&13.2.9, \(lqLOAD DATA Statement\(rq\&.
+Section\ \&13.2.7, \(lqLOAD DATA Statement\(rq\&.
 .PP
 Invoke
 \fBmysqlimport\fR
@@ -140,7 +140,7 @@ This option takes a list of comma\-separated column names as its value\&. The or
 Compress all information sent between the client and the server if possible\&. See
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
 .sp
-This option is deprecated\&. Expect it to be removed in a future version of MySQL\&. See
+As of MySQL 8\&.0\&.18, this option is deprecated\&. Expect it to be removed in a future version of MySQL\&. See
 the section called \(lqConfiguring Legacy Connection Compression\(rq\&.
 .RE
 .sp
@@ -160,6 +160,8 @@ uncompressed\&.
 .sp
 For more information, see
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
+.sp
+This option was added in MySQL 8\&.0\&.18\&.
 .RE
 .sp
 .RS 4
@@ -355,7 +357,7 @@ Section\ \&6.4.1.4, \(lqClient-Side Cleartext Pluggable Authentication\(rq\&.)
 \fB\-\-fields\-escaped\-by=\&.\&.\&.\fR
 These options have the same meaning as the corresponding clauses for
 LOAD DATA\&. See
-Section\ \&13.2.9, \(lqLOAD DATA Statement\(rq\&.
+Section\ \&13.2.7, \(lqLOAD DATA Statement\(rq\&.
 .RE
 .sp
 .RS 4
@@ -453,7 +455,7 @@ lines of the data file\&.
 This option has the same meaning as the corresponding clause for
 LOAD DATA\&. For example, to import Windows files that have lines terminated with carriage return/linefeed pairs, use
 \fB\-\-lines\-terminated\-by="\er\en"\fR\&. (You might have to double the backslashes, depending on the escaping conventions of your command interpreter\&.) See
-Section\ \&13.2.9, \(lqLOAD DATA Statement\(rq\&.
+Section\ \&13.2.7, \(lqLOAD DATA Statement\(rq\&.
 .RE
 .sp
 .RS 4
@@ -587,67 +589,6 @@ To explicitly specify that there is no password and that
 should not prompt for one, use the
 \fB\-\-skip\-password\fR
 option\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-password1[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 1 of the MySQL account used for connecting to the server\&. The password value is optional\&. If not given,
-\fBmysqlimport\fR
-prompts for one\&. If given, there must be
-\fIno space\fR
-between
-\fB\-\-password1=\fR
-and the password following it\&. If no password option is specified, the default is to send no password\&.
-.sp
-Specifying a password on the command line should be considered insecure\&. To avoid giving the password on the command line, use an option file\&. See
-Section\ \&6.1.2.1, \(lqEnd-User Guidelines for Password Security\(rq\&.
-.sp
-To explicitly specify that there is no password and that
-\fBmysqlimport\fR
-should not prompt for one, use the
-\fB\-\-skip\-password1\fR
-option\&.
-.sp
-\fB\-\-password1\fR
-and
-\fB\-\-password\fR
-are synonymous, as are
-\fB\-\-skip\-password1\fR
-and
-\fB\-\-skip\-password\fR\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-password2[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 2 of the MySQL account used for connecting to the server\&. The semantics of this option are similar to the semantics for
-\fB\-\-password1\fR; see the description of that option for details\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-password3[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 3 of the MySQL account used for connecting to the server\&. The semantics of this option are similar to the semantics for
-\fB\-\-password1\fR; see the description of that option for details\&.
 .RE
 .sp
 .RS 4
@@ -920,7 +861,6 @@ STRICT
 causes the client to produce a warning at startup and to operate in non\-FIPS mode\&.
 .sp .5v
 .RE
-This option is deprecated\&. Expect it to be removed in a future version of MySQL\&.
 .RE
 .sp
 .RS 4
@@ -934,27 +874,8 @@ This option is deprecated\&. Expect it to be removed in a future version of MySQ
 \fB\-\-tls\-ciphersuites=\fR\fB\fIciphersuite_list\fR\fR
 The permissible ciphersuites for encrypted connections that use TLSv1\&.3\&. The value is a list of one or more colon\-separated ciphersuite names\&. The ciphersuites that can be named for this option depend on the SSL library used to compile MySQL\&. For details, see
 Section\ \&6.3.2, \(lqEncrypted Connection TLS Protocols and Ciphers\(rq\&.
-.RE
 .sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-tls\-sni\-servername=\fR\fB\fIserver_name\fR\fR
-When specified, the name is passed to the
-libmysqlclient
-C API library using the
-MYSQL_OPT_TLS_SNI_SERVERNAME
-option of
-mysql_options()\&. The server name is not case\-sensitive\&. To show which server name the client specified for the current session, if any, check the
-Tls_sni_server_name
-status variable\&.
-.sp
-Server Name Indication (SNI) is an extension to the TLS protocol (OpenSSL must be compiled using TLS extensions for this option to function)\&. The MySQL implementation of SNI represents the client\-side only\&.
+This option was added in MySQL 8\&.0\&.16\&.
 .RE
 .sp
 .RS 4
@@ -1042,6 +963,8 @@ compression\&.
 .sp
 For more information, see
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
+.sp
+This option was added in MySQL 8\&.0\&.18\&.
 .RE
 .PP
 Here is a sample session that demonstrates use of
@@ -1051,8 +974,8 @@ Here is a sample session that demonstrates use of
 .RS 4
 .\}
 .nf
-$> \fBmysql \-e \*(AqCREATE TABLE imptest(id INT, n VARCHAR(30))\*(Aq test\fR
-$> \fBed\fR
+shell> \fBmysql \-e \*(AqCREATE TABLE imptest(id INT, n VARCHAR(30))\*(Aq test\fR
+shell> \fBed\fR
 a
 100     Max Sydow
 101     Count Dracula
@@ -1060,13 +983,13 @@ a
 w imptest\&.txt
 32
 q
-$> \fBod \-c imptest\&.txt\fR
+shell> \fBod \-c imptest\&.txt\fR
 0000000   1   0   0  \et   M   a   x       S   y   d   o   w  \en   1   0
 0000020   1  \et   C   o   u   n   t       D   r   a   c   u   l   a  \en
 0000040
-$> \fBmysqlimport \-\-local test imptest\&.txt\fR
+shell> \fBmysqlimport \-\-local test imptest\&.txt\fR
 test\&.imptest: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
-$> \fBmysql \-e \*(AqSELECT * FROM imptest\*(Aq test\fR
+shell> \fBmysql \-e \*(AqSELECT * FROM imptest\*(Aq test\fR
 +\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
 | id   | n             |
 +\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
@@ -1080,7 +1003,7 @@ $> \fBmysql \-e \*(AqSELECT * FROM imptest\*(Aq test\fR
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP

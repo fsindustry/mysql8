@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,13 +35,13 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_sys.h"
 #include "mysql/psi/mysql_file.h"
-#include "mysql/strings/int2str.h"
-#include "mysql/strings/m_ctype.h"
 #include "template_utils.h"
 
 /*
@@ -145,7 +145,7 @@ void my_b_seek(IO_CACHE *info, my_off_t pos) {
 */
 
 size_t my_b_fill(IO_CACHE *info) {
-  const my_off_t pos_in_file =
+  my_off_t pos_in_file =
       (info->pos_in_file + (size_t)(info->read_end - info->buffer));
   size_t diff_length, length, max_length;
 
@@ -206,7 +206,7 @@ size_t my_b_gets(IO_CACHE *info, char *to, size_t max_length) {
       }
     }
     if (!(max_length -= length)) {
-      /* Found enough characters;  Return found string */
+      /* Found enough charcters;  Return found string */
       info->read_pos = pos;
       *to = '\0';
       return (size_t)(to - start);
@@ -343,7 +343,7 @@ size_t my_b_vprintf(IO_CACHE *info, const char *fmt, va_list args) {
     if (*fmt == 's') /* String parameter */
     {
       char *par = va_arg(args, char *);
-      const size_t length2 = strlen(par);
+      size_t length2 = strlen(par);
       /* TODO: implement precision */
       out_length += length2;
       if (my_b_write(info, (uchar *)par, length2)) goto err;

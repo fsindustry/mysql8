@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 #include <ndb_opts.h>
 #include <NDBT.hpp>
@@ -54,47 +53,38 @@ static int _retries = 0;
 
 static struct my_option my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::connect_retry_delay,
-  NdbStdOpt::connect_retries,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS("ndb_desc"),
   { "database", 'd', "Name of database table is in",
-    &_dbname, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_dbname, (uchar**) &_dbname, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "unqualified", 'u', "Use unqualified table names",
-    &_unqualified, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_unqualified, (uchar**) &_unqualified, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "extra-partition-info", 'p', "Print more info per partition",
-    &_partinfo, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_partinfo, (uchar**) &_partinfo, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "retries", 'r', "Retry every second for # retries",
-    &_retries, nullptr, nullptr, GET_INT, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_retries, (uchar**) &_retries, 0,
+    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "blob-info", 'b', "Show information for hidden blob tables",
-    &_blobinfo, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_blobinfo, (uchar**) &_blobinfo, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "extra-node-info", 'n', "Print node info for partitions (requires -p)",
-    &_nodeinfo, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_nodeinfo, (uchar**) &_nodeinfo, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "index-info", 'i', "Show information for indexes",
-    &_indexinfo, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_indexinfo, (uchar**) &_indexinfo, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "table", 't', "Base table for index",
-    &_tblname, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_tblname, (uchar**) &_tblname, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "autoinc", 'a', "Show autoincrement information",
-    &_autoinc, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_autoinc, (uchar**) &_autoinc, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "context", 'x', "Show context information",
-    &_context, nullptr, nullptr, GET_BOOL, NO_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
-  NdbStdOpt::end_of_options
+    (uchar**) &_context, (uchar**) &_context, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
 static void print_context_info(Ndb* pNdb, NdbDictionary::Table const* pTab);

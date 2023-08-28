@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +39,7 @@
 #include "my_sys.h"
 #include "my_systime.h"
 #include "my_thread.h"
-#include "mysql/components/services/bits/my_thread_bits.h"
+#include "mysql/components/services/my_thread_bits.h"
 
 namespace mysys_lf_unittest {
 
@@ -207,7 +207,7 @@ static uint test_hash(const LF_HASH *, const uchar *key, size_t length) {
   }
 }
 
-static int test_match(const uchar *arg, void *match_arg [[maybe_unused]]) {
+static int test_match(const uchar *arg) {
   /*
     Unlike keys passed to hash function memory passed to match
     functions are always correctly aligned.
@@ -234,8 +234,8 @@ TEST(Mysys, LFHashRandomMatch) {
   pins = lf_hash_get_pins(&hash);
 
   /* We should not be able to find anything in empty hash. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 0, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 0));
   EXPECT_EQ(null_fnd, fnd);
   lf_hash_search_unpin(pins);
 
@@ -247,14 +247,14 @@ TEST(Mysys, LFHashRandomMatch) {
   EXPECT_EQ(4, hash.count.load());
 
   /* Search still should return nothing. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 0, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 0));
   EXPECT_EQ(null_fnd, fnd);
   lf_hash_search_unpin(pins);
 
   /* Even if we start from different bucket/hash value. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 3, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 3));
   EXPECT_EQ(null_fnd, fnd);
   lf_hash_search_unpin(pins);
 
@@ -267,8 +267,8 @@ TEST(Mysys, LFHashRandomMatch) {
     We should be able to find this record when we start searching
     from bucket #0.
   */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 0, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 0));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
@@ -277,20 +277,19 @@ TEST(Mysys, LFHashRandomMatch) {
     Also when searching from buckets #2 and #5, which don't have dummy nodes and
     lists associated yet.
   */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 2, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 2));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
-  fnd = static_cast<uint *>(
-      lf_hash_random_match(&hash, pins, &test_match, 5, nullptr));
+  fnd = static_cast<uint *>(lf_hash_random_match(&hash, pins, &test_match, 5));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
 
   /* Naturally, it should also be reachable from its native bucket #3. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 3, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 3));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
@@ -307,8 +306,8 @@ TEST(Mysys, LFHashRandomMatch) {
     Such restart is necessary to avoid bias against elements at the start of
     the split-ordered list.
   */
-  fnd = static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match,
-                                                   3 + 0x10 + 0x100, nullptr));
+  fnd = static_cast<uint32 *>(
+      lf_hash_random_match(&hash, pins, &test_match, 3 + 0x10 + 0x100));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
@@ -322,8 +321,8 @@ TEST(Mysys, LFHashRandomMatch) {
     Our matching record will be reachable from its bucket #7 as well,
     since our search wraps around from the tail of the list to its head.
   */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 7, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 7));
   EXPECT_NE(null_fnd, fnd);
   val = 3 + 0x100;
   EXPECT_EQ(val, *fnd);
@@ -335,21 +334,21 @@ TEST(Mysys, LFHashRandomMatch) {
   EXPECT_EQ(0, rc);
 
   /* This record should be reachable from buckets #0 and #4. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 0, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 0));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
 
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 4, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 4));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
 
   /* But not from bucket #3. We will find another record instead. */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 3, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 3));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_NE(val, *fnd);
   lf_hash_search_unpin(pins);
@@ -358,8 +357,8 @@ TEST(Mysys, LFHashRandomMatch) {
     Thanks to search wrapping around from tail to the head of the list,
     our record will be reachable from bucket #7.
   */
-  fnd = static_cast<uint32 *>(
-      lf_hash_random_match(&hash, pins, &test_match, 7, nullptr));
+  fnd =
+      static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match, 7));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_EQ(val, *fnd);
   lf_hash_search_unpin(pins);
@@ -369,8 +368,8 @@ TEST(Mysys, LFHashRandomMatch) {
     should not be reachable even from its native bucket #4, if random number
     identifies higher element. Instead we should get another matching element.
   */
-  fnd = static_cast<uint32 *>(lf_hash_random_match(&hash, pins, &test_match,
-                                                   4 + 0x10 + 0x100, nullptr));
+  fnd = static_cast<uint32 *>(
+      lf_hash_random_match(&hash, pins, &test_match, 4 + 0x10 + 0x100));
   EXPECT_NE(null_fnd, fnd);
   EXPECT_NE(val, *fnd);
   lf_hash_search_unpin(pins);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +31,7 @@
 #include "my_sys.h"
 #include "my_thread_local.h"
 #include "my_timer.h"  // my_timer_t
-#include "mysql/components/services/bits/mysql_mutex_bits.h"
+#include "mysql/components/services/mysql_mutex_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
 #include "sql/mysqld.h"              // key_thd_timer_mutex
@@ -199,7 +199,7 @@ static bool reap_timer(THD_timer_info *thd_timer, bool pending) {
     expiring. Otherwise, the timer notification function might be
     executing asynchronously in the context of a separate thread.
   */
-  const bool unreachable = pending ? thd_timer->thread_id == 0 : true;
+  bool unreachable = pending ? thd_timer->thread_id == 0 : true;
 
   thd_timer->thread_id = 0;
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -272,10 +272,9 @@ public:
 #endif
 private:
 
-  Uint32 attrId() const;              /* Get attribute id                     */
-  bool setNULL();                     /* Set NULL indicator                   */
-  void setUNDEFINED();                //
-  void set_size_in_bytes(Uint32 sz);  /* Set attribute (element) size in bytes. */
+  Uint32 attrId() const;        /* Get attribute id                     */
+  bool setNULL();               /* Set NULL indicator                   */
+  void setUNDEFINED();          //
 
   bool receive_data(const Uint32*, Uint32);
 
@@ -290,6 +289,8 @@ private:
   int setup(const class NdbColumnImpl* anAttrInfo, char* aValue);
   int setup(Uint32 byteSize, char* aValue);
                                 /* Set up attributes and buffers        */
+  bool copyoutRequired() const; /* Need to copy data to application     */
+  void copyout();               /* Copy from storage to application     */
 
   Uint64        theStorage[4];  /* The data storage here if <= 32 bytes */
   Uint64*       theStorageX;    /* The data storage here if >  32 bytes */
@@ -432,6 +433,13 @@ NdbRecAttr::aRef() const
 }
 
 inline
+bool
+NdbRecAttr::copyoutRequired() const
+{
+  return theRef != theValue && theValue != 0;
+}
+
+inline
 Uint32
 NdbRecAttr::attrId() const
 {
@@ -458,13 +466,6 @@ void
 NdbRecAttr::setUNDEFINED()
 {
   m_size_in_bytes= -1;
-}
-
-inline
-void
-NdbRecAttr::set_size_in_bytes(Uint32 sz)
-{
-  m_size_in_bytes = sz;
 }
 
 class NdbOut& operator <<(class NdbOut&, const NdbRecAttr &);

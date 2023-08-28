@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -55,7 +55,6 @@ This file contains the implementation of error and warnings related
 #include <algorithm>
 
 #include "decimal.h"
-#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
@@ -64,8 +63,6 @@ This file contains the implementation of error and warnings related
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/strings/dtoa.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"
 #include "sql/derror.h"  // ER_THD
@@ -77,8 +74,6 @@ This file contains the implementation of error and warnings related
 #include "sql/sql_lex.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
-#include "string_with_len.h"
-#include "strmake.h"
 
 using std::max;
 using std::min;
@@ -102,7 +97,7 @@ using std::min;
   When invoking my_error(), the error number and message is typically
   provided like this:
   - my_error(ER_WRONG_DB_NAME, MYF(0), ...);
-  - my_message(ER_REPLICA_IGNORED_TABLE, ER(ER_REPLICA_IGNORED_TABLE), MYF(0));
+  - my_message(ER_SLAVE_IGNORED_TABLE, ER(ER_SLAVE_IGNORED_TABLE), MYF(0));
 
   In both cases, the message is retrieved from ER(ER_XXX), which in turn
   is read from the resource file errmsg.sys at server startup.
@@ -205,7 +200,7 @@ using std::min;
 */
 
 static void copy_string(MEM_ROOT *mem_root, String *dst, const String *src) {
-  const size_t len = src->length();
+  size_t len = src->length();
   if (len) {
     char *copy = (char *)mem_root->Alloc(len + 1);
     if (copy) {
@@ -218,16 +213,16 @@ static void copy_string(MEM_ROOT *mem_root, String *dst, const String *src) {
 }
 
 Sql_condition::Sql_condition(MEM_ROOT *mem_root)
-    : m_class_origin((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_subclass_origin((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_catalog((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_schema((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_catalog_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_schema_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_table_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_column_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_cursor_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
+    : m_class_origin((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_subclass_origin((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_catalog((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_schema((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_catalog_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_schema_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_table_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_column_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_cursor_name((const char *)nullptr, 0, &my_charset_utf8_bin),
       m_message_text(),
       m_mysql_errno(0),
       m_severity_level(Sql_condition::SL_ERROR),
@@ -240,16 +235,16 @@ Sql_condition::Sql_condition(MEM_ROOT *mem_root, uint mysql_errno,
                              const char *returned_sqlstate,
                              Sql_condition::enum_severity_level severity,
                              const char *message_text)
-    : m_class_origin((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_subclass_origin((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_catalog((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_schema((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_constraint_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_catalog_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_schema_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_table_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_column_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
-      m_cursor_name((const char *)nullptr, 0, &my_charset_utf8mb3_bin),
+    : m_class_origin((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_subclass_origin((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_catalog((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_schema((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_constraint_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_catalog_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_schema_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_table_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_column_name((const char *)nullptr, 0, &my_charset_utf8_bin),
+      m_cursor_name((const char *)nullptr, 0, &my_charset_utf8_bin),
       m_message_text(),
       m_mysql_errno(mysql_errno),
       m_severity_level(severity),
@@ -348,13 +343,15 @@ Diagnostics_area::Diagnostics_area(bool allow_unlimited_conditions)
       m_saved_error_count(0),
       m_saved_warn_count(0) {
   /* Initialize sub structures */
+  init_sql_alloc(PSI_INSTRUMENT_ME, &m_condition_root, WARN_ALLOC_BLOCK_SIZE,
+                 0);
   m_conditions_list.clear();
   memset(m_current_statement_cond_count_by_qb, 0,
          sizeof(m_current_statement_cond_count_by_qb));
   m_message_text[0] = '\0';
 }
 
-Diagnostics_area::~Diagnostics_area() {}
+Diagnostics_area::~Diagnostics_area() { m_condition_root.Clear(); }
 
 void Diagnostics_area::reset_diagnostics_area() {
   DBUG_TRACE;
@@ -501,7 +498,7 @@ void Diagnostics_area::reset_condition_info(THD *thd) {
 
   m_conditions_list.clear();
   m_preexisting_sql_conditions.clear();
-  m_condition_root.ClearForReuse();
+  m_condition_root.Clear();
   memset(m_current_statement_cond_count_by_qb, 0,
          sizeof(m_current_statement_cond_count_by_qb));
   m_current_statement_cond_count = 0;
@@ -688,7 +685,7 @@ void push_warning_printf(THD *thd, Sql_condition::enum_severity_level severity,
   DBUG_PRINT("enter", ("warning: %u", code));
 
   assert(code != 0);
-  if (format == nullptr) format = ER_THD_NONCONST(thd, code);
+  if (format == nullptr) format = ER_THD(thd, code);
 
   va_start(args, format);
   vsnprintf(warning, sizeof(warning), format, args);
@@ -790,7 +787,7 @@ bool mysqld_show_warnings(THD *thd, ulong levels_to_show) {
   }
 
   /* Statement failed, retrieve the error information for propagation. */
-  const uint sql_errno = new_stmt_da.mysql_errno();
+  uint sql_errno = new_stmt_da.mysql_errno();
   const char *message = new_stmt_da.message_text();
   const char *sqlstate = new_stmt_da.returned_sqlstate();
 
@@ -889,7 +886,7 @@ size_t err_conv(char *buff, size_t to_length, const char *from,
    @param from        string from convert
    @param from_length string length
    @param from_cs     charset from convert
-   @param errors      count of errors during conversion
+   @param errors      count of errors during convertion
 
    @retval
    length of converted string
@@ -965,18 +962,12 @@ bool is_sqlstate_valid(const LEX_STRING *sqlstate) {
   if (sqlstate->length != 5) return false;
 
   for (int i = 0; i < 5; ++i) {
-    const char c = sqlstate->str[i];
+    char c = sqlstate->str[i];
 
     if ((c < '0' || '9' < c) && (c < 'A' || 'Z' < c)) return false;
   }
 
   return true;
-}
-
-static bool is_deprecated(const char *cs_name) {
-  return strcmp(cs_name, "ucs2") == 0 || strcmp(cs_name, "macroman") == 0 ||
-         strcmp(cs_name, "macce") == 0 || strcmp(cs_name, "dec8") == 0 ||
-         strcmp(cs_name, "hp8") == 0;
 }
 
 /**
@@ -989,7 +980,7 @@ static bool is_deprecated(const char *cs_name) {
 */
 void warn_on_deprecated_charset(THD *thd, const CHARSET_INFO *cs,
                                 const char *alias, const char *option) {
-  if (cs == &my_charset_utf8mb3_general_ci) {
+  if (cs == &my_charset_utf8_general_ci) {
     if (native_strcasecmp(alias, "utf8") == 0) {
       if (option == nullptr)
         push_warning(thd, ER_DEPRECATED_UTF8_ALIAS);
@@ -1002,12 +993,6 @@ void warn_on_deprecated_charset(THD *thd, const CHARSET_INFO *cs,
         LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_UTF8MB3_CHARSET_OPTION,
                option);
     }
-  } else if (is_deprecated(cs->csname)) {
-    if (option == nullptr)
-      push_deprecated_warn(thd, cs->csname, "utf8mb4");
-    else
-      LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_CHARSET_OPTION, option,
-             cs->csname, "utf8mb4");
   }
 }
 
@@ -1020,101 +1005,13 @@ void warn_on_deprecated_charset(THD *thd, const CHARSET_INFO *cs,
 */
 void warn_on_deprecated_collation(THD *thd, const CHARSET_INFO *collation,
                                   const char *option) {
-  if (my_charset_same(collation, &my_charset_utf8mb3_general_ci)) {
+  if (my_charset_same(collation, &my_charset_utf8_general_ci)) {
     if (option == nullptr)
-      push_warning_printf(thd, Sql_condition::SL_WARNING,
-                          ER_WARN_DEPRECATED_UTF8MB3_COLLATION,
-                          ER_THD(thd, ER_WARN_DEPRECATED_UTF8MB3_COLLATION),
-                          collation->m_coll_name);
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_WARN_DEPRECATED_UTF8MB3_COLLATION,
+          ER_THD(thd, ER_WARN_DEPRECATED_UTF8MB3_COLLATION), collation->name);
     else
       LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_UTF8MB3_COLLATION_OPTION, option,
-             collation->m_coll_name);
-  } else if (is_deprecated(collation->csname)) {
-    if (option == nullptr)
-      push_warning_printf(thd, Sql_condition::SL_WARNING,
-                          ER_WARN_DEPRECATED_COLLATION,
-                          ER_THD(thd, ER_WARN_DEPRECATED_COLLATION),
-                          collation->m_coll_name, collation->csname, "utf8mb4");
-    else
-      LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_COLLATION_OPTION, option,
-             collation->m_coll_name, collation->csname, "utf8mb4");
+             collation->name);
   }
-  if (!(collation->state & MY_CS_COMPILED)) {
-    if (option == nullptr) {
-      push_warning_printf(
-          thd, Sql_condition::SL_WARNING,
-          ER_WARN_DEPRECATED_USER_DEFINED_COLLATIONS,
-          ER_THD(thd, ER_WARN_DEPRECATED_USER_DEFINED_COLLATIONS),
-          collation->m_coll_name);
-    } else {
-      LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_USER_DEFINED_COLLATIONS_OPTION,
-             option, collation->m_coll_name);
-    }
-  }
-}
-
-/**
-  Check if status contains a deprecation warning. If it does, issue the
-  warning and reset the status indication.
-*/
-void check_deprecated_datetime_format(THD *thd, const CHARSET_INFO *cs,
-                                      MYSQL_TIME_STATUS &status) {
-  if (status.m_deprecation.m_kind == MYSQL_TIME_STATUS::DEPRECATION::DP_NONE)
-    return;
-
-  // Before printing, sanitize the delimiter seen and the datetime string it
-  // occurs in.
-  char delim[10];
-  const char c = status.m_deprecation.m_delim_seen;
-  static constexpr char spaces[] = "\n\t\f\r\v";
-  static constexpr char space_sym[] = "ntfrv";
-
-  if (std::isprint(static_cast<unsigned char>(c))) {
-    delim[0] = c;
-    delim[1] = '\0';
-  } else if (strchr(spaces, c) != nullptr) {
-    // Escape with backslash the control characters NEWLINE, TAB, FORM FEED,
-    // CARRIAGE RETURN and VERTICAL TAB.
-    delim[0] = '\\';
-    delim[1] = space_sym[strchr(spaces, c) - spaces];
-    delim[2] = '\0';
-  } else {
-    assert(false);
-    snprintf(delim, sizeof(delim), "\\%#02x",
-             (unsigned int)status.m_deprecation.m_delim_seen & 0xff);
-  }
-
-  const ErrConvString argument(status.m_deprecation.m_arg,
-                               strlen(status.m_deprecation.m_arg), cs);
-  char warn_buff[MYSQL_ERRMSG_SIZE];
-  CHARSET_INFO *sys_cs = system_charset_info;
-
-  switch (status.m_deprecation.m_kind) {
-    case MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_KIND:
-    case MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_SPACE:
-      sys_cs->cset->snprintf(
-          sys_cs, warn_buff, sizeof(warn_buff),
-          ER_THD(thd, ER_WARN_DEPRECATED_DATETIME_DELIMITER), delim,
-          status.m_deprecation.m_position, argument.ptr(),
-          static_cast<int>(thd->get_stmt_da()->current_row_for_condition()),
-          status.m_deprecation.m_kind ==
-                  MYSQL_TIME_STATUS::DEPRECATION::DP_WRONG_SPACE
-              ? ' '
-              : (status.m_deprecation.m_colon ? ':' : '-'));
-      push_warning(thd, Sql_condition::SL_WARNING,
-                   ER_WARN_DEPRECATED_DATETIME_DELIMITER, warn_buff);
-      break;
-    case MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS:
-      sys_cs->cset->snprintf(
-          sys_cs, warn_buff, sizeof(warn_buff),
-          ER_THD(thd, ER_WARN_DEPRECATED_SUPERFLUOUS_DELIMITER), delim,
-          status.m_deprecation.m_position, argument.ptr(),
-          static_cast<int>(thd->get_stmt_da()->current_row_for_condition()));
-      push_warning(thd, Sql_condition::SL_WARNING,
-                   ER_WARN_DEPRECATED_SUPERFLUOUS_DELIMITER, warn_buff);
-      break;
-    default:
-      break;
-  }
-  status.m_deprecation.m_kind = MYSQL_TIME_STATUS::DEPRECATION::DP_NONE;
 }

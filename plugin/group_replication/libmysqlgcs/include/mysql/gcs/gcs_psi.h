@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 
 #include <my_sys.h>
 #include "mysql/psi/psi_cond.h"
-#include "mysql/psi/psi_memory.h"
 #include "mysql/psi/psi_mutex.h"
 #include "mysql/psi/psi_thread.h"
 
@@ -58,8 +57,7 @@ extern PSI_thread_key key_GCS_THD_Gcs_ext_logger_impl_m_consumer,
     key_GCS_THD_Gcs_xcom_control_m_suspicions_processing_thread,
     key_GCS_THD_Gcs_xcom_network_provider_m_network_provider_tcp_server;
 
-extern PSI_memory_key key_MEM_XCOM_xcom_cache,
-    key_MEM_Gcs_message_data_m_buffer;
+extern PSI_memory_key key_MEM_XCOM_xcom_cache;
 
 /**
   Registers the psi keys for the threads that will be instrumented.

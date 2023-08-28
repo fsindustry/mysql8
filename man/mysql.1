@@ -2,12 +2,12 @@
 .\"     Title: mysql
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/20/2023
+.\"      Date: 09/04/2021
 .\"    Manual: MySQL Database System
-.\"    Source: MySQL 8.1
+.\"    Source: MySQL 8.0
 .\"  Language: English
 .\"
-.TH "MYSQL" "1" "06/20/2023" "MySQL 8\&.1" "MySQL Database System"
+.TH "MYSQL" "1" "09/04/2021" "MySQL 8\&.0" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -246,7 +246,7 @@ displays binary data using hexadecimal notation (0x\fIvalue\fR)\&. This occurs w
 when enabled affects display of all binary strings, including those returned by functions such as
 CHAR()
 and
-UNHEX()\&. The following example demonstrates this using the ASCII code for
+UNHEX()\&. The following example demonistrates this using the ASCII code for
 A
 (65 decimal, 41 hexadecimal):
 .sp
@@ -366,7 +366,7 @@ mysql> \fBSELECT CONVERT(UNHEX(\*(Aq41\*(Aq) USING utf8mb4);\fR
 .\}
 .RE
 .sp
-When
+As of MySQL 8\&.0\&.19, when
 \fBmysql\fR
 operates in interactive mode, this option is enabled by default\&. In addition, output from the
 status
@@ -485,10 +485,11 @@ data structures\&. See
 .\}
 \fB\-\-comments\fR,
 \fB\-c\fR
-Whether to preserve or strip comments in statements sent to the server\&. The default is to preserve them; to strip them, start
-\fBmysql\fR
-with
-\fB\-\-skip\-comments\fR\&.
+Whether to strip or preserve comments in statements sent to the server\&. The default is
+\fB\-\-skip\-comments\fR
+(strip comments), enable with
+\fB\-\-comments\fR
+(preserve comments)\&.
 .if n \{\
 .sp
 .\}
@@ -523,7 +524,7 @@ Comment stripping is deprecated\&. Expect this feature and the options to contro
 Compress all information sent between the client and the server if possible\&. See
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
 .sp
-This option is deprecated\&. Expect it to be removed in a future version of MySQL\&. See
+As of MySQL 8\&.0\&.18, this option is deprecated\&. Expect it be removed in a future version of MySQL\&. See
 the section called \(lqConfiguring Legacy Connection Compression\(rq\&.
 .RE
 .sp
@@ -543,6 +544,8 @@ uncompressed\&.
 .sp
 For more information, see
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
+.sp
+This option was added in MySQL 8\&.0\&.18\&.
 .RE
 .sp
 .RS 4
@@ -844,6 +847,8 @@ command is subsequently used at runtime and specifies a host name argument, that
 option given at
 \fBmysql\fR
 startup to specify a DNS SRV record\&.
+.sp
+This option was added in MySQL 8\&.0\&.22\&.
 .RE
 .sp
 .RS 4
@@ -876,104 +881,6 @@ Execute the statement and quit\&. The default output format is like that produce
 Section\ \&4.2.2.1, \(lqUsing Options on the Command Line\(rq, for some examples\&. With this option,
 \fBmysql\fR
 does not use the history file\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-fido\-register\-factor=\fR\fB\fIvalue\fR\fR
-The factor or factors for which FIDO device registration must be performed\&. This option value must be a single value, or two values separated by commas\&. Each value must be 2 or 3, so the permitted option values are
-\*(Aq2\*(Aq,
-\*(Aq3\*(Aq,
-\*(Aq2,3\*(Aq
-and
-\*(Aq3,2\*(Aq\&.
-.sp
-For example, an account that requires registration for a 3rd authentication factor invokes the
-\fBmysql\fR
-client as follows:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-mysql \-\-user=\fIuser_name\fR \-\-fido\-register\-factor=3
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-An account that requires registration for a 2nd and 3rd authentication factor invokes the
-\fBmysql\fR
-client as follows:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-mysql \-\-user=\fIuser_name\fR \-\-fido\-register\-factor=2,3
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-If registration is successful, a connection is established\&. If there is an authentication factor with a pending registration, a connection is placed into pending registration mode when attempting to connect to the server\&. In this case, disconnect and reconnect with the correct
-\fB\-\-fido\-register\-factor\fR
-value to complete the registration\&.
-.sp
-Registration is a two step process comprising
-\fIinitiate registration\fR
-and
-\fIfinish registration\fR
-steps\&. The initiate registration step executes this statement:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-ALTER USER \fIuser\fR \fIfactor\fR INITIATE REGISTRATION
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-The statement returns a result set containing a 32 byte challenge, the user name, and the relying party ID (see
-authentication_fido_rp_id)\&.
-.sp
-The finish registration step executes this statement:
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
-ALTER USER \fIuser\fR \fIfactor\fR FINISH REGISTRATION SET CHALLENGE_RESPONSE AS \*(Aq\fIauth_string\fR\*(Aq
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-The statement completes the registration and sends the following information to the server as part of the
-\fIauth_string\fR: authenticator data, an optional attestation certificate in X\&.509 format, and a signature\&.
-.sp
-The initiate and registration steps must be performed in a single connection, as the challenge received by the client during the initiate step is saved to the client connection handler\&. Registration would fail if the registration step was performed by a different connection\&. The
-\fB\-\-fido\-register\-factor\fR
-option executes both the initiate and registration steps, which avoids the failure scenario described above and prevents having to execute the
-ALTER USER
-initiate and registration statements manually\&.
-.sp
-The
-\fB\-\-fido\-register\-factor\fR
-option is only available for the
-\fBmysql\fR
-client and MySQL Shell\&. Other MySQL client programs do not support it\&.
-.sp
-For related information, see
-the section called \(lqUsing FIDO Authentication\(rq\&.
 .RE
 .sp
 .RS 4
@@ -1098,24 +1005,7 @@ Section\ \&5.1.11, \(lqServer SQL Modes\(rq)\&.
 .IP \(bu 2.3
 .\}
 \fB\-\-init\-command=str\fR
-Single SQL statement to execute after connecting to the server\&. If auto\-reconnect is enabled, the statement is executed again after reconnection occurs\&. The definition resets existing statements defined by it or
-\fBinit\-command\-add\fR\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-init\-command\-add=str\fR
-Add an additional SQL statement to execute after connecting or reconnecting to the MySQL server\&. It\*(Aqs usable without
-\fB\-\-init\-command\fR
-but has no effect if used before it because
-\fBinit\-command\fR
-resets the list of commands to call\&. Option added in MySQL 8\&.2\&.0\&.
+SQL statement to execute after connecting to the server\&. If auto\-reconnect is enabled, the statement is executed again after reconnection occurs\&.
 .RE
 .sp
 .RS 4
@@ -1216,6 +1106,10 @@ load operations within
 \fBmysql\fR
 also requires that the server permits local loading; see
 Section\ \&6.1.6, \(lqSecurity Considerations for LOAD DATA LOCAL\(rq
+.sp
+The
+\fB\-\-load\-data\-local\-dir\fR
+option was added in MySQL 8\&.0\&.21\&.
 .RE
 .sp
 .RS 4
@@ -1351,7 +1245,7 @@ The buffer size for TCP/IP and socket communication\&. (Default value is 16KB\&.
 The network namespace to use for TCP/IP connections\&. If omitted, the connection uses the default (global) namespace\&. For information about network namespaces, see
 Section\ \&5.1.14, \(lqNetwork Namespace Support\(rq\&.
 .sp
-This option is available only on platforms that implement network namespace support\&.
+This option was added in MySQL 8\&.0\&.22\&. It is available only on platforms that implement network namespace support\&.
 .RE
 .sp
 .RS 4
@@ -1567,67 +1461,6 @@ option\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-\fB\-\-password1[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 1 of the MySQL account used for connecting to the server\&. The password value is optional\&. If not given,
-\fBmysql\fR
-prompts for one\&. If given, there must be
-\fIno space\fR
-between
-\fB\-\-password1=\fR
-and the password following it\&. If no password option is specified, the default is to send no password\&.
-.sp
-Specifying a password on the command line should be considered insecure\&. To avoid giving the password on the command line, use an option file\&. See
-Section\ \&6.1.2.1, \(lqEnd-User Guidelines for Password Security\(rq\&.
-.sp
-To explicitly specify that there is no password and that
-\fBmysql\fR
-should not prompt for one, use the
-\fB\-\-skip\-password1\fR
-option\&.
-.sp
-\fB\-\-password1\fR
-and
-\fB\-\-password\fR
-are synonymous, as are
-\fB\-\-skip\-password1\fR
-and
-\fB\-\-skip\-password\fR\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-password2[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 2 of the MySQL account used for connecting to the server\&. The semantics of this option are similar to the semantics for
-\fB\-\-password1\fR; see the description of that option for details\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-password3[=\fR\fB\fIpass_val\fR\fR\fB]\fR
-The password for multifactor authentication factor 3 of the MySQL account used for connecting to the server\&. The semantics of this option are similar to the semantics for
-\fB\-\-password1\fR; see the description of that option for details\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
 \fB\-\-pipe\fR,
 \fB\-W\fR
 On Windows, connect to the server using a named pipe\&. This option applies only if the server was started with the
@@ -1635,30 +1468,6 @@ named_pipe
 system variable enabled to support named\-pipe connections\&. In addition, the user making the connection must be a member of the Windows group specified by the
 named_pipe_full_access_group
 system variable\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-plugin\-authentication\-kerberos\-client\-mode=\fR\fB\fIvalue\fR\fR
-On Windows, the
-authentication_kerberos_client
-authentication plugin supports this plugin option\&. It provides two possible values that the client user can set at runtime:
-SSPI
-and
-GSSAPI\&.
-.sp
-The default value for the client\-side plugin option uses Security Support Provider Interface (SSPI), which is capable of acquiring credentials from the Windows in\-memory cache\&. Alternatively, the client user can select a mode that supports Generic Security Service Application Program Interface (GSSAPI) through the MIT Kerberos library on Windows\&. GSSAPI is capable of acquiring cached credentials previously generated by using the
-\fBkinit\fR
-command\&.
-.sp
-For more information, see
-Commands for Windows Clients in GSSAPI Mode\&.
 .RE
 .sp
 .RS 4
@@ -2092,7 +1901,6 @@ STRICT
 causes the client to produce a warning at startup and to operate in non\-FIPS mode\&.
 .sp .5v
 .RE
-This option is deprecated\&. Expect it to be removed in a future version of MySQL\&.
 .RE
 .sp
 .RS 4
@@ -2171,27 +1979,8 @@ the section called \(lqMYSQL CLIENT COMMANDS\(rq, discusses tee files further\&.
 \fB\-\-tls\-ciphersuites=\fR\fB\fIciphersuite_list\fR\fR
 The permissible ciphersuites for encrypted connections that use TLSv1\&.3\&. The value is a list of one or more colon\-separated ciphersuite names\&. The ciphersuites that can be named for this option depend on the SSL library used to compile MySQL\&. For details, see
 Section\ \&6.3.2, \(lqEncrypted Connection TLS Protocols and Ciphers\(rq\&.
-.RE
 .sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-\fB\-\-tls\-sni\-servername=\fR\fB\fIserver_name\fR\fR
-When specified, the name is passed to the
-libmysqlclient
-C API library using the
-MYSQL_OPT_TLS_SNI_SERVERNAME
-option of
-mysql_options()\&. The server name is not case\-sensitive\&. To show which server name the client specified for the current session, if any, check the
-Tls_sni_server_name
-status variable\&.
-.sp
-Server Name Indication (SNI) is an extension to the TLS protocol (OpenSSL must be compiled using TLS extensions for this option to function)\&. The MySQL implementation of SNI represents the client\-side only\&.
+This option was added in MySQL 8\&.0\&.16\&.
 .RE
 .sp
 .RS 4
@@ -2325,7 +2114,7 @@ The XML output also uses an XML namespace, as shown here:
 .RS 4
 .\}
 .nf
-$> \fBmysql \-\-xml \-uroot \-e "SHOW VARIABLES LIKE \*(Aqversion%\*(Aq"\fR
+shell> \fBmysql \-\-xml \-uroot \-e "SHOW VARIABLES LIKE \*(Aqversion%\*(Aq"\fR
 <?xml version="1\&.0"?>
 <resultset statement="SHOW VARIABLES LIKE \*(Aqversion%\*(Aq" xmlns:xsi="http://www\&.w3\&.org/2001/XMLSchema\-instance">
 <row>
@@ -2370,6 +2159,8 @@ compression\&.
 .sp
 For more information, see
 Section\ \&4.2.8, \(lqConnection Compression Control\(rq\&.
+.sp
+This option was added in MySQL 8\&.0\&.18\&.
 .RE
 .SH "MYSQL CLIENT COMMANDS"
 .PP
@@ -2418,10 +2209,8 @@ charset   (\eC) Switch to another charset\&. Might be needed for processing
 warnings  (\eW) Show warnings after every statement\&.
 nowarning (\ew) Don\*(Aqt show warnings after every statement\&.
 resetconnection(\ex) Clean session context\&.
-query_attributes Sets string parameters (name1 value1 name2 value2 \&.\&.\&.)
+query_attributes(\e) Sets string parameters (name1 value1 name2 value2 \&.\&.\&.)
 for the next query to pick up\&.
-ssl_session_data_print Serializes the current SSL session data to stdout 
-or file\&.
 For server side help, type \*(Aqhelp contents\*(Aq
 .fi
 .if n \{\
@@ -2979,28 +2768,6 @@ Quote characters are taken as part of the file name itself\&. For best results, 
 .sp -1
 .IP \(bu 2.3
 .\}
-ssl_session_data_print [\fIfile_name\fR]
-.sp
-Fetches, serializes, and optionally stores the session data of a successful connection\&. The optional file name and arguments may be given to specify the file to store serialized session data\&. If omitted, the session data is printed to
-stdout\&.
-.sp
-If the MySQL session is configured for reuse, session data from the file is deserialized and supplied to the
-connect
-command to reconnect\&. When the session is reused successfully, the
-status
-command contains a row showing
-SSL session reused: true
-while the client remains reconnected to the server\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
 status,
 \es
 .sp
@@ -3025,6 +2792,10 @@ system \fIcommand\fR,
 \e! \fIcommand\fR
 .sp
 Execute the given command using your default command interpreter\&.
+.sp
+Prior to MySQL 8\&.0\&.19, the
+system
+command works only in Unix\&. As of 8\&.0\&.19, it also works on Windows\&.
 .RE
 .sp
 .RS 4
@@ -3287,7 +3058,6 @@ l l
 l l
 l l
 l l
-l l
 l l.
 T{
 \C
@@ -3368,12 +3138,6 @@ T{
 \s
 T}:T{
 Seconds of the current time
-T}
-T{
-\T
-T}:T{
-Print an asterisk (*) if the current session is
-              inside a transaction block
 T}
 T{
 \t
@@ -3493,7 +3257,7 @@ option on the command line to
 .RS 4
 .\}
 .nf
-$> \fBmysql \-\-prompt="(\eu@\eh) [\ed]> "\fR
+shell> \fBmysql \-\-prompt="(\eu@\eh) [\ed]> "\fR
 (user@host) [database]>
 .fi
 .if n \{\
@@ -4100,15 +3864,6 @@ SHOW MASTER LOGS
 Lists the binary log files on the server\&. This statement is used as
 part of the procedure described in [purge\-binary\-logs], that shows how
 to determine which logs can be purged\&.
-.fi
-.if n \{\
-.RE
-.\}
-.sp
-.if n \{\
-.RS 4
-.\}
-.nf
 mysql> SHOW BINARY LOGS;
 +\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-+
 | Log_name      | File_size | Encrypted |
@@ -4242,7 +3997,7 @@ ignores Unicode byte order mark (BOM) characters at the beginning of input files
 to change its default character set\&. To do that, invoke
 \fBmysql\fR
 with an option such as
-\fB\-\-default\-character\-set=utf8mb4\fR\&.
+\fB\-\-default\-character\-set=utf8\fR\&.
 .PP
 For more information about batch mode, see
 Section\ \&3.5, \(lqUsing mysql in Batch Mode\(rq\&.
@@ -4489,9 +4244,9 @@ Go to the console window properties, select the font tab, and choose Lucida Cons
 Execute
 \fBmysql\&.exe\fR
 with the
-\fB\-\-default\-character\-set=utf8mb4\fR
+\fB\-\-default\-character\-set=utf8\fR
 (or
-utf8mb3) option\&. This option is necessary because
+utf8mb4) option\&. This option is necessary because
 utf16le
 is one of the character sets that cannot be used as the client character set\&. See
 the section called \(lqImpermissible Client Character Sets\(rq\&.
@@ -4504,9 +4259,9 @@ uses the Windows APIs to communicate with the console using UTF\-16LE, and commu
 To avoid those steps each time you run
 \fBmysql\fR, you can create a shortcut that invokes
 \fBmysql\&.exe\fR\&. The shortcut should set the console font to Lucida Console or some other compatible Unicode font, and pass the
-\fB\-\-default\-character\-set=utf8mb4\fR
+\fB\-\-default\-character\-set=utf8\fR
 (or
-utf8mb3) option to
+utf8mb4) option to
 \fBmysql\&.exe\fR\&.
 .PP
 Alternatively, create a shortcut that only sets the console font, and set the character set in the
@@ -4520,7 +4275,7 @@ file:
 .\}
 .nf
 [mysql]
-default\-character\-set=utf8mb4   # or utf8mb3
+default\-character\-set=utf8
 .fi
 .if n \{\
 .RE
@@ -4719,7 +4474,7 @@ WHERE c1 = 2222\&. For such comparisons, the string value is converted to a numb
 Section\ \&12.3, \(lqType Conversion in Expression Evaluation\(rq), preventing use of the index\&. If safe\-updates mode is enabled, an error occurs\&.
 .RE
 .PP
-These behaviors are included in safe\-updates mode:
+As of MySQL 8\&.0\&.13, safe\-updates mode also includes these behaviors:
 .sp
 .RS 4
 .ie n \{\
@@ -4884,7 +4639,7 @@ command)\&.
 .SH "COPYRIGHT"
 .br
 .PP
-Copyright \(co 1997, 2023, Oracle and/or its affiliates.
+Copyright \(co 1997, 2021, Oracle and/or its affiliates.
 .PP
 This documentation is free software; you can redistribute it and/or modify it only under the terms of the GNU General Public License as published by the Free Software Foundation; version 2 of the License.
 .PP
@@ -4901,22 +4656,22 @@ MySQL Shell 8.0
 .IP " 2." 4
 C API Basic Data Structures
 .RS 4
-\%https://dev.mysql.com/doc/c-api/8.1/en/c-api-data-structures.html
+\%https://dev.mysql.com/doc/c-api/8.0/en/c-api-data-structures.html
 .RE
 .IP " 3." 4
 Multiple Statement Execution Support
 .RS 4
-\%https://dev.mysql.com/doc/c-api/8.1/en/c-api-multiple-queries.html
+\%https://dev.mysql.com/doc/c-api/8.0/en/c-api-multiple-queries.html
 .RE
 .IP " 4." 4
 mysql_change_user()
 .RS 4
-\%https://dev.mysql.com/doc/c-api/8.1/en/mysql-change-user.html
+\%https://dev.mysql.com/doc/c-api/8.0/en/mysql-change-user.html
 .RE
 .IP " 5." 4
 Automatic Reconnection Control
 .RS 4
-\%https://dev.mysql.com/doc/c-api/8.1/en/c-api-auto-reconnect.html
+\%https://dev.mysql.com/doc/c-api/8.0/en/c-api-auto-reconnect.html
 .RE
 .SH "SEE ALSO"
 For more information, please refer to the MySQL Reference Manual,

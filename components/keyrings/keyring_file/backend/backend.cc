@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,17 +57,18 @@ Keyring_file_backend::Keyring_file_backend(const std::string keyring_file_name,
       valid_(false) {
   if (keyring_file_name_.length() == 0) return;
   std::string data;
+  output_vector elements;
   create_file_if_missing(keyring_file_name_);
   {
     /* Read the file */
-    const File_reader file_reader(keyring_file_name_, read_only_, data);
+    File_reader file_reader(keyring_file_name_, read_only_, data);
     if (!file_reader.valid()) return;
   }
 
   /* It is possible that file is empty and that's ok. */
   if (data.length()) {
     /* Read JSON data - format check */
-    const Json_reader json_reader(data);
+    Json_reader json_reader(data);
     if (!json_reader.valid()) return;
 
     /* Cache */
@@ -80,7 +81,7 @@ bool Keyring_file_backend::load_cache(
     keyring_common::operations::Keyring_operations<Keyring_file_backend>
         &operations) {
   if (json_writer_.num_elements() == 0) return false;
-  const Json_reader json_reader(json_writer_.to_string());
+  Json_reader json_reader(json_writer_.to_string());
   if (!json_reader.valid()) return true;
   if (json_reader.num_elements() != json_writer_.num_elements()) return true;
 
@@ -126,7 +127,7 @@ bool Keyring_file_backend::generate(const Metadata &metadata, Data &data,
                                     size_t length) {
   if (!metadata.valid()) return true;
 
-  const std::unique_ptr<unsigned char[]> key(new unsigned char[length]);
+  std::unique_ptr<unsigned char[]> key(new unsigned char[length]);
   if (!key) return true;
   if (!get_random_data(key, length)) return true;
 
@@ -139,7 +140,7 @@ bool Keyring_file_backend::generate(const Metadata &metadata, Data &data,
 
 bool Keyring_file_backend::write_to_file() {
   /* Get JSON string from cache and feed it to file writer */
-  const File_writer file_writer(keyring_file_name_, json_writer_.to_string());
+  File_writer file_writer(keyring_file_name_, json_writer_.to_string());
   return !file_writer.valid();
 }
 

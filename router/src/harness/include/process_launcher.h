@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <mutex>
-#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -44,9 +42,6 @@
 #endif
 
 #include "harness_export.h"
-
-#include "exit_status.h"
-#include "mysql/harness/stdx/expected.h"
 
 namespace mysql_harness {
 #ifdef _WIN32
@@ -96,17 +91,7 @@ class HARNESS_EXPORT SpawnedProcess {
 
   virtual ~SpawnedProcess() = default;
 
-#ifdef _WIN32
-  using handle_type = HANDLE;
-  using id_type = DWORD;
-#else
-  using handle_type = pid_t;
-  using id_type = pid_t;
-#endif
-
   std::string get_cmd_line() const;
-
-  std::string executable() const { return executable_path; }
 
  protected:
   const std::string executable_path;
@@ -145,8 +130,6 @@ class HARNESS_EXPORT ProcessLauncher : public SpawnedProcess {
 #endif
 
  public:
-  using exit_status_type = ExitStatus;
-
   /**
    * Creates a new process and launch it.
    * If redirect_stderr is true, the child's stderr is redirected to the
@@ -199,38 +182,32 @@ class HARNESS_EXPORT ProcessLauncher : public SpawnedProcess {
   /**
    * Kills the child process and returns process' exit code.
    */
-  exit_status_type kill();
-
-  using process_handle_type = SpawnedProcess::handle_type;
-  using process_id_type = SpawnedProcess::id_type;
-
-  /**
-   * Returns the child process id.
-   */
-  process_id_type get_pid() const;
+  int kill();
 
   /**
    * Returns the child process handle.
+   * In Linux this needs to be cast to pid_t, in Windows to cast to HANDLE.
    */
-  process_handle_type get_process_handle() const;
-
-  /**
-   * get exit-code.
-   */
-  stdx::expected<exit_status_type, std::error_code> exit_code();
+  uint64_t get_pid() const;
 
   /**
    * Wait for the child process to exists and returns its exit code.
    * If the child process is already dead, wait() just returns.
-   *
-   * @returns the exit code of the process.
-   * @throws std::runtime_error if process exited with a signal
+   * Returns the exit code of the process.
    */
-
   int wait(std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
 
-  exit_status_type native_wait(
-      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
+  /**
+   * Returns the file descriptor write handle (to write child's stdin).
+   * In Linux this needs to be cast to int, in Windows to cast to HANDLE.
+   */
+  uint64_t get_fd_write() const;
+
+  /**
+   * Returns the file descriptor read handle (to read child's stdout).
+   * In Linux this needs to be cast to int, in Windows to cast to HANDLE.
+   */
+  uint64_t get_fd_read() const;
 
   /**
    * Closes pipe to process' STDIN in order to notify the process that all
@@ -240,8 +217,7 @@ class HARNESS_EXPORT ProcessLauncher : public SpawnedProcess {
 
   enum class ShutdownEvent {
     TERM,  // clean shutdown (ie. SIGTERM on Unix)
-    KILL,  // immediate (and abrupt) shutdown (ie. SIGKILL on Unix)
-    ABRT   // try to generate a stacktrace
+    KILL   // immediate (and abrupt) shutdown (ie. SIGKILL on Unix)
   };
   /**
    * Sends a shutdown event to child process (SIGTERM on Unix, Ctrl+C on
@@ -262,10 +238,7 @@ class HARNESS_EXPORT ProcessLauncher : public SpawnedProcess {
    *
    * @return process exit code.
    */
-  exit_status_type close();
-
-  std::mutex fd_in_mtx_;
-  std::mutex fd_out_mtx_;
+  int close();
 
   bool is_alive;
 };

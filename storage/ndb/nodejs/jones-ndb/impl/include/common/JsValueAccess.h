@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #define NODEJS_ADAPTER_INCLUDE_JSVALUEACCESS_H
 
 #include <cstddef>              // size_t
-#include <node_buffer.h>
 
 using v8::String;
 using v8::Number;
@@ -46,6 +45,8 @@ using v8::TryCatch;
 using v8::Message;
 
 typedef v8::FunctionCallbackInfo<Value> Arguments;
+
+#include "node_buffer.h"
 
 // HasProperty
 template <typename KEY>

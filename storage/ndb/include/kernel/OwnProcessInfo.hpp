@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,13 +25,10 @@
 #ifndef NDB_OWNPROCESSINFO_HPP
 #define NDB_OWNPROCESSINFO_HPP
 
-#include "ndb_types.h"
-
 class ProcessInfo;
-class ndb_sockaddr;
 
 void setOwnProcessInfoAngelPid(Uint32);
-void setOwnProcessInfoServerAddress(ndb_sockaddr * addr);
+void setOwnProcessInfoServerAddress(struct sockaddr * addr);
 void setOwnProcessInfoPort(Uint16);
 
 ProcessInfo * getOwnProcessInfo(Uint16 nodeId);

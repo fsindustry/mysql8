@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.basedir);
 COUNT(@@GLOBAL.basedir)
 1
 1 Expected
-SELECT basedir;
+SELECT basedir = @@SESSION.basedir;
 ERROR 42S22: Unknown column 'basedir' in 'field list'
-Expected error 'Unknown column'
+Expected error 'Readonly variable'

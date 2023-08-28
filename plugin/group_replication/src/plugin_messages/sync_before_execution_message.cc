@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
 
 #include "plugin/group_replication/include/plugin_messages/sync_before_execution_message.h"
 #include "my_dbug.h"
-#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 
 Sync_before_execution_message::Sync_before_execution_message(
     my_thread_id thread_id)
@@ -43,9 +42,6 @@ void Sync_before_execution_message::encode_payload(
 
   uint32 thread_id_aux = static_cast<uint32>(m_thread_id);
   encode_payload_item_int4(buffer, PIT_MY_THREAD_ID, thread_id_aux);
-
-  encode_payload_item_int8(buffer, PIT_SENT_TIMESTAMP,
-                           Metrics_handler::get_current_time());
 }
 
 void Sync_before_execution_message::decode_payload(const unsigned char *buffer,
@@ -61,11 +57,4 @@ void Sync_before_execution_message::decode_payload(const unsigned char *buffer,
 
 my_thread_id Sync_before_execution_message::get_thread_id() {
   return m_thread_id;
-}
-
-uint64_t Sync_before_execution_message::get_sent_timestamp(
-    const unsigned char *buffer, size_t length) {
-  DBUG_TRACE;
-  return Plugin_gcs_message::get_sent_timestamp(buffer, length,
-                                                PIT_SENT_TIMESTAMP);
 }

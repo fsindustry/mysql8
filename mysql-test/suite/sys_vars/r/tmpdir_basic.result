@@ -48,6 +48,6 @@ SELECT COUNT(@@GLOBAL.tmpdir);
 COUNT(@@GLOBAL.tmpdir)
 1
 1 Expected
-SELECT tmpdir;
+SELECT tmpdir = @@SESSION.tmpdir;
 ERROR 42S22: Unknown column 'tmpdir' in 'field list'
-Expected error 'Unknown column'
+Expected error 'Readonly variable'

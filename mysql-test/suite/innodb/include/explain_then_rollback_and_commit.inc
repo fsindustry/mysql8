@@ -1,4 +1,3 @@
---skip_if_hypergraph  # Depends on the query plan.
 --eval EXPLAIN FORMAT=JSON $sql_to_do
 
 BEGIN;

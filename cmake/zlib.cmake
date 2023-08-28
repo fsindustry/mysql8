@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -28,11 +28,10 @@
 # but we need at least version 1.2.11, and that's not available on
 # all the platforms we need to support.
 
-# Security bug fixes required from:
-SET(MIN_ZLIB_VERSION_REQUIRED "1.2.13")
+# With earier versions, several compression tests fail.
+SET(MIN_ZLIB_VERSION_REQUIRED "1.2.11")
 
-
-FUNCTION(FIND_ZLIB_VERSION ZLIB_INCLUDE_DIR)
+MACRO(FIND_ZLIB_VERSION)
   FOREACH(version_part
       ZLIB_VER_MAJOR
       ZLIB_VER_MINOR
@@ -47,23 +46,23 @@ FUNCTION(FIND_ZLIB_VERSION ZLIB_INCLUDE_DIR)
   SET(ZLIB_VERSION "${ZLIB_VER_MAJOR}.${ZLIB_VER_MINOR}.${ZLIB_VER_REVISION}")
   SET(ZLIB_VERSION "${ZLIB_VERSION}" CACHE INTERNAL "ZLIB major.minor.step")
   MESSAGE(STATUS "ZLIB_VERSION (${WITH_ZLIB}) is ${ZLIB_VERSION}")
-  MESSAGE(STATUS "ZLIB_INCLUDE_DIR ${ZLIB_INCLUDE_DIR}")
-ENDFUNCTION(FIND_ZLIB_VERSION)
+ENDMACRO()
 
-FUNCTION(FIND_SYSTEM_ZLIB)
+MACRO (FIND_SYSTEM_ZLIB)
+  # In case we are changing from "bundled" to "system".
+  IF(DEFINED ZLIB_LIBRARY AND ZLIB_LIBRARY STREQUAL zlib)
+    UNSET(ZLIB_LIBRARY)
+    UNSET(ZLIB_LIBRARY CACHE)
+  ENDIF()
   FIND_PACKAGE(ZLIB)
   IF(ZLIB_FOUND)
-    SET(ZLIB_FOUND 1 CACHE INTERNAL "")
-    ADD_LIBRARY(zlib_interface INTERFACE)
-    TARGET_LINK_LIBRARIES(zlib_interface INTERFACE ${ZLIB_LIBRARIES})
-
+    SET(ZLIB_LIBRARY ${ZLIB_LIBRARIES} CACHE INTERNAL "System zlib library")
     IF(NOT ZLIB_INCLUDE_DIR STREQUAL "/usr/include")
-      TARGET_INCLUDE_DIRECTORIES(zlib_interface SYSTEM INTERFACE
-        ${ZLIB_INCLUDE_DIR})
+      # In case of -DCMAKE_PREFIX_PATH=</path/to/custom/zlib>
+      INCLUDE_DIRECTORIES(BEFORE SYSTEM ${ZLIB_INCLUDE_DIR})
     ENDIF()
-    FIND_ZLIB_VERSION(${ZLIB_INCLUDE_DIR})
   ENDIF()
-ENDFUNCTION(FIND_SYSTEM_ZLIB)
+ENDMACRO()
 
 MACRO (RESET_ZLIB_VARIABLES)
   # Reset whatever FIND_PACKAGE may have left behind.
@@ -82,27 +81,18 @@ MACRO (RESET_ZLIB_VARIABLES)
   UNSET(FIND_PACKAGE_MESSAGE_DETAILS_ZLIB CACHE)
 ENDMACRO()
 
-SET(ZLIB_VERSION_DIR "zlib-1.2.13")
-SET(BUNDLED_ZLIB_PATH ${CMAKE_SOURCE_DIR}/extra/zlib/${ZLIB_VERSION_DIR})
-
-FUNCTION(MYSQL_USE_BUNDLED_ZLIB)
+MACRO (MYSQL_USE_BUNDLED_ZLIB)
   RESET_ZLIB_VARIABLES()
 
-  ADD_LIBRARY(zlib_interface INTERFACE)
-  TARGET_LINK_LIBRARIES(zlib_interface INTERFACE zlib)
-  TARGET_INCLUDE_DIRECTORIES(zlib_interface SYSTEM BEFORE INTERFACE
-    ${CMAKE_SOURCE_DIR}/extra/zlib/${ZLIB_VERSION_DIR}
-    ${CMAKE_BINARY_DIR}/extra/zlib/${ZLIB_VERSION_DIR}
+  SET(ZLIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/extra/zlib)
+  SET(ZLIB_LIBRARY zlib CACHE INTERNAL "Bundled zlib library")
+  SET(WITH_ZLIB "bundled" CACHE STRING "Use bundled zlib")
+  INCLUDE_DIRECTORIES(BEFORE SYSTEM
+    ${CMAKE_SOURCE_DIR}/extra/zlib
+    ${CMAKE_BINARY_DIR}/extra/zlib
     )
-
-  FIND_ZLIB_VERSION(${BUNDLED_ZLIB_PATH})
-
-  ADD_SUBDIRECTORY(extra/zlib/${ZLIB_VERSION_DIR})
-
-  # Add support for bundled curl.
-  ADD_LIBRARY(ZLIB::ZLIB ALIAS zlib_interface)
-
-ENDFUNCTION(MYSQL_USE_BUNDLED_ZLIB)
+  ADD_SUBDIRECTORY(extra/zlib)
+ENDMACRO()
 
 
 MACRO (MYSQL_CHECK_ZLIB)
@@ -123,9 +113,7 @@ MACRO (MYSQL_CHECK_ZLIB)
     RESET_ZLIB_VARIABLES()
     MESSAGE(FATAL_ERROR "WITH_ZLIB must be bundled or system")
   ENDIF()
-
-  ADD_LIBRARY(ext::zlib ALIAS zlib_interface)
-
+  FIND_ZLIB_VERSION()
   IF(ZLIB_VERSION VERSION_LESS MIN_ZLIB_VERSION_REQUIRED)
     MESSAGE(FATAL_ERROR
       "ZLIB version must be at least ${MIN_ZLIB_VERSION_REQUIRED}, "

@@ -1,9 +1,5 @@
 var common_stmts = require("common_statements");
 
-if (mysqld.global.session_count === undefined) {
-  mysqld.global.session_count = 0;
-}
-
 var options = {
   cluster_type: "gr",
 
@@ -19,26 +15,22 @@ var options = {
       mysqld.global.clusterset_data
           .clusters[mysqld.global.clusterset_data.this_cluster_id]
           .gr_uuid,
-  current_instance_attributes:
-      mysqld.global.clusterset_data
-          .clusters[mysqld.global.clusterset_data.this_cluster_id]
-          .nodes[mysqld.global.clusterset_data.this_node_id]
-          .attributes,
 };
 
 var common_responses = common_stmts.prepare_statement_responses(
     [
+      "router_set_session_options",
       "router_set_gr_consistency_level",
       "router_select_schema_version",
       "router_select_cluster_type_v2",
-      "router_select_current_instance_attributes",
       "router_count_clusters_v2",
       "router_check_member_state",
       "router_select_members_count",
+      "router_select_replication_group_name",
       "router_show_cipher_status",
+      "router_select_cluster_instances_v2",
       "router_start_transaction",
       "router_commit",
-      "router_rollback",
 
       // account verification
       //"router_select_metadata_v2_gr",
@@ -58,6 +50,7 @@ var common_responses = common_stmts.prepare_statement_responses(
 
 var common_responses_regex = common_stmts.prepare_statement_responses_regex(
     [
+      "router_insert_into_routers",
       "router_create_user_if_not_exists",
       "router_grant_on_metadata_db",
       "router_grant_on_pfs_db",
@@ -68,12 +61,6 @@ var common_responses_regex = common_stmts.prepare_statement_responses_regex(
       "router_clusterset_cluster_info_by_name_unknown",
     ],
     options);
-
-var router_set_session_options =
-    common_stmts.get("router_set_session_options", options);
-
-var router_insert_into_routers =
-    common_stmts.get("router_insert_into_routers", options);
 
 ({
   handshake: {
@@ -86,29 +73,10 @@ var router_insert_into_routers =
     var res;
     if (common_responses.hasOwnProperty(stmt)) {
       return common_responses[stmt];
-    } else if (stmt === router_set_session_options.stmt) {
-      mysqld.global.session_count++;
-      return router_set_session_options;
     } else if (
         (res = common_stmts.handle_regex_stmt(stmt, common_responses_regex)) !==
         undefined) {
       return res;
-    } else if (stmt.match(router_insert_into_routers.stmt_regex)) {
-      var is_primary = options.clusterset_data
-                           .clusters[options.clusterset_data.this_cluster_id]
-                           .role === "PRIMARY";
-      if (is_primary) {
-        return {"ok": {"last_insert_id": 1}};
-      } else {
-        return {
-          error: {
-            code: 1290,
-            sql_state: "HY001",
-            message:
-                "The MySQL server is running with the --super-read-only option so it cannot execute this statement"
-          }
-        }
-      }
     } else {
       return common_stmts.unknown_statement_response(stmt);
     }

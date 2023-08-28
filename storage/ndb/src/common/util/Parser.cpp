@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -48,7 +48,7 @@ ParserImpl::ParserImpl(const DummyRow* rows, InputStream& in)
 ParserImpl::~ParserImpl() {}
 
 static bool Empty(const char* str) {
-  if (str == nullptr) return true;
+  if (str == 0) return true;
   const int len = (int)strlen(str);
   if (len == 0) return false;
   for (int i = 0; i < len; i++)
@@ -56,10 +56,10 @@ static bool Empty(const char* str) {
   return true;
 }
 
-static bool Eof(const char* str) { return str == nullptr; }
+static bool Eof(const char* str) { return str == 0; }
 
 static void trim(char* str) {
-  if (str == nullptr) return;
+  if (str == NULL) return;
   int len = (int)strlen(str);
   for (len--; str[len] == '\n' || str[len] == ' ' || str[len] == '\t'; len--)
     str[len] = 0;
@@ -83,7 +83,7 @@ static bool split(char* buf, char** name, char** value) {
     }
   }
 
-  if (*value == nullptr) {
+  if (*value == 0) {
     return false;
   }
   (*value)[0] = 0;
@@ -100,9 +100,9 @@ bool ParserImpl::run(Context* ctx, const class Properties** pDst,
                      volatile bool* stop) const {
   input.set_mutex(ctx->m_mutex);
 
-  *pDst = nullptr;
+  *pDst = 0;
   bool ownStop = false;
-  if (stop == nullptr) stop = &ownStop;
+  if (stop == 0) stop = &ownStop;
 
   ctx->m_aliasUsed.clear();
 
@@ -129,7 +129,7 @@ bool ParserImpl::run(Context* ctx, const class Properties** pDst,
 
   trim(ctx->m_currentToken);
   ctx->m_currentCmd = matchCommand(ctx, ctx->m_currentToken, m_rows);
-  if (ctx->m_currentCmd == nullptr) {
+  if (ctx->m_currentCmd == 0) {
     ctx->m_status = Parser<Dummy>::UnknownCommand;
     return false;
   }
@@ -190,11 +190,11 @@ const ParserImpl::DummyRow* ParserImpl::matchCommand(Context* ctx,
                                                      const DummyRow rows[]) {
   const char* name = buf;
   const DummyRow* tmp = &rows[0];
-  while (tmp->name != nullptr && name != nullptr) {
+  while (tmp->name != 0 && name != 0) {
     if (strcmp(tmp->name, name) == 0) {
       if (tmp->type == DummyRow::Cmd) return tmp;
       if (tmp->type == DummyRow::CmdAlias) {
-        if (ctx != nullptr) ctx->m_aliasUsed.push_back(tmp);
+        if (ctx != 0) ctx->m_aliasUsed.push_back(tmp);
         name = tmp->realName;
         tmp = &rows[0];
         continue;
@@ -202,14 +202,14 @@ const ParserImpl::DummyRow* ParserImpl::matchCommand(Context* ctx,
     }
     tmp++;
   }
-  return nullptr;
+  return 0;
 }
 
 const ParserImpl::DummyRow* ParserImpl::matchArg(Context* ctx, const char* buf,
                                                  const DummyRow rows[]) {
   const char* name = buf;
   const DummyRow* tmp = &rows[0];
-  while (tmp->name != nullptr) {
+  while (tmp->name != 0) {
     const DummyRow::Type t = tmp->type;
     if (t != DummyRow::Arg && t != DummyRow::ArgAlias &&
         t != DummyRow::CmdAlias)
@@ -219,7 +219,7 @@ const ParserImpl::DummyRow* ParserImpl::matchArg(Context* ctx, const char* buf,
         return tmp;
       }
       if (tmp->type == DummyRow::ArgAlias) {
-        if (ctx != nullptr) ctx->m_aliasUsed.push_back(tmp);
+        if (ctx != 0) ctx->m_aliasUsed.push_back(tmp);
         name = tmp->realName;
         tmp = &rows[0];
         continue;
@@ -229,7 +229,7 @@ const ParserImpl::DummyRow* ParserImpl::matchArg(Context* ctx, const char* buf,
     }
     tmp++;
   }
-  return nullptr;
+  return 0;
 }
 
 bool ParserImpl::parseArg(Context* ctx, char* buf, const DummyRow* rows,
@@ -246,7 +246,7 @@ bool ParserImpl::parseArg(Context* ctx, char* buf, const DummyRow* rows,
     name++;
   }
   const DummyRow* arg = matchArg(ctx, name, rows);
-  if (arg == nullptr) {
+  if (arg == 0) {
     ctx->m_status = Parser<Dummy>::UnknownArgument;
     return false;
   }
@@ -299,7 +299,7 @@ bool ParserImpl::parseArg(Context* ctx, char* buf, const DummyRow* rows,
 
 bool ParserImpl::checkMandatory(Context* ctx, const Properties* props) {
   const DummyRow* tmp = &ctx->m_currentCmd[1];
-  while (tmp->name != nullptr && tmp->type == DummyRow::Arg) {
+  while (tmp->name != 0 && tmp->type == DummyRow::Arg) {
     if (tmp->argRequired == ParserRow<Dummy>::Mandatory &&
         !props->contains(tmp->name)) {
       ctx->m_status = Parser<Dummy>::MissingMandatoryArgument;

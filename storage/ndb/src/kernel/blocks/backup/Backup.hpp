@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,17 +38,17 @@
 #include <SignalCounter.hpp>
 #include <blocks/mutexes.hpp>
 
+#include <NdbTCP.h>
 #include <NdbTick.h>
 #include <Array.hpp>
 #include <Mutex.hpp>
 
 #include <signaldata/RedoStateRep.hpp>
+#include "../dblqh/Dblqh.hpp"
 #include <signaldata/BackupSignalData.hpp>
-#include "kernel/signaldata/FsOpenReq.hpp"
 
 #define JAM_FILE_ID 474
 
-class Dblqh;
 
 /**
  * Backup - This block manages database backup and restore
@@ -211,9 +211,10 @@ private:
   void defineBackupMutex_locked(Signal* signal, Uint32 ptrI,Uint32 retVal);
   void dictCommitTableMutex_locked(Signal* signal, Uint32 ptrI,Uint32 retVal);
   void startDropTrig_synced(Signal* signal, Uint32 ptrI, Uint32 retVal);
-  Uint32 validateEncryptionPassword(const EncryptionKeyMaterial* epd);
+  Uint32 validateEncryptionPassword(const EncryptionPasswordData* epd);
 
- public:
+
+public:
   struct Node {
     Uint32 nodeId;
     Uint32 alive;
@@ -919,7 +920,7 @@ private:
     }
 
     bool m_encrypted_file;
-    EncryptionKeyMaterial m_encryption_password_data;
+    EncryptionPasswordData m_encryption_password_data;
   };
   friend struct BackupRecord;
   typedef Ptr<BackupRecord> BackupRecordPtr;
@@ -972,14 +973,11 @@ private:
    * look for the table with the correct backupPtr.
    */
   Uint32 * c_tableMap;
-  Uint32 c_tableMapSize;
   NodeId c_masterNodeId;
   Node_list c_nodes;
   NdbNodeBitmask c_aliveNodes;
   BackupRecord_dllist c_backups;
   Config c_defaults;
-
-  bool c_encrypted_filesystem;
 
   /*
     Variables that control checkpoint to disk speed
@@ -1324,7 +1322,7 @@ private:
   */
   /* Init at start of backup, timers etc... */
   void initReportStatus(Signal* signal, BackupRecordPtr ptr);
-  /* Check timers for reporting at certain points */
+  /* Sheck timers for reporting at certain points */
   void checkReportStatus(Signal* signal, BackupRecordPtr ptr);
   /* Send backup status, invoked either periodically, or explicitly */
   void reportStatus(Signal* signal, BackupRecordPtr ptr,

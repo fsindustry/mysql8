@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -233,7 +233,7 @@ static int copy_events(Ndb *ndb)
 	  DBUG_RETURN(-1);
 	}
 	trans->close();
-	NdbSleep_MilliSleep(100); // sleep before retrying
+	NdbSleep_MilliSleep(100); // sleep before retying
       } while(1);
     } // for
     if (error)
@@ -264,7 +264,7 @@ struct my_option my_long_options[] =
 {
   NDB_STD_OPTS(""),
   { "database", 'd', "Name of database table is in",
-    &_dbname, &_dbname, 0,
+    (uchar**) &_dbname, (uchar**) &_dbname, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };

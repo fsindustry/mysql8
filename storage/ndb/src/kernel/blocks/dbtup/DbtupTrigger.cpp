@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -190,7 +190,7 @@ Dbtup::execCREATE_TRIG_IMPL_REQ(Signal* signal)
   else
   {
     SegmentedSectionPtr ptr;
-    ndbrequire(handle.getSection(ptr, CreateTrigImplReq::ATTRIBUTE_MASK_SECTION));
+    handle.getSection(ptr, CreateTrigImplReq::ATTRIBUTE_MASK_SECTION);
     ndbrequire(ptr.sz == mask.getSizeInWords());
     ::copy(mask.rep.data, ptr);
   }
@@ -1994,7 +1994,8 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 			   &tableDescriptor[regTabPtr->readKeyArray].tabDescr,
 			   regTabPtr->noOfKeyAttr,
 			   keyBuffer,
-			   ZATTR_BUFFER_SIZE);
+			   ZATTR_BUFFER_SIZE,
+			   false);
   ndbrequire(ret >= 0);
   noPrimKey= ret;
   
@@ -2070,7 +2071,8 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 			     &readBuffer[0],
 			     numAttrsToRead,
 			     afterBuffer,
-			     ZATTR_BUFFER_SIZE);
+			     ZATTR_BUFFER_SIZE,
+			     false);
     ndbrequire(ret >= 0);
     noAfterWords= ret;
   } else {
@@ -2108,7 +2110,8 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 			     &readBuffer[0],
 			     numAttrsToRead,
 			     beforeBuffer,
-			     ZATTR_BUFFER_SIZE);
+			     ZATTR_BUFFER_SIZE,
+			     false);
     req_struct->m_tuple_ptr= save;
     ndbrequire(ret >= 0);
     noBeforeWords = ret;

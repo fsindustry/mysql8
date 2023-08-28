@@ -1,7 +1,7 @@
 include/group_replication.inc [rpl_server_count=3]
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 
 ############################################################
@@ -9,9 +9,6 @@ Note	####	Storing MySQL user name or password information in the connection meta
 #    3600 seconds.
 [connection server1]
 SET GLOBAL group_replication_member_expel_timeout = 3600;
-set session sql_log_bin=0;
-call mtr.add_suppression("Old incarnation found while trying to add node*.*");
-set session sql_log_bin=1;
 [connection server2]
 SET GLOBAL group_replication_member_expel_timeout = 3600;
 [connection server3]
@@ -24,7 +21,6 @@ call mtr.add_suppression("Error connecting to all peers. Member join failed. Loc
 call mtr.add_suppression("Unable to start MySQL Network Provider*.*");
 call mtr.add_suppression("Timeout while waiting for the group communication engine to be ready*.*");
 call mtr.add_suppression("The group communication engine is not ready for the member to join*.*");
-call mtr.add_suppression(".*Failed to accept a MySQL connection for Group Replication. Group Replication plugin has an ongoing exclusive operation, like START, STOP or FORCE MEMBERS.*");
 set session sql_log_bin=1;
 
 ############################################################

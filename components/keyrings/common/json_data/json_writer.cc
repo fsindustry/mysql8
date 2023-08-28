@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -131,8 +131,8 @@ bool Json_writer::remove_element(const meta::Metadata &metadata,
 
   for (rapidjson::Value::ConstValueIterator it = elements.Begin();
        it != elements.End();) {
-    const meta::Metadata current_metadata((*it)["data_id"].Get<std::string>(),
-                                          (*it)["user"].Get<std::string>());
+    meta::Metadata current_metadata((*it)["data_id"].Get<std::string>(),
+                                    (*it)["user"].Get<std::string>());
     if (metadata == current_metadata) {
       it = elements.Erase(it);  // Erase will move iterator to next position
       retval = false;

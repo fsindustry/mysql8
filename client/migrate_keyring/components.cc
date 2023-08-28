@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,7 +43,7 @@ registry_type_t *components_registry = nullptr;
 dynamic_loader_type_t *components_dynamic_loader = nullptr;
 
 void init_components_subsystem() {
-  minimal_chassis_init((&components_registry), nullptr);
+  minimal_chassis_init((&components_registry), NULL);
   components_registry->acquire(
       "dynamic_loader",
       reinterpret_cast<my_h_service *>(&components_dynamic_loader));
@@ -52,7 +52,7 @@ void init_components_subsystem() {
 void deinit_components_subsystem() {
   components_registry->release(
       reinterpret_cast<my_h_service>(components_dynamic_loader));
-  minimal_chassis_deinit(components_registry, nullptr);
+  minimal_chassis_deinit(components_registry, NULL);
 }
 
 Keyring_component_load::Keyring_component_load(const std::string component_name,
@@ -67,7 +67,7 @@ Keyring_component_load::Keyring_component_load(const std::string component_name,
   log_debug << "Loading: " << component_path_ << std::endl;
 
   const char *urn[] = {component_path_.c_str()};
-  const bool load_status = dynamic_loader_->load(urn, 1);
+  bool load_status = dynamic_loader_->load(urn, 1);
   if (load_status)
     log_error << "Failed to load " << type_ << " keyring: " << component_path_
               << std::endl;
@@ -81,7 +81,7 @@ Keyring_component_load::~Keyring_component_load() {
   if (ok_) {
     const char *urn[] = {component_path_.c_str()};
     log_debug << "Unloading: " << component_path_ << std::endl;
-    const bool load_status = dynamic_loader_->unload(urn, 1);
+    bool load_status = dynamic_loader_->unload(urn, 1);
     if (load_status)
       log_error << "Failed to unload " << type_
                 << " keyring: " << component_path_ << std::endl;
@@ -107,8 +107,8 @@ Keyring_services::Keyring_services(const std::string implementation_name,
 
   if (keyring_load_service_->load(
           Options::s_component_dir,
-          instance_path.length() ? instance_path.c_str() : nullptr) != 0) {
-    const std::string message("Failed to initialize keyring");
+          instance_path.length() ? instance_path.c_str() : nullptr) == true) {
+    std::string message("Failed to initialize keyring");
     log_error << message << std::endl;
     return;
   }
@@ -189,7 +189,7 @@ Keyring_migrate::Keyring_migrate(Source_keyring_services &src,
     return;
   }
   auto iterator = src_.metadata_iterator();
-  if (iterator->init(&iterator_) != 0) {
+  if (iterator->init(&iterator_) == true) {
     log_error << "Error creating source keyring iterator" << std::endl;
     return;
   }
@@ -199,14 +199,14 @@ Keyring_migrate::Keyring_migrate(Source_keyring_services &src,
 bool Keyring_migrate::lock_source_keyring() {
   if (Options::s_online_migration == false) return true;
   if (!mysql_connection_.ok()) return false;
-  const std::string lock_statement("SET GLOBAL KEYRING_OPERATIONS=0");
+  std::string lock_statement("SET GLOBAL KEYRING_OPERATIONS=0");
   return mysql_connection_.execute(lock_statement);
 }
 
 bool Keyring_migrate::unlock_source_keyring() {
   if (Options::s_online_migration == false || !mysql_connection_.ok())
     return true;
-  const std::string unlock_statement("SET GLOBAL KEYRING_OPERATIONS=1");
+  std::string unlock_statement("SET GLOBAL KEYRING_OPERATIONS=1");
   return mysql_connection_.execute(unlock_statement);
 }
 
@@ -233,15 +233,15 @@ bool Keyring_migrate::migrate_keys() {
     auth_id_length = 0;
     /* Fetch length */
     if (metadata_iterator->get_length(iterator_, &data_id_length,
-                                      &auth_id_length) != 0) {
+                                      &auth_id_length) == true) {
       log_error << "Could not fetch next available key content from keyring"
                 << std::endl;
       retval = false;
       break;
     }
 
-    const std::unique_ptr<char[]> data_id(new char[data_id_length + 1]);
-    const std::unique_ptr<char[]> auth_id(new char[auth_id_length + 1]);
+    std::unique_ptr<char[]> data_id(new char[data_id_length + 1]);
+    std::unique_ptr<char[]> auth_id(new char[auth_id_length + 1]);
 
     if (data_id.get() == nullptr || auth_id.get() == nullptr) {
       log_error << "Failed to allocated required memory for data_id and auth_id"
@@ -251,7 +251,7 @@ bool Keyring_migrate::migrate_keys() {
     }
     /* Fetch metadata of next available key */
     if (metadata_iterator->get(iterator_, data_id.get(), data_id_length + 1,
-                               auth_id.get(), auth_id_length + 1) != 0) {
+                               auth_id.get(), auth_id_length + 1) == true) {
       log_error << "Could not fetch next available key content from keyring"
                 << std::endl;
       retval = false;
@@ -260,8 +260,7 @@ bool Keyring_migrate::migrate_keys() {
 
     /* Fetch key details */
     my_h_keyring_reader_object reader_object = nullptr;
-    const bool status =
-        reader->init(data_id.get(), auth_id.get(), &reader_object);
+    bool status = reader->init(data_id.get(), auth_id.get(), &reader_object);
 
     if (status == true) {
       log_error << "Keyring reported error" << std::endl;
@@ -279,14 +278,15 @@ bool Keyring_migrate::migrate_keys() {
 
     auto cleanup_guard = create_scope_guard([&] {
       if (reader_object != nullptr) {
-        if (reader->deinit(reader_object) != 0)
+        if (reader->deinit(reader_object) == true)
           log_error << "Failed to deallocated reader_object" << std::endl;
       }
       reader_object = nullptr;
     });
 
     size_t data_size, data_type_size;
-    if (reader->fetch_length(reader_object, &data_size, &data_type_size) != 0) {
+    if (reader->fetch_length(reader_object, &data_size, &data_type_size) ==
+        true) {
       log_warning << "Could not find data pointed by data_id: " << data_id.get()
                   << ", auth_id: " << auth_id.get() << ". Skipping"
                   << std::endl;
@@ -305,10 +305,8 @@ bool Keyring_migrate::migrate_keys() {
       continue;
     }
 
-    const std::unique_ptr<unsigned char[]> data_buffer(
-        new unsigned char[data_size]);
-    const std::unique_ptr<char[]> data_type_buffer(
-        new char[data_type_size + 1]);
+    std::unique_ptr<unsigned char[]> data_buffer(new unsigned char[data_size]);
+    std::unique_ptr<char[]> data_type_buffer(new char[data_type_size + 1]);
 
     if (data_buffer.get() == nullptr || data_type_buffer.get() == nullptr) {
       log_error << "Failed to allocated required memory for data pointed by "
@@ -324,7 +322,7 @@ bool Keyring_migrate::migrate_keys() {
 
     if (reader->fetch(reader_object, data_buffer.get(), data_size, &data_size,
                       data_type_buffer.get(), data_type_size + 1,
-                      &data_type_size) != 0) {
+                      &data_type_size) == true) {
       log_warning << "Could not find data pointed by data_id: " << data_id.get()
                   << ", auth_id: " << auth_id.get() << ". Skipping"
                   << std::endl;
@@ -334,7 +332,7 @@ bool Keyring_migrate::migrate_keys() {
 
     /* Write to destination keyring */
     if (data_size > 0 && data_type_size > 0) {
-      const bool write_status =
+      bool write_status =
           writer->store(data_id.get(), auth_id.get(), data_buffer.get(),
                         data_size, data_type_buffer.get());
       memset(data_buffer.get(), 0, data_size);
@@ -353,7 +351,7 @@ bool Keyring_migrate::migrate_keys() {
     ++migrated_count;
   }
 
-  if (metadata_iterator->deinit(iterator_) != 0) {
+  if (metadata_iterator->deinit(iterator_) == true) {
     log_error << "Failed to deinitialize source iterator" << std::endl;
     retval = false;
   }

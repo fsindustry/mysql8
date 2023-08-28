@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,13 +25,14 @@
 #include <sys/types.h>
 
 #include "lex_string.h"
+#include "m_ctype.h"
+#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "my_sys.h"
-#include "mysql/components/services/bits/psi_error_bits.h"
+#include "mysql/components/services/psi_error_bits.h"
 #include "mysql/psi/mysql_error.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"     // ER_*
 #include "sql/derror.h"       // ER_THD
 #include "sql/item.h"         // Item
@@ -40,7 +41,6 @@
 #include "sql/sql_class.h"    // THD
 #include "sql/sql_lex.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 
 struct MEM_ROOT;
 
@@ -109,7 +109,7 @@ void Sql_cmd_common_signal::eval_defaults(THD *thd, Sql_condition *cond) {
   assert(cond);
 
   const char *sqlstate;
-  const bool set_defaults = (m_cond != nullptr);
+  bool set_defaults = (m_cond != nullptr);
 
   if (set_defaults) {
     /*
@@ -206,7 +206,7 @@ static bool assign_fixed_string(MEM_ROOT *mem_root, CHARSET_INFO *dst_cs,
 static int assign_condition_item(MEM_ROOT *mem_root, const char *name, THD *thd,
                                  Item *set, String *ci) {
   char str_buff[(64 + 1) * 4]; /* Room for a null terminated UTF8 String 64 */
-  String str_value(str_buff, sizeof(str_buff), &my_charset_utf8mb3_bin);
+  String str_value(str_buff, sizeof(str_buff), &my_charset_utf8_bin);
   String *str;
   bool truncated;
 
@@ -218,8 +218,7 @@ static int assign_condition_item(MEM_ROOT *mem_root, const char *name, THD *thd,
   }
 
   str = set->val_str(&str_value);
-  truncated =
-      assign_fixed_string(mem_root, &my_charset_utf8mb3_bin, 64, ci, str);
+  truncated = assign_fixed_string(mem_root, &my_charset_utf8_bin, 64, ci, str);
   if (truncated) {
     if (thd->is_strict_mode()) {
       thd->raise_error_printf(ER_COND_ITEM_TOO_LONG, name);
@@ -239,7 +238,7 @@ int Sql_cmd_common_signal::eval_signal_informations(THD *thd,
     String Sql_condition::*m_member;
   };
 
-  static const cond_item_map map[] = {
+  static cond_item_map map[] = {
       {CIN_CLASS_ORIGIN, &Sql_condition::m_class_origin},
       {CIN_SUBCLASS_ORIGIN, &Sql_condition::m_subclass_origin},
       {CIN_CONSTRAINT_CATALOG, &Sql_condition::m_constraint_catalog},
@@ -306,7 +305,7 @@ int Sql_cmd_common_signal::eval_signal_informations(THD *thd,
     bool truncated;
     String utf8_text;
     str = set->val_str(&str_value);
-    truncated = assign_fixed_string(thd->mem_root, &my_charset_utf8mb3_bin, 128,
+    truncated = assign_fixed_string(thd->mem_root, &my_charset_utf8_bin, 128,
                                     &utf8_text, str);
     if (truncated) {
       if (thd->is_strict_mode()) {
@@ -335,7 +334,7 @@ int Sql_cmd_common_signal::eval_signal_informations(THD *thd,
       thd->raise_error_printf(ER_WRONG_VALUE_FOR_VAR, "MYSQL_ERRNO", "NULL");
       goto end;
     }
-    const longlong code = set->val_int();
+    longlong code = set->val_int();
     if ((code <= 0) || (code > MAX_MYSQL_ERRNO)) {
       str = set->val_str(&str_value);
       thd->raise_error_printf(ER_WRONG_VALUE_FOR_VAR, "MYSQL_ERRNO",

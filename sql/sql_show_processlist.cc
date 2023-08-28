@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,11 +20,12 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <stddef.h>
-
 #include "sql/sql_show_processlist.h"
 
+#include <stddef.h>
+
 #include "lex_string.h"
+#include "m_string.h"  // STRING_WITH_LEN
 #include "sql/auth/auth_acls.h"
 #include "sql/debug_sync.h"
 #include "sql/item_cmpfunc.h"  // Item_func_like
@@ -38,12 +39,8 @@
 #include "sql/sql_parse.h"         // check_table_access
 #include "sql/strfunc.h"
 #include "sql_string.h"
-#include "string_with_len.h"
 
-/**
-  Implement SHOW PROCESSLIST by using performance schema.processlist
-*/
-bool pfs_processlist_enabled = false;
+extern bool pfs_processlist_enabled;
 
 static const LEX_CSTRING field_id = {STRING_WITH_LEN("ID")};
 static const LEX_CSTRING alias_id = {STRING_WITH_LEN("Id")};
@@ -128,7 +125,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   }
 
   /* Id, User, Host, db, Command, Time, State */
-  PT_select_item_list *item_list = new (thd->mem_root) PT_select_item_list(pos);
+  PT_select_item_list *item_list = new (thd->mem_root) PT_select_item_list();
   if (item_list == nullptr) return true;
 
   if (add_expression(pos, thd, item_list, field_id, alias_id)) return true;
@@ -146,7 +143,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
       new (thd->mem_root) PTI_simple_ident_ident(pos, field_info);
   if (ident_info == nullptr) return true;
 
-  /* Info length is either "100" or "1024" depending on verbose */
+  /* Info length is either "25" or "100" depending on verbose */
   Item_int *item_info_len = new (thd->mem_root) Item_int(pos, info_len);
   if (item_info_len == nullptr) return true;
 
@@ -183,7 +180,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
 
   PT_table_factor_table_ident *table_factor_processlist =
       new (thd->mem_root) PT_table_factor_table_ident(
-          pos, table_ident_processlist, nullptr, NULL_CSTR, nullptr);
+          table_ident_processlist, nullptr, NULL_CSTR, nullptr);
   if (table_factor_processlist == nullptr) return true;
 
   Mem_root_array_YY<PT_table_reference *> table_reference_list;
@@ -199,11 +196,11 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   */
   PT_query_primary *query_specification =
       new (thd->mem_root) PT_query_specification(
-          pos, options, item_list, table_reference_list, where_clause);
+          options, item_list, table_reference_list, where_clause);
   if (query_specification == nullptr) return true;
 
   PT_query_expression *query_expression =
-      new (thd->mem_root) PT_query_expression(pos, query_specification);
+      new (thd->mem_root) PT_query_expression(query_specification);
   if (query_expression == nullptr) return true;
 
   PT_subquery *sub_query =
@@ -215,7 +212,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
 
   /* ... AS show_processlist */
   PT_derived_table *derived_table = new (thd->mem_root)
-      PT_derived_table(pos, false, sub_query, table_processlist, &column_names);
+      PT_derived_table(false, sub_query, table_processlist, &column_names);
   if (derived_table == nullptr) return true;
 
   Mem_root_array_YY<PT_table_reference *> table_reference_list1;
@@ -227,8 +224,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
       new (thd->mem_root) Item_asterisk(pos, nullptr, nullptr);
   if (ident_star == nullptr) return true;
 
-  PT_select_item_list *item_list1 =
-      new (thd->mem_root) PT_select_item_list(pos);
+  PT_select_item_list *item_list1 = new (thd->mem_root) PT_select_item_list();
   if (item_list1 == nullptr) return true;
   item_list1->push_back(ident_star);
 
@@ -238,11 +234,11 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   */
   PT_query_specification *query_specification2 =
       new (thd->mem_root) PT_query_specification(
-          pos, options, item_list1, table_reference_list1, nullptr);
+          options, item_list1, table_reference_list1, nullptr);
   if (query_specification2 == nullptr) return true;
 
   PT_query_expression *query_expression2 =
-      new (thd->mem_root) PT_query_expression(pos, query_specification2);
+      new (thd->mem_root) PT_query_expression(query_specification2);
   if (query_expression2 == nullptr) return true;
 
   LEX *lex = thd->lex;
@@ -251,6 +247,6 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   assert(!thd->is_error());
 
   if (query_expression2->contextualize(&pc)) return true;
-  if (pc.finalize_query_expression()) return true;
+
   return false;
 }

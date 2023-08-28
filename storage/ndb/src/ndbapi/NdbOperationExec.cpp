@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 #include "API.hpp"
 
@@ -69,8 +68,8 @@ private :
 
   void checkStaticAssertions()
   {
-    static_assert(KeyInfo::HeaderLength == KeyAndAttrInfoHeaderLength);
-    static_assert(AttrInfo::HeaderLength == KeyAndAttrInfoHeaderLength);
+    STATIC_ASSERT(KeyInfo::HeaderLength == KeyAndAttrInfoHeaderLength);
+    STATIC_ASSERT(AttrInfo::HeaderLength == KeyAndAttrInfoHeaderLength);
   }
 
 public :
@@ -101,7 +100,7 @@ public :
      * In following signals, data starts at offset 3
      * regardless
      */
-    if (likely(currentPos != nullptr))
+    if (likely(currentPos != NULL))
     {
       if (currentPos == firstDataPtr)
       {
@@ -119,7 +118,7 @@ public :
       return sig->getDataPtrSend() + KeyAndAttrInfoHeaderLength;
     }
     sz = 0;
-    return nullptr;
+    return NULL;
   }
 };
 
@@ -315,7 +314,7 @@ NdbOperation::doSendKeyReq(int aNodeId,
 /******************************************************************************
 int doSend()
 
-Return Value:   Return >0 : send was successful, returns number of signals sent
+Return Value:   Return >0 : send was succesful, returns number of signals sent
                 Return -1: In all other case.   
 Parameters:     aProcessorId: Receiving processor node
 Remark:         Sends the TCKEYREQ signal and optional KEYINFO and ATTRINFO 
@@ -324,11 +323,11 @@ Remark:         Sends the TCKEYREQ signal and optional KEYINFO and ATTRINFO
 int
 NdbOperation::doSend(int aNodeId, Uint32 lastFlag)
 {
-  assert(theTCREQ != nullptr);
+  assert(theTCREQ != NULL);
   Uint32 numSecs= 1;
   GenericSectionPtr secs[2];
 
-  if (m_attribute_record != nullptr)
+  if (m_attribute_record != NULL)
   {
     /*
      * NdbRecord signal building code puts all KeyInfo and 
@@ -431,7 +430,7 @@ NdbOperation::prepareGetLockHandle()
    */
   NdbBlob* blobHandle = theBlobList;
 
-  while (blobHandle != nullptr)
+  while (blobHandle != NULL)
   {
     theLockHandle->m_openBlobCount ++;
     blobHandle = blobHandle->theNext;
@@ -444,7 +443,7 @@ NdbOperation::prepareGetLockHandle()
 int prepareSend(Uint32 aTC_ConnectPtr,
                 Uint64 aTransactionId)
 
-Return Value:   Return 0 : preparation of send was successful.
+Return Value:   Return 0 : preparation of send was succesful.
                 Return -1: In all other case.   
 Parameters:     aTC_ConnectPtr: the Connect pointer to TC.
 		aTransactionId:	the Transaction identity of the transaction.
@@ -558,7 +557,7 @@ NdbOperation::prepareSend(Uint32 aTC_ConnectPtr,
   tcKeyReq->requestInfo = tReqInfo;
 
 //-------------------------------------------------------------
-// The next step is to fill in the up to three conditional words.
+// The next step is to fill in the upto three conditional words.
 //-------------------------------------------------------------
   Uint32* tOptionalDataPtr = &tcKeyReq->scanInfo;
   Uint32 tScanInfo = theScanInfo;
@@ -580,10 +579,10 @@ NdbOperation::prepareSend(Uint32 aTC_ConnectPtr,
     /**
      *	Set correct length on last KeyInfo signal
      */
-    if (theLastKEYINFO == nullptr)
+    if (theLastKEYINFO == NULL)
       theLastKEYINFO= theTCREQ->next();
 
-    assert(theLastKEYINFO != nullptr);
+    assert(theLastKEYINFO != NULL);
 
     Uint32 lastKeyInfoLen= ((theTupKeyLen - TcKeyReq::MaxKeyInfo)
                             % KeyInfo::DataLength);
@@ -670,8 +669,8 @@ NdbOperation::repack_read(Uint32 len)
     }
     
     theNdb->releaseSignals(cnt, theFirstATTRINFO, theCurrentATTRINFO);
-    theFirstATTRINFO = nullptr;
-    theCurrentATTRINFO = nullptr;
+    theFirstATTRINFO = 0;
+    theCurrentATTRINFO = 0;
     ptr = tcKeyReq->attrInfo;
     if (all)
     {
@@ -694,7 +693,7 @@ NdbOperation::repack_read(Uint32 len)
 int prepareSendInterpreted()
 
 Make preparations to send an interpreted operation.
-Return Value:   Return 0 : successful.
+Return Value:   Return 0 : succesful.
                 Return -1: In all other case.   
 ***************************************************************************/
 int
@@ -745,7 +744,7 @@ NdbOperation::prepareSendInterpreted()
   /*
     Fix jumps by patching in the correct address for the corresponding label.
   */
-  while (theFirstBranch != nullptr) {
+  while (theFirstBranch != NULL) {
     Uint32 tRelAddress;
     Uint32 tLabelAddress = 0;
     int     tAddress = -1;
@@ -758,7 +757,7 @@ NdbOperation::prepareSendInterpreted()
     }//if
 
     // Find the label address
-    while (tNdbLabel != nullptr) {
+    while (tNdbLabel != NULL) {
       for(tLabelAddress = 0; tLabelAddress<16; tLabelAddress++){
 	const Uint32 labelNo = tNdbLabel->theLabelNo[tLabelAddress];
 	if(tBranchLabel == labelNo){
@@ -805,7 +804,7 @@ NdbOperation::prepareSendInterpreted()
     theNdb->releaseNdbBranch(tNdbBranch);
   }//while
 
-  while (theFirstCall != nullptr) {
+  while (theFirstCall != NULL) {
     Uint32 tSubroutineCount = 0;
     int     tAddress = -1;
     NdbSubroutine* tNdbSubroutine;
@@ -816,7 +815,7 @@ NdbOperation::prepareSendInterpreted()
     }//if
 // Find the subroutine address
     tNdbSubroutine = theFirstSubroutine;
-    while (tNdbSubroutine != nullptr) {
+    while (tNdbSubroutine != NULL) {
       tSubroutineCount += 16;
       if (tNdbCall->theSubroutine < tSubroutineCount) {
 // Subroutine Found
@@ -882,7 +881,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   char buf[NdbRecord::Attr::SHRINK_VARCHAR_BUFFSIZE];
   int res;
   Uint32 no_disk_flag;
-  Uint32 *attrinfo_section_sizes_ptr= nullptr;
+  Uint32 *attrinfo_section_sizes_ptr= NULL;
 
   assert(theStatus==UseNdbRecord);
   /* Interpreted operations not supported with NdbRecord
@@ -894,7 +893,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   const char *key_row= m_key_row;
   const NdbRecord *attr_rec= m_attribute_record;
   const char *updRow;
-  const bool isScanTakeover= (key_rec == nullptr);
+  const bool isScanTakeover= (key_rec == NULL);
   const bool isUnlock = (theOperationType == UnlockRequest);
 
   TcKeyReq *tcKeyReq= CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
@@ -902,8 +901,8 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   /* No KeyInfo goes in the TCKEYREQ signal - it all goes into 
    * a separate KeyInfo section
    */
-  assert(theTCREQ->next() == nullptr);
-  theKEYINFOptr= nullptr;
+  assert(theTCREQ->next() == NULL);
+  theKEYINFOptr= NULL;
   keyInfoRemain= 0;
 
   /* Fill in keyinfo */
@@ -1000,9 +999,9 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   /* All ATTRINFO goes into a separate ATTRINFO section - none is placed
    * into the TCKEYREQ signal
    */
-  assert(theFirstATTRINFO == nullptr);
+  assert(theFirstATTRINFO == NULL);
   attrInfoRemain= 0;
-  theATTRINFOptr= nullptr;
+  theATTRINFOptr= NULL;
 
   no_disk_flag = (m_flags & OF_NO_DISK) != 0;
 
@@ -1040,7 +1039,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   /* Initial read signal words */
   if (tOpType == ReadRequest || tOpType == ReadExclusive ||
       (tOpType == DeleteRequest && 
-       m_attribute_row != nullptr)) // Read as part of delete
+       m_attribute_row != NULL)) // Read as part of delete
   {
     Bitmask<MAXNROFATTRIBUTESINWORDS> readMask;
     Uint32 requestedCols= 0;
@@ -1140,15 +1139,6 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
   /* Interpreted program main signal words */
   if (code)
   {
-    if (tOpType == UpdateRequest || tOpType == WriteRequest) {
-      /* Handle any Extra GetValues, treating as 'InitialRead's */
-      const NdbRecAttr *ra = theReceiver.m_firstRecAttr;
-      while (ra) {
-        res = insertATTRINFOHdr_NdbRecord(ra->attrId(), 0);
-        if (res) return res;
-        ra = ra->next();
-      }
-    }
     /* Record length of Initial Read section */
     attrinfo_section_sizes_ptr[0]= theTotalCurrAI_Len - 
       AttrInfo::SectionSizeInfoLength;
@@ -1200,7 +1190,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
       if (likely(!(col->flags & (NdbRecord::IsBlob|NdbRecord::IsMysqldBitfield))))
       {
         int idxColNum= -1;
-        const NdbRecord::Attr* idxCol= nullptr;
+        const NdbRecord::Attr* idxCol= NULL;
         
         /* Take data from the key row for key columns, attr row otherwise 
          * Always attr row for scan takeover
@@ -1236,10 +1226,10 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
            * record
            * Note that the key record could be for a unique index.
            */
-          assert(key_rec != nullptr); /* Not scan takeover */
+          assert(key_rec != 0); /* Not scan takeover */
           assert(key_rec->m_attrId_indexes_length > attrId);
           assert(key_rec->m_attrId_indexes[attrId] != -1);
-          assert(idxCol != nullptr);
+          assert(idxCol != NULL);
           col= idxCol;
           assert(col->attrId == attrId);
           assert(col->flags & NdbRecord::IsKey);
@@ -1250,9 +1240,9 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
            */
           assert(!col->is_null(key_row));
           length= 0;
-
-          bool len_ok [[maybe_unused]];
-
+          
+          bool len_ok;
+          
           if (col->flags & NdbRecord::IsMysqldShrinkVarchar)
           {
             /* Used to support special varchar format for mysqld keys. 
@@ -1331,7 +1321,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
     } // for noOfColumns
 
     /* Now handle any extra setValues passed in */
-    if (m_extraSetValues != nullptr)
+    if (m_extraSetValues != NULL)
     {
       for (Uint32 i=0; i<m_numExtraSetValues; i++)
       {
@@ -1343,7 +1333,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
 
         Uint32 length;
         
-        if (pvalue==nullptr)
+        if (pvalue==NULL)
           length=0;
         else
         { 
@@ -1371,7 +1361,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
 
         if(length>0)
         {
-          res = insertATTRINFOData_NdbRecord((const char *)pvalue, length);
+          res=insertATTRINFOData_NdbRecord((char*)pvalue, length);
           if(res)
             return res;
         }
@@ -1379,7 +1369,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
     }// if m_extraSetValues!=null
 
     /* Don't need these any more */
-    m_extraSetValues = nullptr;
+    m_extraSetValues = NULL;
     m_numExtraSetValues = 0;
   }
 
@@ -1502,7 +1492,7 @@ NdbOperation::fillTcKeyReqHdr(TcKeyReq *tcKeyReq,
   tcKeyReq->attrLen= 0;
 
   UintR reqInfo= 0;
-  TcKeyReq::setInterpretedFlag(reqInfo, (m_interpreted_code != nullptr));
+  TcKeyReq::setInterpretedFlag(reqInfo, (m_interpreted_code != NULL));
   // AbortOption set later in prepareSendNdbRecord()
   tcKeyReq->requestInfo= reqInfo;
 
@@ -1541,13 +1531,13 @@ NdbOperation::allocKeyInfo()
   NdbApiSignal *tSignal;
 
   tSignal= theNdb->getSignal();
-  if (tSignal == nullptr)
+  if (tSignal == NULL)
   {
     setErrorCodeAbort(4000);
     return -1;
   }
-  tSignal->next(nullptr);
-  if (theRequest->next() != nullptr)
+  tSignal->next(NULL);
+  if (theRequest->next() != NULL)
   {
     theLastKEYINFO->setLength(NdbApiSignal::MaxSignalWords);
     theLastKEYINFO->next(tSignal);
@@ -1575,13 +1565,13 @@ NdbOperation::allocAttrInfo()
   NdbApiSignal *tSignal;
 
   tSignal= theNdb->getSignal();
-  if (tSignal == nullptr)
+  if (tSignal == NULL)
   {
     setErrorCodeAbort(4000);
     return -1;
   }
-  tSignal->next(nullptr);
-  if (theFirstATTRINFO != nullptr)
+  tSignal->next(NULL);
+  if (theFirstATTRINFO != NULL)
   {
     theCurrentATTRINFO->setLength(NdbApiSignal::MaxSignalWords);
     theCurrentATTRINFO->next(tSignal);
@@ -1615,7 +1605,7 @@ NdbOperation::insertKEYINFO_NdbRecord(const char *value,
     if (keyInfoRemain)
     {
       /* Fill remaining words in this object */
-      assert(theKEYINFOptr != nullptr);
+      assert(theKEYINFOptr != NULL);
       memcpy(theKEYINFOptr, value, keyInfoRemain*4);
       value+= keyInfoRemain*4;
       byteSize-= keyInfoRemain*4;
@@ -1627,11 +1617,11 @@ NdbOperation::insertKEYINFO_NdbRecord(const char *value,
       return res;
   }
 
-  assert(theRequest->next() != nullptr);
-  assert(theLastKEYINFO != nullptr);
+  assert(theRequest->next() != NULL);
+  assert(theLastKEYINFO != NULL);
 
   /* Remaining words fit in this object */
-  assert(theKEYINFOptr != nullptr);
+  assert(theKEYINFOptr != NULL);
   memcpy(theKEYINFOptr, value, byteSize);
   if((byteSize%4) != 0)
     memset(((char *)theKEYINFOptr)+byteSize, 0, 4-(byteSize%4));
@@ -1671,9 +1661,9 @@ NdbOperation::insertATTRINFOHdr_NdbRecord(Uint32 attrId,
   /* Word fits in remaining space */
   Uint32 ah;
   AttributeHeader::init(&ah, attrId, attrLen);
-  assert(theFirstATTRINFO != nullptr);
-  assert(theCurrentATTRINFO != nullptr);
-  assert(theATTRINFOptr != nullptr);
+  assert(theFirstATTRINFO != NULL);
+  assert(theCurrentATTRINFO != NULL);
+  assert(theATTRINFOptr != NULL);
 
   *(theATTRINFOptr++)= ah;
   attrInfoRemain--;
@@ -1713,9 +1703,9 @@ NdbOperation::insertATTRINFOData_NdbRecord(const char *value,
   }
 
   /* Remaining words fit in current signal */
-  assert(theFirstATTRINFO != nullptr);
-  assert(theCurrentATTRINFO != nullptr);
-  assert(theATTRINFOptr != nullptr);
+  assert(theFirstATTRINFO != NULL);
+  assert(theCurrentATTRINFO != NULL);
+  assert(theATTRINFOptr != NULL);
 
   memcpy(theATTRINFOptr, value, byteSize);
   if((byteSize%4) != 0)
@@ -1760,7 +1750,7 @@ NdbOperation::checkState_TransId(const NdbApiSignal* aSignal)
 /***************************************************************************
 int receiveTCKEYREF( NdbApiSignal* aSignal)
 
-Return Value:   Return 0 : send was successful.
+Return Value:   Return 0 : send was succesful.
                 Return -1: In all other case.   
 Parameters:     aSignal: the signal object that contains the TCKEYREF signal from TC.
 Remark:         Handles the reception of the TCKEYREF signal.

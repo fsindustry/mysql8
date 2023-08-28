@@ -155,26 +155,18 @@ INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 255));
 DELETE FROM t1 WHERE c40>'a';
 DROP TABLE t1;
 CREATE TABLE t1 (c41 CHAR CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c41='a';
 DROP TABLE t1;
 CREATE TABLE t1 (c42 CHAR(0) CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('');
 DELETE FROM t1 WHERE c42='';
 DROP TABLE t1;
 CREATE TABLE t1 (c43 CHAR(1) CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c43='a';
 DROP TABLE t1;
 CREATE TABLE t1 (c44 CHAR(255) CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES (repeat('a', 255));
 INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 255));
 DELETE FROM t1 WHERE c44>'a';
@@ -214,26 +206,18 @@ INSERT INTO t1 VALUES (repeat(_latin1 0xDF, 261));
 DELETE FROM t1 WHERE c52>'a';
 DROP TABLE t1;
 CREATE TABLE t1 (c53 VARCHAR(0) CHARACTER SET ucs2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('');
 DELETE FROM t1 WHERE c53='';
 DROP TABLE t1;
 CREATE TABLE t1 (c54 VARCHAR(1) CHARACTER SET ucs2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('a');
 DELETE FROM t1 WHERE c54='a';
 DROP TABLE t1;
 CREATE TABLE t1 (c55 VARCHAR(255) CHARACTER SET ucs2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES (repeat('ab', 127));
 DELETE FROM t1 WHERE c55>'a';
 DROP TABLE t1;
 CREATE TABLE t1 (c56 VARCHAR(261) CHARACTER SET ucs2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES (repeat('ab', 130));
 DELETE FROM t1 WHERE c56>'a';
 DROP TABLE t1;
@@ -308,26 +292,18 @@ INSERT INTO t1 VALUES ('longtext1');
 DELETE FROM t1 WHERE c75='longtext1';
 DROP TABLE t1;
 CREATE TABLE t1 (c67 TINYTEXT CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('tinytext1');
 DELETE FROM t1 WHERE c67='tinytext1';
 DROP TABLE t1;
 CREATE TABLE t1 (c70 TEXT CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('text1');
 DELETE FROM t1 WHERE c70='text1';
 DROP TABLE t1;
 CREATE TABLE t1 (c73 MEDIUMTEXT CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('mediumtext1');
 DELETE FROM t1 WHERE c73='mediumtext1';
 DROP TABLE t1;
 CREATE TABLE t1 (c76 LONGTEXT CHARACTER SET UCS2);
-Warnings:
-Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES ('longtext1');
 DELETE FROM t1 WHERE c76='longtext1';
 DROP TABLE t1;
@@ -452,7 +428,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -477,7 +452,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -529,7 +503,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -554,7 +527,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -579,7 +551,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -604,7 +575,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -629,7 +599,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -654,7 +623,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -679,7 +647,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -704,7 +671,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -729,7 +695,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -754,7 +719,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -808,7 +772,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -861,7 +824,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -886,7 +848,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -911,7 +872,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -936,7 +896,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -988,7 +947,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1019,7 +977,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1044,7 +1001,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -1071,7 +1027,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1123,7 +1078,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1151,7 +1105,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1203,7 +1156,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1228,7 +1180,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1280,7 +1231,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1305,7 +1255,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1357,7 +1306,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1385,7 +1333,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -1412,7 +1359,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1464,7 +1410,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1489,7 +1434,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1541,7 +1485,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1569,7 +1512,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -1596,7 +1538,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1648,7 +1589,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1673,7 +1613,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1725,7 +1664,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1753,7 +1691,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -1780,7 +1717,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1832,7 +1768,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1857,7 +1792,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -1909,7 +1843,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -1937,7 +1870,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -1964,7 +1896,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2016,7 +1947,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2041,7 +1971,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2093,7 +2022,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2118,7 +2046,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2170,7 +2097,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2195,7 +2121,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2220,7 +2145,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2272,7 +2196,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2297,7 +2220,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2350,7 +2272,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2375,7 +2296,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2428,7 +2348,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2453,7 +2372,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2505,7 +2423,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2530,7 +2447,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2582,7 +2498,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2607,7 +2522,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2659,7 +2573,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2684,7 +2597,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2736,7 +2648,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2761,7 +2672,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2813,7 +2723,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2838,7 +2747,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2890,7 +2798,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2915,7 +2822,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -2967,7 +2873,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -2992,7 +2897,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3044,7 +2948,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3069,7 +2972,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3121,7 +3023,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3146,7 +3047,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3198,7 +3098,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3223,7 +3122,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3248,7 +3146,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3303,7 +3200,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3328,7 +3224,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3380,7 +3275,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3405,7 +3299,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3457,7 +3350,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3482,7 +3374,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3534,7 +3425,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3559,7 +3449,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3584,7 +3473,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3639,7 +3527,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3664,7 +3551,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3716,7 +3602,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3741,7 +3626,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3793,7 +3677,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3818,7 +3701,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3870,7 +3752,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3895,7 +3776,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -3947,7 +3827,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -3972,7 +3851,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4024,7 +3902,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4049,7 +3926,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4101,7 +3977,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4126,7 +4001,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4151,7 +4025,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4206,7 +4079,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4231,7 +4103,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4256,7 +4127,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4311,7 +4181,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4336,7 +4205,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4388,7 +4256,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4413,7 +4280,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4465,7 +4331,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4490,7 +4355,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4542,7 +4406,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4567,7 +4430,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4619,7 +4481,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4644,7 +4505,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4669,7 +4529,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4694,7 +4553,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4746,7 +4604,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4771,7 +4628,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4823,7 +4679,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4848,7 +4703,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4873,7 +4727,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4898,7 +4751,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -4950,7 +4802,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -4975,7 +4826,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5000,7 +4850,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5025,7 +4874,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5077,7 +4925,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5102,7 +4949,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5154,7 +5000,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5179,7 +5024,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5204,7 +5048,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5229,7 +5072,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5281,7 +5123,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5306,7 +5147,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5331,7 +5171,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5356,7 +5195,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5408,7 +5246,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5433,7 +5270,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5485,7 +5321,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5510,7 +5345,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5562,7 +5396,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5587,7 +5420,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5639,7 +5471,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5664,7 +5495,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5716,7 +5546,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5741,7 +5570,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5793,7 +5621,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5818,7 +5645,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5870,7 +5696,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5895,7 +5720,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -5947,7 +5771,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -5972,7 +5795,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6024,7 +5846,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6049,7 +5870,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6101,7 +5921,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6126,7 +5945,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6178,7 +5996,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6203,7 +6020,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6255,7 +6071,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6280,7 +6095,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6332,7 +6146,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6357,7 +6170,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6409,7 +6221,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6434,7 +6245,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6459,7 +6269,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6484,7 +6293,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6509,7 +6317,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6534,7 +6341,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6559,7 +6365,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6584,7 +6389,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -6639,7 +6443,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6670,7 +6473,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6700,7 +6502,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6760,7 +6561,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6790,7 +6590,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6820,7 +6619,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6882,7 +6680,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6912,7 +6709,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -6942,7 +6738,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7014,7 +6809,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7040,7 +6834,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7066,7 +6859,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t2`
@@ -7092,7 +6884,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t2`
@@ -7118,10 +6909,8 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id #
 # at #
@@ -7200,7 +6989,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7226,7 +7014,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -7255,7 +7042,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -7308,7 +7094,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7335,7 +7120,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
@@ -7362,7 +7146,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -7393,7 +7176,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`t1`
@@ -7424,7 +7206,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`
@@ -7451,7 +7232,6 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`t1`

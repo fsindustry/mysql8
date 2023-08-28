@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -23,11 +23,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "udf_metadata_imp.h"
 #include <assert.h>
 #include <mysql/components/service_implementation.h>
+#include "m_ctype.h"
 
 #include "my_sys.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
-#include "sql/mysqld_cs.h"
 #include "sql/sql_udf.h"
 #include "template_utils.h"
 
@@ -117,7 +116,7 @@ DEFINE_BOOL_METHOD(mysql_udf_metadata_imp::argument_get,
     *out_value = pointer_cast<void *>(csname);
   } else if (!my_strcasecmp(system_charset_info, consts::collation.c_str(),
                             extension_type)) {
-    csname = const_cast<char *>(x->charset_info[index]->m_coll_name);
+    csname = const_cast<char *>(x->charset_info[index]->name);
     *out_value = pointer_cast<void *>(csname);
   } else {
     my_error(ER_DA_UDF_INVALID_EXTENSION_ARGUMENT_TYPE, MYF(0), extension_type);
@@ -138,7 +137,7 @@ DEFINE_BOOL_METHOD(mysql_udf_metadata_imp::result_get,
     *out_value = pointer_cast<void *>(csname);
   } else if (!my_strcasecmp(system_charset_info, consts::collation.c_str(),
                             extension_type)) {
-    csname = const_cast<char *>(x->charset_info->m_coll_name);
+    csname = const_cast<char *>(x->charset_info->name);
     *out_value = pointer_cast<void *>(csname);
   } else {
     my_error(ER_DA_UDF_INVALID_EXTENSION_ARGUMENT_TYPE, MYF(0), extension_type);

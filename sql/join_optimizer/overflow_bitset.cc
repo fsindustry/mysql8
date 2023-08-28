@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -76,6 +76,13 @@ MutableOverflowBitset OverflowBitset::XorOverflow(MEM_ROOT *mem_root,
   return ret;
 }
 
+void MutableOverflowBitset::SetBitOverflow(int bit_num) {
+  assert(!is_inline());
+  assert(bit_num >= 0);
+  assert(static_cast<size_t>(bit_num) < capacity());
+  m_ext->m_bits[bit_num / 64] |= uint64_t{1} << (bit_num % 64);
+}
+
 void MutableOverflowBitset::ClearBitsOverflow(int begin_bit_num,
                                               int end_bit_num) {
   assert(!is_inline());
@@ -122,23 +129,9 @@ bool OverlapsOverflow(OverflowBitset a, OverflowBitset b) {
   return false;
 }
 
-bool IsSubsetOverflow(OverflowBitset a, OverflowBitset b) {
-  assert(!a.is_inline());
-  assert(!b.is_inline());
-  assert(a.capacity() == b.capacity());
-  for (unsigned i = 0; i < a.m_ext->m_num_blocks; ++i) {
-    if (!IsSubset(a.m_ext->m_bits[i], b.m_ext->m_bits[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-int PopulationCountOverflow(OverflowBitset x) {
+bool IsBitSetOverflow(int bit_num, OverflowBitset x) {
   assert(!x.is_inline());
-  int count = 0;
-  for (unsigned i = 0; i < x.m_ext->m_num_blocks; ++i) {
-    count += PopulationCount(x.m_ext->m_bits[i]);
-  }
-  return count;
+  assert(bit_num >= 0);
+  assert(static_cast<size_t>(bit_num) < x.capacity());
+  return Overlaps(x.m_ext->m_bits[bit_num / 64], uint64_t{1} << (bit_num % 64));
 }

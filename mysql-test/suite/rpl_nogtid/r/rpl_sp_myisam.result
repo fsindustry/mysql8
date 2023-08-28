@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 drop database if exists mysqltest1;
 create database mysqltest1;
@@ -182,20 +182,10 @@ return unix_timestamp();
 end|
 ERROR HY000: You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 set global log_bin_trust_function_creators=0;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 set global log_bin_trust_function_creators=1;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 set @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 set global log_bin_trust_function_creators=1;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 create function fn2()
 returns int
 no sql
@@ -599,11 +589,7 @@ master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Query	#	#	use `mysqltest`; SELECT `mysqltest2`.`f1`()
 master-bin.000001	#	Query	#	#	COMMIT
 set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 set @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
-Warnings:
-Warning	1287	'@@log_bin_trust_function_creators' is deprecated and will be removed in a future release.
 drop database mysqltest;
 drop database mysqltest2;
 use test;
@@ -624,9 +610,9 @@ return 3;
 end|
 use test|
 show procedure status like '%mysqltestbug36570%';
-Db	Name	Type	Language	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	 mysqltestbug36570_p2	PROCEDURE	SQL	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
-test	mysqltestbug36570_p1	PROCEDURE	SQL	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	 mysqltestbug36570_p2	PROCEDURE	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+test	mysqltestbug36570_p1	PROCEDURE	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 show create procedure ` mysqltestbug36570_p2`;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
  mysqltestbug36570_p2	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE ` mysqltestbug36570_p2`( a int )
@@ -635,9 +621,9 @@ begin
 select a;
 end	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 show procedure status like '%mysqltestbug36570%';
-Db	Name	Type	Language	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	 mysqltestbug36570_p2	PROCEDURE	SQL	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
-test	mysqltestbug36570_p1	PROCEDURE	SQL	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	 mysqltestbug36570_p2	PROCEDURE	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+test	mysqltestbug36570_p1	PROCEDURE	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 show create procedure ` mysqltestbug36570_p2`;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
  mysqltestbug36570_p2	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE ` mysqltestbug36570_p2`( a int )
@@ -649,8 +635,8 @@ call ` mysqltestbug36570_p2`(42);
 a
 42
 show function status like '%mysqltestbug36570%';
-Db	Name	Type	Language	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	mysqltestbug36570_f1	FUNCTION	SQL	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	mysqltestbug36570_f1	FUNCTION	root@localhost	t	t	DEFINER		utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 flush logs;
 include/mysqlbinlog.inc
 # The proper term is pseudo_replica_mode, but we use this compatibility alias
@@ -1856,11 +1842,7 @@ call mtr.add_suppression("Unsafe statement written to the binary log using state
 create procedure p1(p1 integer)
 delete from t1 limit p1;
 set @save_binlog_format=@@session.binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 set @@session.binlog_format=STATEMENT;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 call p1(NULL);
 call p1(0);
 call p1(1);
@@ -1885,8 +1867,6 @@ select * from t1;
 c1
 # Cleanup
 set @@session.binlog_format=@save_binlog_format;
-Warnings:
-Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 drop table t1;
 drop procedure p1;
 # End of 5.5 tests.

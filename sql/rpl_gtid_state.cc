@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,8 +30,8 @@
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "my_systime.h"
-#include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/components/services/log_builtins.h"  //LogErr
+#include "mysql/components/services/psi_stage_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
@@ -48,7 +48,7 @@
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
 
-class Table_ref;
+struct TABLE_LIST;
 
 PSI_memory_key key_memory_Gtid_state_group_commit_sidno;
 
@@ -263,21 +263,13 @@ void Gtid_state::end_gtid_violating_transaction(THD *thd) {
 }
 
 bool Gtid_state::wait_for_sidno(THD *thd, rpl_sidno sidno,
-                                struct timespec *abstime,
-                                bool update_thd_status) {
+                                struct timespec *abstime) {
   DBUG_TRACE;
   PSI_stage_info old_stage;
-  PSI_stage_info stage = stage_waiting_for_gtid_to_be_committed;
   sid_lock->assert_some_lock();
   sid_locks.assert_owner(sidno);
-
-  if (!update_thd_status) {
-    // Keep the same stage info on the new condition.
-    stage.m_key = thd->get_current_stage_key();
-    stage.m_name = thd->proc_info();
-  }
-
-  sid_locks.enter_cond(thd, sidno, &stage, &old_stage);
+  sid_locks.enter_cond(thd, sidno, &stage_waiting_for_gtid_to_be_committed,
+                       &old_stage);
   bool ret = sid_locks.wait(thd, sidno, abstime);
   // Can't call sid_locks.unlock() as that requires global_sid_lock.
   mysql_mutex_unlock(thd->current_mutex);
@@ -297,8 +289,8 @@ bool Gtid_state::wait_for_gtid(THD *thd, const Gtid &gtid,
   return ret;
 }
 
-bool Gtid_state::wait_for_gtid_set(THD *thd, Gtid_set *wait_for, double timeout,
-                                   bool update_thd_status) {
+bool Gtid_state::wait_for_gtid_set(THD *thd, Gtid_set *wait_for,
+                                   double timeout) {
   struct timespec abstime;
   DBUG_TRACE;
   DEBUG_SYNC(thd, "begin_wait_for_executed_gtid_set");
@@ -373,8 +365,8 @@ bool Gtid_state::wait_for_gtid_set(THD *thd, Gtid_set *wait_for, double timeout,
         todo.remove_intervals_for_sidno(&executed_gtids, sidno);
 
         if (todo.contains_sidno(sidno)) {
-          bool ret = wait_for_sidno(
-              thd, sidno, timeout > 0 ? &abstime : nullptr, update_thd_status);
+          bool ret =
+              wait_for_sidno(thd, sidno, timeout > 0 ? &abstime : nullptr);
 
           // wait_for_gtid will release both the global lock and the
           // mutex.  Acquire the global lock again.
@@ -757,7 +749,7 @@ int Gtid_state::compress(THD *thd) {
   return gtid_table_persistor->compress(thd);
 }
 
-int Gtid_state::warn_or_err_on_modify_gtid_table(THD *thd, Table_ref *table) {
+int Gtid_state::warn_or_err_on_modify_gtid_table(THD *thd, TABLE_LIST *table) {
   DBUG_TRACE;
   int ret =
       gtid_table_persistor->warn_or_err_on_explicit_modification(thd, table);
@@ -877,7 +869,6 @@ void Gtid_state::update_gtids_impl_own_gtid(THD *thd, bool is_commit) {
       SQL thread or slave worker thread adds transaction owned GTID
       into global executed_gtids, lost_gtids and gtids_only_in_table.
     */
-    CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_gtid_externalization");
     executed_gtids._add_gtid(thd->owned_gtid);
     thd->rpl_thd_ctx.session_gtids_ctx().notify_after_gtid_executed_update(thd);
     if (thd->slave_thread && opt_bin_log && !opt_log_replica_updates) {

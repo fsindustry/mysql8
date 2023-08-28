@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,6 @@
 #include <mysql/plugin.h>
 
 #include "sql/mysqld.h"
-
-struct CHARSET_INFO;
 
 namespace mysqld {
 

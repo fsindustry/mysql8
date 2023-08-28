@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,6 @@
 #include "sql/dd/impl/transaction_impl.h"          // Open_dictionary_tables_ctx
 #include "sql/dd/impl/types/table_impl.h"          // Table_impl
 #include "sql/error_handler.h"                     // Internal_error_handler
-#include "string_with_len.h"
 
 namespace dd {
 class Object_key;

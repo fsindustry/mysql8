@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,20 +26,17 @@
 #include <sys/types.h>
 
 #include "my_base.h"
+#include "my_bitmap.h"
 #include "sql/handler.h"
-#include "sql/join_optimizer/overflow_bitset.h"
-#include "sql/range_optimizer/range_opt_param.h"
-#include "sql/range_optimizer/range_optimizer.h"
+#include "sql/range_optimizer/table_read_plan.h"
 
 class Opt_trace_object;
 class RANGE_OPT_PARAM;
+class QUICK_SELECT_I;
 class SEL_ROOT;
 class SEL_TREE;
 struct MEM_ROOT;
 
-// TODO(sgunders): Consider whether we can create INDEX_RANGE_SCAN AccessPaths
-// directly, instead of first creating this structure and then creating
-// AccessPaths from it.
 struct ROR_SCAN_INFO {
   uint idx;         ///< # of used key in param->keys
   uint keynr;       ///< # of used key in table
@@ -49,7 +46,16 @@ struct ROR_SCAN_INFO {
   SEL_ROOT *sel_root;
 
   /** Fields used in the query and covered by this ROR scan. */
-  OverflowBitset covered_fields;
+  MY_BITMAP covered_fields;
+  /**
+    Fields used in the query that are a) covered by this ROR scan and
+    b) not already covered by ROR scans ordered earlier in the merge
+    sequence.
+  */
+  MY_BITMAP covered_fields_remaining;
+  /** Number of fields in covered_fields_remaining (caching of
+   * bitmap_bits_set()) */
+  uint num_covered_fields_remaining;
 
   /**
     Cost of reading all index records with values in sel_arg intervals set
@@ -64,83 +70,71 @@ struct ROR_SCAN_INFO {
   uint used_key_parts;
 };
 
-// Planning related information when picking the best combination
-// of rowid ordered scans for a ROR-Intersect plan.
-class ROR_intersect_plan {
- public:
-  ROR_intersect_plan(const RANGE_OPT_PARAM *param, size_t num_fields);
-  ROR_intersect_plan(const ROR_intersect_plan &) = delete;
-  ROR_intersect_plan &operator=(const ROR_intersect_plan &plan);
+/* Plan for QUICK_ROR_INTERSECT_SELECT scan. */
 
-  bool add(OverflowBitset needed_fields, ROR_SCAN_INFO *ror_scan,
-           bool is_cpk_scan, Opt_trace_object *trace_costs, bool ignore_cost);
-  double get_scan_selectivity(const ROR_SCAN_INFO *scan) const;
-  size_t num_scans() const { return m_ror_scans.size(); }
-
+class TRP_ROR_INTERSECT : public TABLE_READ_PLAN {
  public:
-  /// Range optimizer parameter
-  const RANGE_OPT_PARAM *m_param;
-  /// Rowid ordered scans that are part of this plan.
-  Mem_root_array<ROR_SCAN_INFO *> m_ror_scans;
-  /// Whether this plan with the chosen rowid ordered scans is covering or not.
-  bool m_is_covering{false};
-  /// Output rows for this plan.
-  double m_out_rows;
-  /// Total cost for the plan - m_index_read_cost + disk_sweep_cost
-  Cost_estimate m_total_cost;
+  // intersect_scans (both the pointers and the structs themselves)
+  // must be allocated on return_mem_root, as it will be used
+  // by make_quick(), which can be called after the range optimizer
+  // has returned.
+  TRP_ROR_INTERSECT(TABLE *table_arg, bool forced_by_hint_arg,
+                    KEY_PART *const *key_arg, const uint *real_keynr_arg,
+                    Bounds_checked_array<ROR_SCAN_INFO *> intersect_scans_arg,
+                    Cost_estimate index_scan_cost_arg, bool is_covering_arg,
+                    ROR_SCAN_INFO *cpk_scan_arg)
+      : TABLE_READ_PLAN(table_arg, MAX_KEY, /*used_key_parts=*/-1,
+                        forced_by_hint_arg),
+        intersect_scans(intersect_scans_arg),
+        cpk_scan(cpk_scan_arg),
+        is_covering(is_covering_arg),
+        index_scan_cost(index_scan_cost_arg),
+        key(key_arg),
+        real_keynr(real_keynr_arg) {}
+
+  QUICK_SELECT_I *make_quick(bool retrieve_full_rows,
+                             MEM_ROOT *return_mem_root) override;
+
+  Cost_estimate get_index_scan_cost() const { return index_scan_cost; }
 
  private:
-  /// Bitmap of fields covered by the scans in the plan.
-  OverflowBitset m_covered_fields;
-  /// Number of rows to be read from indexes that are used for rowid ordered
-  /// scans
-  ha_rows m_index_records{0};
-  /// Total cost for reading the indexes picked in the plan.
-  Cost_estimate m_index_read_cost;
+  /* ROR range scans used in this intersection */
+  Bounds_checked_array<ROR_SCAN_INFO *> intersect_scans;
+  ROR_SCAN_INFO *cpk_scan; /* Clustered PK scan, if there is one */
+  const bool is_covering;  /* true if no row retrieval phase is necessary */
+  const Cost_estimate index_scan_cost; /* SUM(cost(index_scan)) */
+
+  void trace_basic_info(THD *thd, const RANGE_OPT_PARAM *param,
+                        Opt_trace_object *trace_object) const override;
+
+  KEY_PART *const *key;
+  const uint *real_keynr;
 };
 
-AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
-                                   TABLE *table,
-                                   bool index_merge_intersect_allowed,
-                                   SEL_TREE *tree, double cost_est,
-                                   bool force_index_merge_result,
-                                   bool reuse_handler);
+/*
+  Plan for QUICK_ROR_UNION_SELECT scan.
+  QUICK_ROR_UNION_SELECT always retrieves full rows, so retrieve_full_rows
+  is ignored by make_quick.
+*/
 
-void trace_basic_info_rowid_intersection(THD *thd, const AccessPath *path,
-                                         const RANGE_OPT_PARAM *param,
-                                         Opt_trace_object *trace_object);
+class TRP_ROR_UNION : public TABLE_READ_PLAN {
+ public:
+  TRP_ROR_UNION(TABLE *table_arg, bool forced_by_hint_arg)
+      : TABLE_READ_PLAN(table_arg, MAX_KEY, /*used_key_parts=*/-1,
+                        forced_by_hint_arg) {}
+  QUICK_SELECT_I *make_quick(bool retrieve_full_rows,
+                             MEM_ROOT *return_mem_root) override;
+  TABLE_READ_PLAN **first_ror; /* array of ptrs to plans for merged scans */
+  TABLE_READ_PLAN **last_ror;  /* end of the above array */
 
-void trace_basic_info_rowid_union(THD *thd, const AccessPath *path,
-                                  const RANGE_OPT_PARAM *param,
-                                  Opt_trace_object *trace_object);
+  void trace_basic_info(THD *thd, const RANGE_OPT_PARAM *param,
+                        Opt_trace_object *trace_object) const override;
+};
 
-void add_keys_and_lengths_rowid_intersection(const AccessPath *path,
-                                             String *key_names,
-                                             String *used_lengths);
-
-void add_keys_and_lengths_rowid_union(const AccessPath *path, String *key_names,
-                                      String *used_lengths);
-
-OverflowBitset get_needed_fields(const RANGE_OPT_PARAM *param);
-
-ROR_SCAN_INFO *make_ror_scan(const RANGE_OPT_PARAM *param, int idx,
-                             SEL_ROOT *sel_root, OverflowBitset needed_fields);
-
-void find_intersect_order(Mem_root_array<ROR_SCAN_INFO *> *ror_scans,
-                          OverflowBitset needed_fields, MEM_ROOT *mem_root);
-
-AccessPath *MakeRowIdOrderedIndexScanAccessPath(ROR_SCAN_INFO *scan,
-                                                TABLE *table,
-                                                KEY_PART *used_key_part,
-                                                bool reuse_handler,
-                                                MEM_ROOT *mem_root);
-
-#ifndef NDEBUG
-void dbug_dump_rowid_intersection(int indent, bool verbose,
-                                  const Mem_root_array<AccessPath *> &children);
-
-void dbug_dump_rowid_union(int indent, bool verbose,
-                           const Mem_root_array<AccessPath *> &children);
-#endif
+TRP_ROR_INTERSECT *get_best_ror_intersect(
+    THD *thd, const RANGE_OPT_PARAM *param, TABLE *table,
+    bool index_merge_intersect_allowed, enum_order order_direction,
+    SEL_TREE *tree, const MY_BITMAP *needed_fields,
+    const Cost_estimate *cost_est, bool force_index_merge_result);
 
 #endif  // SQL_RANGE_OPTIMIZER_ROWID_ORDERED_RETRIEVAL_PLAN_H_

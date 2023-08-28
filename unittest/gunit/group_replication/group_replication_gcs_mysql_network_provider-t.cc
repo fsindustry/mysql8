@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,13 +25,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-int handle_group_replication_incoming_connection(THD *thd, int fd,
-                                                 SSL *ssl_ctx) {
+void handle_group_replication_incoming_connection(THD *thd, int fd,
+                                                  SSL *ssl_ctx) {
   (void)thd;
   (void)fd;
   (void)ssl_ctx;
-
-  return 0;
 }
 
 // To fool the compiler
@@ -131,15 +129,15 @@ class MySQLNetworkProviderTest : public ::testing::Test {
 TEST_F(MySQLNetworkProviderTest, StartAndStopTest) {
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
   net_provider.stop();
 }
 
 TEST_F(MySQLNetworkProviderTest, StartAgainAndStopTest) {
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
+  ASSERT_FALSE(net_provider.start());
 
   net_provider.stop();
 }
@@ -180,7 +178,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfTest) {
 
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", false});
@@ -239,7 +237,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfWithNameSpaceTest) {
 
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", false});
@@ -305,7 +303,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfWithSSLTest) {
 
   net_provider.configure_secure_connections(net_provider_security_params);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", true});
@@ -336,7 +334,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfCredentialsErrorTest) {
 
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", false});
@@ -370,7 +368,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfRealConnectErrorTest) {
 
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", false});
@@ -410,7 +408,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfSendCommandErrorTest) {
 
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   auto new_connection =
       net_provider.open_connection("localhost", 12345, {"", "", false});
@@ -425,7 +423,7 @@ TEST_F(MySQLNetworkProviderTest, CreateConnectionToSelfSendCommandErrorTest) {
 TEST_F(MySQLNetworkProviderTest, NewServerConnectionTest) {
   Gcs_mysql_network_provider net_provider(auth_interface, native_interface);
 
-  ASSERT_FALSE(net_provider.start().first);
+  ASSERT_FALSE(net_provider.start());
 
   constexpr int socket_to_use = 42;
 

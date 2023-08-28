@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <string>
 
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_dbug.h"
@@ -39,7 +40,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/services/registry.h"
 #include "mysql/mysql_lex_string.h"
 #include "mysql/service_plugin_registry.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_common.h"
 #include "sql/auth/auth_internal.h"
@@ -48,10 +48,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "sql/current_thd.h"
 #include "sql/field.h"
 #include "sql/handler.h"
-#include "sql/iterators/row_iterator.h"
 #include "sql/key.h"
+#include "sql/records.h"
+#include "sql/row_iterator.h"
 #include "sql/sql_const.h"
-#include "sql/sql_executor.h"
 #include "sql/table.h"
 
 class THD;
@@ -85,7 +85,7 @@ Dynamic_privilege_register *get_dynamic_privilege_register(void) {
     @retval false Success
 */
 
-bool populate_dynamic_privilege_caches(THD *thd, Table_ref *tablelst) {
+bool populate_dynamic_privilege_caches(THD *thd, TABLE_LIST *tablelst) {
   DBUG_TRACE;
   bool error = false;
   assert(assert_acl_cache_write_lock(thd));
@@ -137,8 +137,8 @@ bool populate_dynamic_privilege_caches(THD *thd, Table_ref *tablelst) {
 
       my_caseup_str(system_charset_info, priv);
       LEX_CSTRING str_priv = {priv, strlen(priv)};
-      const LEX_CSTRING str_user = {user, strlen(user)};
-      const LEX_CSTRING str_host = {host, strlen(host)};
+      LEX_CSTRING str_user = {user, strlen(user)};
+      LEX_CSTRING str_host = {host, strlen(host)};
       Update_dynamic_privilege_table no_update;
       if (grant_dynamic_privilege(str_priv, str_user, str_host,
                                   (*with_grant_option == 'Y' ? true : false),

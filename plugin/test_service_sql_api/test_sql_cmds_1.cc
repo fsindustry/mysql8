@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,6 @@
 #include <mysql/components/services/log_builtins.h>
 #include <mysqld_error.h>
 
-#include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"
@@ -41,9 +40,7 @@
 #include "template_utils.h"
 #include "thr_cond.h"
 
-static constexpr int STRING_BUFFER = 1024 * 4;
-
-struct CHARSET_INFO;
+#define STRING_BUFFER 1024
 
 static const char *sep =
     "======================================================\n";
@@ -162,8 +159,9 @@ static int sql_start_result_metadata(void *, uint num_cols, uint,
                                      const CHARSET_INFO *resultcs) {
   DBUG_TRACE;
   DBUG_PRINT("info", ("resultcs->number: %d", resultcs->number));
-  DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
-  DBUG_PRINT("info", ("resultcs->name: %s", resultcs->m_coll_name));
+  DBUG_PRINT("info",
+             ("resultcs->csname: %s", replace_utf8_utf8mb3(resultcs->csname)));
+  DBUG_PRINT("info", ("resultcs->name: %s", resultcs->name));
   row_count = 0;
   sql_num_cols = num_cols;
   sql_resultcs = resultcs;
@@ -362,7 +360,7 @@ static void test_com_query(void *p [[maybe_unused]]) {
   cmd.com_query.length = strlen(cmd.com_query.query);
   WRITE_VAL("%s\n", cmd.com_query.query);
   fail = command_service_run_command(st_session, COM_QUERY, &cmd,
-                                     &my_charset_utf8mb3_general_ci, &sql_cbs,
+                                     &my_charset_utf8_general_ci, &sql_cbs,
                                      CS_TEXT_REPRESENTATION, &cbd);
   if (fail)
     LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "sql_simple ret code: %d\n",
@@ -371,7 +369,7 @@ static void test_com_query(void *p [[maybe_unused]]) {
     /* get values */
     WRITE_STR(
         "-----------------------------------------------------------------\n");
-    WRITE_VAL("%s\t%s\n", sql_field[0][0].col_name, sql_field[0][1].col_name);
+    WRITE_VAL("%s\t\%s\n", sql_field[0][0].col_name, sql_field[0][1].col_name);
     for (uint row = 0; row < sql_num_rows; row++) {
       for (uint col = 0; col < sql_num_cols; col++) {
         WRITE_VAL("%s\n", sql_str_value[col][row]);
@@ -386,7 +384,7 @@ static void test_com_query(void *p [[maybe_unused]]) {
     } else {
       WRITE_VAL("server status: %d\n", cbd.server_status);
       WRITE_VAL("warn count: %d\n", cbd.warn_count);
-      //           WRITE_VAL("message: %s\n",msg);
+      //           WRITE_VAL("messsage: %s\n",msg);
     }
   }
 
@@ -403,7 +401,7 @@ static void test_com_query(void *p [[maybe_unused]]) {
   WRITE_VAL("%s\n", cmd.com_query.query);
   cbd.reset();
   fail = command_service_run_command(st_session, COM_QUERY, &cmd,
-                                     &my_charset_utf8mb3_general_ci, &sql_cbs,
+                                     &my_charset_utf8_general_ci, &sql_cbs,
                                      CS_TEXT_REPRESENTATION, &cbd);
   if (fail)
     LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "sql_simple ret code: %d\n",
@@ -412,10 +410,10 @@ static void test_com_query(void *p [[maybe_unused]]) {
     /* get values */
     WRITE_STR(
         "-----------------------------------------------------------------\n");
-    WRITE_VAL("%s\t%s\n", sql_field[0][0].col_name, sql_field[0][1].col_name);
+    WRITE_VAL("%s\t\%s\n", sql_field[0][0].col_name, sql_field[0][1].col_name);
     for (uint row = 0; row < sql_num_rows; row++) {
       for (uint col = 0; col < sql_num_cols; col += 2) {
-        WRITE_VAL("%s\t%s\n", sql_str_value[col][row],
+        WRITE_VAL("%s\t\%s\n", sql_str_value[col][row],
                   sql_str_value[col + 1][row]);
       }
     }
@@ -438,7 +436,7 @@ static void test_com_query(void *p [[maybe_unused]]) {
   cmd.com_query.length = strlen(cmd.com_query.query);
 
   ENSURE_API_OK(command_service_run_command(
-      st_session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
+      st_session, COM_QUERY, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
       CS_TEXT_REPRESENTATION, &cbd));
 
   WRITE_VAL("error after bad SQL: %i: %s\n", cbd.err, cbd.errmsg.c_str());
@@ -467,7 +465,7 @@ static int test_com_init_db(void *p) {
   cmd.com_init_db.length = strlen("mysql");
   Callback_data cbd;
   ENSURE_API_OK(command_service_run_command(
-      st_session, COM_INIT_DB, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
+      st_session, COM_INIT_DB, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
       CS_TEXT_REPRESENTATION, &cbd));
 
   db_name = srv_session_info_get_current_db(st_session);
@@ -492,7 +490,7 @@ static int test_com_list_fields(void *p)
   cmd.com_init_db.db_name = "mysql";
   cmd.com_init_db.length = strlen("mysql");
   ENSURE_API_OK(command_service_run_command(st_session, COM_INIT_DB, &cmd,
-&my_charset_utf8mb3_general_ci, &sql_cbs, CS_TEXT_REPRESENTATION, p));
+&my_charset_utf8_general_ci, &sql_cbs, CS_TEXT_REPRESENTATION, p));
 
   WRITE_VAL("switched default db to: %s\n",
 srv_session_info_get_current_db(st_session));
@@ -505,7 +503,7 @@ char*)cmd.com_field_list.table_name); cmd.com_field_list.query = (unsigned
 char*)"%"; cmd.com_field_list.query_length = strlen((const
 char*)cmd.com_field_list.query);
   ENSURE_API_OK(command_service_run_command(st_session, COM_FIELD_LIST, &cmd,
-&my_charset_utf8mb3_general_ci, &sql_cbs, CS_TEXT_REPRESENTATION, p));
+&my_charset_utf8_general_ci, &sql_cbs, CS_TEXT_REPRESENTATION, p));
 
   WRITE_STR("-----------------------------------------------------------------\n");
   for (uint row_count=0;row_count < sql_num_rows;row_count++){
@@ -572,9 +570,9 @@ static void *test_session_thread(Test_data *tdata) {
 
   tdata->go();
 
-  const int r = command_service_run_command(
-      tdata->session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
-      CS_TEXT_REPRESENTATION, &cbdata);
+  int r = command_service_run_command(tdata->session, COM_QUERY, &cmd,
+                                      &my_charset_utf8_general_ci, &sql_cbs,
+                                      CS_TEXT_REPRESENTATION, &cbdata);
   WRITE_VAL("Killed run_command return value: %i\n", r);
 
   WRITE_VAL("thread shutdown: %i (%s)\n", cbdata.shutdown,
@@ -647,7 +645,7 @@ static int test_query_kill(void *p) {
   cmd.com_query.query = buffer;
   cmd.com_query.length = strlen(buffer);
   ENSURE_API_OK(command_service_run_command(
-      st_session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
+      st_session, COM_QUERY, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
       CS_TEXT_REPRESENTATION, &cbd));
 
   void *ret;
@@ -682,8 +680,8 @@ static int test_com_process_kill(void *p) {
 
   cmd.com_kill.id = srv_session_info_get_session_id(st_session_victim);
   ENSURE_API_OK(command_service_run_command(
-      st_session, COM_PROCESS_KILL, &cmd, &my_charset_utf8mb3_general_ci,
-      &sql_cbs, CS_TEXT_REPRESENTATION, &cbd));
+      st_session, COM_PROCESS_KILL, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
+      CS_TEXT_REPRESENTATION, &cbd));
 
   WRITE_VAL("session is dead now? %i\n",
             thd_killed(srv_session_info_get_thd(st_session_victim)));
@@ -711,7 +709,7 @@ static int test_priv(void *p) {
   cmd.com_query.query = "create user ordinary@localhost";
   cmd.com_query.length = strlen(cmd.com_query.query);
   ENSURE_API_OK(command_service_run_command(
-      root_session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
+      root_session, COM_QUERY, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
       CS_TEXT_REPRESENTATION, &cbd));
   WRITE_VAL("create user as root: %i %s\n", cbd.err, cbd.errmsg.c_str());
 
@@ -726,7 +724,7 @@ static int test_priv(void *p) {
     cmd.com_query.query = "create user bogus@localhost";
     cmd.com_query.length = strlen(cmd.com_query.query);
     ENSURE_API_OK(command_service_run_command(
-        ordinary_session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci,
+        ordinary_session, COM_QUERY, &cmd, &my_charset_utf8_general_ci,
         &sql_cbs, CS_TEXT_REPRESENTATION, &cbd));
 
     WRITE_VAL("create user supposed to fail: %i %s\n", cbd.err,
@@ -740,7 +738,7 @@ static int test_priv(void *p) {
   cmd.com_query.query = "drop user ordinary@localhost";
   cmd.com_query.length = strlen(cmd.com_query.query);
   ENSURE_API_OK(command_service_run_command(
-      root_session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
+      root_session, COM_QUERY, &cmd, &my_charset_utf8_general_ci, &sql_cbs,
       CS_TEXT_REPRESENTATION, &cbd));
   WRITE_VAL("drop user as root: %i %s\n", cbd.err, cbd.errmsg.c_str());
 

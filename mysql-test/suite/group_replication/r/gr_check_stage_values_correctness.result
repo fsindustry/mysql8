@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection server1]
 CREATE TABLE test.t1 (a INT PRIMARY KEY);
 include/rpl_sync.inc
@@ -18,8 +18,7 @@ include/assert.inc [Group replication recovery thread is not present in threads 
 
 include/stop_group_replication.inc
 include/assert.inc [No group replication entries are present in events_stages_current table.]
-include/assert.inc [2 group replication entries are present in threads table.]
-include/assert.inc [THD_mysql_thread_handler* are present in threads table.]
+include/assert.inc [No group replication entries are present in threads table.]
 
 # 03. Create some data on server1.
 #     Recovery channel will have some data on server2.

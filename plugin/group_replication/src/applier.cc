@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,13 +36,11 @@
 #include "plugin/group_replication/include/applier.h"
 #include "plugin/group_replication/include/leave_group_on_failure.h"
 #include "plugin/group_replication/include/plugin.h"
-#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/include/plugin_messages/single_primary_message.h"
 #include "plugin/group_replication/include/plugin_server_include.h"
 #include "plugin/group_replication/include/services/notification/notification.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_member_identifier.h"
 #include "sql/protocol_classic.h"
-#include "string_with_len.h"
 
 char applier_module_channel_name[] = "group_replication_applier";
 bool applier_thread_is_exiting = false;
@@ -99,7 +97,7 @@ int Applier_module::setup_applier_module(Handler_pipeline_type pipeline_type,
   int error = 0;
 
   // create the receiver queue
-  this->incoming = new Synchronized_queue<Packet *>(key_transaction_data);
+  this->incoming = new Synchronized_queue<Packet *>();
 
   stop_wait_timeout = stop_timeout;
 
@@ -269,9 +267,6 @@ int Applier_module::apply_view_change_packet(
     Format_description_log_event *fde_evt, Continuation *cont) {
   int error = 0;
 
-  /* Start garbage collection duration. */
-  const auto garbage_collection_begin = Metrics_handler::get_current_time();
-
   Gtid_set *group_executed_set = nullptr;
   Sid_map *sid_map = nullptr;
   if (!view_change_packet->group_executed_set.empty()) {
@@ -298,11 +293,6 @@ int Applier_module::apply_view_change_packet(
     delete sid_map;
     delete group_executed_set;
   }
-
-  /* Update garbage collection metrics. */
-  const auto garbage_collection_end = Metrics_handler::get_current_time();
-  metrics_handler->add_garbage_collection_run(garbage_collection_begin,
-                                              garbage_collection_end);
 
   View_change_log_event *view_change_event =
       new View_change_log_event(view_change_packet->view_id.c_str());
@@ -335,32 +325,25 @@ int Applier_module::apply_view_change_packet(
 int Applier_module::apply_data_packet(Data_packet *data_packet,
                                       Format_description_log_event *fde_evt,
                                       Continuation *cont) {
-  DBUG_TRACE;
   int error = 0;
   uchar *payload = data_packet->payload;
   uchar *payload_end = data_packet->payload + data_packet->len;
 
   DBUG_EXECUTE_IF("group_replication_before_apply_data_packet", {
-    const char act[] =
-        "now signal signal.group_replication_before_apply_data_packet_reached "
-        "wait_for continue_apply";
+    const char act[] = "now wait_for continue_apply";
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
 
   while ((payload != payload_end) && !error) {
     uint event_len = uint4korr(((uchar *)payload) + EVENT_LEN_OFFSET);
 
-    Data_packet *new_packet =
-        new Data_packet(payload, event_len, key_transaction_data);
+    Data_packet *new_packet = new Data_packet(payload, event_len);
     payload = payload + event_len;
 
-    Members_list *online_members = nullptr;
+    std::list<Gcs_member_identifier> *online_members = nullptr;
     if (nullptr != data_packet->m_online_members) {
-      online_members = new Members_list(
-          data_packet->m_online_members->begin(),
-          data_packet->m_online_members->end(),
-          Malloc_allocator<Gcs_member_identifier>(
-              key_consistent_members_that_must_prepare_transaction));
+      online_members =
+          new std::list<Gcs_member_identifier>(*data_packet->m_online_members);
     }
 
     Pipeline_event *pevent =
@@ -368,17 +351,7 @@ int Applier_module::apply_data_packet(Data_packet *data_packet,
                            data_packet->m_consistency_level, online_members);
     error = inject_event_into_pipeline(pevent, cont);
 
-    DBUG_EXECUTE_IF("group_replication_apply_data_packet_after_inject", {
-      const char act[] =
-          "now SIGNAL "
-          "signal.group_replication_apply_data_packet_after_inject_reached "
-          "WAIT_FOR "
-          "signal.group_replication_apply_data_packet_after_inject_continue";
-      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
-    });
-
     delete pevent;
-
     DBUG_EXECUTE_IF("stop_applier_channel_after_reading_write_rows_log_event", {
       if (payload[EVENT_TYPE_OFFSET] == binary_log::WRITE_ROWS_EVENT) {
         error = 1;
@@ -410,21 +383,18 @@ int Applier_module::apply_single_primary_action_packet(
 
 int Applier_module::apply_transaction_prepared_action_packet(
     Transaction_prepared_action_packet *packet) {
-  DBUG_TRACE;
   return transaction_consistency_manager->handle_remote_prepare(
       packet->get_sid(), packet->m_gno, packet->m_gcs_member_id);
 }
 
 int Applier_module::apply_sync_before_execution_action_packet(
     Sync_before_execution_action_packet *packet) {
-  DBUG_TRACE;
   return transaction_consistency_manager->handle_sync_before_execution_message(
       packet->m_thread_id, packet->m_gcs_member_id);
 }
 
 int Applier_module::apply_leaving_members_action_packet(
     Leaving_members_action_packet *packet) {
-  DBUG_TRACE;
   return transaction_consistency_manager->handle_member_leave(
       packet->m_leaving_members);
 }
@@ -595,9 +565,9 @@ end:
     */
     leave_actions.set(leave_group_on_failure::HANDLE_EXIT_STATE_ACTION,
                       gcs_module->belongs_to_group());
-    leave_group_on_failure::leave(leave_actions,
-                                  ER_GRP_RPL_APPLIER_EXECUTION_FATAL_ERROR,
-                                  nullptr, exit_state_action_abort_log_message);
+    leave_group_on_failure::leave(
+        leave_actions, ER_GRP_RPL_APPLIER_EXECUTION_FATAL_ERROR,
+        PSESSION_USE_THREAD, nullptr, exit_state_action_abort_log_message);
   }
 
   // Even on error cases, send a stop signal to all handlers that could be
@@ -793,21 +763,10 @@ delete_pipeline:
 void Applier_module::inform_of_applier_stop(char *channel_name, bool aborted) {
   DBUG_TRACE;
 
-  /*
-   This function is called when async replication applier thread is stopped.
-   The stop of async replication applier thread is not an issue, however when
-   async replication applier thread stops because of some errors, GR applier
-   pipeline is also stopped and member goes in the ERROR state.
-   The function parameter 'aborted' informs about the async replication
-   applier thread errors.
-   When the async replication applier thread stop is initiated by Clone GR
-   (m_ignore_applier_errors_during_stop=true), GR applier pipeline should
-   ignore async replication applier thread errors.
-  */
   if (!strcmp(channel_name, applier_module_channel_name) && aborted &&
-      !m_ignore_applier_errors_during_stop &&
       applier_thd_state.is_thread_alive()) {
     LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_APPLIER_THD_EXECUTION_ABORTED);
+
     applier_error = 1;
 
     // before waiting for termination, signal the queue to unlock.

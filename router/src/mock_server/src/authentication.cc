@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,12 +25,13 @@
 #include "authentication.h"
 
 #include <memory>  // unique_ptr
-#include <optional>
 #include <string_view>
 #include <vector>
 
 #include <openssl/evp.h>
 #include <openssl/opensslv.h>
+
+#include "mysql/harness/stdx/expected.h"
 
 namespace impl {
 /**
@@ -50,11 +51,11 @@ namespace impl {
  * double_hashed_password; if false, nonce appears after double_hashed_password
  * @returns auth-response a client would send it
  */
-static std::optional<std::vector<uint8_t>> scramble(
+static stdx::expected<std::vector<uint8_t>, void> scramble(
     std::string_view nonce, std::string_view password,
     const EVP_MD *digest_func, bool nonce_before_double_hashed_password) {
   // in case of empty password, the hash is empty too
-  if (password.size() == 0) return std::vector<uint8_t>{};
+  if (password.size() == 0) return {};
 
   const auto digest_size = EVP_MD_size(digest_func);
 
@@ -95,7 +96,9 @@ static std::optional<std::vector<uint8_t>> scramble(
   ok &= EVP_DigestFinal_ex(digest_ctx.get(), double_hashed_password.data(),
                            nullptr);
 
-  if (!ok) return std::nullopt;
+  if (!ok) {
+    return stdx::make_unexpected();
+  }
 
   // scramble the hashed password with the nonce
   for (int i = 0; i < digest_size; ++i) {
@@ -108,21 +111,24 @@ static std::optional<std::vector<uint8_t>> scramble(
 
 // mysql_native_password
 
-std::optional<std::vector<uint8_t>> MySQLNativePassword::scramble(
+stdx::expected<std::vector<uint8_t>, void> MySQLNativePassword::scramble(
     std::string_view nonce, std::string_view password) {
   return impl::scramble(nonce, password, EVP_sha1(), true);
 }
 
+constexpr char MySQLNativePassword::name[];
+
 // caching_sha2_password
 
-std::optional<std::vector<uint8_t>> CachingSha2Password::scramble(
+stdx::expected<std::vector<uint8_t>, void> CachingSha2Password::scramble(
     std::string_view nonce, std::string_view password) {
   return impl::scramble(nonce, password, EVP_sha256(), false);
 }
+constexpr char CachingSha2Password::name[];
 
 // clear_text_password
 
-std::optional<std::vector<uint8_t>> ClearTextPassword::scramble(
+stdx::expected<std::vector<uint8_t>, void> ClearTextPassword::scramble(
     std::string_view /* nonce */, std::string_view password) {
   std::vector<uint8_t> res(password.begin(), password.end());
 
@@ -131,3 +137,5 @@ std::optional<std::vector<uint8_t>> ClearTextPassword::scramble(
 
   return res;
 }
+
+constexpr char ClearTextPassword::name[];

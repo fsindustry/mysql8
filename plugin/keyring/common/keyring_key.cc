@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -19,8 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
-
-#include "my_cleanse.h"
 
 #include "plugin/keyring/common/keyring_key.h"
 
@@ -69,7 +67,7 @@ void Key::init(const char *a_key_id, const char *a_key_type,
 }
 
 Key::~Key() {
-  if (key) my_cleanse(key.get(), key_len);
+  if (key) memset(key.get(), 0, key_len);
 }
 
 void Key::store_field_length(uchar *buffer, size_t *buffer_position,
@@ -97,7 +95,7 @@ void Key::store_in_buffer(uchar *buffer, size_t *buffer_position) const {
   store_field(buffer, buffer_position, reinterpret_cast<char *>(key.get()),
               key_len);
 
-  const size_t padding =
+  size_t padding =
       (sizeof(size_t) - (*buffer_position % sizeof(size_t))) % sizeof(size_t);
 
   *buffer_position += padding;
@@ -162,7 +160,7 @@ bool Key::load_from_buffer(uchar *buffer,
   memcpy(this->key.get(), buffer + buffer_position, key_len);
   buffer_position += key_len;
 
-  const size_t padding =
+  size_t padding =
       (sizeof(size_t) - (buffer_position % sizeof(size_t))) % sizeof(size_t);
   buffer_position += padding;
   assert(buffer_position % sizeof(size_t) == 0);
@@ -177,14 +175,14 @@ bool Key::load_from_buffer(uchar *buffer,
   The memory is aligned to sizeof(size_t)
 */
 size_t Key::get_key_pod_size() const {
-  const size_t key_pod_size = 4 * sizeof(size_t) + key_id.length() +
-                              key_type.length() + user_id.length() +
-                              sizeof(key_len) + key_len;
+  size_t key_pod_size = 4 * sizeof(size_t) + key_id.length() +
+                        key_type.length() + user_id.length() + sizeof(key_len) +
+                        key_len;
 
-  const size_t padding =
+  size_t padding =
       (sizeof(size_t) - (key_pod_size % sizeof(size_t))) % sizeof(size_t);
 
-  const size_t key_pod_size_aligned = key_pod_size + padding;
+  size_t key_pod_size_aligned = key_pod_size + padding;
   assert(key_pod_size_aligned % sizeof(size_t) == 0);
   return key_pod_size_aligned;
 }

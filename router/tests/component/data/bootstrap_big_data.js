@@ -2,6 +2,8 @@ var common_stmts = require("common_statements");
 
 var options = {
   innodb_cluster_name: "test",
+  innodb_cluster_instances:
+      [["localhost", 5500], ["localhost", 5510], ["localhost", 5520]],
 };
 
 var common_responses = common_stmts.prepare_statement_responses(
@@ -9,7 +11,6 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_set_session_options",
       "router_set_gr_consistency_level",
       "router_select_schema_version",
-      "router_select_current_instance_attributes",
       "router_select_group_membership_with_primary_mode",
       "router_select_group_replication_primary_member",
       "router_select_metadata",

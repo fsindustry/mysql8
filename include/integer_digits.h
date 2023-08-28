@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2019, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2019, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,8 +29,6 @@
 #include <algorithm>
 #include <limits>
 #include <type_traits>
-
-#include "mysql/attribute.h"
 
 /**
   @file
@@ -71,7 +69,6 @@ class TwoDigitWriter {
   @param[in,out] to the destination string
   @return pointer to the character just after the last digit
 */
-MY_ATTRIBUTE((visibility("default")))
 inline char *write_two_digits(int value, char *to) {
   static constexpr TwoDigitWriter writer;
   return writer.Write(value, to);

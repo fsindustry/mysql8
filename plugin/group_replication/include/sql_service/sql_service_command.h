@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,6 +43,86 @@ enum enum_plugin_con_isolation {
 class Sql_service_commands {
  public:
   /**
+    Internal method to set the super read only mode.
+
+    @param sql_interface the server session interface for query execution
+    @param arg a generic argument to give the method info or get a result
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long internal_set_super_read_only(Sql_service_interface *sql_interface,
+                                    void *arg = nullptr);
+
+  /**
+    Internal method to reset the super read only mode.
+
+    @param sql_interface the server session interface for query execution
+    @param arg a generic argument to give the method info or get a result
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long internal_reset_super_read_only(Sql_service_interface *sql_interface,
+                                      void *arg = nullptr);
+
+  /**
+    Internal method to reset the super read only mode.
+
+    @param sql_interface the server session interface for query execution
+    @param arg a generic argument to give the method info or get a result
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long internal_reset_read_only(Sql_service_interface *sql_interface,
+                                void *arg = nullptr);
+
+  /**
+   Internal method to get the super read only mode.
+
+   @param sql_interface the server session interface for query execution
+   @param arg a generic argument to give the method info or get a result
+
+   @retval -1  Error reading the value
+   @retval  0  Not in super read mode
+   @retval  1  In read super mode
+  */
+  long internal_get_server_super_read_only(Sql_service_interface *sql_interface,
+                                           void *arg = nullptr);
+
+  /**
+    Internal method to get the super read only mode.
+
+    @param sql_interface the server session interface for query execution
+    @param arg a generic argument to give the method info or get a result
+
+    @retval -1  Error reading the value
+    @retval  0  Not in super read mode
+    @retval  1  In read super mode
+  */
+  long internal_get_server_read_only(Sql_service_interface *sql_interface,
+                                     void *arg = nullptr);
+
+  /**
+    Method to wait for the server gtid_executed to match the given GTID string
+
+    @param sql_interface the server session interface for query execution
+    @param [in] gtid_executed  The GTID string to check
+    @param [in] timeout        The timeout after which the method should break
+
+    @return the error value returned
+      @retval 0      OK
+      @retval !=0    Error when executed or timeout.
+  */
+  long internal_wait_for_server_gtid_executed(
+      Sql_service_interface *sql_interface, std::string &gtid_executed,
+      int timeout = 0);
+
+  /**
    Method to kill the session identified by the given session id in those
    cases where the server hangs while executing the sql query.
 
@@ -55,6 +135,17 @@ class Sql_service_commands {
   */
   long internal_kill_session(Sql_service_interface *sql_interface,
                              void *session_id = nullptr);
+
+  /**
+   Method to set a variable using SET PERSIST_ONLY
+   @param sql_interface  the server session interface for query execution
+   @param variable_args  arg void pointer, should be pair <string,string>
+   @return the error value returned
+    @retval 0      OK
+    @retval !=0    Error
+  */
+  long internal_set_persist_only_variable(Sql_service_interface *sql_interface,
+                                          void *variable_args = nullptr);
 
   /**
     Method to remotely clone a server
@@ -94,6 +185,19 @@ class Sql_service_commands {
   */
   long internal_execute_conditional_query(Sql_service_interface *sql_interface,
                                           void *variable_args = nullptr);
+
+  /**
+    Internal method to set the offline mode.
+
+    @param sql_interface the server session interface for query execution
+    @param arg a generic argument to give the method info or get a result
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long internal_set_offline_mode(Sql_service_interface *sql_interface,
+                                 void *arg = nullptr);
 };
 
 struct st_session_method {
@@ -187,7 +291,7 @@ class Session_plugin_thread {
   thread_state m_session_thread_state;
   /** Session termination flag */
   bool m_session_thread_terminate;
-  /** Session thread error flag */
+  /** Session tread error flag */
   int m_session_thread_error;
 };
 
@@ -281,6 +385,77 @@ class Sql_service_command_interface {
   bool is_session_valid();
 
   /**
+    Method to set the super_read_only variable "ON".
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long set_super_read_only();
+
+  /**
+    Method to reset the super_read_only mode back to "OFF" on the
+    server.
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long reset_super_read_only();
+
+  /**
+    Method to reset the read_only mode back to "OFF" on the
+    server.
+
+    @return error code during execution of the sql query.
+      @retval 0  -  success
+      @retval >0 - failure
+  */
+  long reset_read_only();
+
+  /**
+    Method to wait for the server gtid_executed to match the given GTID string
+
+    @param [in] gtid_executed  The GTID string to check
+    @param [in] timeout        The timeout after which the method should break
+
+    @return the error value returned
+      @retval 0    OK
+      @retval -1   Timeout on the GTID wait
+      @retval 1    Error when executed
+  */
+  long wait_for_server_gtid_executed(std::string &gtid_executed,
+                                     int timeout = 0);
+
+  /**
+    Method to get the value of the super_read_only variable on the server.
+
+    @retval -1  Error reading the value
+    @retval  0  Not in super read mode
+    @retval  1  In read super mode
+  */
+  long get_server_super_read_only();
+
+  /**
+    Method to get the value of the read_only variable on the server.
+
+    @retval -1  Error reading the value
+    @retval  0  Not in super read mode
+    @retval  1  In read super mode
+  */
+  long get_server_read_only();
+
+  /**
+    Method to set a variable using SET PERSIST_ONLY
+    @param variable the variable name
+    @param value the value for the variable
+    @return the error value returned
+      @retval 0      OK
+      @retval !=0    Error
+  */
+  long set_persist_only_variable(std::string &variable, std::string &value);
+
+  /**
     Method to remotely clone a server
 
     @param [in] host      The host to clone
@@ -345,6 +520,15 @@ class Sql_service_command_interface {
   */
   long execute_conditional_query(std::string &query, bool *result,
                                  std::string &error);
+
+  /**
+    Method to set the offline_mode variable "ON".
+
+    @return error code during execution of the sql query.
+       @retval 0  - success
+       @retval >0 - failure
+  */
+  long set_offline_mode();
 
  private:
   enum_plugin_con_isolation connection_thread_isolation;

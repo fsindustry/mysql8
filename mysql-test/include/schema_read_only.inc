@@ -3,7 +3,7 @@
 #--------------------------------------------------------------------
 
 --source include/have_debug.inc
---source include/not_valgrind.inc
+--source include/no_valgrind_without_big.inc
 
 --let $LCTN = `SELECT @@lower_case_table_names`
 

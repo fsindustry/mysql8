@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -101,7 +101,7 @@ int my_sync(File fd, myf my_flags) {
   } while (res == -1 && errno == EINTR);
 
   if (res) {
-    const int er = errno;
+    int er = errno;
     set_my_errno(er);
     if (!er) set_my_errno(-1); /* Unknown error */
     if (after_sync_wait) (*after_sync_wait)();

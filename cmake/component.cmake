@@ -1,4 +1,4 @@
-# Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2013, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -133,10 +133,7 @@ MACRO(MYSQL_ADD_COMPONENT component_arg)
         COMPONENT ${INSTALL_COMPONENT})
     ENDIF()
   ENDIF()
-
-  ADD_DEPENDENCIES(component_all ${target})
-
-ENDMACRO(MYSQL_ADD_COMPONENT)
+ENDMACRO()
 
 
 # Add all CMake projects under components

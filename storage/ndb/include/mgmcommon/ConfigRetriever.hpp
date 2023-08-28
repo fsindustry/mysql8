@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,7 +38,7 @@ class ConfigRetriever {
 public:
   ConfigRetriever(const char * _connect_string, int force_nodeid,
                   Uint32 version, ndb_mgm_node_type nodeType,
-		  const char * _bind_address = nullptr,
+		  const char * _bind_address = 0,
                   int timeout_ms = 30000);
   ~ConfigRetriever();
 
@@ -81,7 +81,6 @@ public:
   /**
    * Get config from file
    */
-  static ndb_mgm::config_ptr getConfig(const char * file, BaseString& err);
   ndb_mgm::config_ptr getConfig(const char * file);
 
   /**

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,9 +26,7 @@
 #include <AttributeHeader.hpp>
 #include <signaldata/TcKeyConf.hpp>
 #include <signaldata/DictTabInfo.hpp>
-#include "portlib/ndb_compiler.h"
-#include <cstddef>
-#include <cstdint>
+
 
 /**
  * 'class NdbReceiveBuffer' takes care of buffering multi-row
@@ -77,12 +75,12 @@ public:
    */
   Uint32 *allocRow(Uint32 noOfWords)
   {
-    //assert(verifyBuffer());
-    assert(checkFreeSpace() >= noOfWords+1);  // + eodMagic
+    assert(verifyBuffer());
     const Uint32 pos = rowIx(m_rows);  //First free
     rowIx(++m_rows) = pos + noOfWords; //Next free
 #ifndef NDEBUG
     m_buffer[pos + noOfWords] = eodMagic;
+    assert(verifyBuffer());
 #endif
     return &m_buffer[pos];
   }
@@ -96,23 +94,23 @@ public:
    */
   Uint32 *allocKey(Uint32 noOfWords)
   {
-    //assert(verifyBuffer());
-    assert(checkFreeSpace() >= noOfWords+1);  // + eodMagic
+    assert(verifyBuffer());
     const Uint32 prev = keyIx(m_keys-1);
     const Uint32 pos = prev - noOfWords;
     keyIx(m_keys) = pos;
     m_keys++;
 #ifndef NDEBUG
     m_buffer[pos-1] = eodMagic;
+    assert(verifyBuffer());
 #endif
     return &m_buffer[pos];
   }
 
   const Uint32 *getRow(Uint32 row, Uint32& noOfWords) const
   {
-    //assert(verifyBuffer());
+    assert(verifyBuffer());
     if (unlikely(row >= m_rows))
-      return nullptr;
+      return NULL;
 
     const Uint32 ix = rowIx(row);
     noOfWords = rowIx(row+1) - ix;
@@ -122,9 +120,9 @@ public:
 
   const Uint32 *getKey(Uint32 key, Uint32& noOfWords) const
   {
-    //assert(verifyBuffer());
+    assert(verifyBuffer());
     if (unlikely(key >= m_keys))
-      return nullptr;
+      return NULL;
 
     const Uint32 ix = keyIx(key);
     noOfWords = keyIx(key-1) - ix;
@@ -193,57 +191,6 @@ private:
   Uint32  keyIx(Uint32 key) const { return m_buffer[m_bufSizeWords-2-key]; }
   Uint32& keyIx(Uint32 key)       { return m_buffer[m_bufSizeWords-2-key]; }
 
-  /**
-   * Check the amount of free space in NdbReceiverBuffer. The free space
-   * is between the 'rows' allocated upwards, and keys growing downwards.
-   * Also doing some simplified verification of buffer consistency.
-   */
-  Uint32 checkFreeSpace() const
-  {
-    // No more rows/keys than we allocated for
-    assert(m_rows <= m_maxRows);
-    assert(m_keys <= m_maxRows);
-
-    /**
-     * rowIx() / keyIx() refers within m_buffer[], without
-     * referring into the rowIx() / keyIx() arrays:
-     *
-     * NOTE that 'm_keys > 0' is the only indication of there possibly
-     *      being a keyIx()-array. Until any keys arrives, we make the
-     *      assumption that there are none, and the rowIx() may
-     *      allocRow's into the array of keyIx.
-     */
-    const Uint32 keyArraySize[[maybe_unused]] = (m_keys > 0) ? m_maxRows+1 : 0;
-    const Uint32 bufIxLow[[maybe_unused]] = m_maxRows+1;
-    const Uint32 bufIxHigh[[maybe_unused]] = m_bufSizeWords - keyArraySize;
-
-    assert(rowIx(m_rows) >= bufIxLow);
-    assert(rowIx(m_rows) <= bufIxHigh);
-    assert(m_keys == 0 || keyIx(m_keys-1) >= bufIxLow);
-    assert(m_keys == 0 || keyIx(m_keys-1) <= bufIxHigh);
-
-    // Last written row/key contents not written past allocated end.
-    // Note that 'eodMagic' is not present until a row/key is allocated.
-    assert(m_rows == 0 || m_buffer[rowIx(m_rows)] == eodMagic);
-    assert(m_keys == 0 || m_buffer[keyIx(m_keys-1)-1] == eodMagic);
-
-    const Uint32 rows_end = rowIx(m_rows);  //First free row
-    const Uint32 keys_end = (m_keys > 0) ? keyIx(m_keys-1) : m_bufSizeWords;
-    assert(keys_end >= rows_end);
-    return keys_end - rows_end;
-  }
-
-  /**
-   * Verify the contents of all rows/keys inserted into NdbReceiverBuffer.
-   * It had significant impact on performance, so we prefer asserts based
-   * on the simpler checkFreeSpace() instead. We mostly keep this method
-   * in case it will be needed for later debugging of buffer issues.
-   *
-   * BEWARE that allocRow()/Key() is called from deliver_signals(),
-   * when holding the poll-right. As the poll-right effectively
-   * single-threads the signal delivery, extra care should be taken to
-   * not add extra overhead to NdbReceiverBuffer allocation.
-   */
   bool verifyBuffer() const
   {
     assert(m_rows <= m_maxRows);
@@ -305,12 +252,11 @@ NdbReceiverBuffer::NdbReceiverBuffer(
    * available key buffer area.
    *
    * NOTE: We init key_ix[] even if keyinfo not present
-   * in result set. In that case it might later be overwritten
+   * in result set. that case it might later be overwritten
    * by rows, which is ok as the keyinfo is then never used.
    */
   keyIx(-1) = m_bufSizeWords - (m_maxRows+1);
-  //assert(verifyBuffer());
-  assert(checkFreeSpace() == m_bufSizeWords - (m_maxRows+1));
+  assert(verifyBuffer());
 }
 
 
@@ -325,25 +271,21 @@ static
 const Uint8*
 pad(const Uint8* src, Uint32 align, Uint32 bitPos);
 
-static
-size_t
-pad_pos(size_t pos, Uint32 align, Uint32 bitPos);
-
 NdbReceiver::NdbReceiver(Ndb *aNdb) :
   theMagicNumber(0),
   m_ndb(aNdb),
   m_id(NdbObjectIdMap::InvalidId),
   m_tcPtrI(RNIL),
   m_type(NDB_UNINITIALIZED),
-  m_owner(nullptr),
-  m_ndb_record(nullptr),
-  m_row_buffer(nullptr),
-  m_recv_buffer(nullptr),
+  m_owner(NULL),
+  m_ndb_record(NULL),
+  m_row_buffer(NULL),
+  m_recv_buffer(NULL),
   m_read_range_no(false),
   m_read_key_info(false),
-  m_firstRecAttr(nullptr),
-  m_lastRecAttr(nullptr),
-  m_rec_attr_data(nullptr),
+  m_firstRecAttr(NULL),
+  m_lastRecAttr(NULL),
+  m_rec_attr_data(NULL),
   m_rec_attr_len(0),
   m_current_row(beforeFirstRow),
   m_expected_result_length(0),
@@ -376,14 +318,14 @@ NdbReceiver::init(ReceiverType type, void* owner)
   theMagicNumber = getMagicNumber();
   m_type = type;
   m_owner = owner;
-  m_ndb_record= nullptr;
-  m_row_buffer= nullptr;
-  m_recv_buffer= nullptr;
+  m_ndb_record= NULL;
+  m_row_buffer= NULL;
+  m_recv_buffer= NULL;
   m_read_range_no= false;
   m_read_key_info= false;
-  m_firstRecAttr = nullptr;
-  m_lastRecAttr = nullptr;
-  m_rec_attr_data = nullptr;
+  m_firstRecAttr = NULL;
+  m_lastRecAttr = NULL;
+  m_rec_attr_data = NULL;
   m_rec_attr_len = 0;
 
   if (m_id == NdbObjectIdMap::InvalidId)
@@ -408,7 +350,7 @@ NdbReceiver::do_setup_ndbrecord(const NdbRecord *ndb_record,
 {
   m_ndb_record= ndb_record;
   m_row_buffer= row_buffer;
-  m_recv_buffer= nullptr;
+  m_recv_buffer= NULL;
   m_read_range_no= read_range_no;
   m_read_key_info= read_key_info;
 }
@@ -418,19 +360,19 @@ NdbReceiver::release()
 {
   theMagicNumber = 0;
   NdbRecAttr* tRecAttr = m_firstRecAttr;
-  while (tRecAttr != nullptr)
+  while (tRecAttr != NULL)
   {
     NdbRecAttr* tSaveRecAttr = tRecAttr;
     tRecAttr = tRecAttr->next();
     m_ndb->releaseRecAttr(tSaveRecAttr);
   }
-  m_firstRecAttr = nullptr;
-  m_lastRecAttr = nullptr;
-  m_rec_attr_data = nullptr;
+  m_firstRecAttr = NULL;
+  m_lastRecAttr = NULL;
+  m_rec_attr_data = NULL;
   m_rec_attr_len = 0;
-  m_ndb_record= nullptr;
-  m_row_buffer= nullptr;
-  m_recv_buffer= nullptr;
+  m_ndb_record= NULL;
+  m_row_buffer= NULL;
+  m_recv_buffer= NULL;
 }
   
 NdbRecAttr *
@@ -438,25 +380,25 @@ NdbReceiver::getValue(const NdbColumnImpl* tAttrInfo, char * user_dst_ptr)
 {
   NdbRecAttr* tRecAttr = m_ndb->getRecAttr();
   if(tRecAttr && !tRecAttr->setup(tAttrInfo, user_dst_ptr)){
-    if (m_firstRecAttr == nullptr)
+    if (m_firstRecAttr == NULL)
       m_firstRecAttr = tRecAttr;
     else
       m_lastRecAttr->next(tRecAttr);
     m_lastRecAttr = tRecAttr;
-    tRecAttr->next(nullptr);
+    tRecAttr->next(NULL);
     return tRecAttr;
   }
   if(tRecAttr){
     m_ndb->releaseRecAttr(tRecAttr);
   }    
-  return nullptr;
+  return 0;
 }
 
 void
 NdbReceiver::getValues(const NdbRecord* rec, char *row_ptr)
 {
-  assert(m_recv_buffer == nullptr);
-  assert(rec != nullptr);
+  assert(m_recv_buffer == NULL);
+  assert(rec != NULL);
 
   m_ndb_record= rec;
   m_row_buffer= row_ptr;
@@ -471,7 +413,7 @@ NdbReceiver::prepareSend()
   m_received_result_length = 0;
   m_expected_result_length = 0;
 
-  if (m_recv_buffer != nullptr)
+  if (m_recv_buffer != NULL)
   {
     m_recv_buffer->reset();
   }
@@ -494,9 +436,9 @@ NdbReceiver::prepareReceive(NdbReceiverBuffer *buffer)
   - It should stay strictly within the 'batch_size' (#rows) limit.
   - It is allowed to overallocate the 'batch_byte_size' (slightly)
     in order to complete the current row when it hit the limit.
-    (Up to ::packed_rowsize())
+    (Upto ::packed_rowsize())
 
-  The client should be prepared to receive, and buffer, up to 
+  The client should be prepared to receive, and buffer, upto 
   'batch_size' rows from each fragment.
 */
 //static
@@ -573,10 +515,10 @@ Uint32 packed_rowsize(const NdbRecord *result_record,
 {
   Uint32 nullCount = 0;
   Uint32 bitPos = 0;
-  UintPtr pos = 0;
+  const Uint8 *pos = NULL;
 
   bool pk_is_known = false;
-  if (likely(result_record != nullptr))
+  if (likely(result_record != NULL))
   {
     for (Uint32 i= 0; i<result_record->noOfColumns; i++)
     {
@@ -597,13 +539,13 @@ Uint32 packed_rowsize(const NdbRecord *result_record,
 
         switch(align){
         case DictTabInfo::aBit:
-          pos = pad_pos(pos, 0, 0);
+          pos = pad(pos, 0, 0);
           bitPos += col->bitCount;
           pos += 4 * (bitPos / 32);
           bitPos = (bitPos % 32);
           break;
         default:
-          pos = pad_pos(pos, align, bitPos);
+          pos = pad(pos, align, bitPos);
           bitPos = 0;
           pos += col->maxSize;
           break;
@@ -614,7 +556,7 @@ Uint32 packed_rowsize(const NdbRecord *result_record,
       }
     }
   }
-  Uint32 sizeInWords = pad_pos(pos, 0, bitPos);
+  Uint32 sizeInWords = (Uint32)(((Uint32*)pad(pos, 0, bitPos) - (Uint32*)NULL));
 
   // Add AttributeHeader::READ_PACKED or ::READ_ALL (Uint32) and
   // variable size bitmask the 'packed' columns and their null bits.
@@ -630,20 +572,20 @@ Uint32 packed_rowsize(const NdbRecord *result_record,
     sizeInWords += (1+sigBitmaskWords);   //AttrHeader + bitMask
   }
 
-  // The optional RANGE_NO is transferred and stored in buffer
+  // The optional RANGE_NO is transfered and stored in buffer
   // as AttributeHeader::RANGE_NO + an Uint32 'range_no'
   if (read_range_no)
   {
     sizeInWords += 2;
   }
-  // The optional CORR_FACTOR is transferred
+  // The optional CORR_FACTOR is transfered
   // as AttributeHeader::CORR_FACTOR64 + an Uint64
   if (read_correlation)
   {
     sizeInWords += 3;
   }
 
-  // KeyInfo is transferred in a separate signal,
+  // KeyInfo is transfered in a separate signal,
   // and is stored in the packed buffer together with 'info' word
   if (keySizeWords > 0)
   {
@@ -652,7 +594,7 @@ Uint32 packed_rowsize(const NdbRecord *result_record,
 
   /* Add extra needed to transfer RecAttrs requested by getValue() */
   const NdbRecAttr *ra= first_rec_attr;
-  while (ra != nullptr)
+  while (ra != NULL)
   {
     // AttrHeader + max column size. Aligned to word boundary
     sizeInWords+= 1 + ((ra->getColumn()->getSizeInBytes() + 3) / 4);
@@ -715,11 +657,11 @@ NdbReceiver::result_bufsize(const NdbRecord *result_record,
    *
    * In the later case we can make no assumption about number of rows we
    * actually fetched, except that it will be in the range 1..'batch_rows'.
-   * So we need to take a conservative approach in our calculations here. 
+   * So we need to take a conservative approach in our calulations here. 
    *
    * Furthermore, LQH doesn't terminate the batch until *after*
-   * 'batch_bytes' has been exceeded. Thus it could over-deliver
-   * up to 'rowSizeWords-1' more than specified in 'batch_bytes'!
+   * 'batch_bytes' has been exceed. Thus it could over-deliver
+   * upto 'rowSizeWords-1' more than specified in 'batch_bytes'!
    * When used from SPJ, the available 'batch_bytes' may be divided
    * among a number of 'parallelism' fragment scans being joined.
    * Each of these may over-deliver on the last row as described above.
@@ -810,17 +752,16 @@ NdbReceiver::result_bufsize(const NdbRecord *result_record,
  */
 static
 inline
-UintPtr
-pad_pos(UintPtr pos, Uint32 align, Uint32 bitPos)
+const Uint8*
+pad(const Uint8* src, Uint32 align, Uint32 bitPos)
 {
-  UintPtr ptr = pos;
-  switch(align)
-  {
+  UintPtr ptr = UintPtr(src);
+  switch(align){
   case DictTabInfo::aBit:
   case DictTabInfo::a32Bit:
   case DictTabInfo::a64Bit:
   case DictTabInfo::a128Bit:
-    return (((ptr + 3) & ~UintPtr{3}) + 4 * ((bitPos + 31) >> 5));
+    return (Uint8*)(((ptr + 3) & ~(UintPtr)3) + 4 * ((bitPos + 31) >> 5));
 
   default:
 #ifdef VM_TRACE
@@ -830,17 +771,8 @@ pad_pos(UintPtr pos, Uint32 align, Uint32 bitPos)
 
   case DictTabInfo::an8Bit:
   case DictTabInfo::a16Bit:
-    return pos + 4 * ((bitPos + 31) >> 5);
+    return src + 4 * ((bitPos + 31) >> 5);
   }
-}
-
-static
-inline
-const Uint8*
-pad(const Uint8* src, Uint32 align, Uint32 bitPos)
-{
-  UintPtr ptr = UintPtr(src);
-  return (const Uint8*)pad_pos(ptr, align, bitPos);
 }
 
 /**
@@ -852,7 +784,7 @@ static
 void
 handle_packed_bit(const char* _src, Uint32 pos, Uint32 len, char* _dst)
 {
-  const Uint32* src = (const Uint32*)_src;
+  Uint32 * src = (Uint32*)_src;
   assert((UintPtr(src) & 3) == 0);
 
   /* Convert char* to aligned Uint32* and some byte offset */
@@ -864,23 +796,22 @@ handle_packed_bit(const char* _src, Uint32 pos, Uint32 len, char* _dst)
                          src, pos, len);
 }
 
+
 /**
  * unpackRecAttr
  * Unpack a packed stream of field values, whose presence and nullness
  * is indicated by a leading bitmap into a list of NdbRecAttr objects
  * Return the number of words read from the input stream.
- * On failure UINT32_MAX is returned.
  */
-Uint32 NdbReceiver::unpackRecAttr(NdbRecAttr** recAttr,
-                                  Uint32 bmlen,
-                                  const Uint32* const aDataPtr,
-                                  Uint32 aLength)
+//static
+Uint32
+NdbReceiver::unpackRecAttr(NdbRecAttr** recAttr, 
+                           Uint32 bmlen, 
+                           const Uint32* aDataPtr, 
+                           Uint32 aLength)
 {
-  constexpr Uint32 ERROR = UINT32_MAX;
-  if (unlikely(bmlen > aLength)) return ERROR;
   NdbRecAttr* currRecAttr = *recAttr;
-  const Uint8* src = (const Uint8*)(aDataPtr + bmlen);
-  const Uint8* const end = (const Uint8*)(aDataPtr + aLength);
+  const Uint8 *src = (Uint8*)(aDataPtr + bmlen);
   Uint32 bitPos = 0;
   for (Uint32 i = 0, attrId = 0; i<32*bmlen; i++, attrId++)
   {
@@ -888,12 +819,12 @@ Uint32 NdbReceiver::unpackRecAttr(NdbRecAttr** recAttr,
     {
       const NdbColumnImpl & col = 
 	NdbColumnImpl::getImpl(* currRecAttr->getColumn());
-      if (unlikely(attrId != (Uint32)col.m_attrId)) return ERROR;
+      if (unlikely(attrId != (Uint32)col.m_attrId))
+        goto err;
       if (col.m_nullable)
       {
-        if (unlikely(i + 1 >= 32 * bmlen)) return ERROR;
-        if (BitmaskImpl::get(bmlen, aDataPtr, ++i))
-        {
+	if (BitmaskImpl::get(bmlen, aDataPtr, ++i))
+	{
 	  currRecAttr->setNULL();
 	  currRecAttr = currRecAttr->next();
 	  continue;
@@ -908,16 +839,12 @@ Uint32 NdbReceiver::unpackRecAttr(NdbRecAttr** recAttr,
       
       switch(align){
       case DictTabInfo::aBit: // Bit
-      {
         src = pad(src, 0, 0);
-        size_t byte_len = 4 * ((bitPos + len) >> 5);
-        if (unlikely(end < src + byte_len)) return ERROR;
-        handle_packed_bit((const char*)src, bitPos, len, currRecAttr->aRef());
-        src += byte_len;
-        bitPos = (bitPos + len) & 31;
-        currRecAttr->set_size_in_bytes(sz);
+	handle_packed_bit((const char*)src, bitPos, len, 
+                          currRecAttr->aRef());
+	src += 4 * ((bitPos + len) >> 5);
+	bitPos = (bitPos + len) & 31;
         goto next;
-      }
       default:
         src = pad(src, align, bitPos);
       }
@@ -925,32 +852,28 @@ Uint32 NdbReceiver::unpackRecAttr(NdbRecAttr** recAttr,
       case NDB_ARRAYTYPE_FIXED:
         break;
       case NDB_ARRAYTYPE_SHORT_VAR:
-        if (unlikely(end < src + 1)) return ERROR;
         sz = 1 + src[0];
         break;
       case NDB_ARRAYTYPE_MEDIUM_VAR:
-        if (unlikely(end < src + 2)) return ERROR;
-        sz = 2 + src[0] + 256 * src[1];
+	sz = 2 + src[0] + 256 * src[1];
         break;
       default:
-        return ERROR;
+        goto err;
       }
       
       bitPos = 0;
-      if (unlikely(end < src + sz)) return ERROR;
-      currRecAttr->receive_data((const Uint32*)src, sz);
+      currRecAttr->receive_data((Uint32*)src, sz);
       src += sz;
   next:
       currRecAttr = currRecAttr->next();
     }
   }
   * recAttr = currRecAttr;
-  const Uint8* read_src = pad(src, 0, bitPos);
-  if (unlikely(end < read_src)) return ERROR;
-  const std::ptrdiff_t read_words = (const Uint32*)read_src - aDataPtr;
-  if (unlikely(read_words < 0) || unlikely(read_words > INT32_MAX))
-    return ERROR;
-  return (Uint32)read_words;
+  return (Uint32)(((Uint32*)pad(src, 0, bitPos)) - aDataPtr);
+
+err:
+  abort();
+  return 0;
 }
 
 
@@ -958,8 +881,8 @@ int
 NdbReceiver::get_range_no() const
 {
   Uint32 range_no;
-  assert(m_ndb_record != nullptr);
-  assert(m_row_buffer != nullptr);
+  assert(m_ndb_record != NULL);
+  assert(m_row_buffer != NULL);
 
   if (unlikely(!m_read_range_no))
     return -1;
@@ -1031,7 +954,7 @@ NdbReceiver::unpackNdbRecord(const NdbRecord *rec,
                              char* row)
 {
   assert(bmlen <= 0x07FF);
-  const Uint8* src = (const Uint8*)(aDataPtr + bmlen);
+  const Uint8 *src = (Uint8*)(aDataPtr + bmlen);
   uint bitPos = 0;
   uint attrId = 0;
   uint bitIndex = 0;
@@ -1102,7 +1025,7 @@ NdbReceiver::unpackNdbRecord(const NdbRecord *rec,
     src += sz;
     memcpy(col_row_ptr, source, sz);
   }
-  const Uint32 len = (Uint32)(((const Uint32*)pad(src, 0, bitPos)) - aDataPtr);
+  const Uint32 len = (Uint32)(((Uint32*)pad(src, 0, bitPos)) - aDataPtr);
   return len;
 }
 
@@ -1115,7 +1038,7 @@ NdbReceiver::get_keyinfo20(Uint32 & scaninfo, Uint32 & length,
 
   Uint32 len;
   const Uint32 *p = m_recv_buffer->getKey(m_current_row, len);
-  if (unlikely(p == nullptr))
+  if (unlikely(p == NULL))
     return -1;
 
   scaninfo = *p;
@@ -1127,26 +1050,26 @@ NdbReceiver::get_keyinfo20(Uint32 & scaninfo, Uint32 & length,
 const char* 
 NdbReceiver::unpackBuffer(const NdbReceiverBuffer *buffer, Uint32 row)
 {
-  assert(buffer != nullptr);
+  assert(buffer != NULL);
 
   Uint32 aLength;
   const Uint32 *aDataPtr = buffer->getRow(row, aLength);
-  if (likely(aDataPtr != nullptr))
+  if (likely(aDataPtr != NULL))
   {
     if (unpackRow(aDataPtr, aLength, m_row_buffer) == -1)
-      return nullptr;
+      return NULL;
 
     return m_row_buffer;
   }
 
-  /* ReceiveBuffer may contain only keyinfo */
+  /* ReceiveBuffer may containt only keyinfo */
   const Uint32 *key = buffer->getKey(row, aLength);
-  if (key != nullptr)
+  if (key != NULL)
   {
-    assert(m_row_buffer != nullptr);
+    assert(m_row_buffer != NULL);
     return m_row_buffer; // Row is empty, used as non-NULL return
   }
-  return nullptr;
+  return NULL;
 }
 
 int 
@@ -1166,7 +1089,7 @@ NdbReceiver::unpackRow(const Uint32* aDataPtr, Uint32 aLength, char* row)
    */
 
   /* If present, NdbRecord data will come first */
-  if (m_ndb_record != nullptr)
+  if (m_ndb_record != NULL)
   {
     /* Read words from the incoming signal train.
      * The length passed in is enough for one row, either as an individual
@@ -1187,7 +1110,7 @@ NdbReceiver::unpackRow(const Uint32* aDataPtr, Uint32 aLength, char* row)
        */
       if (likely(attrId == AttributeHeader::READ_PACKED))
       {
-        assert(row != nullptr);
+        assert(row != NULL);
         const Uint32 len= unpackNdbRecord(m_ndb_record,
                                           attrSize >> 2, // Bitmap length
                                           aDataPtr,
@@ -1201,7 +1124,7 @@ NdbReceiver::unpackRow(const Uint32* aDataPtr, Uint32 aLength, char* row)
        * stored just after the row. */
       else if (attrId == AttributeHeader::RANGE_NO)
       {
-        assert(row != nullptr);
+        assert(row != NULL);
         assert(m_read_range_no);
         assert(attrSize==sizeof(Uint32));
         memcpy(row+m_ndb_record->m_row_size, aDataPtr++, sizeof(Uint32));
@@ -1263,7 +1186,7 @@ NdbReceiver::unpackRow(const Uint32* aDataPtr, Uint32 aLength, char* row)
     }
   } // if (aLength > 0)
 
-  m_rec_attr_data = nullptr;
+  m_rec_attr_data = NULL;
   m_rec_attr_len = 0;
   return 0;
 }
@@ -1299,9 +1222,7 @@ NdbReceiver::handle_rec_attrs(NdbRecAttr* rec_attr_list,
       {
         const Uint32 len = unpackRecAttr(&currRecAttr, 
                                          attrSize>>2, aDataPtr, aLength);
-        if (unlikely(len == UINT32_MAX)) return -1;
         assert(aLength >= len);
-        if (unlikely(aLength < len)) return -1;
         aDataPtr += len;
         aLength -= len;
         continue;
@@ -1328,7 +1249,7 @@ NdbReceiver::handle_rec_attrs(NdbRecAttr* rec_attr_list,
             attrId, currRecAttr, rec_attr_list, attrSize,
             currRecAttr ? currRecAttr->get_size_in_bytes() : 0);
         currRecAttr = rec_attr_list;
-        while(currRecAttr != nullptr){
+        while(currRecAttr != 0){
           g_eventLogger->info("%d ", currRecAttr->attrId());
           currRecAttr = currRecAttr->next();
         }
@@ -1361,7 +1282,7 @@ NdbReceiver::execTRANSID_AI(const Uint32* aDataPtr, Uint32 aLength)
    * It is unpacked into NdbRecord format when
    * we navigate to each row.
    */
-  if (m_recv_buffer != nullptr)
+  if (m_recv_buffer != NULL)
   {
     Uint32 *row_recv = m_recv_buffer->allocRow(aLength);
     if (likely(aLength > 0))
@@ -1382,7 +1303,7 @@ int
 NdbReceiver::execKEYINFO20(Uint32 info, const Uint32* aDataPtr, Uint32 aLength)
 {
   assert(m_read_key_info);
-  assert(m_recv_buffer != nullptr);
+  assert(m_recv_buffer != NULL);
 
   Uint32 *keyinfo_ptr = m_recv_buffer->allocKey(aLength+1);
 
@@ -1405,10 +1326,10 @@ NdbReceiver::getRow(const NdbReceiverBuffer* buffer, Uint32 row)
 const char* 
 NdbReceiver::getNextRow()
 {
-  assert(m_recv_buffer != nullptr);
+  assert(m_recv_buffer != NULL);
   const Uint32 nextRow =  m_current_row+1;
   const char *row = unpackBuffer(m_recv_buffer, nextRow);
-  if (likely(row != nullptr))
+  if (likely(row != NULL))
   {
     m_current_row = nextRow;
   }
@@ -1418,7 +1339,7 @@ NdbReceiver::getNextRow()
 int
 NdbReceiver::execSCANOPCONF(Uint32 tcPtrI, Uint32 len, Uint32 rows)
 {
-  assert(m_recv_buffer != nullptr);
+  assert(m_recv_buffer != NULL);
   assert(m_recv_buffer->getMaxRows() >= rows);
   assert(m_recv_buffer->getBufSizeWords() >= len);
 
@@ -1433,7 +1354,7 @@ NdbReceiver::execSCANOPCONF(Uint32 tcPtrI, Uint32 len, Uint32 rows)
      */
     for (Uint32 row=0; row<rows; row++)
     {
-      execTRANSID_AI(nullptr,0);
+      execTRANSID_AI(NULL,0);
     }
   }
 

@@ -2,12 +2,10 @@
 # Bug#23102944: MYSQLPUMP LEAKS MEMORY IN CASE OF ERRORS.
 #
 # testing a failed connection: must not crash
-WARNING: mysqlpump is deprecated and will be removed in a future version. Use mysqldump instead.
 mysqlpump: Got error: 2005: Unknown MySQL server host 'non_existent_ghost' (errno) while connecting to the MySQL server
 mysqlpump: [ERROR] (11) 
 Dump process encountered error and will not continue.
 # testing an invalid option: must not crash
-WARNING: mysqlpump is deprecated and will be removed in a future version. Use mysqldump instead.
 mysqlpump: [ERROR] unknown variable 'parallelism=3'.
 mysqlpump: [ERROR] (7) Error during handling options
 Dump process encountered error and will not continue.
@@ -85,15 +83,7 @@ CREATE TABLE B32340208.test (
 PRIMARY KEY (`pk`),
 KEY `functional_index` ((radians(`c1`))) USING BTREE COMMENT 'you''re'
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr;
-Warnings:
-Warning	4095	Delimiter '\n' in position 10 in datetime value '0000-00-00
-00:00:00' at row 1 is deprecated. Prefer the standard ' '.
 # Success criteria: should not crash
 DROP DATABASE B32340208;
 SET sql_mode = DEFAULT;
-#
-# Bug #33688141 mysqlpump exits in regards to 'std::logic_error'
-#
-# Expect log that proves the client clean exit
-Pattern "Dump process encountered error and will not continue." found
 # End of 8.0 tests

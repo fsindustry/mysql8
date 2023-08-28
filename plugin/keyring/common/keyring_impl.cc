@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -75,7 +75,7 @@ bool init_keyring_locks() {
 }
 
 bool is_key_length_and_type_valid(const char *key_type, size_t key_len) {
-  const std::string key_type_str(key_type);
+  std::string key_type_str(key_type);
   bool is_key_len_valid = false;
   bool is_type_valid = true;
 
@@ -116,7 +116,7 @@ bool create_keyring_dir_if_does_not_exist(const char *keyring_file_path) {
     keyring_dir[keyring_dir_length - 1] = '\0';
     --keyring_dir_length;
   }
-  const int flags =
+  int flags =
 #ifdef _WIN32
       0
 #else
@@ -239,7 +239,7 @@ void mysql_keyring_iterator_deinit(Keys_iterator *key_iterator) {
 bool mysql_keyring_iterator_get_key(Keys_iterator *key_iterator, char *key_id,
                                     char *user_id) {
   keyring::Key_metadata *key_loaded = nullptr;
-  const bool error = key_iterator->get_key(&key_loaded);
+  bool error = key_iterator->get_key(&key_loaded);
   if (error == false && key_loaded != nullptr) {
     if (key_id) strcpy(key_id, key_loaded->id->c_str());
     if (user_id) strcpy(user_id, key_loaded->user->c_str());

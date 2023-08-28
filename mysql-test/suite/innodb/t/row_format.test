@@ -4,7 +4,6 @@
 --echo #
 
 --source include/have_innodb_16k.inc
---source include/not_valgrind.inc
 
 --echo # SETUP
 let $MYSQLD_DATADIR= `SELECT @@datadir`;

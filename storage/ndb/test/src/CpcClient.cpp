@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -418,7 +418,7 @@ int SimpleCpcClient::select_protocol(Properties &reply) {
 SimpleCpcClient::SimpleCpcClient(const char *_host, int _port) {
   host = strdup(_host);
   port = _port;
-  ndb_socket_initialize(&cpc_sock);
+  ndb_socket_invalidate(&cpc_sock);
   m_cpcd_protocol_version = 0;
 }
 
@@ -449,27 +449,26 @@ int SimpleCpcClient::connect() {
 }
 
 int SimpleCpcClient::open_connection() {
+  struct sockaddr_in6 sa;
+
+  /* Create socket */
+  cpc_sock = ndb_socket_create_dual_stack(SOCK_STREAM, IPPROTO_TCP);
+  if (!ndb_socket_valid(cpc_sock)) return -1;
+
+  memset(&sa, 0, sizeof(sa));
+  sa.sin6_family = AF_INET6;
+  sa.sin6_port = htons(port);
 
   // Resolve server address
-  ndb_sockaddr sa;
-  if (Ndb_getAddr(&sa, host))
+  if (Ndb_getInAddr6(&sa.sin6_addr, host))
   {
     ndb_socket_close(cpc_sock);
     ndb_socket_invalidate(&cpc_sock);
     errno = ENOENT;
     return -1;
   }
-  sa.set_port(port);
 
-  /* Create socket */
-  cpc_sock = ndb_socket_create(sa.get_address_family());
-  if (!ndb_socket_valid(cpc_sock)) return -1;
-
-  if (sa.need_dual_stack())
-  {
-    [[maybe_unused]] bool ok = ndb_socket_dual_stack(cpc_sock, 1);
-  }
-  return ndb_connect(cpc_sock, &sa);
+  return ndb_connect_inet6(cpc_sock, &sa);
 }
 
 int SimpleCpcClient::negotiate_client_protocol() {
@@ -592,7 +591,7 @@ const Properties *SimpleCpcClient::cpc_call(const char *cmd,
   return ret;
 }
 
-SimpleCpcClient::ParserDummy::ParserDummy(ndb_socket_t sock)
+SimpleCpcClient::ParserDummy::ParserDummy(NDB_SOCKET_TYPE sock)
     : SocketServer::Session(sock) {}
 
 template class Vector<SimpleCpcClient::Process>;

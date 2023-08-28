@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -38,7 +38,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 template <int signal_number, typename arg_type>
 bool my_host_application_signal(SERVICE_TYPE(registry) * registry,
                                 arg_type argument) {
-  const my_service<SERVICE_TYPE(host_application_signal)> host_app(
+  my_service<SERVICE_TYPE(host_application_signal)> host_app(
       "host_application_signal", registry);
 
   return host_app->signal(signal_number, argument);

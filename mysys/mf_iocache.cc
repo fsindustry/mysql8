@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,11 +34,12 @@
   Possibly use of asyncronic io.
   macros for read and writes for faster io.
   Used instead of FILE when reading or writing whole files.
-  This code makes mf_rec_cache obsolete (currently only used by ISAM).
-  One can change info->pos_in_file to a higher value to skip bytes in the file
-  if also info->read_pos is set to info->read_end. If called through
-  open_cached_file(), then the temporary file will only be created if a write
-  exceeds the file buffer or if one calls my_b_flush_io_cache().
+  This code makes mf_rec_cache obsolete (currently only used by ISAM)
+  One can change info->pos_in_file to a higher value to skip bytes in file if
+  also info->read_pos is set to info->read_end.
+  If called through open_cached_file(), then the temporary file will
+  only be created if a write exeeds the file buffer or if one calls
+  my_b_flush_io_cache().
 
   If one uses SEQ_READ_APPEND, then two buffers are allocated, one for
   reading and another for writing.  Reads are first done from disk and
@@ -70,6 +71,7 @@ TODO:
 #include <sys/types.h>
 #include <algorithm>
 
+#include "m_string.h"
 #include "my_byteorder.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -84,7 +86,6 @@ TODO:
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/int2str.h"
 #include "mysys/mysys_priv.h"
 #include "thr_mutex.h"
 
@@ -108,7 +109,7 @@ bool binlog_cache_temporary_file_is_encrypted = false;
     info		IO_CACHE handler
 
   NOTES
-    This is called on automatically on init or reinit of IO_CACHE
+    This is called on automaticly on init or reinit of IO_CACHE
     It must be called externally if one moves or copies an IO_CACHE
     object.
 */
@@ -125,7 +126,7 @@ void setup_io_cache(IO_CACHE *info) {
 }
 
 static void init_functions(IO_CACHE *info) {
-  const enum cache_type type = info->type;
+  enum cache_type type = info->type;
   switch (type) {
     case READ_NET:
       /*
@@ -161,7 +162,7 @@ static void init_functions(IO_CACHE *info) {
                        If == 0 then use my_default_record_cache_size
     type               Type of cache
     seek_offset        Where cache should start reading/writing
-    use_async_io       Set to 1 of we should use async_io (if available)
+    use_async_io       Set to 1 of we should use async_io (if avaiable)
     cache_myflags      Bitmap of different flags
                        MY_WME | MY_FAE | MY_NABP | MY_FNABP |
                        MY_DONT_CHECK_FILESIZE
@@ -1185,8 +1186,7 @@ read_append_buffer:
 
   {
     /* First copy the data to Count */
-    const size_t len_in_buff =
-        (size_t)(info->write_pos - info->append_read_pos);
+    size_t len_in_buff = (size_t)(info->write_pos - info->append_read_pos);
     size_t copy_len;
     size_t transfer_len;
 
@@ -1277,7 +1277,7 @@ int _my_b_write(IO_CACHE *info, const uchar *Buffer, size_t Count) {
       MY_FNABP are not set.
     */
     DBUG_EXECUTE_IF("verify_mysql_encryption_file_write_bytes",
-                    const size_t write_bytes = mysql_encryption_file_write(
+                    size_t write_bytes = mysql_encryption_file_write(
                         info, Buffer, length, info->myflags);
                     assert(write_bytes == length););
 
@@ -1404,7 +1404,7 @@ int my_block_write(IO_CACHE *info, const uchar *Buffer, size_t Count,
   /* Check if we want to write inside the used part of the buffer.*/
   length = (size_t)(info->write_end - info->buffer);
   if (pos < info->pos_in_file + length) {
-    const size_t offset = (size_t)(pos - info->pos_in_file);
+    size_t offset = (size_t)(pos - info->pos_in_file);
     length -= offset;
     if (length > Count) length = Count;
     memcpy(info->buffer + offset, Buffer, length);
@@ -1430,7 +1430,7 @@ int my_block_write(IO_CACHE *info, const uchar *Buffer, size_t Count,
 int my_b_flush_io_cache(IO_CACHE *info, int need_append_buffer_lock) {
   size_t length;
   my_off_t pos_in_file;
-  const bool append_cache = (info->type == SEQ_READ_APPEND);
+  bool append_cache = (info->type == SEQ_READ_APPEND);
   DBUG_TRACE;
   DBUG_PRINT("enter", ("cache: %p", info));
 
@@ -1646,7 +1646,7 @@ my_off_t mysql_encryption_file_seek(IO_CACHE *cache, my_off_t pos, int whence,
 
 size_t mysql_encryption_file_read(IO_CACHE *cache, uchar *buffer, size_t count,
                                   myf flags) {
-  const size_t ret = mysql_file_read(cache->file, buffer, count, flags);
+  size_t ret = mysql_file_read(cache->file, buffer, count, flags);
   if (ret != MY_FILE_ERROR && cache->m_decryptor != nullptr)
     cache->m_decryptor->decrypt(buffer, buffer, ret ? ret : count);
   return ret;

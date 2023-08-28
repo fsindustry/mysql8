@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,6 @@
 
 #include <stdint.h>
 #include <algorithm>
-#include <unordered_map>
 
 const unsigned char checksum_version_split[3] = {5, 6, 1};
 const unsigned long checksum_version_product =
@@ -36,52 +35,10 @@ namespace binary_log_debug {
 bool debug_query_mts_corrupt_db_names = false;
 bool debug_checksum_test = false;
 bool debug_simulate_invalid_address = false;
-
+bool debug_pretend_version_50034_in_binlog = false;
 }  // namespace binary_log_debug
 
 namespace binary_log {
-
-static const std::unordered_map<Log_event_type, const std::string>
-    event_type_to_string = {{STOP_EVENT, "Stop"},
-                            {QUERY_EVENT, "Query"},
-                            {ROTATE_EVENT, "Rotate"},
-                            {INTVAR_EVENT, "Intvar"},
-                            {APPEND_BLOCK_EVENT, "Append_block"},
-                            {DELETE_FILE_EVENT, "Delete_file"},
-                            {RAND_EVENT, "RAND"},
-                            {USER_VAR_EVENT, "User var"},
-                            {XID_EVENT, "Xid"},
-                            {FORMAT_DESCRIPTION_EVENT, "Format_desc"},
-                            {TABLE_MAP_EVENT, "Table_map"},
-                            {WRITE_ROWS_EVENT_V1, "Write_rows_v1"},
-                            {UPDATE_ROWS_EVENT_V1, "Update_rows_v1"},
-                            {DELETE_ROWS_EVENT_V1, "Delete_rows_v1"},
-                            {BEGIN_LOAD_QUERY_EVENT, "Begin_load_query"},
-                            {EXECUTE_LOAD_QUERY_EVENT, "Execute_load_query"},
-                            {INCIDENT_EVENT, "Incident"},
-                            {IGNORABLE_LOG_EVENT, "Ignorable"},
-                            {ROWS_QUERY_LOG_EVENT, "Rows_query"},
-                            {WRITE_ROWS_EVENT, "Write_rows"},
-                            {UPDATE_ROWS_EVENT, "Update_rows"},
-                            {DELETE_ROWS_EVENT, "Delete_rows"},
-                            {GTID_LOG_EVENT, "Gtid"},
-                            {ANONYMOUS_GTID_LOG_EVENT, "Anonymous_Gtid"},
-                            {PREVIOUS_GTIDS_LOG_EVENT, "Previous_gtids"},
-                            {HEARTBEAT_LOG_EVENT, "Heartbeat"},
-                            {TRANSACTION_CONTEXT_EVENT, "Transaction_context"},
-                            {VIEW_CHANGE_EVENT, "View_change"},
-                            {XA_PREPARE_LOG_EVENT, "XA_prepare"},
-                            {PARTIAL_UPDATE_ROWS_EVENT, "Update_rows_partial"},
-                            {TRANSACTION_PAYLOAD_EVENT, "Transaction_payload"},
-                            {UNKNOWN_EVENT, "Unknown"}};
-
-const std::string &get_event_type_as_string(Log_event_type type) {
-  try {
-    return event_type_to_string.at(type);
-  } catch (const std::out_of_range &) {
-    return event_type_to_string.at(UNKNOWN_EVENT);
-  }
-}
 
 Log_event_footer::Log_event_footer(Event_reader &reader,
                                    Log_event_type event_type,
@@ -121,7 +78,7 @@ enum_binlog_checksum_alg Log_event_footer::get_checksum_alg(
 
    @return  the version-safe checksum alg descriptor where zero
             designates no checksum, 255 - the orginator is
-            checksum-unaware (effectively no checksum) and the actual
+            checksum-unaware (effectively no checksum) and the actuall
             [1-254] range alg descriptor.
 */
 enum_binlog_checksum_alg Log_event_footer::get_checksum_alg(const char *buf,
@@ -199,7 +156,7 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
 #endif
       BAPI_ASSERT(alg == BINLOG_CHECKSUM_ALG_CRC32);
       /*
-        Compile time guard to watch over the max number of alg
+        Complile time guard to watch over  the max number of alg
       */
       static_assert(BINLOG_CHECKSUM_ALG_ENUM_END <= 0x80, "");
     }

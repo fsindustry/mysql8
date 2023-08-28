@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2018, 2023, Oracle and/or its affiliates.
+Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -63,7 +63,7 @@ Tablespace_pool *tbsp_pool = nullptr;
 /* Directory to store session temporary tablespaces, provided by user */
 char *srv_temp_dir = nullptr;
 
-/** Session Temporary tablespace */
+/** Sesssion Temporary tablespace */
 Tablespace::Tablespace()
     : m_space_id(++m_last_used_space_id), m_inited(), m_thread_id() {
   ut_ad(m_space_id <= dict_sys_t::s_max_temp_space_id);
@@ -86,7 +86,7 @@ Tablespace::~Tablespace() {
     ib::error(ER_IB_FAILED_TO_DELETE_TABLESPACE_FILE)
         << "Failed to delete file " << path();
     os_file_get_last_error(true);
-    ut_d(ut_error);
+    ut_ad(0);
   }
 }
 
@@ -115,7 +115,8 @@ dberr_t Tablespace::create() {
 
   mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
 
-  bool ret = fsp_header_init(m_space_id, FIL_IBT_FILE_INITIAL_SIZE, &mtr);
+  bool ret =
+      fsp_header_init(m_space_id, FIL_IBT_FILE_INITIAL_SIZE, &mtr, false);
   mtr_commit(&mtr);
 
   if (!ret) {
@@ -146,7 +147,7 @@ bool Tablespace::truncate() {
 
   mtr_start(&mtr);
   mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
-  fsp_header_init(m_space_id, FIL_IBT_FILE_INITIAL_SIZE, &mtr);
+  fsp_header_init(m_space_id, FIL_IBT_FILE_INITIAL_SIZE, &mtr, false);
   mtr_commit(&mtr);
 
   return true;
@@ -237,7 +238,7 @@ void Tablespace_pool::free_ts(Tablespace *ts) {
   if (it != m_active->end()) {
     m_active->erase(it);
   } else {
-    ut_d(ut_error);
+    ut_ad(0);
   }
 
   m_free->push_back(ts);
@@ -278,7 +279,7 @@ dberr_t Tablespace_pool::expand(size_t size) {
     Tablespace *ts = ut::new_withkey<Tablespace>(UT_NEW_THIS_FILE_PSI_KEY);
 
     if (ts == nullptr) {
-      return DB_OUT_OF_MEMORY;
+      return (DB_OUT_OF_MEMORY);
     }
 
     dberr_t err = ts->create();
@@ -287,10 +288,10 @@ dberr_t Tablespace_pool::expand(size_t size) {
       m_free->push_back(ts);
     } else {
       ut::delete_(ts);
-      return err;
+      return (err);
     }
   }
-  return DB_SUCCESS;
+  return (DB_SUCCESS);
 }
 
 void Tablespace_pool::delete_old_pool(bool create_new_db) {

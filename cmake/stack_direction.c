@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+ Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -21,25 +21,16 @@
  along with this program; if not, write to the Free Software
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <stdio.h>
-
 /* Check stack direction (0-down, 1-up) */
 int f(int *a) {
   int b;
-  if (&b > a) {
-    printf("Stack grows upward\n");
-    return 1;
-  }
-  printf("Stack grows downward\n");
-  return 0;
+  return (&b > a) ? 1 : 0;
 }
-
 /*
  Prevent compiler optimizations by calling function
  through pointer.
 */
-int (*ptr_f)(int *) = f;
-
+volatile int (*ptr_f)(int *) = f;
 int main() {
   int a;
   return ptr_f(&a);

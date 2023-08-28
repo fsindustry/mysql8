@@ -1,5 +1,6 @@
+
 /*
-   Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2014, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +28,6 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "client/client_priv.h"
 #include "my_sys.h"
 #include "print_version.h"
 #include "welcome_copyright_notice.h"
@@ -46,7 +46,6 @@ static const int INPUT_BUFFER_SIZE = 1024 * 1024;
 static const int OUTPUT_BUFFER_SIZE = 1024 * 1024;
 
 int main(int argc, char **argv) {
-  CLIENT_WARN_DEPRECATED_NO_REPLACEMENT("zlib_decompress");
   MY_INIT(argv[0]);
   if (argc != 3) {
     usage();
@@ -97,15 +96,8 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
-      size_t bytes_to_write =
-          OUTPUT_BUFFER_SIZE - decompression_context.avail_out;
-      if (fwrite(output_buffer, 1, bytes_to_write, output_file) !=
-          bytes_to_write) {
-        fprintf(stderr,
-                "zlib_decompress: [Error] Encountered problem during "
-                "file write.\n");
-        exit(1);
-      }
+      fwrite(output_buffer, 1,
+             OUTPUT_BUFFER_SIZE - decompression_context.avail_out, output_file);
     } while (decompression_context.avail_out == 0);
   }
 

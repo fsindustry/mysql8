@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -68,17 +68,14 @@ void DestinationTlsContext::ciphers(const std::string &ciphers) {
   ciphers_ = ciphers;
 }
 
-TlsClientContext *DestinationTlsContext::get(const std::string &dest_id,
-                                             const std::string &hostname) {
+TlsClientContext *DestinationTlsContext::get(const std::string &dest_id) {
   std::lock_guard<std::mutex> lk(mtx_);
 
   const auto it = tls_contexts_.find(dest_id);
   if (it == tls_contexts_.end()) {
     // not found
-    auto res = tls_contexts_.emplace(
-        dest_id, std::make_unique<TlsClientContext>(
-                     TlsVerify::PEER, session_cache_mode_,
-                     ssl_session_cache_size_, ssl_session_cache_timeout_));
+    auto res =
+        tls_contexts_.emplace(dest_id, std::make_unique<TlsClientContext>());
     auto *tls_ctx = res.first->second.get();
 
     if (!ciphers_.empty()) tls_ctx->cipher_list(ciphers_);
@@ -89,7 +86,7 @@ TlsClientContext *DestinationTlsContext::get(const std::string &dest_id,
         tls_ctx->verify(TlsVerify::NONE);
         break;
       case SslVerify::kVerifyIdentity:
-        tls_ctx->verify_hostname(hostname);
+        tls_ctx->verify_hostname(dest_id);
         [[fallthrough]];
       case SslVerify::kVerifyCa:
         tls_ctx->ssl_ca(ca_file_, ca_path_);

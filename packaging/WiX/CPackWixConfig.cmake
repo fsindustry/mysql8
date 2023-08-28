@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -20,23 +20,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-SET(CPACK_COMPONENTS_USED
-  Client
-  DataFiles
-  Development
-  Documentation
-  Info
-  IniFiles
-  Meb
-  MebReadme
-  Readme
-  Router
-  Server
-  Server_Scripts
-  SharedLibraries
-  )
+SET(CPACK_COMPONENTS_USED 
+    "Server;Client;DataFiles;Development;SharedLibraries;Documentation;IniFiles;Readme;Server_Scripts;Meb;MebReadme;Router")
 
-IF(WITH_NDB)
+IF(WITH_NDBCLUSTER)
   MESSAGE(STATUS "This is Cluster build, append additional components")
   SET(CPACK_COMPONENTS_USED
     "${CPACK_COMPONENTS_USED};ClusterTools;ClusterDataNode;ClusterManagementServer;ClusterManagementClient;ClusterJ;nodejs")
@@ -117,19 +104,10 @@ SET(CPACK_COMPONENT_GROUP_DEBUGSYMBOLS_WIX_LEVEL 2)
  SET(CPACK_COMPONENT_DEBUGINFO_GROUP "DebugSymbols")
  SET(CPACK_COMPONENT_DEBUGINFO_HIDDEN 1)
 
-#Feature Documentation (disable each component as you can't disable a group)
-SET(CPACK_COMPONENT_GROUP_ALLDOC_DISPLAY_NAME "Documentation")
-SET(CPACK_COMPONENT_GROUP_ALLDOC_DESCRIPTION "Installs documentation")
- # Subfeature "Documentation" (hidden)
- SET(CPACK_COMPONENT_DOCUMENTATION_GROUP "AllDoc")
- SET(CPACK_COMPONENT_DOCUMENTATION_DISPLAY_NAME "Miscellaneous documentation")
- SET(CPACK_COMPONENT_DOCUMENTATION_DESCRIPTION "Installs documentation and samle files")
- SET(CPACK_COMPONENT_DOCUMENTATION_WIX_LEVEL 2) # Not to install by default
- # Subfeature "Info" (hidden)
- SET(CPACK_COMPONENT_INFO_GROUP "AllDoc")
- SET(CPACK_COMPONENT_INFO_DISPLAY_NAME "Source/build information")
- SET(CPACK_COMPONENT_INFO_DESCRIPTION "Installs the \"docs/INFO_SRC\" and \"docs/INFO_BIN\" files")
- SET(CPACK_COMPONENT_INFO_WIX_LEVEL 2) # Not to install by default
+#Feature Documentation
+SET(CPACK_COMPONENT_DOCUMENTATION_DISPLAY_NAME "Documentation")
+SET(CPACK_COMPONENT_DOCUMENTATION_DESCRIPTION "Installs documentation")
+SET(CPACK_COMPONENT_DOCUMENTATION_WIX_LEVEL 2)
 
 #Feature tests
 SET(CPACK_COMPONENT_TEST_DISPLAY_NAME "Tests")
@@ -143,7 +121,7 @@ SET(CPACK_COMPONENT_GROUP_MISC_WIX_LEVEL 100)
   SET(CPACK_COMPONENT_INIFILES_GROUP "Misc")
   SET(CPACK_COMPONENT_SERVER_SCRIPTS_GROUP "Misc")
 
-IF(WITH_NDB)
+IF(WITH_NDBCLUSTER)
   MESSAGE(STATUS "This is Cluster build, define additional components")
   #Feature "Cluster"
   SET(CPACK_COMPONENT_GROUP_CLUSTER_DISPLAY_NAME "MySQL Cluster")

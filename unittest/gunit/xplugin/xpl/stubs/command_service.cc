@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,8 +23,6 @@
 #include <assert.h>
 
 #include "mysql/service_command.h"
-
-struct CHARSET_INFO;
 
 int command_service_run_command(MYSQL_SESSION, enum enum_server_command,
                                 const union COM_DATA *, const CHARSET_INFO *,

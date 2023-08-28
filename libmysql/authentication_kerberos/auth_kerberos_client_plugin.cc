@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,10 +23,25 @@
 #include "my_config.h"
 
 /*
-  This is a CLIENT_ONLY plugin, so allocation functions are my_malloc,
-  my_free etc.
+  In case of kerberos authentication we need to fill user name as kerberos user
+  name if it is empty. We need to fill user name inside mysql->user, clients
+  uses my_strdup directly to create new string. To use MySQL alloc functions we
+  need to include "/mysql/service_mysql_alloc.h". Inside service_mysql_alloc.h
+  there is #define which forces all dynamic plugins to use MySQL malloc function
+  via services. Client side plugin cannot use any services as of now.   Code
+  check in service_mysql_alloc.h #ifdef MYSQL_DYNAMIC_PLUGIN #define my_strdup
+  mysql_malloc_service->my_strdup #else extern char *my_strdup(PSI_memory_key
+  key, const char *from, myf_t flags); #endif Client authentication plugin
+  defines MYSQL_DYNAMIC_PLUGIN. And this forces to use always my_strdup via
+  services. To use native direct my_strdup, we need to undefine
+  MYSQL_DYNAMIC_PLUGIN. And again define MYSQL_DYNAMIC_PLUGIN once correct
+  my_strdup are declared. service_mysql_alloc.h should provide proper fix like
+  Instead of #ifdef MYSQL_DYNAMIC_PLUGIN
+  #ifdef  MYSQL_DYNAMIC_PLUGIN  &&   ! MYSQL_CLIENT_PLUGIN
 */
+#undef MYSQL_DYNAMIC_PLUGIN
 #include <mysql/service_mysql_alloc.h>
+#define MYSQL_DYNAMIC_PLUGIN
 
 #include "auth_kerberos_client_plugin.h"
 
@@ -40,20 +55,11 @@
 #include "auth_kerberos_client_io.h"
 #include "log_client.h"
 
-static authentication_mode g_authentication_mode {
-#if defined(_WIN32)
-  authentication_mode::MODE_SSPI
-#else
-  authentication_mode::MODE_GSSAPI
-#endif /* _WIN32 */
-};
-
 Logger_client *g_logger_client{nullptr};
 
 Kerberos_plugin_client::Kerberos_plugin_client(MYSQL_PLUGIN_VIO *vio,
-                                               MYSQL *mysql,
-                                               authentication_mode mode)
-    : m_vio{vio}, m_mysql{mysql}, m_mode{mode} {}
+                                               MYSQL *mysql)
+    : m_vio{vio}, m_mysql{mysql} {}
 
 /*
   This method try to get kerberos TGT if user name and password are not
@@ -65,9 +71,9 @@ bool Kerberos_plugin_client::obtain_store_credentials() {
   log_client_dbg("Obtaining TGT TGS tickets from kerberos server.");
   if (!m_kerberos_client) {
     m_kerberos_client =
-        std::unique_ptr<I_Kerberos_client>(Kerberos_client_create_factory(
-            m_mode == authentication_mode::MODE_GSSAPI, m_service_principal,
-            m_vio, m_user_principal_name, m_password, m_as_user_relam));
+        std::unique_ptr<I_Kerberos_client>(I_Kerberos_client::create(
+            m_service_principal, m_vio, m_user_principal_name, m_password,
+            m_as_user_relam));
   }
   if (!m_kerberos_client->obtain_store_credentials()) {
     log_client_error(
@@ -99,9 +105,9 @@ void Kerberos_plugin_client::set_mysql_account_name(
     */
     if (!m_kerberos_client) {
       m_kerberos_client =
-          std::unique_ptr<I_Kerberos_client>(Kerberos_client_create_factory(
-              m_mode == authentication_mode::MODE_GSSAPI, m_service_principal,
-              m_vio, m_user_principal_name, m_password, m_as_user_relam));
+          std::unique_ptr<I_Kerberos_client>(I_Kerberos_client::create(
+              m_service_principal, m_vio, m_user_principal_name, m_password,
+              m_as_user_relam));
     }
     cc_user_name = m_kerberos_client->get_user_name();
     log_client_stream << "Cached/ OS session user name is: ";
@@ -181,7 +187,7 @@ static int deinitialize_plugin() SUPPRESS_UBSAN;
 
 static int kerberos_authenticate(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
   std::stringstream log_client_stream;
-  Kerberos_plugin_client client{vio, mysql, g_authentication_mode};
+  Kerberos_plugin_client client{vio, mysql};
 
   log_client_info("*** Kerberos authentication starting. ***");
   client.set_mysql_account_name(mysql->user);
@@ -216,7 +222,7 @@ static int kerberos_authenticate(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
 static int initialize_plugin(char *, size_t, int, va_list) {
   g_logger_client = new Logger_client();
   const char *opt = getenv("AUTHENTICATION_KERBEROS_CLIENT_LOG");
-  const int opt_val = opt ? atoi(opt) : 0;
+  int opt_val = opt ? atoi(opt) : 0;
   if (opt && opt_val > 0 && opt_val < 6) {
     g_logger_client->set_log_level(static_cast<log_client_level>(opt_val));
   }
@@ -229,28 +235,7 @@ static int deinitialize_plugin() {
   return 0;
 }
 
-#if defined(_WIN32)
-static int authentication_kerberos_client_option(const char *option,
-                                                 const void *val) {
-  // Supported options
-  if (strcmp(option, "plugin_authentication_kerberos_client_mode") == 0 &&
-      val != nullptr) {
-    g_authentication_mode =
-        strcmp(static_cast<const char *>(val), "GSSAPI") == 0
-            ? authentication_mode::MODE_GSSAPI
-            : authentication_mode::MODE_SSPI;
-    return 0;
-  }
-  return 1;
-}
-#endif /* _WIN32 */
-
 mysql_declare_client_plugin(AUTHENTICATION) "authentication_kerberos_client",
     MYSQL_CLIENT_PLUGIN_AUTHOR_ORACLE, "Kerberos Client Authentication Plugin",
     {0, 1, 0}, "PROPRIETARY", nullptr, initialize_plugin, deinitialize_plugin,
-#if defined(_WIN32)
-    authentication_kerberos_client_option,
-#else
-    nullptr,
-#endif
-    nullptr, kerberos_authenticate, nullptr mysql_end_client_plugin;
+    nullptr, nullptr, kerberos_authenticate, nullptr mysql_end_client_plugin;

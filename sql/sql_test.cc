@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,7 @@
 
 #include "keycache.h"
 #include "lex_string.h"
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -42,12 +43,10 @@
 #include "my_sys.h"
 #include "my_thread_local.h"
 #include "mysql/psi/mysql_mutex.h"
-#include "mysql/strings/m_ctype.h"
 #include "prealloced_array.h"
 #include "sql/events.h"
 #include "sql/field.h"
 #include "sql/item.h"
-#include "sql/join_optimizer/access_path.h"
 #include "sql/key.h"
 #include "sql/keycaches.h"
 #include "sql/mysqld.h"              // LOCK_status
@@ -56,8 +55,7 @@
 #include "sql/opt_trace.h"
 #include "sql/opt_trace_context.h"
 #include "sql/psi_memory_key.h"
-#include "sql/range_optimizer/path_helpers.h"
-#include "sql/range_optimizer/range_optimizer.h"
+#include "sql/range_optimizer/range_optimizer.h"  // QUICK_SELECT_I
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
@@ -136,7 +134,7 @@ void TEST_join(JOIN *join) {
             form->alias, join_type_str[tab->type()],
             tab->keys().print(key_map_buff), tab->ref().key_parts,
             tab->ref().key, tab->ref().key_length);
-    if (tab->range_scan()) {
+    if (tab->quick()) {
       char buf[MAX_KEY / 8 + 1];
       if (tab->use_quick == QS_DYNAMIC_RANGE)
         fprintf(DBUG_FILE,
@@ -145,7 +143,7 @@ void TEST_join(JOIN *join) {
                 form->quick_keys.print(buf));
       else {
         fprintf(DBUG_FILE, "                  quick select used:\n");
-        dbug_dump(tab->range_scan(), 18, false);
+        tab->quick()->dbug_dump(18, false);
       }
     }
     if (tab->ref().key_parts) {
@@ -161,8 +159,8 @@ void TEST_join(JOIN *join) {
 void print_keyuse_array(THD *thd, Opt_trace_context *trace,
                         const Key_use_array *keyuse_array) {
   if (unlikely(!trace->is_started())) return;
-  const Opt_trace_object wrapper(trace);
-  const Opt_trace_array trace_key_uses(trace, "ref_optimizer_key_uses");
+  Opt_trace_object wrapper(trace);
+  Opt_trace_array trace_key_uses(trace, "ref_optimizer_key_uses");
   DBUG_PRINT("opt", ("Key_use array (%zu elements)", keyuse_array->size()));
   for (uint i = 0; i < keyuse_array->size(); i++) {
     const Key_use &keyuse = keyuse_array->at(i);
@@ -289,8 +287,10 @@ static inline int dl_compare(const TABLE_LOCK_INFO *a,
                              const TABLE_LOCK_INFO *b) {
   if (a->thread_id > b->thread_id) return 1;
   if (a->thread_id < b->thread_id) return -1;
-  if (a->waiting == b->waiting) return 0;
-  if (a->waiting) return -1;
+  if (a->waiting == b->waiting)
+    return 0;
+  else if (a->waiting)
+    return -1;
   return 1;
 }
 
@@ -342,26 +342,26 @@ class Unique_fifo_queue {
 
 class Dbug_table_list_dumper {
   FILE *out;
-  Unique_fifo_queue<Table_ref> tables_fifo;
-  Unique_fifo_queue<mem_root_deque<Table_ref *>> tbl_lists;
+  Unique_fifo_queue<TABLE_LIST> tables_fifo;
+  Unique_fifo_queue<mem_root_deque<TABLE_LIST *>> tbl_lists;
 
  public:
-  void dump_one_struct(Table_ref *tbl);
+  void dump_one_struct(TABLE_LIST *tbl);
 
-  int dump_graph(Query_block *query_block, Table_ref *first_leaf);
+  int dump_graph(Query_block *query_block, TABLE_LIST *first_leaf);
 };
 
-void dump_TABLE_LIST_graph(Query_block *query_block, Table_ref *tl) {
+void dump_TABLE_LIST_graph(Query_block *query_block, TABLE_LIST *tl) {
   Dbug_table_list_dumper dumper;
   dumper.dump_graph(query_block, tl);
 }
 
 /*
-  - Dump one Table_ref objects and its outgoing edges
+  - Dump one TABLE_LIST objects and its outgoing edges
   - Schedule that other objects seen along the edges are dumped too.
 */
 
-void Dbug_table_list_dumper::dump_one_struct(Table_ref *tbl) {
+void Dbug_table_list_dumper::dump_one_struct(TABLE_LIST *tbl) {
   fprintf(out, "\"%p\" [\n", tbl);
   fprintf(out, "  label = \"%p|", tbl);
   fprintf(out, "alias=%s|", tbl->alias ? tbl->alias : "NULL");
@@ -407,7 +407,7 @@ void Dbug_table_list_dumper::dump_one_struct(Table_ref *tbl) {
 }
 
 int Dbug_table_list_dumper::dump_graph(Query_block *query_block,
-                                       Table_ref *first_leaf) {
+                                       TABLE_LIST *first_leaf) {
   DBUG_TRACE;
   char filename[500];
   int no = 0;
@@ -433,15 +433,15 @@ int Dbug_table_list_dumper::dump_graph(Query_block *query_block,
   fputs("  rankdir = \"LR\"", out);
   fputs("];", out);
 
-  Table_ref *tbl;
+  TABLE_LIST *tbl;
   tables_fifo.reset();
   dump_one_struct(first_leaf);
   while (tables_fifo.pop_first(&tbl)) {
     dump_one_struct(tbl);
   }
 
-  mem_root_deque<Table_ref *> *plist;
-  tbl_lists.push_back(&query_block->m_table_nest);
+  mem_root_deque<TABLE_LIST *> *plist;
+  tbl_lists.push_back(&query_block->top_join_list);
   while (tbl_lists.pop_first(&plist)) {
     fprintf(out, "\"%p\" [\n", plist);
     fprintf(out, "  bgcolor = \"\"");
@@ -450,7 +450,7 @@ int Dbug_table_list_dumper::dump_graph(Query_block *query_block,
   }
 
   fprintf(out, " { rank = same; ");
-  for (Table_ref *tl = first_leaf; tl; tl = tl->next_leaf)
+  for (TABLE_LIST *tl = first_leaf; tl; tl = tl->next_leaf)
     fprintf(out, " \"%p\"; ", tl);
   fprintf(out, "};\n");
   fputs("}", out);

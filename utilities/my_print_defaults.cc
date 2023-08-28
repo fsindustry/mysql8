@@ -1,6 +1,6 @@
 
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -67,8 +67,8 @@ static struct my_option my_long_options[] = {
      &config_file, &config_file, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit", nullptr,
-     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"debug", '#', "This is a non-debug version. Catch this and exit", 0, 0, 0,
+     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
     {"debug", '#', "Output debug log", &default_dbug_option,
      &default_dbug_option, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0,
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
   for (argument = arguments + 1; *argument; argument++)
     if (!my_getopt_is_args_separator(*argument)) /* skip arguments separator */
     {
-      if (!(show_passwords) && strncmp(*argument, "--password=", 11) == 0)
+      if (!(show_passwords) && strncmp(*argument, "--password", 10) == 0)
         puts("--password=*****");
       else
         puts(*argument);

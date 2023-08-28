@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,7 +22,6 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "util/require.h"
 #include <ndb_global.h>
 
 #include <time.h>
@@ -287,36 +286,10 @@ void NDBT_Context::setNumLoops(int _loops){
   loops = _loops;
 }
 
-void NDBT_Context::getRecordSubRange(int records,
-                                     int rangeCount,
-                                     int rangeId,
-                                     int& startRecord,
-                                     int& stopRecord)
-{
-  int recordsPerStep = records / rangeCount;
-  if (recordsPerStep == 0)
-  {
-    recordsPerStep = 1;
-  }
-  startRecord = rangeId * recordsPerStep;
-  stopRecord = startRecord + recordsPerStep;
-
-  if (stopRecord > records)
-  {
-    stopRecord = records;
-  }
-  if (startRecord >= records)
-  {
-    startRecord = stopRecord = 0;
-  }
-}
-
-
 NDBT_Step::NDBT_Step(NDBT_TestCase* ptest, const char* pname,
                      NDBT_TESTFUNC* pfunc) :
   m_ctx(NULL), name(pname), func(pfunc),
-  testcase(ptest), step_no(-1), step_type_no(0),
-  step_type_count(1), m_ndb(NULL)
+  testcase(ptest), step_no(-1), m_ndb(NULL)
 {
 }
 
@@ -341,8 +314,6 @@ NDBT_Step::setUp(Ndb_cluster_connection& con){
     int result = m_ndb->waitUntilReady(300); // 5 minutes
     if (result != 0){
       g_err << "Ndb was not ready" << endl;
-      delete m_ndb;
-      m_ndb = NULL;
       return NDBT_FAILED;
     }
     break;
@@ -423,13 +394,8 @@ NDBT_Context* NDBT_Step::getContext(){
 
 NDBT_ParallelStep::NDBT_ParallelStep(NDBT_TestCase* ptest, 
 				     const char* pname, 
-				     NDBT_TESTFUNC* pfunc,
-                                     int num,
-                                     int count)
+				     NDBT_TESTFUNC* pfunc)
   : NDBT_Step(ptest, pname, pfunc) {
-  require(num < count);
-  step_type_no = num;
-  step_type_count = count;
 }
 NDBT_Verifier::NDBT_Verifier(NDBT_TestCase* ptest, 
 			     const char* pname, 
@@ -1545,15 +1511,7 @@ static const char *load_default_groups[]= {
 
 static struct my_option my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::optimized_node_selection,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS(""),
   { "backup-password", NDB_OPT_NOSHORT,
     "Password to use for encrypted backup files",
     NULL, NULL, 0,
@@ -1563,48 +1521,48 @@ static struct my_option my_long_options[] =
     &opt_backup_password_from_stdin.opt_value, NULL, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, NULL, 0, &opt_backup_password_from_stdin },
   { "print", NDB_OPT_NOSHORT, "Print execution tree",
-    &opt_print, &opt_print, 0,
+    (uchar **) &opt_print, (uchar **) &opt_print, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "print_html", NDB_OPT_NOSHORT, "Print execution tree in html table format",
-    &opt_print_html, &opt_print_html, 0,
+    (uchar **) &opt_print_html, (uchar **) &opt_print_html, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "print_cases", NDB_OPT_NOSHORT, "Print list of test cases",
-    &opt_print_cases, &opt_print_cases, 0,
+    (uchar **) &opt_print_cases, (uchar **) &opt_print_cases, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "records", 'r', "Number of records", 
-    &opt_records, &opt_records, 0,
+    (uchar **) &opt_records, (uchar **) &opt_records, 0,
     GET_INT, REQUIRED_ARG, 1000, 0, 0, 0, 0, 0 },
   { "loops", 'l', "Number of loops",
-    &opt_loops, &opt_loops, 0,
+    (uchar **) &opt_loops, (uchar **) &opt_loops, 0,
     GET_INT, REQUIRED_ARG, 5, 0, 0, 0, 0, 0 },
   { "seed", NDB_OPT_NOSHORT, "Random seed",
-    &opt_seed, &opt_seed, 0,
+    (uchar **) &opt_seed, (uchar **) &opt_seed, 0,
     GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "testname", 'n', "Name of test to run",
-    &opt_testname, &opt_testname, 0,
+    (uchar **) &opt_testname, (uchar **) &opt_testname, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "timer", 't', "Print execution time",
-    &opt_timer, &opt_timer, 0,
+    (uchar **) &opt_timer, (uchar **) &opt_timer, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "verbose", 'v', "Print verbose status",
-    &opt_verbose, &opt_verbose, 0,
+    (uchar **) &opt_verbose, (uchar **) &opt_verbose, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "temporary-tables", 'T', "Create temporary table(s)",
-    &opt_temporary, &opt_temporary, 0,
+    (uchar **) &opt_temporary, (uchar **) &opt_temporary, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "nologging", NDB_OPT_NOSHORT, "Create table(s) wo/ logging",
-    &opt_nologging, &opt_nologging, 0,
+    (uchar **) &opt_nologging, (uchar **) &opt_nologging, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "noddl", NDB_OPT_NOSHORT,
     "Don't create/drop tables as part of running tests",
-    &opt_noddl, &opt_noddl, 0,
+    (uchar**) &opt_noddl, (uchar**) &opt_noddl, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "forceshortreqs", NDB_OPT_NOSHORT, "Use short signals for NdbApi requests",
-    &opt_forceShort, &opt_forceShort, 0,
+    (uchar**) &opt_forceShort, (uchar**) &opt_forceShort, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { "stop-on-error", NDB_OPT_NOSHORT,
     "Don't run any more tests after one has failed",
-    &opt_stop_on_error, &opt_stop_on_error, 0,
+    (uchar**) &opt_stop_on_error, (uchar**) &opt_stop_on_error, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
@@ -1629,12 +1587,12 @@ int NDBT_TestSuite::execute(int argc, const char** argv){
        Other parameters should:
        * be calculated from the above two parameters 
        * be divided into different test cases, ex. one testcase runs
-         with FragmentType = Single and another performs the same 
+         with FragmentType = Single and another perfoms the same 
          test with FragmentType = Large
        * let the test case iterate over all/subset of appropriate parameters
          ex. iterate over FragmentType = Single to FragmentType = AllLarge
 
-       Remember that the intention is that it should be _easy_ to run 
+       Remeber that the intention is that it should be _easy_ to run 
        a complete test suite without any greater knowledge of what 
        should be tested ie. keep arguments at a minimum
   */
@@ -1642,7 +1600,7 @@ int NDBT_TestSuite::execute(int argc, const char** argv){
   char **_argv= (char **)argv;
 
   // Use program name as one of the defaults group name
-  static_assert(NDB_ARRAY_SIZE(load_default_groups) == 4);
+  static_assert(NDB_ARRAY_SIZE(load_default_groups) == 4, "");
   require(load_default_groups[2] == nullptr);
   load_default_groups[2] = argv[0];
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2015, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,9 +25,8 @@
 #include "client/base/message_data.h"
 #include "errmsg.h"
 
-#include "mysql/strings/m_ctype.h"
+#include "m_ctype.h"
 #include "sql_string.h"
-#include "template_utils.h"
 
 using namespace Mysql::Tools::Base;
 

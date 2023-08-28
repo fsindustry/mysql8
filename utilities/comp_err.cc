@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,12 +45,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <fstream>
 #include <new>
 #include <set>
 #include <utility>
 #include <vector>
 
+#include "m_ctype.h"
 #include "m_string.h"
 #include "my_byteorder.h"
 #include "my_checksum.h"
@@ -62,12 +62,8 @@
 #include "my_sys.h"
 #include "mysql/components/services/log_shared.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/strings/m_ctype.h"
-#include "mysql/strings/my_strtoll10.h"
-#include "nulls.h"
 #include "prealloced_array.h"
 #include "print_version.h"
-#include "strxmov.h"
 #include "welcome_copyright_notice.h"
 
 #define MAX_ERROR_NAME_LENGTH 64
@@ -184,8 +180,8 @@ std::set<err_range> reserved_sections;
 
 static struct my_option my_long_options[] = {
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit", nullptr,
-     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"debug", '#', "This is a non-debug version. Catch this and exit", 0, 0, 0,
+     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
     {"debug", '#', "Output debug log", &default_dbug_option,
      &default_dbug_option, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0,
@@ -220,7 +216,7 @@ static struct my_option my_long_options[] = {
      0, nullptr, 0, nullptr}};
 
 static struct languages *parse_charset_string(char *str);
-static struct errors *parse_error_string(char *str, int er_count,
+static struct errors *parse_error_string(char *ptr, int er_count,
                                          PFS_error_stat error_stat);
 static struct message *parse_message_string(struct message *new_message,
                                             char *str);
@@ -233,7 +229,7 @@ static int parse_input_file(const char *file_name, struct errors ***last_error,
                             struct languages **top_language,
                             int base_error_code, PFS_error_stat error_stat);
 static int get_options(int *argc, char ***argv);
-static void usage();
+static void usage(void);
 static bool get_one_option(int optid, const struct my_option *opt,
                            char *argument);
 static char *parse_text_line(char *pos);
@@ -378,27 +374,6 @@ static void print_escaped_string(FILE *f, const char *str) {
   }
 }
 
-std::string get_file_contents(std::string filename) {
-  std::ifstream ifs(filename);
-  if (!ifs.good()) {
-    return "";
-  }
-  return std::string(std::istreambuf_iterator<char>(ifs),
-                     std::istreambuf_iterator<char>());
-}
-
-static void compare_and_move_file(std::string source_filename,
-                                  std::string destination_filename) {
-  const auto source_contents = get_file_contents(source_filename);
-  const auto destination_contents = get_file_contents(destination_filename);
-  if (source_contents == destination_contents) {
-    unlink(source_filename.c_str());
-  } else {
-    unlink(destination_filename.c_str());
-    rename(source_filename.c_str(), destination_filename.c_str());
-  }
-}
-
 static int create_header_files(struct errors *error_head) {
   FILE *er_definef, *er_namef;
   FILE *er_errmsg;
@@ -408,18 +383,14 @@ static int create_header_files(struct errors *error_head) {
 
   DBUG_TRACE;
 
-  std::string headerfile_tmp = std::string(HEADERFILE) + "_tmp";
-  std::string namefile_tmp = std::string(NAMEFILE) + "_tmp";
-  std::string msgfile_tmp = std::string(MSGFILE) + "_tmp";
-
-  if (!(er_definef = my_fopen(headerfile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
+  if (!(er_definef = my_fopen(HEADERFILE, O_WRONLY, MYF(MY_WME)))) {
     return 1;
   }
-  if (!(er_namef = my_fopen(namefile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
+  if (!(er_namef = my_fopen(NAMEFILE, O_WRONLY, MYF(MY_WME)))) {
     my_fclose(er_definef, MYF(0));
     return 1;
   }
-  if (!(er_errmsg = my_fopen(msgfile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
+  if (!(er_errmsg = my_fopen(MSGFILE, O_WRONLY, MYF(MY_WME)))) {
     my_fclose(er_definef, MYF(0));
     my_fclose(er_namef, MYF(0));
     return 1;
@@ -581,10 +552,6 @@ static int create_header_files(struct errors *error_head) {
   my_fclose(er_definef, MYF(0));
   my_fclose(er_namef, MYF(0));
   my_fclose(er_errmsg, MYF(0));
-
-  compare_and_move_file(headerfile_tmp, HEADERFILE);
-  compare_and_move_file(namefile_tmp, NAMEFILE);
-  compare_and_move_file(msgfile_tmp, MSGFILE);
   return 0;
 }
 
@@ -714,11 +681,10 @@ static int parse_input_file(const char *file_name, struct errors ***last_error,
                             struct languages **top_lang, int base_error_code,
                             PFS_error_stat error_stat) {
   FILE *file;
-  char *str, buff[2000];  // temporary fix for compilation failure of Wl14191 at
-                          // few platforms
+  char *str, buff[1000];
   const char *fail = nullptr;
   struct errors *current_error = nullptr, **tail_error = *last_error;
-  struct message current_message {};
+  struct message current_message;
   int rcount = 0; /* Number of error codes in current section. */
   int ecount = 0; /* Number of error codes in total. */
   DBUG_TRACE;
@@ -973,7 +939,9 @@ static bool parse_reserved_error_section(char *str) {
   }
 
   auto ret = reserved_sections.insert(err_range(sec_start, sec_end));
-  return (!ret.second);
+  if (!ret.second) return true;
+
+  return false;
 }
 
 /* Parsing of the default language line. e.g. "default-language eng" */
@@ -1424,7 +1392,7 @@ static bool get_one_option(int optid,
   return false;
 }
 
-static void usage() {
+static void usage(void) {
   DBUG_TRACE;
   print_version();
   printf(

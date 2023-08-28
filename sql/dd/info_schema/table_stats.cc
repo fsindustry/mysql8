@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,6 @@
 #include "sql/dd/info_schema/table_stats.h"  // dd::info_schema::*
 
 #include "my_time.h"  // TIME_to_ulonglong_datetime
-#include "mysql/strings/m_ctype.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/dd.h"          // dd::create_object
 #include "sql/dd/impl/utils.h"  // dd::my_time_t_to_ull_datetime()
@@ -314,7 +313,7 @@ static bool report_error_except_ignore_dup(THD *thd, const char *object_type) {
 namespace dd {
 namespace info_schema {
 
-bool update_table_stats(THD *thd, Table_ref *table) {
+bool update_table_stats(THD *thd, TABLE_LIST *table) {
   // Update the object properties
   HA_CREATE_INFO create_info;
 
@@ -340,7 +339,7 @@ bool update_table_stats(THD *thd, Table_ref *table) {
          report_error_except_ignore_dup(thd, "table");
 }
 
-bool update_index_stats(THD *thd, Table_ref *table) {
+bool update_index_stats(THD *thd, TABLE_LIST *table) {
   // Update the object properties
   TABLE *analyze_table = table->table;
   KEY *key_info = analyze_table->s->key_info;
@@ -712,8 +711,8 @@ ulonglong Table_statistics::read_stat_by_open_table(
     goto end;
   }
 
-  Table_ref *table_list;
-  table_list = lex->query_block->get_table_list();
+  TABLE_LIST *table_list;
+  table_list = lex->query_block->table_list.first;
   table_list->required_type = dd::enum_table_type::BASE_TABLE;
 
   /*
@@ -888,7 +887,7 @@ ulonglong Table_statistics::read_stat_by_open_table(
   }
 
 end:
-  lex->cleanup(true);
+  lex->cleanup(thd, true);
 
   /* Restore original LEX value, statement's arena and THD arena values. */
   lex_end(thd->lex);

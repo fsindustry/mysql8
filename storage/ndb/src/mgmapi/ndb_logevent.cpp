@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,7 +37,7 @@
 
 extern
 int ndb_mgm_listen_event_internal(NdbMgmHandle, const int filter[],
-                                  int, ndb_socket_t*);
+                                  int, NDB_SOCKET_TYPE*);
 
 struct ndb_logevent_error_msg {
   enum ndb_logevent_handle_error code;
@@ -50,11 +50,11 @@ struct ndb_logevent_error_msg ndb_logevent_error_messages[]= {
   { NDB_LEH_UNKNOWN_EVENT_VARIABLE,  "Unknown event variable" },
   { NDB_LEH_UNKNOWN_EVENT_TYPE,      "Unknown event type" },
   { NDB_LEH_INTERNAL_ERROR,          "Unknown internal error" },
-  { NDB_LEH_NO_ERROR,nullptr}
+  { NDB_LEH_NO_ERROR,0}
 };
 
 struct ndb_logevent_handle {
-  ndb_socket_t socket;
+  NDB_SOCKET_TYPE socket;
   enum ndb_logevent_handle_error m_error;
 };
 
@@ -69,7 +69,7 @@ ndb_mgm_create_logevent_handle_same_socket(NdbMgmHandle mh)
   NdbLogEventHandle h=
     (NdbLogEventHandle)malloc(sizeof(ndb_logevent_handle));
   if (!h)
-    return nullptr;
+    return NULL;
 
   h->socket= _ndb_mgm_get_socket(mh);
 
@@ -84,13 +84,13 @@ ndb_mgm_create_logevent_handle(NdbMgmHandle mh,
   NdbLogEventHandle h=
     (NdbLogEventHandle)malloc(sizeof(ndb_logevent_handle));
   if (!h)
-    return nullptr;
+    return NULL;
 
-  ndb_socket_t sock;
+  NDB_SOCKET_TYPE sock;
   if(ndb_mgm_listen_event_internal(mh, filter, 1, &sock) < 0)
   {
     free(h);
-    return nullptr;
+    return 0;
   }
 
   h->socket= sock;
@@ -99,7 +99,7 @@ ndb_mgm_create_logevent_handle(NdbMgmHandle mh,
 }
 
 extern "C"
-socket_t
+ndb_native_socket_t
 ndb_logevent_get_fd(const NdbLogEventHandle h)
 {
   return ndb_socket_get_native(h->socket);
@@ -115,7 +115,7 @@ void ndb_mgm_destroy_logevent_handle(NdbLogEventHandle * h)
     ndb_socket_close((*h)->socket);
 
   free(*h);
-  * h = nullptr;
+  * h = 0;
 }
 
 #define ROW(a,b,c,d) \
@@ -440,7 +440,7 @@ struct Ndb_logevent_body_row ndb_logevent_body[]= {
   ROW( EventBufferStatus3, "alloc_h",     11, alloc_h),
   ROW( EventBufferStatus3, "max_h",       12, max_h),
 
-  { NDB_LE_ILLEGAL_TYPE, nullptr, 0, nullptr, 0, 0}
+  { NDB_LE_ILLEGAL_TYPE, 0, 0, 0, 0, 0}
 };
 
 struct Ndb_logevent_header_row {
@@ -457,7 +457,7 @@ struct Ndb_logevent_header_row ndb_logevent_header[]= {
   ROW2( "type",          type),
   ROW2( "time",          time),
   ROW2( "source_nodeid", source_nodeid),
-  { nullptr, 0, 0 }
+  { 0, 0, 0 }
 };
 
 static int
@@ -551,19 +551,18 @@ int ndb_logevent_get_next2(const NdbLogEventHandle h,
     return res;
   }
 
-  NdbSocket s(h->socket, NdbSocket::From::Existing);
-  SecureSocketInputStream in(s, timeout_in_milliseconds);
+  SocketInputStream in(h->socket, timeout_in_milliseconds);
 
   /*
     Read log event header until header received
-    or timeout expired. The MGM server will continuously
+    or timeout expired. The MGM server will continusly
     send <PING>'s that should be ignored.
   */
   char buf[1024];
   const NDB_TICKS start = NdbTick_getCurrentTicks();
   while(1)
   {
-    if (in.gets(buf,sizeof(buf)) == nullptr)
+    if (in.gets(buf,sizeof(buf)) == 0)
     {
       h->m_error= NDB_LEH_READ_ERROR;
       return -1;
@@ -593,7 +592,7 @@ int ndb_logevent_get_next2(const NdbLogEventHandle h,
   Properties p;
   while (1)
   {
-    if (in.gets(buf,sizeof(buf)) == nullptr)
+    if (in.gets(buf,sizeof(buf)) == 0)
     {
       h->m_error= NDB_LEH_READ_ERROR;
       return -1;

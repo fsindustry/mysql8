@@ -1,7 +1,7 @@
 #ifndef ITEM_GEOFUNC_INCLUDED
 #define ITEM_GEOFUNC_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -170,6 +170,15 @@ class BG_geometry_collection {
 
   size_t num_isolated() const { return m_num_isolated; }
 
+  Gis_geometry_collection *as_geometry_collection(String *geodata) const;
+  /**
+    Merge all components as appropriate so that the object contains only
+    components that don't overlap.
+
+    @tparam Coordsys Coordinate system type, specified using those defined in
+            boost::geometry::cs.
+    @param[out] pnull_value takes back null_value set during the operation.
+   */
  private:
   bool store_geometry(const Geometry *geo, bool break_multi_geom);
   Geometry *store(const Geometry *geo);
@@ -245,7 +254,7 @@ class Item_func_geometry_from_text : public Item_geometry_func {
                                Item *option, Functype functype)
       : Item_geometry_func(pos, a, srid, option), m_functype(functype) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override;
   String *val_str(String *) override;
   bool resolve_type(THD *thd) override {
@@ -312,7 +321,7 @@ class Item_func_geometry_from_wkb : public Item_geometry_func {
                               Functype functype)
       : Item_geometry_func(pos, a, srid, option), m_functype(functype) {}
 
-  bool do_itemize(Parse_context *pc, Item **res) override;
+  bool itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override;
   String *val_str(String *) override;
 };
@@ -338,7 +347,7 @@ class Item_func_as_wkb : public Item_geometry_func {
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_GEOMETRY)) return true;
     if (param_type_is_default(thd, 1, 2)) return true;
     if (Item_geometry_func::resolve_type(thd)) return true;
-    set_data_type_blob(MYSQL_TYPE_LONG_BLOB, Field::MAX_LONG_BLOB_WIDTH);
+    set_data_type_blob(Field::MAX_LONG_BLOB_WIDTH);
     return false;
   }
 };
@@ -1244,8 +1253,26 @@ class Item_func_st_union final : public Item_func_spatial_operation {
   const char *func_name() const override { return "st_union"; }
 };
 
-class Item_func_buffer_strategy : public Item_str_func {
- private:
+class Item_func_buffer : public Item_geometry_func {
+ public:
+  /*
+    There are five types of buffer strategies, this is an enumeration of them.
+   */
+  enum enum_buffer_strategy_types {
+    invalid_strategy_type = 0,
+    end_strategy,
+    join_strategy,
+    point_strategy,
+    // The two below are not parameterized.
+    distance_strategy,
+    side_strategy
+  };
+
+  /*
+    For each type of strategy listed above, there are several options/values
+    for it, this is an enumeration of all such options/values for all types of
+    strategies.
+   */
   enum enum_buffer_strategies {
     invalid_strategy = 0,
     end_round,
@@ -1260,6 +1287,45 @@ class Item_func_buffer_strategy : public Item_str_func {
     // parameterization for them.
   };
 
+  /*
+    A piece of strategy setting. User can specify 0 to 3 different strategy
+    settings in any order to ST_Buffer(), which must be of different
+    strategy types. Default strategies are used if not explicitly specified.
+   */
+  struct Strategy_setting {
+    enum_buffer_strategies strategy;
+    // This field is only effective for end_round, join_round, join_mit,
+    // and point_circle.
+    double value;
+  };
+
+ private:
+  BG_result_buf_mgr bg_resbuf_mgr;
+  int num_strats;
+  String *strategies[side_strategy + 1];
+  /*
+    end_xxx stored in settings[end_strategy];
+    join_xxx stored in settings[join_strategy];
+    point_xxx stored in settings[point_strategy].
+  */
+  Strategy_setting settings[side_strategy + 1];
+  String tmp_value;  // Stores current buffer result.
+  String m_tmp_geombuf;
+  void set_strategies();
+  bool resolve_type(THD *thd) override {
+    if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_GEOMETRY)) return true;
+    if (param_type_is_default(thd, 1, 2, MYSQL_TYPE_DOUBLE)) return true;
+    if (param_type_is_default(thd, 2, -1)) return true;
+    return Item_geometry_func::resolve_type(thd);
+  }
+
+ public:
+  Item_func_buffer(const POS &pos, PT_item_list *ilist);
+  const char *func_name() const override { return "st_buffer"; }
+};
+
+class Item_func_buffer_strategy : public Item_str_func {
+ private:
   friend class Item_func_buffer;
   String tmp_value;
   char tmp_buffer[16];  // The buffer for tmp_value.

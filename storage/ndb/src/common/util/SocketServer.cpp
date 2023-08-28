@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,7 +35,6 @@
 #include "ndb_socket.h"
 #include <OwnProcessInfo.hpp>
 #include <EventLogger.hpp>
-#include "portlib/ndb_sockaddr.h"
 
 #if 0
 #define DEBUG_FPRINTF(arglist) do { fprintf arglist ; } while (0)
@@ -48,7 +47,7 @@ SocketServer::SocketServer(unsigned maxSessions) :
   m_services(5),
   m_maxSessions(maxSessions),
   m_stopThread(false),
-  m_thread(nullptr)
+  m_thread(0)
 {
 }
 
@@ -66,19 +65,26 @@ SocketServer::~SocketServer() {
   }
 }
 
-bool SocketServer::tryBind(ndb_sockaddr servaddr,
+bool SocketServer::tryBind(unsigned short port, const char* intface,
                            char* error, size_t error_size) {
-  const ndb_socket_t sock = ndb_socket_create(servaddr.get_address_family());
+  struct sockaddr_in6 servaddr;
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin6_family = AF_INET6;
+  servaddr.sin6_addr = in6addr_any;
+  servaddr.sin6_port = htons(port);
 
+  if(intface != 0){
+    if(Ndb_getInAddr6(&servaddr.sin6_addr, intface))
+      return false;
+  }
+
+  const NDB_SOCKET_TYPE sock =
+      ndb_socket_create_dual_stack(SOCK_STREAM, 0);
   if (!ndb_socket_valid(sock))
     return false;
 
-  if (servaddr.need_dual_stack())
-  {
-    [[maybe_unused]] bool ok = ndb_socket_dual_stack(sock, 1);
-  }
-
-  DBUG_PRINT("info",("NDB_SOCKET: %s", ndb_socket_to_string(sock).c_str()));
+  DBUG_PRINT("info",("NDB_SOCKET: " MY_SOCKET_FORMAT,
+                     MY_SOCKET_FORMAT_VALUE(sock)));
 
   if (ndb_socket_configure_reuseaddr(sock, true) == -1)
   {
@@ -86,8 +92,8 @@ bool SocketServer::tryBind(ndb_sockaddr servaddr,
     return false;
   }
 
-  if (ndb_bind(sock, &servaddr) == -1) {
-    if (error != nullptr) {
+  if (ndb_bind_inet(sock, &servaddr) == -1) {
+    if (error != NULL) {
       int err_code = ndb_socket_errno();
       snprintf(error, error_size, "%d '%s'", err_code,
                ndb_socket_err_message(err_code).c_str());
@@ -102,12 +108,24 @@ bool SocketServer::tryBind(ndb_sockaddr servaddr,
 
 #define MAX_SOCKET_SERVER_TCP_BACKLOG 64
 bool
-SocketServer::setup(SocketServer::Service * service, ndb_sockaddr* servaddr)
-{
+SocketServer::setup(SocketServer::Service * service,
+        unsigned short * port,
+        const char * intface){
   DBUG_ENTER("SocketServer::setup");
+  DBUG_PRINT("enter",("interface=%s, port=%u", intface, *port));
+  struct sockaddr_in6 servaddr;
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin6_family = AF_INET6;
+  servaddr.sin6_addr = in6addr_any;
+  servaddr.sin6_port = htons(*port);
 
-  const ndb_socket_t sock = ndb_socket_create(servaddr->get_address_family());
+  if(intface != 0){
+    if(Ndb_getInAddr6(&servaddr.sin6_addr, intface))
+      DBUG_RETURN(false);
+  }
 
+  const NDB_SOCKET_TYPE sock =
+      ndb_socket_create_dual_stack(SOCK_STREAM, 0);
   if (!ndb_socket_valid(sock))
   {
     DBUG_PRINT("error",("socket() - %d - %s",
@@ -115,12 +133,8 @@ SocketServer::setup(SocketServer::Service * service, ndb_sockaddr* servaddr)
     DBUG_RETURN(false);
   }
 
-  if (servaddr->need_dual_stack())
-  {
-    [[maybe_unused]] bool ok = ndb_socket_dual_stack(sock, 1);
-  }
-
-  DBUG_PRINT("info",("NDB_SOCKET: %s", ndb_socket_to_string(sock).c_str()));
+  DBUG_PRINT("info",("NDB_SOCKET: " MY_SOCKET_FORMAT,
+                     MY_SOCKET_FORMAT_VALUE(sock)));
 
   if (ndb_socket_reuseaddr(sock, true) == -1)
   {
@@ -130,7 +144,7 @@ SocketServer::setup(SocketServer::Service * service, ndb_sockaddr* servaddr)
     DBUG_RETURN(false);
   }
 
-  if (ndb_bind(sock, servaddr) == -1) {
+  if (ndb_bind_inet(sock, &servaddr) == -1) {
     DBUG_PRINT("error",("bind() - %d - %s",
       socket_errno, strerror(socket_errno)));
     ndb_socket_close(sock);
@@ -138,7 +152,9 @@ SocketServer::setup(SocketServer::Service * service, ndb_sockaddr* servaddr)
   }
 
   /* Get the address and port we bound to */
-  if(ndb_getsockname(sock, servaddr))
+  struct sockaddr_in6 serv_addr;
+  ndb_socket_len_t addr_len = sizeof(serv_addr);
+  if(ndb_getsockname(sock, (struct sockaddr *) &serv_addr, &addr_len))
   {
     g_eventLogger->info(
         "An error occurred while trying to find out what port we bound to."
@@ -147,9 +163,10 @@ SocketServer::setup(SocketServer::Service * service, ndb_sockaddr* servaddr)
     ndb_socket_close(sock);
     DBUG_RETURN(false);
   }
-  setOwnProcessInfoServerAddress(servaddr);
+  *port = ntohs(serv_addr.sin6_port);
+  setOwnProcessInfoServerAddress((sockaddr*)& serv_addr);
 
-  DBUG_PRINT("info",("bound to %u", servaddr->get_port()));
+  DBUG_PRINT("info",("bound to %u", *port));
 
   if (ndb_listen(sock, m_maxSessions > MAX_SOCKET_SERVER_TCP_BACKLOG ?
                       MAX_SOCKET_SERVER_TCP_BACKLOG : m_maxSessions) == -1)
@@ -183,7 +200,7 @@ SocketServer::doAccept()
   m_services_poller.clear();
   for (unsigned i = 0; i < m_services.size(); i++)
   {
-    m_services_poller.add_readable(m_services[i].m_socket); // Need error ??
+    m_services_poller.add(m_services[i].m_socket, true, false, true);
   }
   assert(m_services.size() == m_services_poller.count());
 
@@ -214,7 +231,7 @@ SocketServer::doAccept()
     ServiceInstance & si = m_services[i];
     assert(m_services_poller.is_socket_equal(i, si.m_socket));
 
-    const ndb_socket_t childSock = ndb_accept(si.m_socket, nullptr);
+    const NDB_SOCKET_TYPE childSock = ndb_accept(si.m_socket, 0, 0);
     if (!ndb_socket_valid(childSock))
     {
       // Could not 'accept' socket(maybe at max fds), indicate error
@@ -226,7 +243,7 @@ SocketServer::doAccept()
     SessionInstance s;
     s.m_service = si.m_service;
     s.m_session = si.m_service->newSession(childSock);
-    if (s.m_session != nullptr)
+    if (s.m_session != 0)
     {
       m_session_mutex.lock();
       m_sessions.push_back(s);
@@ -244,14 +261,14 @@ void*
 socketServerThread_C(void* _ss){
   SocketServer * ss = (SocketServer *)_ss;
   ss->doRun();
-  return nullptr;
+  return 0;
 }
 
 struct NdbThread*
 SocketServer::startServer()
 {
   m_threadLock.lock();
-  if(m_thread == nullptr && m_stopThread == false)
+  if(m_thread == 0 && m_stopThread == false)
   {
     m_thread = NdbThread_Create(socketServerThread_C,
 				(void**)this,
@@ -266,13 +283,13 @@ SocketServer::startServer()
 void
 SocketServer::stopServer(){
   m_threadLock.lock();
-  if(m_thread != nullptr){
+  if(m_thread != 0){
     m_stopThread = true;
     
     void * res;
     NdbThread_WaitFor(m_thread, &res);
     NdbThread_Destroy(&m_thread);
-    m_thread = nullptr;
+    m_thread = 0;
   }
   m_threadLock.unlock();
 }
@@ -356,7 +373,7 @@ SocketServer::checkSessionsImpl()
     if(m_sessions[i].m_session->m_thread_stopped &&
        (m_sessions[i].m_session->m_refCount == 0))
     {
-      if(m_sessions[i].m_thread != nullptr)
+      if(m_sessions[i].m_thread != 0)
       {
 	void* ret;
 	NdbThread_WaitFor(m_sessions[i].m_thread, &ret);
@@ -423,7 +440,7 @@ sessionThread_C(void* _sc){
   // Mark the thread as stopped to allow the
   // session resources to be released
   si->m_thread_stopped = true;
-  return nullptr;
+  return 0;
 }
 
 template class MutexVector<SocketServer::ServiceInstance>;

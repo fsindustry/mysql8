@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,26 +47,17 @@ static int _lock = 0;
 
 static struct my_option my_long_options[] =
 {
-  NdbStdOpt::usage,
-  NdbStdOpt::help,
-  NdbStdOpt::version,
-  NdbStdOpt::ndb_connectstring,
-  NdbStdOpt::mgmd_host,
-  NdbStdOpt::connectstring,
-  NdbStdOpt::ndb_nodeid,
-  NdbStdOpt::connect_retry_delay,
-  NdbStdOpt::connect_retries,
-  NDB_STD_OPT_DEBUG
+  NDB_STD_OPTS("ndb_select_count"),
   { "database", 'd', "Name of database table is in",
-    &_dbname, nullptr, nullptr, GET_STR, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_dbname, (uchar**) &_dbname, 0,
+    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "parallelism", 'p', "parallelism",
-    &_parallelism, nullptr, nullptr, GET_INT, REQUIRED_ARG,
-    240, 0, 0, nullptr, 0, nullptr },
+    (uchar**) &_parallelism, (uchar**) &_parallelism, 0,
+    GET_INT, REQUIRED_ARG, 240, 0, 0, 0, 0, 0 }, 
   { "lock", 'l', "Read(0), Read-hold(1), Exclusive(2)",
-    &_lock, nullptr, nullptr, GET_INT, REQUIRED_ARG,
-    0, 0, 0, nullptr, 0, nullptr },
-  NdbStdOpt::end_of_options
+    (uchar**) &_lock, (uchar**) &_lock, 0,
+    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 }, 
+  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
 static void short_usage_sub(void)

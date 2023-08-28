@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -50,7 +50,6 @@
 #define HAVE_PSI_DATA_LOCK_INTERFACE
 #define HAVE_PSI_SYSTEM_INTERFACE
 #define HAVE_PSI_TLS_CHANNEL_INTERFACE
-#define HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE
 
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -134,8 +133,6 @@ static void set_thread_start_time_noop(time_t) { return; }
 
 static void set_thread_info_noop(const char *, uint) { return; }
 
-static void set_thread_secondary_engine_noop(bool) { return; }
-
 static void set_thread_noop(PSI_thread *) { return; }
 
 static void set_thread_peer_port_noop(PSI_thread *, uint) { return; }
@@ -193,14 +190,6 @@ static void notify_session_disconnect_noop(PSI_thread *) { return; }
 
 static void notify_session_change_user_noop(PSI_thread *) { return; }
 
-static void set_mem_cnt_THD_noop(THD *, THD **backup_thd) {
-  *backup_thd = nullptr;
-  return;
-}
-
-static void detect_telemetry_noop(PSI_thread * /*unused*/) {}
-static void abort_telemetry_noop(PSI_thread * /*unused*/) {}
-
 static PSI_thread_service_t psi_thread_noop = {
     register_thread_noop,
     spawn_thread_noop,
@@ -219,7 +208,6 @@ static PSI_thread_service_t psi_thread_noop = {
     set_connection_type_noop,
     set_thread_start_time_noop,
     set_thread_info_noop,
-    set_thread_secondary_engine_noop,
     set_thread_resource_group_noop,
     set_thread_resource_group_by_id_noop,
     set_thread_noop,
@@ -236,10 +224,7 @@ static PSI_thread_service_t psi_thread_noop = {
     unregister_notification_noop,
     notify_session_connect_noop,
     notify_session_disconnect_noop,
-    notify_session_change_user_noop,
-    set_mem_cnt_THD_noop,
-    detect_telemetry_noop,
-    abort_telemetry_noop};
+    notify_session_change_user_noop};
 
 struct PSI_thread_bootstrap *psi_thread_hook = nullptr;
 PSI_thread_service_t *psi_thread_service = &psi_thread_noop;
@@ -726,10 +711,6 @@ static void set_statement_no_good_index_used_noop(PSI_statement_locker *) {
   return;
 }
 
-static void set_statement_secondary_engine_noop(PSI_statement_locker *, bool) {
-  return;
-}
-
 static void end_statement_noop(PSI_statement_locker *, void *) { return; }
 
 static PSI_prepared_stmt *create_prepared_stmt_noop(void *, uint,
@@ -750,10 +731,6 @@ static void execute_prepared_stmt_noop(PSI_statement_locker *,
 
 static void set_prepared_stmt_text_noop(PSI_prepared_stmt *, const char *,
                                         uint) {
-  return;
-}
-
-static void set_prepared_stmt_secondary_engine_noop(PSI_prepared_stmt *, bool) {
   return;
 }
 
@@ -783,11 +760,6 @@ static void drop_sp_noop(uint, const char *, uint, const char *, uint) {
   return;
 }
 
-static void notify_statement_query_attributes_noop(PSI_statement_locker *,
-                                                   bool) {}
-
-static void abort_statement_telemetry_noop(PSI_statement_locker * /*unused*/) {}
-
 static PSI_statement_service_t psi_statement_noop = {
     register_statement_noop,
     get_thread_statement_locker_noop,
@@ -811,23 +783,19 @@ static PSI_statement_service_t psi_statement_noop = {
     inc_statement_sort_scan_noop,
     set_statement_no_index_used_noop,
     set_statement_no_good_index_used_noop,
-    set_statement_secondary_engine_noop,
     end_statement_noop,
     create_prepared_stmt_noop,
     destroy_prepared_stmt_noop,
     reprepare_prepared_stmt_noop,
     execute_prepared_stmt_noop,
     set_prepared_stmt_text_noop,
-    set_prepared_stmt_secondary_engine_noop,
     digest_start_noop,
     digest_end_noop,
     get_sp_share_noop,
     release_sp_share_noop,
     start_sp_noop,
     end_sp_noop,
-    drop_sp_noop,
-    notify_statement_query_attributes_noop,
-    abort_statement_telemetry_noop};
+    drop_sp_noop};
 
 struct PSI_statement_bootstrap *psi_statement_hook = nullptr;
 PSI_statement_service_t *psi_statement_service = &psi_statement_noop;
@@ -1006,5 +974,3 @@ PSI_tls_channel_service_t *psi_tls_channel_service = &psi_tls_channel_noop;
 void set_psi_tls_channel_service(void *psi) {
   psi_tls_channel_service = (PSI_tls_channel_service_t *)psi;
 }
-
-// ===========================================================================

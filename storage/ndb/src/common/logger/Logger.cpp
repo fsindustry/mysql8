@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -52,9 +52,9 @@ const char* Logger::LoggerLevelNames[] = { "ON      ",
 					 };
 Logger::Logger() : 
   m_pCategory("Logger"),
-  m_pConsoleHandler(nullptr),
-  m_pFileHandler(nullptr),
-  m_pSyslogHandler(nullptr)
+  m_pConsoleHandler(NULL),
+  m_pFileHandler(NULL),
+  m_pSyslogHandler(NULL)
 {
   m_pHandlerList = new LogHandlerList();
   m_mutex= NdbMutex_Create();
@@ -107,14 +107,14 @@ Logger::removeConsoleHandler()
   Guard g(m_handler_mutex);
   if (removeHandler(m_pConsoleHandler))
   {
-    m_pConsoleHandler = nullptr;
+    m_pConsoleHandler = NULL;
   }
 }
 
-#ifdef _WIN32
 bool
 Logger::createEventLogHandler(const char* source_name)
 {
+#ifdef _WIN32
   Guard g(m_handler_mutex);
 
   LogHandler* log_handler = new EventLogHandler(source_name);
@@ -128,8 +128,10 @@ Logger::createEventLogHandler(const char* source_name)
   }
 
   return true;
-}
+#else
+  return false;
 #endif
+}
 
 bool
 Logger::createFileHandler(char*filename)
@@ -159,7 +161,7 @@ Logger::removeFileHandler()
   Guard g(m_handler_mutex);
   if (removeHandler(m_pFileHandler))
   {
-    m_pFileHandler = nullptr;
+    m_pFileHandler = NULL;
   }
 }
 
@@ -195,7 +197,7 @@ Logger::removeSyslogHandler()
   Guard g(m_handler_mutex);
   if (removeHandler(m_pSyslogHandler))
   {
-    m_pSyslogHandler = nullptr;
+    m_pSyslogHandler = NULL;
   }
 }
 
@@ -203,7 +205,7 @@ bool
 Logger::addHandler(LogHandler* pHandler)
 {
   Guard g(m_mutex);
-  assert(pHandler != nullptr);
+  assert(pHandler != NULL);
 
   if (!pHandler->is_open() &&
       !pHandler->open())
@@ -224,14 +226,14 @@ Logger::removeHandler(LogHandler* pHandler)
 {
   Guard g(m_mutex);
   int rc = false;
-  if (pHandler != nullptr)
+  if (pHandler != NULL)
   {
     if (pHandler == m_pConsoleHandler)
-      m_pConsoleHandler= nullptr;
+      m_pConsoleHandler= NULL;
     if (pHandler == m_pFileHandler)
-      m_pFileHandler= nullptr;
+      m_pFileHandler= NULL;
     if (pHandler == m_pSyslogHandler)
-      m_pSyslogHandler= nullptr;
+      m_pSyslogHandler= NULL;
 
     rc = m_pHandlerList->remove(pHandler);
   }
@@ -245,9 +247,9 @@ Logger::removeAllHandlers()
   Guard g(m_mutex);
   m_pHandlerList->removeAll();
 
-  m_pConsoleHandler= nullptr;
-  m_pFileHandler= nullptr;
-  m_pSyslogHandler= nullptr;
+  m_pConsoleHandler= NULL;
+  m_pFileHandler= NULL;
+  m_pSyslogHandler= NULL;
 }
 
 bool
@@ -375,10 +377,10 @@ Logger::log(LoggerLevel logLevel, const char* pMsg, va_list ap) const
   {
     char buf[MAX_LOG_MESSAGE_SIZE];
     BaseString::vsnprintf(buf, sizeof(buf), pMsg, ap);
-    LogHandler* pHandler = nullptr;
-    while ( (pHandler = m_pHandlerList->next()) != nullptr)
+    LogHandler* pHandler = NULL;
+    while ( (pHandler = m_pHandlerList->next()) != NULL)
     {
-      time_t now = ::time((time_t*)nullptr);
+      time_t now = ::time((time_t*)NULL);
       pHandler->append(m_pCategory, logLevel, buf, now);
     }
   }
@@ -387,7 +389,7 @@ Logger::log(LoggerLevel logLevel, const char* pMsg, va_list ap) const
 void Logger::setRepeatFrequency(unsigned val)
 {
   LogHandler* pHandler;
-  while ((pHandler = m_pHandlerList->next()) != nullptr)
+  while ((pHandler = m_pHandlerList->next()) != NULL)
   {
     pHandler->setRepeatFrequency(val);
   }
@@ -402,7 +404,7 @@ Logger::format_timestamp(const time_t epoch,
 
   // convert to local timezone
   tm tm_buf;
-  if (ndb_localtime_r(&epoch, &tm_buf) == nullptr)
+  if (ndb_localtime_r(&epoch, &tm_buf) == NULL)
   {
     // Failed to convert to local timezone.
     // Fill with bogus time stamp value in order

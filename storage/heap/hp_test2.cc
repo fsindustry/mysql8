@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,6 @@
 
 #include <algorithm>
 
-#include "m_string.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
@@ -38,11 +37,9 @@
 #define MAX_RECORDS 100000U
 #define MAX_KEYS 4
 
-struct CHARSET_INFO;
-
 static int get_options(int argc, char *argv[]);
 static int rnd(int max_value);
-[[noreturn]] static void endprog(int sig_number);
+static void endprog(int sig_number) MY_ATTRIBUTE((noreturn));
 
 static uint flag = 0, verbose = 0, testflag = 0, recant = 10000, silent = 0;
 static uint keys = MAX_KEYS;
@@ -545,7 +542,7 @@ static int get_options(int argc, char *argv[]) {
   return 0;
 } /* get options */
 
-/* Generate a random value in interval 0 <=x <= n */
+/* Generate a random value in intervall 0 <=x <= n */
 
 static int rnd(int max_value) {
   return (int)((rand() & 32767) / 32767.0 * max_value);

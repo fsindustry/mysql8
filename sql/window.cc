@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,13 +32,13 @@
 #include <unordered_set>
 
 #include "field_types.h"
+#include "m_ctype.h"
 #include "my_alloc.h"  // destroy
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "my_table_map.h"
 #include "my_time.h"
-#include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysqld_error.h"
 #include "sql/derror.h"  // ER_THD
@@ -84,7 +84,7 @@ static ORDER *clone(THD *thd, ORDER *order) {
   ORDER *clone = nullptr;
   ORDER **prev_next = &clone;
   for (; order != nullptr; order = order->next) {
-    ORDER *o = new (thd->mem_root) PT_order_expr(POS(), nullptr, ORDER_ASC);
+    ORDER *o = new (thd->mem_root) PT_order_expr(nullptr, ORDER_ASC);
     std::memcpy(o, order, sizeof(*order));
     *prev_next = o;
     prev_next = &o->next;
@@ -177,13 +177,13 @@ bool Window::check_window_functions1(THD *thd, Query_block *select) {
 }
 
 static Item_cache *make_result_item(Item *value) {
-  Item *order_expr = down_cast<Item_ref *>(value)->ref_item();
+  Item *order_expr = *down_cast<Item_ref *>(value)->ref;
   Item_cache *result = nullptr;
   Item_result result_type = order_expr->result_type();
 
   // In case of enum/set type, ordering is based on numeric
   // comparison. So, we need to create items that will
-  // evaluate to integers.
+  // evalute to integers.
   if (order_expr->real_item()->type() == Item::FIELD_ITEM) {
     Item_field *field = down_cast<Item_field *>(order_expr->real_item());
     if (field->field->real_type() == MYSQL_TYPE_ENUM ||
@@ -342,19 +342,6 @@ bool Window::setup_range_expressions(THD *thd) {
               return true;
             }
           }
-
-          // Special case to handle "INTERVAL expr" border. It is special
-          // because we allow a general expression there, not just a
-          // literal. If expr is a constant subquery like (SELECT 1), it gets
-          // replaced during fix_fields above with an Item_int. If it is not
-          // constant, we will detect it later in check_constant_bound.
-          if (border_type == WBT_VALUE_PRECEDING ||
-              border_type == WBT_VALUE_FOLLOWING) {
-            Item *border_val = down_cast<Item_func *>(cmp_arg)->arguments()[1];
-            if (border_val != *border->border_ptr())  // replaced?
-              *border->border_ptr() = border_val;
-          }
-
           comparators[i] = Arg_comparator(left_args, right_args);
           bool compare_func_set = false;
           // In case of enum/set type, as ordering is based on
@@ -364,21 +351,15 @@ bool Window::setup_range_expressions(THD *thd) {
             Item_field *field = down_cast<Item_field *>(nr->real_item());
             if (field->field->real_type() == MYSQL_TYPE_ENUM ||
                 field->field->real_type() == MYSQL_TYPE_SET) {
-              if (comparators[i].set_cmp_func(/*owner_arg=*/nullptr, left_args,
-                                              right_args, /*set_null_arg=*/true,
-                                              INT_RESULT)) {
-                return true;
-              }
+              comparators[i].set_cmp_func(/*owner_arg=*/nullptr, left_args,
+                                          right_args, /*set_null_arg=*/true,
+                                          INT_RESULT);
               compare_func_set = true;
             }
           }
-          if (!compare_func_set) {
-            if (comparators[i].set_cmp_func(/*owner_arg=*/nullptr, left_args,
-                                            right_args,
-                                            /*set_null_arg=*/true)) {
-              return true;
-            }
-          }
+          if (!compare_func_set)
+            comparators[i].set_cmp_func(/*owner_arg=*/nullptr, left_args,
+                                        right_args, /*set_null_arg=*/true);
         }
         m_comparators[border == m_frame->m_to] = comparators;
         break;
@@ -409,7 +390,7 @@ ORDER *Window::sorting_order(THD *thd, bool implicitly_grouped) {
     This ensures that all columns are present in the resulting sort ordering
     and that all ORDER BY expressions are at the end.
     The resulting sort can the be used to detect partition change and also
-    satisfy the window ordering.
+    satify the window ordering.
   */
   if (ord == nullptr)
     m_sorting_order = part;
@@ -547,7 +528,7 @@ bool Window::before_or_after_frame(bool before) {
     infinity = WBT_UNBOUNDED_FOLLOWING;
   }
 
-  const enum enum_window_border_type border_type = border->m_border_type;
+  enum enum_window_border_type border_type = border->m_border_type;
 
   if (border_type == infinity) return false;  // all rows included
 
@@ -670,7 +651,7 @@ bool Window::setup_ordering_cached_items(THD *thd, Query_block *select,
 }
 
 bool Window::resolve_window_ordering(THD *thd, Ref_item_array ref_item_array,
-                                     Table_ref *tables,
+                                     TABLE_LIST *tables,
                                      mem_root_deque<Item *> *fields, ORDER *o,
                                      bool partition_order) {
   DBUG_TRACE;
@@ -693,13 +674,13 @@ bool Window::resolve_window_ordering(THD *thd, Ref_item_array ref_item_array,
       return true;
     oi = *order->item;
 
-    if (order->used_alias != nullptr) {
+    if (order->used_alias) {
       /*
         Order by using alias is not allowed for windows, cf. SQL 2011, section
         7.11 <window clause>, SR 4. Throw the same error code as when alias is
         argument of a window function, or any function.
       */
-      my_error(ER_BAD_FIELD_ERROR, MYF(0), order->used_alias, thd->where);
+      my_error(ER_BAD_FIELD_ERROR, MYF(0), oi->item_name.ptr(), thd->where);
       return true;
     }
 
@@ -1087,22 +1068,16 @@ void Window::eliminate_unused_objects(List<Window> *windows) {
 }
 
 bool Window::setup_windows1(THD *thd, Query_block *select,
-                            Ref_item_array ref_item_array, Table_ref *tables,
+                            Ref_item_array ref_item_array, TABLE_LIST *tables,
                             mem_root_deque<Item *> *fields,
                             List<Window> *windows) {
   // Only possible at resolution time.
   assert(thd->lex->current_query_block()->first_execution);
-
-  if (windows->elements > kMaxWindows) {
-    my_error(ER_TOO_MANY_WINDOWS, MYF(0), windows->elements, kMaxWindows);
-    return true;
-  }
-
   /*
     We can encounter aggregate functions in the ORDER BY and PARTITION clauses
     of window function, so make sure we allow it:
   */
-  const nesting_map save_allow_sum_func = thd->lex->allow_sum_func;
+  nesting_map save_allow_sum_func = thd->lex->allow_sum_func;
   thd->lex->allow_sum_func |= (nesting_map)1 << select->nest_level;
 
   for (Window &w : *windows) {
@@ -1198,7 +1173,7 @@ bool Window::setup_windows1(THD *thd, Query_block *select,
         }
       } else {
         /*
-          This window has at least one dependent SQL 2014 section
+          This window has at least one dependant SQL 2014 section
           7.15 <window clause> SR 10.e
         */
         const Window *const ancestor = (*windows)[i];
@@ -1293,7 +1268,7 @@ bool Window::check_window_functions2(THD *thd) {
   }
 
   /*
-    We do not allow FROM_LAST yet, so sorting guarantees sequential traversal
+    We do not allow FROM_LAST yet, so sorting guarantees sequential traveral
     of the frame buffer under evaluation of several NTH_VALUE functions invoked
     on a window, which is important for the optimized wf eval strategy
   */
@@ -1414,7 +1389,6 @@ void Window::reset_execution_state(Reset_level level) {
   m_aggregates_primed = false;
   m_first_rowno_in_range_frame = 1;
   m_last_rowno_in_range_frame = 0;
-  m_first_rowno_in_rows_frame = 1;
   m_row_has_fields_in_out_table = 0;
 }
 
@@ -1552,10 +1526,9 @@ void Window::apply_temp_table(THD *thd, const Func_ptr_array &items_to_copy) {
       thd->change_item_tree(left_ptr, new_item);
 
       Item_cache *cache = FindCacheInComparator(cmp);
-      Item *new_cache_item = FindReplacementOrReplaceMaterializedItems(
+      cache->store(FindReplacementOrReplaceMaterializedItems(
           thd, cache->get_example()->real_item(), items_to_copy,
-          /*need_exact_match=*/true);
-      thd->change_item_tree(cache->get_example_ptr(), new_cache_item);
+          /*need_exact_match=*/true));
     }
   }
 }

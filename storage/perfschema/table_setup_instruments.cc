@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -54,8 +54,7 @@ Plugin_table table_setup_instruments::m_table_def(
     "  ENABLED ENUM ('YES', 'NO') not null,\n"
     "  TIMED ENUM ('YES', 'NO'),\n"
     "  PROPERTIES SET('singleton', 'progress', 'user', 'global_statistics', "
-    "'mutable', 'controlled_by_default') not null,\n"
-    "  FLAGS SET('controlled'),\n"
+    "'mutable') not null,\n"
     "  VOLATILITY int not null,\n"
     "  DOCUMENTATION LONGTEXT,\n"
     "  PRIMARY KEY (NAME) USING HASH\n",
@@ -98,7 +97,7 @@ PFS_engine_table *table_setup_instruments::create(PFS_engine_table_share *) {
   return new table_setup_instruments();
 }
 
-ha_rows table_setup_instruments::get_row_count() {
+ha_rows table_setup_instruments::get_row_count(void) {
   return wait_class_max + stage_class_max + statement_class_max +
          transaction_class_max + memory_class_max + error_class_max;
 }
@@ -106,12 +105,12 @@ ha_rows table_setup_instruments::get_row_count() {
 table_setup_instruments::table_setup_instruments()
     : PFS_engine_table(&m_share, &m_pos), m_pos(), m_next_pos() {}
 
-void table_setup_instruments::reset_position() {
+void table_setup_instruments::reset_position(void) {
   m_pos.reset();
   m_next_pos.reset();
 }
 
-int table_setup_instruments::rnd_next() {
+int table_setup_instruments::rnd_next(void) {
   PFS_instr_class *instr_class = nullptr;
   PFS_builtin_memory_class *pfs_builtin;
   bool update_enabled;
@@ -267,7 +266,7 @@ int table_setup_instruments::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_setup_instruments::index_next() {
+int table_setup_instruments::index_next(void) {
   PFS_instr_class *instr_class = nullptr;
   PFS_builtin_memory_class *pfs_builtin;
   bool update_enabled;
@@ -356,7 +355,6 @@ int table_setup_instruments::make_row(PFS_instr_class *klass,
   m_row.m_instr_class = klass;
   m_row.m_update_enabled = update_enabled;
   m_row.m_update_timed = klass->can_be_timed();
-  m_row.m_update_flags = klass->can_be_enforced();
 
   return 0;
 }
@@ -366,7 +364,6 @@ int table_setup_instruments::read_row_values(TABLE *table, unsigned char *buf,
   Field *f;
   const char *doc;
   uint properties;
-  uint enforced;
 
   /* Set the null bits */
   assert(table->s->null_bytes == 1);
@@ -381,8 +378,8 @@ int table_setup_instruments::read_row_values(TABLE *table, unsigned char *buf,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* NAME */
-          set_field_varchar_utf8mb4(f, m_row.m_instr_class->m_name.str(),
-                                    m_row.m_instr_class->m_name.length());
+          set_field_varchar_utf8(f, m_row.m_instr_class->m_name.str(),
+                                 m_row.m_instr_class->m_name.length());
           break;
         case 1: /* ENABLED */
           set_field_enum(f,
@@ -413,26 +410,12 @@ int table_setup_instruments::read_row_values(TABLE *table, unsigned char *buf,
           if (m_row.m_instr_class->is_global()) {
             properties |= INSTR_PROPERTIES_SET_GLOBAL_STAT;
           }
-          if (m_row.m_instr_class->has_default_memory_cnt()) {
-            properties |= INSTR_PROPERTIES_SET_QUOTA_BY_DEFAULT;
-          }
           set_field_set(f, properties);
           break;
-        case 4: /* FLAGS */
-          if (m_row.m_update_flags) {
-            enforced = 0;
-            if (m_row.m_instr_class->has_enforced_memory_cnt()) {
-              enforced |= INSTR_FLAGS_SET_CONTROLLED;
-            }
-            set_field_set(f, enforced);
-          } else {
-            f->set_null();
-          }
-          break;
-        case 5: /* VOLATILITY */
+        case 4: /* VOLATILITY */
           set_field_ulong(f, m_row.m_instr_class->m_volatility);
           break;
-        case 6: /* DOCUMENTATION */
+        case 5: /* DOCUMENTATION */
           doc = m_row.m_instr_class->m_documentation;
           if (doc != nullptr) {
             set_field_blob(f, doc, strlen(doc));
@@ -459,44 +442,29 @@ int table_setup_instruments::update_row_values(TABLE *table,
   for (; (f = *fields); fields++) {
     if (bitmap_is_set(table->write_set, f->field_index())) {
       switch (f->field_index()) {
+        case 0: /* NAME */
+          return HA_ERR_WRONG_COMMAND;
         case 1: /* ENABLED */
           /* Do not raise error if m_update_enabled is false, silently ignore.
            */
           if (m_row.m_update_enabled) {
             value = (enum_yes_no)get_field_enum(f);
-            m_row.m_instr_class->m_enabled = (value == ENUM_YES);
+            m_row.m_instr_class->m_enabled = (value == ENUM_YES) ? true : false;
           }
           break;
         case 2: /* TIMED */
           /* Do not raise error if m_update_timed is false, silently ignore. */
           if (m_row.m_update_timed) {
             value = (enum_yes_no)get_field_enum(f);
-            m_row.m_instr_class->m_timed = (value == ENUM_YES);
+            m_row.m_instr_class->m_timed = (value == ENUM_YES) ? true : false;
           }
           break;
-        case 4: /* FLAGS */
-          /*
-            Silently ignore the update if:
-            - the instrument is not a memory instrument (m_update_flags
-              is false)
-            - the instrument is global (controlled memory depends on
-              per thread statistics)
-           */
-          if (m_row.m_update_flags && !m_row.m_instr_class->is_global()) {
-            ulonglong enforced_value = 0;
-            uint enforced_flags = 0;
-            /* Treat FLAGS = NULL as FLAGS = '' */
-            if (!f->is_null()) {
-              enforced_value = get_field_set(f);
-            }
-            if (enforced_value & INSTR_FLAGS_SET_CONTROLLED) {
-              enforced_flags |= PSI_FLAG_MEM_COLLECT;
-            }
-            m_row.m_instr_class->set_enforced_flags(enforced_flags);
-          }
-          break;
-        default:
+        case 3: /* PROPERTIES */
+        case 4: /* VOLATILITY */
+        case 5: /* DOCUMENTATION */
           return HA_ERR_WRONG_COMMAND;
+        default:
+          assert(false);
       }
     }
   }

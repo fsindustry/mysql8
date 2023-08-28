@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -76,10 +76,6 @@ Plugin_table table_esms_by_user_by_event_name::m_table_def(
     "  SUM_SORT_SCAN BIGINT unsigned not null,\n"
     "  SUM_NO_INDEX_USED BIGINT unsigned not null,\n"
     "  SUM_NO_GOOD_INDEX_USED BIGINT unsigned not null,\n"
-    "  SUM_CPU_TIME BIGINT unsigned not null,\n"
-    "  MAX_CONTROLLED_MEMORY BIGINT unsigned not null,\n"
-    "  MAX_TOTAL_MEMORY BIGINT unsigned not null,\n"
-    "  COUNT_SECONDARY BIGINT unsigned not null,\n"
     "  UNIQUE KEY (user, event_name) USING HASH\n",
     /* Options */
     " ENGINE=PERFORMANCE_SCHEMA",
@@ -128,14 +124,14 @@ PFS_engine_table *table_esms_by_user_by_event_name::create(
   return new table_esms_by_user_by_event_name();
 }
 
-int table_esms_by_user_by_event_name::delete_all_rows() {
+int table_esms_by_user_by_event_name::delete_all_rows(void) {
   reset_events_statements_by_thread();
   reset_events_statements_by_account();
   reset_events_statements_by_user();
   return 0;
 }
 
-ha_rows table_esms_by_user_by_event_name::get_row_count() {
+ha_rows table_esms_by_user_by_event_name::get_row_count(void) {
   return global_user_container.get_row_count() * statement_class_max;
 }
 
@@ -144,14 +140,14 @@ table_esms_by_user_by_event_name::table_esms_by_user_by_event_name()
   m_normalizer = time_normalizer::get_statement();
 }
 
-void table_esms_by_user_by_event_name::reset_position() {
+void table_esms_by_user_by_event_name::reset_position(void) {
   m_pos.reset();
   m_next_pos.reset();
 }
 
 int table_esms_by_user_by_event_name::rnd_init(bool) { return 0; }
 
-int table_esms_by_user_by_event_name::rnd_next() {
+int table_esms_by_user_by_event_name::rnd_next(void) {
   PFS_user *user;
   PFS_statement_class *statement_class;
   bool has_more_user = true;
@@ -197,7 +193,7 @@ int table_esms_by_user_by_event_name::index_init(uint idx [[maybe_unused]],
   return 0;
 }
 
-int table_esms_by_user_by_event_name::index_next() {
+int table_esms_by_user_by_event_name::index_next(void) {
   PFS_user *user;
   PFS_statement_class *statement_class;
   bool has_more_user = true;
@@ -270,7 +266,7 @@ int table_esms_by_user_by_event_name::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* USER */
-          m_row.m_user.set_nullable_field(f);
+          m_row.m_user.set_field(f);
           break;
         case 1: /* EVENT_NAME */
           m_row.m_event_name.set_field(f);

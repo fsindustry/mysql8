@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -87,7 +87,7 @@ int Server::clone() {
       if (m_storage_initialized) {
         assert(err != 0);
         /* Don't abort clone if worker thread fails during attach. */
-        const int in_err = (command == COM_ATTACH) ? 0 : err;
+        int in_err = (command == COM_ATTACH) ? 0 : err;
 
         hton_clone_end(get_thd(), get_storage_vector(), m_tasks, in_err);
         m_storage_initialized = false;
@@ -356,7 +356,7 @@ int Server::deserialize_init_buffer(const uchar *init_buf, size_t init_len) {
 
   /* Extract DDL timeout */
   {
-    const uint32_t client_ddl_timeout = uint4korr(init_buf);
+    uint32_t client_ddl_timeout = uint4korr(init_buf);
     init_buf += 4;
     init_len -= 4;
 
@@ -401,9 +401,8 @@ int Server::send_key_value(Command_Response rcmd, String_Key &key_str,
   auto buf_len = key_str.length();
   buf_len += 4;
 
-  const bool send_value =
-      (rcmd == COM_RES_CONFIG || rcmd == COM_RES_PLUGIN_V2 ||
-       rcmd == COM_RES_CONFIG_V3);
+  bool send_value = (rcmd == COM_RES_CONFIG || rcmd == COM_RES_PLUGIN_V2 ||
+                     rcmd == COM_RES_CONFIG_V3);
 
   /** Add length for value. */
   if (send_value) {

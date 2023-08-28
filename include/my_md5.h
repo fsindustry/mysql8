@@ -1,7 +1,7 @@
 #ifndef MY_MD5_INCLUDED
 #define MY_MD5_INCLUDED
 
-/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,7 @@
 
 #include <sys/types.h>
 
-#include "dig_vec.h"
+#include "m_string.h"
 #include "my_inttypes.h"
 
 /**
@@ -43,8 +43,8 @@ int compute_md5_hash(char *digest, const char *buf, int len);
 static inline void array_to_hex(char *to, const unsigned char *str, uint len) {
   const unsigned char *str_end = str + len;
   for (; str != str_end; ++str) {
-    *to++ = dig_vec_lower[((uchar)*str) >> 4];
-    *to++ = dig_vec_lower[((uchar)*str) & 0x0F];
+    *to++ = _dig_vec_lower[((uchar)*str) >> 4];
+    *to++ = _dig_vec_lower[((uchar)*str) & 0x0F];
   }
 }
 

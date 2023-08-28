@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -102,6 +102,14 @@ class Network_provider_manager : public Network_provider_management_interface,
    *
    */
   void remove_all_network_provider() override;
+
+  /**
+   * @brief Starts all network providers.
+   *
+   * @return true In case of success starting ALL network providers
+   * @return false In case of failure in starting AT LEAST ONE network provider
+   */
+  bool start_all_network_providers();
 
   /**
    * @brief Starts an already added network provider
@@ -359,7 +367,6 @@ class Network_provider_manager : public Network_provider_management_interface,
    * @brief Cleans up SSL context.
    */
   void cleanup_secure_connections_context() override;
-  void delayed_cleanup_secure_connections_context() override;
   void finalize_secure_connections_context() override;
 
  private:
@@ -390,10 +397,6 @@ class Network_provider_manager : public Network_provider_management_interface,
 
   // Default provider. It is encapsulated in the Network Manager.
   std::shared_ptr<Xcom_network_provider> m_xcom_network_provider;
-
-  // Clear SSL data function to be held after the last active network
-  // provider was still at work
-  std::function<void()> m_ssl_data_context_cleaner{nullptr};
 };
 
 /**
@@ -451,11 +454,11 @@ class Network_Management_Interface
   }
 
   void remove_network_provider(enum_transport_protocol provider_key) override {
-    m_get_manager().remove_network_provider(provider_key);
+    return m_get_manager().remove_network_provider(provider_key);
   }
 
   void remove_all_network_provider() override {
-    m_get_manager().remove_all_network_provider();
+    return m_get_manager().remove_all_network_provider();
   }
 
   bool configure_active_provider(
@@ -491,13 +494,11 @@ class Network_Management_Interface
     return m_get_manager().xcom_get_ssl_fips_mode();
   }
   void cleanup_secure_connections_context() override {
-    m_get_manager().cleanup_secure_connections_context();
+    return m_get_manager().cleanup_secure_connections_context();
   }
-  void delayed_cleanup_secure_connections_context() override {
-    m_get_manager().delayed_cleanup_secure_connections_context();
-  }
+
   void finalize_secure_connections_context() override {
-    m_get_manager().finalize_secure_connections_context();
+    return m_get_manager().finalize_secure_connections_context();
   }
 
  private:

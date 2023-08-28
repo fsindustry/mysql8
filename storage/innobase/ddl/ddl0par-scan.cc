@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -167,7 +167,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
 
   /* Create the per thread heap for transient memory allocations. */
   for (size_t i = 0; i < use_n_threads; ++i) {
-    m_heaps.push_back(mem_heap_create(1024, UT_LOCATION_HERE));
+    m_heaps.push_back(mem_heap_create(1024));
 
     if (m_heaps.back() == nullptr) {
       return cleanup(m_heaps, DB_OUT_OF_MEMORY);
@@ -334,9 +334,8 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
 
         row.m_rec = read_ctx->m_rec;
 
-        row.m_offsets =
-            rec_get_offsets(row.m_rec, index(), nullptr, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+        row.m_offsets = rec_get_offsets(row.m_rec, index(), nullptr,
+                                        ULINT_UNDEFINED, &heap);
 
 #ifdef UNIV_DEBUG
         {
@@ -349,7 +348,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
           any inserts that could have written a record 'stub' before
           writing out off-page columns. */
           ut_ad(m_ctx.m_online ||
-                !rec_offs_any_null_extern(index(), rec, row.m_offsets));
+                !rec_offs_any_null_extern(rec, row.m_offsets));
         }
 #endif /* UNIV_DEBUG */
 
@@ -397,8 +396,8 @@ dberr_t Parallel_cursor::copy_row(size_t thread_id, Row &row) noexcept {
 
   auto heap = m_heaps[thread_id];
 
-  row.m_offsets = rec_get_offsets(row.m_rec, index(), nullptr, ULINT_UNDEFINED,
-                                  UT_LOCATION_HERE, &heap);
+  row.m_offsets =
+      rec_get_offsets(row.m_rec, index(), nullptr, ULINT_UNDEFINED, &heap);
 
   return row.build(m_ctx, index(), heap, ROW_COPY_DATA);
 }

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,7 @@
 #include "mysql/psi/mysql_file.h"  // MYSQL_FILE
 #include "print_version.h"
 #include "sql/time_zone_common.h"
-#include "sql/tzfile.h"  // TZ_MAX_REV_RANGES, tzhead
-#include "strmake.h"
+#include "sql/tzfile.h"                // TZ_MAX_REV_RANGES, tzhead
 #include "welcome_copyright_notice.h"  // ORACLE_WELCOME_COPYRIGHT_NOTICE
 
 /*
@@ -104,10 +103,10 @@ static bool tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage) {
             ttisgmtcnt)             /* ttisgmts */
       return true;
 
-    const size_t start_of_zone_abbrev = sizeof(struct tzhead) +
-                                        sp->timecnt * 4 +      /* ats */
-                                        sp->timecnt +          /* types */
-                                        sp->typecnt * (4 + 2); /* ttinfos */
+    size_t start_of_zone_abbrev = sizeof(struct tzhead) +
+                                  sp->timecnt * 4 +      /* ats */
+                                  sp->timecnt +          /* types */
+                                  sp->typecnt * (4 + 2); /* ttinfos */
 
     /*
       Check that timezone file doesn't contain junk timezone data.
@@ -118,7 +117,7 @@ static bool tz_load(const char *name, TIME_ZONE_INFO *sp, MEM_ROOT *storage) {
                          sp->charcnt)))
       return true;
 
-    const size_t abbrs_buf_len = sp->charcnt + 1;
+    size_t abbrs_buf_len = sp->charcnt + 1;
 
     if (!(tzinfo_buf = (char *)storage->Alloc(
               ALIGN_SIZE(sp->timecnt * sizeof(my_time_t)) +
@@ -206,9 +205,8 @@ static void print_tz_as_sql(const char *tz_name, const TIME_ZONE_INFO *sp) {
         "INSERT INTO time_zone_transition \
 (Time_zone_id, Transition_time, Transition_type_id) VALUES\n");
     for (i = 0; i < sp->timecnt; i++)
-      printf("%s(@time_zone_id, %lld, %u)\n", (i == 0 ? " " : ","),
-             static_cast<long long int>(sp->ats[i]),
-             static_cast<uint>(sp->types[i]));
+      printf("%s(@time_zone_id, %ld, %u)\n", (i == 0 ? " " : ","), sp->ats[i],
+             (uint)sp->types[i]);
     printf(";\n");
   }
 
@@ -250,8 +248,7 @@ static void print_tz_leaps_as_sql(const TIME_ZONE_INFO *sp) {
         "INSERT INTO time_zone_leap_second \
 (Transition_time, Correction) VALUES\n");
     for (i = 0; i < sp->leapcnt; i++)
-      printf("%s(%lld, %ld)\n", (i == 0 ? " " : ","),
-             static_cast<long long int>(sp->lsis[i].ls_trans),
+      printf("%s(%ld, %ld)\n", (i == 0 ? " " : ","), sp->lsis[i].ls_trans,
              sp->lsis[i].ls_corr);
     printf(";\n");
   }
@@ -326,8 +323,6 @@ static bool scan_tz_dir(char *name_end) {
 
   return false;
 }
-
-extern "C" void sql_alloc_error_handler() {}
 
 int main(int argc, char **argv) {
   MY_INIT(argv[0]);

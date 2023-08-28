@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -55,14 +55,12 @@ TODO:
 #include <mysql/psi/mysql_file.h>
 #include <algorithm>
 
-#include "m_string.h"
 #include "map_helpers.h"
 #include "my_byteorder.h"
 #include "my_dbug.h"
 #include "my_psi_config.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_memory.h"
-#include "nulls.h"
 #include "sql/derror.h"
 #include "sql/field.h"
 #include "sql/sql_class.h"
@@ -608,7 +606,7 @@ int ha_tina::chain_append() {
   else {
     /* We set up for the next position */
     if ((size_t)(chain_ptr - chain) == (chain_size - 1)) {
-      const my_off_t location = chain_ptr - chain;
+      my_off_t location = chain_ptr - chain;
       chain_size += DEFAULT_CHAIN_LENGTH;
       if (chain_alloced) {
         /* Must cast since my_malloc unlike malloc doesn't have a void ptr */
@@ -645,6 +643,9 @@ int ha_tina::find_current_row(uchar *buf) {
   bool read_all;
   DBUG_TRACE;
 
+  // Clear BLOB data from the previous row.
+  blobroot.ClearForReuse();
+
   /*
     We do not read further then local_saved_data_file_length in order
     not to conflict with undergoing concurrent insert.
@@ -653,9 +654,6 @@ int ha_tina::find_current_row(uchar *buf) {
                                    local_saved_data_file_length, &eoln_len)) ==
       0)
     return HA_ERR_END_OF_FILE;
-
-  // Clear BLOB data from the previous row.
-  blobroot.ClearForReuse();
 
   /* We must read all columns in case a table is opened for update */
   read_all = !bitmap_is_clear_all(table->write_set);
@@ -772,7 +770,7 @@ int ha_tina::find_current_row(uchar *buf) {
     }
 
     if (read_all || bitmap_is_set(table->read_set, (*field)->field_index())) {
-      const bool is_enum = ((*field)->real_type() == MYSQL_TYPE_ENUM);
+      bool is_enum = ((*field)->real_type() == MYSQL_TYPE_ENUM);
       /*
         Here CHECK_FIELD_WARN checks that all values in the csv file are valid
         which is normally the case, if they were written  by
@@ -787,7 +785,7 @@ int ha_tina::find_current_row(uchar *buf) {
       }
       if ((*field)->is_flag_set(BLOB_FLAG)) {
         Field_blob *blob_field = down_cast<Field_blob *>(*field);
-        const size_t length = blob_field->get_length();
+        size_t length = blob_field->get_length();
         // BLOB data is not stored inside buffer. It only contains a
         // pointer to it. Copy the BLOB data into a separate memory
         // area so that it is not overwritten by subsequent calls to
@@ -918,7 +916,7 @@ int ha_tina::open(const char *name, int, uint open_options, const dd::Table *) {
 }
 
 /*
-  Close a database file. We remove ourselves from the shared structure.
+  Close a database file. We remove ourselves from the shared strucutre.
   If it is empty we destroy it.
 */
 int ha_tina::close(void) {
@@ -1255,9 +1253,9 @@ int ha_tina::rnd_end() {
 
     /*
       The sort is needed when there were updates/deletes with random orders.
-      It sorts so that we move the first blocks to the beginning.
+      It sorts so that we move the firts blocks to the beginning.
 
-      We assume that intervals do not intersect. So, it is enough to compare
+      We assume that intervals do not intersect. So, it is enought to compare
       any two points. Here we take start of intervals for comparison.
     */
     std::sort(chain, chain_ptr, [](const tina_set &a, const tina_set &b) {
@@ -1272,8 +1270,8 @@ int ha_tina::rnd_end() {
     /* write the file with updated info */
     while ((file_buffer_start != (my_off_t)-1))  // while not end of file
     {
-      const bool in_hole = get_write_pos(&write_end, ptr);
-      const my_off_t write_length = write_end - write_begin;
+      bool in_hole = get_write_pos(&write_end, ptr);
+      my_off_t write_length = write_end - write_begin;
 
       /* if there is something to write, write it */
       if (write_length) {

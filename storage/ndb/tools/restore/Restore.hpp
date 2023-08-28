@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,12 +28,11 @@
 #define RESTORE_H
 
 #include <ndb_global.h>
-#include "portlib/ndb_compiler.h"
 #include "my_byteorder.h"
 #include <NdbOut.hpp>
 #include "../src/kernel/blocks/backup/BackupFormat.hpp"
 #include <NdbApi.hpp>
-#include "util/ndbxfrm_file.h"
+#include "util/ndbxfrm_readfile.h"
 #include "portlib/ndb_file.h"
 #include <util/UtilBuffer.hpp>
 
@@ -400,7 +399,7 @@ class RestoreLogIterator;
 class BackupFile {
 protected:
   ndb_file m_file;
-  ndbxfrm_file m_xfile;
+  ndbxfrm_readfile m_xfile;
 
   char m_path[PATH_MAX];
   char m_fileName[PATH_MAX];
@@ -478,10 +477,11 @@ public:
    *
    * But, when compressed backup is enabled, m_file_pos gives the current file
    * position in uncompressed state and m_file_size gives the backup file size
-   * in compressed state. 
-   * This parameter also works when compressed backup is disabled.
+   * in compressed state. So, Instead of m_file_pos, ndbzio_stream's m_file.in
+   * parameter is used to get current position in compressed state.This
+   * parameter also works when compressed backup is disabled.
    */
-  Uint64 get_file_pos() const { return m_xfile.get_file_pos(); }
+  Uint64 get_file_pos() const { return 0; } // { return m_xfrm.get_backing_pos(); }
 #ifdef ERROR_INSERT
   void error_insert(unsigned int code); 
 #endif
@@ -641,7 +641,8 @@ class RestoreLogIterator : public BackupFile {
    * No harm in require space for a few extra words to header too.
    */
   static_assert(BackupFile::BUFFER_SIZE >=
-                  BackupFormat::LogFile::LogEntry::MAX_SIZE);
+                  BackupFormat::LogFile::LogEntry::MAX_SIZE,
+                "");
 private:
   const RestoreMetaData & m_metaData;
 
@@ -675,12 +676,8 @@ public:
          ATTRIBUTE_FORMAT(printf, 2, 3);
   void setThreadPrefix(const char* prefix);
   const char* getThreadPrefix() const;
-  void set_print_timestamp(bool print_TS);
-  bool get_print_timestamp();
 private:
   NdbMutex *m_mutex;
-  char timestamp[64];
-  bool print_timestamp;
 };
 
 NdbOut& operator<<(NdbOut& ndbout, const TableS&);

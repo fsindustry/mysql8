@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2020, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 #include "my_base.h"
 #include "my_io.h"
 #include "mysql_com.h"
-#include "sql-common/json_dom.h"
+#include "sql/json_dom.h"
 #include "sql/rpl_async_conn_failover_table_operations.h"
 #include "sql/rpl_info.h" /* CHANNEL_NAME_LENGTH*/
 #include "storage/perfschema/pfs_engine_table.h"
@@ -140,7 +140,7 @@ class table_rpl_async_connection_failover_managed : public PFS_engine_table {
   static ha_rows get_row_count();
 
   /** Reset the cursor position to the beginning of the table. */
-  void reset_position() override;
+  void reset_position(void) override;
 
   /**
     Initialize table for random read or scan.
