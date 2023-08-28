@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,11 +34,11 @@
 #include "my_psi_config.h"
 #include "my_sqlcommand.h"
 #include "my_sys.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/mysql_lex_string.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_mutex.h"
@@ -56,6 +56,7 @@
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_rewrite.h"  // mysql_rewrite_query
 #include "sql/table.h"
+#include "sql_parse.h"  // Command_names
 #include "sql_string.h"
 #include "thr_mutex.h"
 
@@ -309,6 +310,7 @@ inline const CHARSET_INFO *thd_get_audit_query(THD *thd,
   } else {
     query->str = thd->query().str;
     query->length = thd->query().length;
+    DBUG_PRINT("print_query", ("%.*s\n", (int)query->length, query->str));
     return thd->charset();
   }
 }
@@ -364,6 +366,7 @@ int mysql_audit_notify(THD *thd, mysql_event_general_subclass_t subclass,
                        const char *msg, size_t msg_len) {
   mysql_event_general event;
   char user_buff[MAX_USER_HOST_SIZE];
+  std::string cmd_class_lowercase;
 
   assert(thd);
 
@@ -383,7 +386,33 @@ int mysql_audit_notify(THD *thd, mysql_event_general_subclass_t subclass,
   event.general_host = sctx->host();
   event.general_external_user = sctx->external_user();
   event.general_rows = thd->get_stmt_da()->current_row_for_condition();
-  event.general_sql_command = sql_statement_names[thd->lex->sql_command];
+  if (thd->lex->sql_command == SQLCOM_END && msg_len > 0 && error_code == 0) {
+    enum_server_command found_index = Command_names::get_index_by_str_name(msg);
+
+    switch (found_index) {
+      case COM_STMT_PREPARE:
+        event.general_sql_command = sql_statement_names[SQLCOM_PREPARE];
+        break;
+      case COM_STMT_EXECUTE:
+        event.general_sql_command = sql_statement_names[SQLCOM_EXECUTE];
+        break;
+      case COM_STMT_RESET:
+        event.general_sql_command = sql_statement_names[SQLCOM_RESET];
+        break;
+      case COM_END:
+        event.general_sql_command = sql_statement_names[thd->lex->sql_command];
+        break;
+      default:
+        cmd_class_lowercase = msg;
+        std::transform(cmd_class_lowercase.begin(), cmd_class_lowercase.end(),
+                       cmd_class_lowercase.begin(), ::tolower);
+        event.general_sql_command.str = cmd_class_lowercase.c_str();
+        event.general_sql_command.length = cmd_class_lowercase.length();
+        break;
+    }
+  } else {
+    event.general_sql_command = sql_statement_names[thd->lex->sql_command];
+  }
 
   event.general_charset = const_cast<CHARSET_INFO *>(
       thd_get_audit_query(thd, &event.general_query));
@@ -491,7 +520,7 @@ int mysql_audit_notify(THD *thd, mysql_event_parse_subclass_t subclass,
 
   @retval true - generate event, otherwise not.
 */
-inline bool generate_table_access_event(THD *thd, TABLE_LIST *table) {
+inline bool generate_table_access_event(THD *thd, Table_ref *table) {
   /* Discard views or derived tables. */
   if (table->is_view_or_derived()) return false;
 
@@ -543,7 +572,7 @@ inline static void set_table_access_subclass(
 */
 static int mysql_audit_notify(THD *thd,
                               mysql_event_table_access_subclass_t subclass,
-                              const char *subclass_name, TABLE_LIST *table) {
+                              const char *subclass_name, Table_ref *table) {
   LEX_CSTRING str;
   mysql_event_table_access event;
 
@@ -570,10 +599,14 @@ static int mysql_audit_notify(THD *thd,
                                     subclass_name, &event);
 }
 
-int mysql_audit_table_access_notify(THD *thd, TABLE_LIST *table) {
+int mysql_audit_table_access_notify(THD *thd, Table_ref *table) {
   mysql_event_table_access_subclass_t subclass;
   const char *subclass_name;
   int ret;
+
+  if ((thd->system_thread &
+       (SYSTEM_THREAD_SLAVE_SQL | SYSTEM_THREAD_SLAVE_WORKER)) != 0)
+    return 0;
 
   /* Do not generate events for non query table access. */
   if (!thd->lex->query_tables) return 0;
@@ -1153,12 +1186,15 @@ void mysql_audit_release(THD *thd) {
     data->release_thd(thd);
   }
 
+  /* Move audit plugins array from THD to a tmp variable in order to avoid calls
+     to them via THD after the plugin is unlocked (#bug34594035) */
+  Plugin_array audit_class_plugins(std::move(thd->audit_class_plugins));
+
   /* Now we actually unlock the plugins */
-  plugin_unlock_list(nullptr, thd->audit_class_plugins.begin(),
-                     thd->audit_class_plugins.size());
+  plugin_unlock_list(nullptr, audit_class_plugins.begin(),
+                     audit_class_plugins.size());
 
   /* Reset the state of thread values */
-  thd->audit_class_plugins.clear();
   thd->audit_class_mask.clear();
   thd->audit_class_mask.resize(MYSQL_AUDIT_CLASS_MASK_SIZE);
 }

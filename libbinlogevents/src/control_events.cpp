@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -64,6 +64,28 @@ Rotate_event::Rotate_event(const char *buf, const Format_description_event *fde)
   BAPI_VOID_RETURN;
 }
 
+Start_encryption_event::Start_encryption_event(
+    const char *buf, const Format_description_event *fde)
+    : Binary_log_event(&buf, fde) {
+  BAPI_ENTER(
+      "Start_encryption_event::Start_encryption_event(const char *, ...");
+  READER_TRY_INITIALIZATION;
+  READER_ASSERT_POSITION(fde->common_header_len);
+  const auto remaining_length = READER_CALL(available_to_read);
+  if (unlikely(remaining_length != EVENT_DATA_LENGTH))
+    READER_THROW("Event is smaller or larger than expected");
+
+  READER_TRY_SET(crypto_scheme, read<uint8_t>);
+  if (unlikely(crypto_scheme != 1))
+    READER_THROW("Unknown crypto scheme version");
+
+  READER_TRY_SET(key_version, read<uint32_t>);
+  READER_TRY_CALL(memcpy<unsigned char *>, nonce, NONCE_LENGTH);
+
+  READER_CATCH_ERROR;
+  BAPI_VOID_RETURN;
+}
+
 /**
   Format_description_event 1st constructor.
 */
@@ -85,59 +107,35 @@ Format_description_event::Format_description_event(uint8_t binlog_ver,
       memset(server_version, 0, ST_SERVER_VER_LEN);
       snprintf(server_version, ST_SERVER_VER_LEN, "%.*s", ST_SERVER_VER_LEN - 1,
                server_ver);
-      if (binary_log_debug::debug_pretend_version_50034_in_binlog)
-        strcpy(server_version, "5.0.34");
+
       common_header_len = LOG_EVENT_HEADER_LEN;
       number_of_event_types = LOG_EVENT_TYPES;
       /**
-        This will be used to initialze the post_header_len,
+        This will be used to initialize the post_header_len,
         for binlog version 4.
       */
       static uint8_t server_event_header_length[] = {
-          0,
-          QUERY_HEADER_LEN,
-          STOP_HEADER_LEN,
-          ROTATE_HEADER_LEN,
-          INTVAR_HEADER_LEN,
-          0,
+          0, QUERY_HEADER_LEN, STOP_HEADER_LEN, ROTATE_HEADER_LEN,
+          INTVAR_HEADER_LEN, 0,
           /*
             Unused because the code for Slave log event was removed.
             (15th Oct. 2010)
           */
-          0,
-          0,
-          APPEND_BLOCK_HEADER_LEN,
-          0,
-          DELETE_FILE_HEADER_LEN,
-          0,
-          RAND_HEADER_LEN,
-          USER_VAR_HEADER_LEN,
-          FORMAT_DESCRIPTION_HEADER_LEN,
-          XID_HEADER_LEN,
-          BEGIN_LOAD_QUERY_HEADER_LEN,
-          EXECUTE_LOAD_QUERY_HEADER_LEN,
-          TABLE_MAP_HEADER_LEN,
-          0,
-          0,
-          0,
-          ROWS_HEADER_LEN_V1, /* WRITE_ROWS_EVENT_V1*/
-          ROWS_HEADER_LEN_V1, /* UPDATE_ROWS_EVENT_V1*/
-          ROWS_HEADER_LEN_V1, /* DELETE_ROWS_EVENT_V1*/
-          INCIDENT_HEADER_LEN,
-          0, /* HEARTBEAT_LOG_EVENT*/
-          IGNORABLE_HEADER_LEN,
-          IGNORABLE_HEADER_LEN,
-          ROWS_HEADER_LEN_V2,
-          ROWS_HEADER_LEN_V2,
-          ROWS_HEADER_LEN_V2,
+          0, 0, APPEND_BLOCK_HEADER_LEN, 0, DELETE_FILE_HEADER_LEN, 0,
+          RAND_HEADER_LEN, USER_VAR_HEADER_LEN, FORMAT_DESCRIPTION_HEADER_LEN,
+          XID_HEADER_LEN, BEGIN_LOAD_QUERY_HEADER_LEN,
+          EXECUTE_LOAD_QUERY_HEADER_LEN, TABLE_MAP_HEADER_LEN, 0, 0, 0,
+          ROWS_HEADER_LEN_V1,     /* WRITE_ROWS_EVENT_V1*/
+          ROWS_HEADER_LEN_V1,     /* UPDATE_ROWS_EVENT_V1*/
+          ROWS_HEADER_LEN_V1,     /* DELETE_ROWS_EVENT_V1*/
+          INCIDENT_HEADER_LEN, 0, /* HEARTBEAT_LOG_EVENT*/
+          IGNORABLE_HEADER_LEN, IGNORABLE_HEADER_LEN, ROWS_HEADER_LEN_V2,
+          ROWS_HEADER_LEN_V2, ROWS_HEADER_LEN_V2,
           Gtid_event::POST_HEADER_LENGTH, /*GTID_EVENT*/
           Gtid_event::POST_HEADER_LENGTH, /*ANONYMOUS_GTID_EVENT*/
-          IGNORABLE_HEADER_LEN,
-          TRANSACTION_CONTEXT_HEADER_LEN,
-          VIEW_CHANGE_HEADER_LEN,
-          XA_PREPARE_HEADER_LEN,
-          ROWS_HEADER_LEN_V2,
-          TRANSACTION_PAYLOAD_EVENT,
+          IGNORABLE_HEADER_LEN, TRANSACTION_CONTEXT_HEADER_LEN,
+          VIEW_CHANGE_HEADER_LEN, XA_PREPARE_HEADER_LEN, ROWS_HEADER_LEN_V2,
+          TRANSACTION_PAYLOAD_EVENT, 0 /* HEARTBEAT_LOG_EVENT_V2*/
       };
       /*
         Allows us to sanity-check that all events initialized their
@@ -371,6 +369,12 @@ XA_prepare_event::XA_prepare_event(const char *buf,
   BAPI_VOID_RETURN;
 }
 
+bool XA_prepare_event::is_one_phase() const { return this->one_phase; }
+
+XA_prepare_event::MY_XID const &XA_prepare_event::get_xid() const {
+  return this->my_xid;
+}
+
 Transaction_payload_event::Transaction_payload_event(const char *payload,
                                                      uint64_t payload_size,
                                                      uint16_t compression_type,
@@ -464,6 +468,8 @@ Gtid_event::Gtid_event(const char *buf, const Format_description_event *fde)
     |1 to 9 bytes| transaction_length (see net_length_size())
     +------------+
     |   4/8 bytes| original/immediate_server_version (see timestamps*)
+    +------------+
+    |     8 bytes| Commit group ticket
     +------------+
 
     The 'Flags' field contains gtid flags.
@@ -575,6 +581,10 @@ Gtid_event::Gtid_event(const char *buf, const Format_description_event *fde)
                            ORIGINAL_SERVER_VERSION_LENGTH);
           } else
             original_server_version = immediate_server_version;
+
+          if (READER_CALL(can_read, COMMIT_GROUP_TICKET_LENGTH)) {
+            READER_TRY_SET(this->commit_group_ticket, read<uint64_t>);
+          }
         }
       }
     }
@@ -582,6 +592,26 @@ Gtid_event::Gtid_event(const char *buf, const Format_description_event *fde)
 
   READER_CATCH_ERROR;
   BAPI_VOID_RETURN;
+}
+
+int Gtid_event::get_commit_group_ticket_length() const {
+  if (kGroupTicketUnset != commit_group_ticket) {
+    return COMMIT_GROUP_TICKET_LENGTH;
+  }
+  return 0;
+}
+
+void Gtid_event::set_commit_group_ticket_and_update_transaction_length(
+    std::uint64_t value) {
+  /*
+    Add the commit_group_ticket length to the transaction length if
+    it was not yet considered.
+  */
+  assert(value > 0);
+  set_trx_length(transaction_length + (kGroupTicketUnset == commit_group_ticket
+                                           ? COMMIT_GROUP_TICKET_LENGTH
+                                           : 0));
+  commit_group_ticket = value;
 }
 
 Previous_gtids_event::Previous_gtids_event(const char *buffer,
@@ -711,6 +741,56 @@ Heartbeat_event::Heartbeat_event(const char *buf,
   BAPI_VOID_RETURN;
 }
 
+Heartbeat_event_v2::Heartbeat_event_v2(const char *buf,
+                                       const Format_description_event *fde)
+    : Binary_log_event(&buf, fde) {
+  BAPI_ENTER("Heartbeat_event_v2::Heartbeat_event_v2(const char*, ...)");
+  READER_TRY_INITIALIZATION;
+  READER_ASSERT_POSITION(fde->common_header_len);
+  if (header()->get_is_valid()) {
+    auto codec = codecs::Factory::build_codec(header()->type_code);
+    // decode the post LOG_EVENT header
+    auto buffer = (const unsigned char *)reader().ptr();
+    size_t buffer_size = reader().available_to_read();
+    auto result = codec->decode(buffer, buffer_size, *this);
+    header()->set_is_valid(result.second == false);
+  }
+  BAPI_VOID_RETURN;
+}
+
+Heartbeat_event_v2::Heartbeat_event_v2()
+    : Binary_log_event(HEARTBEAT_LOG_EVENT_V2) {}
+
+void Heartbeat_event_v2::set_log_filename(const std::string name) {
+  m_log_filename = name;
+}
+void Heartbeat_event_v2::set_log_position(uint64_t position) {
+  m_log_position = position;
+}
+const std::string Heartbeat_event_v2::get_log_filename() const {
+  return m_log_filename;
+}
+uint64_t Heartbeat_event_v2::get_log_position() const { return m_log_position; }
+
+/**
+  This member function returns the len of the event
+
+  @return the event len
+ */
+uint64_t Heartbeat_event_v2::max_encoding_length() {
+  auto max_log_filename_size_old = FN_REFLEN;
+  auto string_terminator_size_old = 1;
+
+  // add TYPE size + LEN size + VALUE size
+  auto max_filename_len_size = 9UL + 9 + FN_REFLEN;
+  auto max_log_position_size = 9UL + 9 + 9;
+
+  // Add new field sizes here ------------------------
+
+  return max_log_filename_size_old + string_terminator_size_old +
+         max_filename_len_size + max_log_position_size;
+}
+
 #ifndef HAVE_MYSYS
 void Rotate_event::print_event_info(std::ostream &info) {
   info << "Binlog Position: " << pos;
@@ -752,6 +832,15 @@ void Xid_event::print_long_info(std::ostream &info) {
   info << "Timestamp: " << header()->when.tv_sec;
   info << "\t";
   this->print_event_info(info);
+}
+
+void Heartbeat_event_v2::print_event_info(std::ostream &info) {
+  info << "{ 'log filename' : '" << m_log_filename << "', "
+       << "'log_position' : " << m_log_position << " }";
+}
+
+void Heartbeat_event_v2::print_long_info(std::ostream &info) {
+  print_event_info(info);
 }
 
 #endif  // end HAVE_MYSYS

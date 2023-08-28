@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,7 +44,7 @@
   @retval true   A user doesn't have the privilege BACKUP_ADMIN
 */
 
-static bool check_backup_admin_privilege(THD *thd) {
+bool check_backup_admin_privilege(THD *thd) {
   Security_context *sctx = thd->security_context();
 
   if (!sctx->has_global_grant(STRING_WITH_LEN("BACKUP_ADMIN")).first) {

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2021, Oracle and/or its affiliates.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -46,9 +46,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define ulint unsigned long
 #define ut_a(c) assert(c)
 #define ut_error assert(0)
-#define ibool unsigned int
-#define TRUE 1
-#define FALSE 0
 #endif
 
 struct ib_rbt_node_t;
@@ -111,6 +108,12 @@ struct ib_rbt_bound_t {
 /* Compare a key with the node value (t is tree, k is key, n is node)*/
 #define rbt_compare(t, k, n) (t->compare(k, n->value))
 
+/* Node size. FIXME: name might clash, but currently it does not, so for easier
+maintenance do not rename it for now. */
+inline static size_t SIZEOF_NODE(const ib_rbt_t *t) {
+  return sizeof(ib_rbt_node_t) + t->sizeof_value - 1;
+}
+
 /** Free an instance of  a red black tree */
 void rbt_free(ib_rbt_t *tree); /*!< in: rb tree to free */
 /** Create an instance of a red black tree
@@ -124,8 +127,8 @@ ib_rbt_t *rbt_create_arg_cmp(size_t sizeof_value, /*!< in: size in bytes */
                              ib_rbt_arg_compare compare, /*!< in: comparator */
                              void *cmp_arg); /*!< in: compare fn arg */
 /** Delete a node from the red black tree, identified by key */
-ibool rbt_delete(
-    /* in: TRUE on success */
+bool rbt_delete(
+    /* in: true on success */
     ib_rbt_t *tree,   /* in: rb tree */
     const void *key); /* in: key to delete */
 /** Remove a node from the red black tree, NOTE: This function will not delete
@@ -149,6 +152,15 @@ const ib_rbt_node_t *rbt_add_node(ib_rbt_t *tree,         /*!< in: rb tree */
                                   ib_rbt_bound_t *parent, /*!< in: parent */
                                   const void *value);     /*!< in: this value is
                                                           copied     to the node */
+
+/** Add a new caller-provided node to tree at the specified position.
+The node must have its key fields initialized correctly.
+@param[in]	tree	rb tree
+@param[in]	parent	parent
+@param[in]	node	node */
+void rbt_add_preallocated_node(ib_rbt_t *tree, ib_rbt_bound_t *parent,
+                               ib_rbt_node_t *node);
+
 /** Return the left most data node in the tree
  @return left most node */
 const ib_rbt_node_t *rbt_first(const ib_rbt_t *tree); /*!< in: rb tree */
@@ -161,18 +173,18 @@ const ib_rbt_node_t *rbt_next(const ib_rbt_t *tree, /*!< in: rb tree */
                               const ib_rbt_node_t * /* in: current node */
                                   current);
 /** Return the prev node from current.
- @return precedessor node to current that is passed in */
+ @return predecessor node to current that is passed in */
 const ib_rbt_node_t *rbt_prev(const ib_rbt_t *tree, /*!< in: rb tree */
                               const ib_rbt_node_t * /* in: current node */
                                   current);
-/** Search for the key, a node will be retuned in parent.last, whether it
+/** Search for the key, a node will be returned in parent.last, whether it
  was found or not. If not found then parent.last will contain the
  parent node for the possibly new key otherwise the matching node.
  @return result of last comparison */
 int rbt_search(const ib_rbt_t *tree,   /*!< in: rb tree */
                ib_rbt_bound_t *parent, /*!< in: search bounds */
                const void *key);       /*!< in: key to search */
-/** Search for the key, a node will be retuned in parent.last, whether it
+/** Search for the key, a node will be returned in parent.last, whether it
  was found or not. If not found then parent.last will contain the
  parent node for the possibly new key otherwise the matching node.
  @return result of last comparison */
@@ -182,6 +194,9 @@ int rbt_search_cmp(const ib_rbt_t *tree,            /*!< in: rb tree */
                    ib_rbt_compare compare,          /*!< in: comparator */
                    ib_rbt_arg_compare arg_compare); /*!< in: fn to compare items
                                                     with argument */
+/** Clear the tree without deleting and freeing its nodes.
+@param[in]	tree	rb tree */
+void rbt_reset(ib_rbt_t *tree);
 /** Merge the node from dst into src. Return the number of nodes merged.
  @return no. of recs merged */
 ulint rbt_merge_uniq(ib_rbt_t *dst,        /*!< in: dst rb tree */
@@ -190,7 +205,7 @@ ulint rbt_merge_uniq(ib_rbt_t *dst,        /*!< in: dst rb tree */
 /** Verify the integrity of the RB tree. For debugging. 0 failure else height
  of tree (in count of black nodes).
  @return true if OK false if tree invalid. */
-ibool rbt_validate(const ib_rbt_t *tree); /*!< in: tree to validate */
-#endif                                    /* UNIV_DEBUG || IB_RBT_TESTING */
+bool rbt_validate(const ib_rbt_t *tree); /*!< in: tree to validate */
+#endif                                   /* UNIV_DEBUG || IB_RBT_TESTING */
 
 #endif /* INNOBASE_UT0RBT_H */

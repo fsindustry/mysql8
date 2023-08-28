@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,10 +42,10 @@
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_mysql_alloc.h"
@@ -80,7 +80,7 @@
 int max_binlog_dump_events = 0;  // unlimited
 bool opt_sporadic_binlog_dump_fail = false;
 
-malloc_unordered_map<uint32, unique_ptr_my_free<SLAVE_INFO>> slave_list{
+malloc_unordered_map<uint32, unique_ptr_my_free<REPLICA_INFO>> slave_list{
     key_memory_REPLICA_INFO};
 extern TYPELIB binlog_checksum_typelib;
 
@@ -109,18 +109,19 @@ extern TYPELIB binlog_checksum_typelib;
     1	Error.   Error message sent to client
 */
 
-int register_slave(THD *thd, uchar *packet, size_t packet_length) {
+int register_replica(THD *thd, uchar *packet, size_t packet_length) {
   int res;
   uchar *p = packet, *p_end = packet + packet_length;
-  const char *errmsg = "Wrong parameters to function register_slave";
+  const char *errmsg = "Wrong parameters when registering replica";
+  String replica_uuid;
 
   CONDITIONAL_SYNC_POINT("begin_register_replica");
 
   if (check_access(thd, REPL_SLAVE_ACL, any_db, nullptr, nullptr, false, false))
     return 1;
 
-  unique_ptr_my_free<SLAVE_INFO> si((SLAVE_INFO *)my_malloc(
-      key_memory_REPLICA_INFO, sizeof(SLAVE_INFO), MYF(MY_WME)));
+  unique_ptr_my_free<REPLICA_INFO> si((REPLICA_INFO *)my_malloc(
+      key_memory_REPLICA_INFO, sizeof(REPLICA_INFO), MYF(MY_WME)));
   if (si == nullptr) return 1;
 
   /* 4 bytes for the server id */
@@ -131,10 +132,10 @@ int register_slave(THD *thd, uchar *packet, size_t packet_length) {
 
   thd->server_id = si->server_id = uint4korr(p);
   p += 4;
-  get_object(p, si->host, "Failed to register slave: too long 'report-host'");
-  get_object(p, si->user, "Failed to register slave: too long 'report-user'");
+  get_object(p, si->host, "Failed to register replica: too long 'report-host'");
+  get_object(p, si->user, "Failed to register replica: too long 'report-user'");
   get_object(p, si->password,
-             "Failed to register slave; too long 'report-password'");
+             "Failed to register replica; too long 'report-password'");
   if (p + 10 > p_end) goto err;
   si->port = uint2korr(p);
   p += 2;
@@ -146,10 +147,15 @@ int register_slave(THD *thd, uchar *packet, size_t packet_length) {
   */
   p += 4;
   if (!(si->master_id = uint4korr(p))) si->master_id = server_id;
-  si->thd = thd;
+  si->thd_id = thd->thread_id();
+  si->valid_replica_uuid = false;
+  if (get_replica_uuid(thd, &replica_uuid)) {
+    si->valid_replica_uuid =
+        !si->replica_uuid.parse(replica_uuid.c_ptr(), replica_uuid.length());
+  }
 
   mysql_mutex_lock(&LOCK_replica_list);
-  unregister_slave(thd, false, false /*need_lock_slave_list=false*/);
+  unregister_replica(thd, false, false /*need_lock_slave_list=false*/);
   res = !slave_list.emplace(si->server_id, std::move(si)).second;
   mysql_mutex_unlock(&LOCK_replica_list);
   return res;
@@ -159,7 +165,7 @@ err:
   return 1;
 }
 
-void unregister_slave(THD *thd, bool only_mine, bool need_lock_slave_list) {
+void unregister_replica(THD *thd, bool only_mine, bool need_lock_slave_list) {
   if (thd->server_id) {
     if (need_lock_slave_list)
       mysql_mutex_lock(&LOCK_replica_list);
@@ -167,7 +173,8 @@ void unregister_slave(THD *thd, bool only_mine, bool need_lock_slave_list) {
       mysql_mutex_assert_owner(&LOCK_replica_list);
 
     auto it = slave_list.find(thd->server_id);
-    if (it != slave_list.end() && (!only_mine || it->second->thd == thd))
+    if (it != slave_list.end() &&
+        (!only_mine || it->second->thd_id == thd->thread_id()))
       slave_list.erase(it);
 
     if (need_lock_slave_list) mysql_mutex_unlock(&LOCK_replica_list);
@@ -175,7 +182,7 @@ void unregister_slave(THD *thd, bool only_mine, bool need_lock_slave_list) {
 }
 
 /**
-  Execute a SHOW SLAVE HOSTS statement.
+  Execute a SHOW REPLICAS / SHOW SLAVE HOSTS statement.
 
   @param thd Pointer to THD object for the client thread executing the
   statement.
@@ -183,7 +190,7 @@ void unregister_slave(THD *thd, bool only_mine, bool need_lock_slave_list) {
   @retval false success
   @retval true failure
 */
-bool show_slave_hosts(THD *thd) {
+bool show_replicas(THD *thd) {
   mem_root_deque<Item *> field_list(thd->mem_root);
   Protocol *protocol = thd->get_protocol();
   DBUG_TRACE;
@@ -209,7 +216,7 @@ bool show_slave_hosts(THD *thd) {
   mysql_mutex_lock(&LOCK_replica_list);
 
   for (const auto &key_and_value : slave_list) {
-    SLAVE_INFO *si = key_and_value.second.get();
+    REPLICA_INFO *si = key_and_value.second.get();
     protocol->start_row();
     protocol->store((uint32)si->server_id);
     protocol->store(si->host, &my_charset_bin);
@@ -220,10 +227,14 @@ bool show_slave_hosts(THD *thd) {
     protocol->store((uint32)si->port);
     protocol->store((uint32)si->master_id);
 
-    /* get slave's UUID */
-    String replica_uuid;
-    if (get_replica_uuid(si->thd, &replica_uuid))
-      protocol->store(replica_uuid.c_ptr_safe(), &my_charset_bin);
+    if (si->valid_replica_uuid) {
+      char text_buf[binary_log::Uuid::TEXT_LENGTH + 1];
+      si->replica_uuid.to_string(text_buf);
+      protocol->store(text_buf, &my_charset_bin);
+    } else {
+      protocol->store("", &my_charset_bin);
+    }
+
     if (protocol->end_row()) {
       mysql_mutex_unlock(&LOCK_replica_list);
       return true;
@@ -322,7 +333,7 @@ bool show_slave_hosts(THD *thd) {
   <tr><td>@ref sect_protocol_basic_dt_string_fix "string[50]"</td>
     <td>mysql-server version</td>
     <td>version of the MySQL Server that created the binlog.
-      The string is evaluted to apply work-arounds in the slave. </td></tr>
+      The string is evaluated to apply workarounds on the slave. </td></tr>
   <tr><td>@ref a_protocol_type_int4 "int&lt;4&gt;"</td>
       <td>create-timestamp</td>
       <td>seconds since Unix epoch when the binlog was created</td></tr>
@@ -347,7 +358,7 @@ bool show_slave_hosts(THD *thd) {
   <tr><td>@ref sect_protocol_basic_dt_string_fix "string[50]"</td>
     <td>mysql-server version</td>
     <td>version of the MySQL Server that created the binlog.
-      The string is evaluted to apply work-arounds in the slave. </td></tr>
+      The string is evaluated to apply workarounds on the slave. </td></tr>
   <tr><td>@ref a_protocol_type_int4 "int&lt;4&gt;"</td>
       <td>create-timestamp</td>
       <td>seconds since Unix epoch when the binlog was created</td></tr>
@@ -512,7 +523,7 @@ bool show_slave_hosts(THD *thd) {
 
   @subsection sect_protocol_replication_event_heartbeat HEARTBEAT_EVENT
 
-  An artificial event genereted by the master. It isn't written to the relay
+  An artificial event generated by the master. It isn't written to the relay
   logs.
 
   It is added by the master after the replication connection was idle for
@@ -582,7 +593,7 @@ bool show_slave_hosts(THD *thd) {
     <td>2</td></tr>
   <tr><td>0x09</td><td>@ref sect_protocol_replication_event_query_09 "Q_TABLE_MAP_FOR_UPDATE_CODE"</td>
     <td>8</td></tr>
-  <tr><td>0x0a</td><td>@ref sect_protocol_replication_event_query_0a "Q_MASTER_DATA_WRITTEN_CODE"</td>
+  <tr><td>0x0a</td><td>@ref sect_protocol_replication_event_query_0a "Q_SOURCE_DATA_WRITTEN_CODE"</td>
     <td>4</td></tr>
   <tr><td>0x0b</td><td>@ref sect_protocol_replication_event_query_0b "Q_INVOKERS"</td>
     <td>1 + n + 1 + n</td></tr>
@@ -662,7 +673,7 @@ bool show_slave_hosts(THD *thd) {
 
   1 byte length + &lt;length&gt; chars of the cataiog + &lsquo;0&lsquo;-char
 
-  @note Oly written if length > 0
+  @note Only written if length > 0
 
 
   @anchor sect_protocol_replication_event_query_04 <b>Q_CHARSET_CODE</b>
@@ -913,7 +924,7 @@ bool com_binlog_dump(THD *thd, char *packet, size_t packet_length) {
   mysql_binlog_send(thd, thd->mem_strdup(packet + 10), (my_off_t)pos, nullptr,
                     flags);
 
-  unregister_slave(thd, true, true /*need_lock_slave_list=true*/);
+  unregister_replica(thd, true, true /*need_lock_slave_list=true*/);
   /*  fake COM_QUIT -- if we get here, the thread needs to terminate */
   return true;
 
@@ -958,10 +969,10 @@ bool com_binlog_dump_gtid(THD *thd, char *packet, size_t packet_length) {
       RETURN_STATUS_OK)
     return true;
   slave_gtid_executed.to_string(&gtid_string);
-  DBUG_PRINT("info",
-             ("Slave %d requested to read %s at position %" PRIu64 " gtid set "
-              "'%s'.",
-              thd->server_id, name, pos, gtid_string));
+  DBUG_PRINT("info", ("Replica %d requested to read %s at position %" PRIu64
+                      " gtid set "
+                      "'%s'.",
+                      thd->server_id, name, pos, gtid_string));
 
   kill_zombie_dump_threads(thd);
   query_logger.general_log_print(thd, thd->get_command(),
@@ -970,7 +981,7 @@ bool com_binlog_dump_gtid(THD *thd, char *packet, size_t packet_length) {
   my_free(gtid_string);
   mysql_binlog_send(thd, name, (my_off_t)pos, &slave_gtid_executed, flags);
 
-  unregister_slave(thd, true, true /*need_lock_slave_list=true*/);
+  unregister_replica(thd, true, true /*need_lock_slave_list=true*/);
   /*  fake COM_QUIT -- if we get here, the thread needs to terminate */
   return true;
 
@@ -1116,7 +1127,7 @@ void kill_zombie_dump_threads(THD *thd) {
 
   @param thd Pointer to THD object of the client thread executing the
   statement.
-  @param unlock_global_read_lock Unlock the global read lock aquired
+  @param unlock_global_read_lock Unlock the global read lock acquired
   by RESET MASTER.
   @retval false success
   @retval true error
@@ -1139,7 +1150,7 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
     unless executed during a clone operation as part of the process.
   */
   if (is_group_replication_running() && !is_group_replication_cloning()) {
-    my_error(ER_CANT_RESET_MASTER, MYF(0), "Group Replication is running");
+    my_error(ER_CANT_RESET_SOURCE, MYF(0), "Group Replication is running");
     ret = true;
     goto end;
   }
@@ -1165,7 +1176,7 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
 
 end:
   /*
-    Unlock the global read lock (which was aquired by this
+    Unlock the global read lock (which was acquired by this
     session as part of RESET MASTER) before running the hook
     which informs plugins.
   */
@@ -1272,7 +1283,7 @@ bool show_binlogs(THD *thd) {
   field_list.push_back(new Item_empty_string("Log_name", 255));
   field_list.push_back(
       new Item_return_int("File_size", 20, MYSQL_TYPE_LONGLONG));
-  field_list.push_back(new Item_empty_string("Encrypted", 3));
+  field_list.push_back(new Item_empty_string("Encrypted", 12));
   if (thd->send_result_metadata(field_list,
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
@@ -1287,12 +1298,14 @@ bool show_binlogs(THD *thd) {
 
   cur_dir_len = dirname_length(cur.log_file_name);
 
-  reinit_io_cache(index_file, READ_CACHE, (my_off_t)0, false, false);
+  if (reinit_io_cache(index_file, READ_CACHE, (my_off_t)0, false, false))
+    goto err;
 
   /* The file ends with EOF or empty line */
   while ((length = my_b_gets(index_file, fname, sizeof(fname))) > 1) {
     size_t dir_len;
     int encrypted_header_size = 0;
+    bool is_ps_encrypted = false;
     ulonglong file_length = 0;  // Length if open fails
     fname[--length] = '\0';     // remove the newline
 
@@ -1319,10 +1332,39 @@ bool show_binlogs(THD *thd) {
         }
         file_length = (ulonglong)mysql_file_seek(file, 0L, MY_SEEK_END, MYF(0));
         mysql_file_close(file, MYF(0));
+        if (encrypted_header_size == 0) {
+          /* check for PS encrypted binlog */
+          Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
+          if (!binlog_file_reader.open(fname) &&
+              binlog_file_reader.get_error_type() ==
+                  Binlog_read_error::SUCCESS) {
+            // We need to check if binlog file contains
+            // START_5_7_ENCRYPTION_EVENT If it does - it has to be the second
+            // event
+            std::unique_ptr<Log_event> ev(
+                binlog_file_reader.read_event_object());
+            if (ev) {
+              // proceed to the second event
+              ev.reset(binlog_file_reader.read_event_object());
+              if (ev && ev->get_type_code() ==
+                            binary_log::START_5_7_ENCRYPTION_EVENT) {
+                is_ps_encrypted = true;
+              }
+            }
+          }
+        }
       }
     }
     protocol->store(file_length);
-    protocol->store(encrypted_header_size ? "Yes" : "No", &my_charset_bin);
+    std::string encrypted;
+    if (encrypted_header_size != 0) {
+      encrypted = "Yes";
+    } else if (is_ps_encrypted) {
+      encrypted = "PS encrypted";
+    } else {
+      encrypted = "No";
+    }
+    protocol->store(encrypted.c_str(), &my_charset_bin);
     if (protocol->end_row()) {
       DBUG_PRINT(
           "info",

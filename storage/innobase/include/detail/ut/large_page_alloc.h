@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2021, Oracle and/or its affiliates.
+Copyright (c) 2021, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -108,10 +108,10 @@ struct Large_page_alloc : public allocator_traits<false> {
       @param[in] size Size of storage (in bytes) requested to be allocated.
       @return Pointer to the allocated storage. nullptr if allocation failed.
    */
-  static inline void *alloc(std::size_t size) {
+  static inline void *alloc(std::size_t size, bool populate) {
     auto total_len = round_to_next_multiple(
         size + page_allocation_metadata::len, large_page_default_size);
-    auto mem = large_page_aligned_alloc(total_len);
+    auto mem = large_page_aligned_alloc(total_len, populate);
     if (unlikely(!mem)) return nullptr;
     page_allocation_metadata::datalen(mem, total_len);
     page_allocation_metadata::page_type(mem, Page_type::large_page);
@@ -127,8 +127,9 @@ struct Large_page_alloc : public allocator_traits<false> {
    */
   static inline bool free(void *data) noexcept {
     if (unlikely(!data)) return false;
-    return large_page_aligned_free(
-        deduce(data), datalen(data) + page_allocation_metadata::len);
+    ut_ad(page_type(data) == Page_type::large_page);
+    return large_page_aligned_free(deduce(data),
+                                   page_allocation_metadata::datalen(data));
   }
 
   /** Returns the number of bytes that have been allocated.
@@ -138,6 +139,7 @@ struct Large_page_alloc : public allocator_traits<false> {
       @return Number of bytes.
    */
   static inline page_allocation_metadata::datalen_t datalen(void *data) {
+    ut_ad(page_type(data) == Page_type::large_page);
     return page_allocation_metadata::datalen(data) -
            page_allocation_metadata::len;
   }
@@ -152,13 +154,29 @@ struct Large_page_alloc : public allocator_traits<false> {
     return page_allocation_metadata::page_type(data);
   }
 
+  /** Retrieves the pointer and size of the allocation provided by the OS. It is
+      a low level information, and is needed only to call low level
+      memory-related OS functions.
+
+      @param[in] data Pointer to storage allocated through
+      Large_page_alloc::alloc()
+      @return Low level allocation info.
+   */
+  static inline allocation_low_level_info low_level_info(void *data) {
+    ut_ad(page_type(data) == Page_type::large_page);
+    return {deduce(data), page_allocation_metadata::datalen(data)};
+  }
+
  private:
   /** Helper function which deduces the original pointer returned by
       Large_page_alloc from a pointer which is passed to us by the call-site.
    */
   static inline void *deduce(void *data) noexcept {
-    return reinterpret_cast<void *>(static_cast<uint8_t *>(data) -
-                                    page_allocation_metadata::len);
+    ut_ad(page_type(data) == Page_type::large_page);
+    const auto res = reinterpret_cast<void *>(static_cast<uint8_t *>(data) -
+                                              page_allocation_metadata::len);
+    ut_ad(reinterpret_cast<std::uintptr_t>(res) % large_page_size() == 0);
+    return res;
   }
 };
 
@@ -226,11 +244,11 @@ struct Large_page_alloc_pfs : public allocator_traits<true> {
       @return Pointer to the allocated storage. nullptr if allocation failed.
     */
   static inline void *alloc(
-      std::size_t size,
+      std::size_t size, bool populate,
       page_allocation_metadata::pfs_metadata::pfs_memory_key_t key) {
     auto total_len = round_to_next_multiple(
         size + page_allocation_metadata::len, large_page_default_size);
-    auto mem = large_page_aligned_alloc(total_len);
+    auto mem = large_page_aligned_alloc(total_len, populate);
     if (unlikely(!mem)) return nullptr;
 
 #ifdef HAVE_PSI_MEMORY_INTERFACE
@@ -261,6 +279,7 @@ struct Large_page_alloc_pfs : public allocator_traits<true> {
    */
   static inline bool free(PFS_metadata::data_segment_ptr data) noexcept {
     if (unlikely(!data)) return false;
+    ut_ad(page_type(data) == Page_type::large_page);
 
     PFS_metadata::pfs_datalen_t total_len = {};
 #ifdef HAVE_PSI_MEMORY_INTERFACE
@@ -284,6 +303,7 @@ struct Large_page_alloc_pfs : public allocator_traits<true> {
       @return Number of bytes.
    */
   static inline size_t datalen(PFS_metadata::data_segment_ptr data) {
+    ut_ad(page_type(data) == Page_type::large_page);
     return page_allocation_metadata::pfs_metadata::pfs_datalen(data) -
            page_allocation_metadata::len;
   }
@@ -298,13 +318,31 @@ struct Large_page_alloc_pfs : public allocator_traits<true> {
     return page_allocation_metadata::page_type(data);
   }
 
+  /** Retrieves the pointer and size of the allocation provided by the OS. It is
+      a low level information, and is needed only to call low level
+      memory-related OS functions.
+
+      @param[in] data Pointer to storage allocated through
+      Large_page_alloc_pfs::alloc()
+      @return Low level allocation info.
+   */
+  static inline allocation_low_level_info low_level_info(void *data) {
+    ut_ad(page_type(data) == Page_type::large_page);
+    return {deduce(data),
+            page_allocation_metadata::pfs_metadata::pfs_datalen(data)};
+  }
+
  private:
   /** Helper function which deduces the original pointer returned by
       Large_page_alloc_pfs from a pointer which is passed to us by the
       call-site.
    */
   static inline void *deduce(PFS_metadata::data_segment_ptr data) noexcept {
-    return page_allocation_metadata::pfs_metadata::deduce_pfs_meta(data);
+    ut_ad(page_type(data) == Page_type::large_page);
+    const auto res =
+        page_allocation_metadata::pfs_metadata::deduce_pfs_meta(data);
+    ut_ad(reinterpret_cast<std::uintptr_t>(res) % large_page_size() == 0);
+    return res;
   }
 };
 
@@ -334,17 +372,20 @@ template <typename Impl>
 struct Large_alloc_ {
   template <typename T = Impl>
   static inline typename std::enable_if<T::is_pfs_instrumented_v, void *>::type
-  alloc(size_t size, PSI_memory_key key) {
-    return Impl::alloc(size, key);
+  alloc(size_t size, bool populate, PSI_memory_key key) {
+    return Impl::alloc(size, populate, key);
   }
   template <typename T = Impl>
   static inline typename std::enable_if<!T::is_pfs_instrumented_v, void *>::type
-  alloc(size_t size, PSI_memory_key /*key*/) {
-    return Impl::alloc(size);
+  alloc(size_t size, bool populate, PSI_memory_key /*key*/) {
+    return Impl::alloc(size, populate);
   }
   static inline bool free(void *ptr) { return Impl::free(ptr); }
   static inline size_t datalen(void *ptr) { return Impl::datalen(ptr); }
   static inline Page_type page_type(void *ptr) { return Impl::page_type(ptr); }
+  static inline allocation_low_level_info low_level_info(void *ptr) {
+    return Impl::low_level_info(ptr);
+  }
 };
 
 }  // namespace detail

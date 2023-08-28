@@ -2728,6 +2728,7 @@ SELECT * FROM t1;
 
 CREATE VIEW v1(m, e) AS SELECT MIN(id), e FROM t1 GROUP BY e;
 CREATE TABLE t2 SELECT * FROM v1;
+--sorted_result
 SELECT * FROM t2;
 
 DROP VIEW v1;
@@ -6309,4 +6310,45 @@ DROP VIEW v1;
 
 EXPLAIN SELECT pk AS foo, col_int_key AS bar FROM t1;
 
+DROP TABLE t1;
+
+--echo # Bug#34239456: Assertion '!thd->is_error()' failed in MySQL 8.0.29
+
+CREATE TABLE t0 (c0 INTEGER, c1 INTEGER);
+
+CREATE VIEW v0 AS
+SELECT c0
+FROM t0
+WHERE c1 = (SELECT 1
+            UNION
+            SELECT c0 FROM t0
+            ORDER BY c1
+           );
+
+--error ER_TABLENAME_NOT_ALLOWED_HERE
+SELECT * FROM v0;
+
+DROP VIEW v0;
+DROP TABLE t0;
+
+--echo #
+--echo # Bug#34800905 - View definition changes latin 1 Invalid utf8mb4 character
+--echo #
+
+CREATE TABLE `t1` (`c1` SMALLINT DEFAULT NULL);
+CREATE VIEW v1 AS SELECT c1,'á' AS c2 FROM t1;
+INSERT INTO t1 (c1) VALUES ('0'), ('1');
+
+SET NAMES 'latin1';
+ALTER TABLE t1 RENAME t1_aux;
+ALTER TABLE t1_aux RENAME t1;
+SHOW CREATE VIEW v1;
+
+SET NAMES DEFAULT;
+--echo # Without fix, invalid character string error is reported for column c2.
+SHOW CREATE VIEW v1;
+--echo # Without fix, incorrect values listed for column c2.
+SELECT * FROM v1;
+
+DROP VIEW v1;
 DROP TABLE t1;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -97,19 +97,19 @@ PFS_engine_table *table_file_instances::create(PFS_engine_table_share *) {
   return new table_file_instances();
 }
 
-ha_rows table_file_instances::get_row_count(void) {
+ha_rows table_file_instances::get_row_count() {
   return global_file_container.get_row_count();
 }
 
 table_file_instances::table_file_instances()
     : PFS_engine_table(&m_share, &m_pos), m_pos(0), m_next_pos(0) {}
 
-void table_file_instances::reset_position(void) {
+void table_file_instances::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
-int table_file_instances::rnd_next(void) {
+int table_file_instances::rnd_next() {
   PFS_file *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -156,7 +156,7 @@ int table_file_instances::index_init(uint idx, bool) {
   return 0;
 }
 
-int table_file_instances::index_next(void) {
+int table_file_instances::index_next() {
   PFS_file *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -189,8 +189,7 @@ int table_file_instances::make_row(PFS_file *pfs) {
     return HA_ERR_RECORD_DELETED;
   }
 
-  m_row.m_filename = pfs->m_filename;
-  m_row.m_filename_length = pfs->m_filename_length;
+  m_row.m_file_name = pfs->m_file_name;
   m_row.m_event_name = safe_class->m_name.str();
   m_row.m_event_name_length = safe_class->m_name.length();
   m_row.m_open_count = pfs->m_file_stat.m_open_count;
@@ -213,11 +212,12 @@ int table_file_instances::read_row_values(TABLE *table, unsigned char *,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* FILENAME */
-          set_field_varchar_utf8(f, m_row.m_filename, m_row.m_filename_length);
+          set_field_varchar_utf8mb4(f, m_row.m_file_name.ptr(),
+                                    m_row.m_file_name.length());
           break;
         case 1: /* EVENT_NAME */
-          set_field_varchar_utf8(f, m_row.m_event_name,
-                                 m_row.m_event_name_length);
+          set_field_varchar_utf8mb4(f, m_row.m_event_name,
+                                    m_row.m_event_name_length);
           break;
         case 2: /* OPEN_COUNT */
           set_field_ulong(f, m_row.m_open_count);

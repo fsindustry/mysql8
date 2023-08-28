@@ -1,6 +1,6 @@
 #ifndef SYS_VARS_H_INCLUDED
 #define SYS_VARS_H_INCLUDED
-/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,11 +32,14 @@
 
 #include "my_config.h"
 
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
-#include <time.h>
+
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <string>
+#include <string_view>
 
 #include "keycache.h"  // dflt_key_cache
 #include "lex_string.h"
@@ -56,9 +59,10 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/debug_sync.h"  // debug_sync_update
 #include "sql/handler.h"
-#include "sql/item.h"       // Item
-#include "sql/keycaches.h"  // default_key_cache_base
-#include "sql/mysqld.h"     // max_system_variables
+#include "sql/item.h"           // Item
+#include "sql/keycaches.h"      // default_key_cache_base
+#include "sql/mysqld.h"         // max_system_variables
+#include "sql/rpl_event_ctx.h"  // Rpl_event_ctx
 #include "sql/rpl_gtid.h"
 #include "sql/set_var.h"    // sys_var_chain
 #include "sql/sql_class.h"  // THD
@@ -94,6 +98,15 @@ template <typename Struct_type, typename Name_getter>
 class Sys_var_struct;
 template <typename T, ulong ARGT, enum enum_mysql_show_type SHOWT, bool SIGNED>
 class Sys_var_integer;
+
+constexpr const unsigned long TABLE_OPEN_CACHE_DEFAULT{4000};
+constexpr const unsigned long TABLE_DEF_CACHE_DEFAULT{400};
+/**
+  Maximum number of connections default value.
+  151 is larger than Apache's default max children,
+  to avoid "too many connections" error in a common setup.
+*/
+constexpr const unsigned long MAX_CONNECTIONS_DEFAULT{151};
 
 /*
   a set of mostly trivial (as in f(X)=X) defines below to make system variable
@@ -131,6 +144,7 @@ class Sys_var_integer;
 #define PREALLOCATED sys_var::ALLOCATED +
 #define NON_PERSIST sys_var::NOTPERSIST +
 #define PERSIST_AS_READONLY sys_var::PERSIST_AS_READ_ONLY +
+#define SENSITIVE sys_var::SENSITIVE +
 
 /*
   Sys_var_bit meaning is reversed, like in
@@ -295,7 +309,7 @@ class Sys_var_integer : public sys_var {
   }
   void session_save_default(THD *thd, set_var *var) override {
     var->save_result.ulonglong_value = static_cast<ulonglong>(
-      *pointer_cast<const T *>(global_value_ptr(thd, nullptr)));
+      *pointer_cast<const T *>(global_value_ptr(thd, {})));
   }
   void global_save_default(THD *, set_var *var) override {
     var->save_result.ulonglong_value = option.def_value;
@@ -307,6 +321,10 @@ class Sys_var_integer : public sys_var {
     else
       longlong10_to_str((longlong)var->save_result.ulonglong_value,
                         def_val, 10);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_int(static_cast<longlong>(var->save_result.ulonglong_value),
+                  !SIGNED, system_charset_info);
   }
 
  private:
@@ -383,92 +401,80 @@ class Sys_var_alias : public sys_var {
 
   sys_var &get_base_var() { return m_base_var; }
 
-  virtual void cleanup() override { m_base_var.cleanup(); }
-  virtual sys_var_pluginvar *cast_pluginvar() override {
+  void cleanup() override { m_base_var.cleanup(); }
+  sys_var_pluginvar *cast_pluginvar() override {
     return m_base_var.cast_pluginvar();
   }
-  virtual void update_default(longlong new_def_value) override {
+  void update_default(longlong new_def_value) override {
     m_base_var.update_default(new_def_value);
   }
-  virtual longlong get_default() override { return m_base_var.get_default(); }
-  virtual longlong get_min_value() override {
-    return m_base_var.get_min_value();
-  }
-  virtual ulonglong get_max_value() override {
-    return m_base_var.get_max_value();
-  }
-  virtual ulong get_var_type() override { return m_base_var.get_var_type(); }
-  virtual void set_arg_source(get_opt_arg_source *arg_source) override {
+  longlong get_default() override { return m_base_var.get_default(); }
+  longlong get_min_value() override { return m_base_var.get_min_value(); }
+  ulonglong get_max_value() override { return m_base_var.get_max_value(); }
+  ulong get_var_type() override { return m_base_var.get_var_type(); }
+  void set_arg_source(get_opt_arg_source *arg_source) override {
     m_base_var.set_arg_source(arg_source);
   }
-  virtual void set_is_plugin(bool is_plugin) override {
+  void set_is_plugin(bool is_plugin) override {
     m_base_var.set_is_plugin(is_plugin);
   }
-  virtual bool is_non_persistent() override {
-    return m_base_var.is_non_persistent();
-  }
-  virtual void saved_value_to_string(THD *thd, set_var *var,
-                                     char *def_val) override {
+  bool is_non_persistent() override { return m_base_var.is_non_persistent(); }
+  void saved_value_to_string(THD *thd, set_var *var, char *def_val) override {
     return m_base_var.saved_value_to_string(thd, var, def_val);
   }
-  virtual bool check_update_type(Item_result type) override {
+  void persist_only_to_string(THD *thd, set_var *var,
+                              String *dest) override {
+    return m_base_var.persist_only_to_string(thd, var, dest);
+  }
+  bool check_update_type(Item_result type) override {
     return m_base_var.check_update_type(type);
   }
-  virtual enum_variable_source get_source() override {
-    return m_base_var.get_source();
-  }
-  virtual const char *get_source_name() override {
+  enum_variable_source get_source() override { return m_base_var.get_source(); }
+  const char *get_source_name() override {
     return m_base_var.get_source_name();
   }
-  virtual void set_source(enum_variable_source src) override {
+  void set_source(enum_variable_source src) override {
     m_base_var.set_source(src);
   }
-  virtual bool set_source_name(const char *path) override {
+  bool set_source_name(const char *path) override {
     return m_base_var.set_source_name(path);
   }
-  virtual bool set_user(const char *usr) override {
-    return m_base_var.set_user(usr);
-  }
-  virtual const char *get_user() override { return m_base_var.get_user(); }
-  virtual const char *get_host() override { return m_base_var.get_host(); }
-  virtual bool set_host(const char *hst) override {
-    return m_base_var.set_host(hst);
-  }
-  virtual ulonglong get_timestamp() const override {
+  bool set_user(const char *usr) override { return m_base_var.set_user(usr); }
+  const char *get_user() override { return m_base_var.get_user(); }
+  const char *get_host() override { return m_base_var.get_host(); }
+  bool set_host(const char *hst) override { return m_base_var.set_host(hst); }
+  ulonglong get_timestamp() const override {
     return m_base_var.get_timestamp();
   }
-  virtual void set_user_host(THD *thd) override {
-    m_base_var.set_user_host(thd);
-  }
-  virtual void set_timestamp() override { m_base_var.set_timestamp(); }
-  virtual void set_timestamp(ulonglong ts) override {
-    m_base_var.set_timestamp(ts);
-  }
+  void set_user_host(THD *thd) override { m_base_var.set_user_host(thd); }
+  void set_timestamp() override { m_base_var.set_timestamp(); }
+  void set_timestamp(ulonglong ts) override { m_base_var.set_timestamp(ts); }
 
  private:
-  virtual bool do_check(THD *thd, set_var *var) override {
+  bool do_check(THD *thd, set_var *var) override {
     return m_base_var.do_check(thd, var);
   }
-  virtual void session_save_default(THD *thd, set_var *var) override {
+  void session_save_default(THD *thd, set_var *var) override {
     return m_base_var.session_save_default(thd, var);
   }
-  virtual void global_save_default(THD *thd, set_var *var) override {
+  void global_save_default(THD *thd, set_var *var) override {
     return m_base_var.global_save_default(thd, var);
   }
-  virtual bool session_update(THD *thd, set_var *var) override {
+  bool session_update(THD *thd, set_var *var) override {
     return m_base_var.session_update(thd, var);
   }
-  virtual bool global_update(THD *thd, set_var *var) override {
+  bool global_update(THD *thd, set_var *var) override {
     return m_base_var.global_update(thd, var);
   }
 
  protected:
-  virtual const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                         LEX_STRING *base) override {
-    return m_base_var.session_value_ptr(running_thd, target_thd, base);
+  const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
+                                 std::string_view keycache_name) override {
+    return m_base_var.session_value_ptr(running_thd, target_thd, keycache_name);
   }
-  virtual const uchar *global_value_ptr(THD *thd, LEX_STRING *base) override {
-    return m_base_var.global_value_ptr(thd, base);
+  const uchar *global_value_ptr(THD *thd,
+                                std::string_view keycache_name) override {
+    return m_base_var.global_value_ptr(thd, keycache_name);
   }
 };
 
@@ -538,7 +544,7 @@ class Sys_var_alias : public sys_var {
     file, and get rid of the warning, using RESET PERSIST
     OLD_VARIABLE_NAME.
 
-  - After downgrade from verson X+1 to version X, all persisted
+  - After downgrade from version X+1 to version X, all persisted
     variables retain their values.  User will not see deprecation
     warnings.  If user needs to further downgrade to version X-1, user
     needs to first run SET PERSIST for some variable in order to
@@ -669,12 +675,19 @@ class Sys_var_enum : public Sys_var_typelib {
     strcpy(def_val, typelib.type_names[var->save_result.ulonglong_value]);
   }
   const uchar *session_value_ptr(THD *, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     return pointer_cast<const uchar *>(
         typelib.type_names[session_var(target_thd, ulong)]);
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     return pointer_cast<const uchar *>(typelib.type_names[global_var(ulong)]);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const auto *str =
+        typelib.type_names[(longlong)var->save_result.ulonglong_value];
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
   }
 };
 
@@ -713,13 +726,20 @@ class Sys_var_bool : public Sys_var_typelib {
   }
   void session_save_default(THD *thd, set_var *var) override {
     var->save_result.ulonglong_value = static_cast<ulonglong>(
-        *pointer_cast<const bool *>(global_value_ptr(thd, nullptr)));
+        *pointer_cast<const bool *>(global_value_ptr(thd, {})));
   }
   void global_save_default(THD *, set_var *var) override {
     var->save_result.ulonglong_value = option.def_value;
   }
   void saved_value_to_string(THD *, set_var *var, char *def_val) override {
     longlong10_to_str((longlong)var->save_result.ulonglong_value, def_val, 10);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (static_cast<longlong>(var->save_result.ulonglong_value)) {
+      dest->copy("ON", 2, system_charset_info);
+    } else {
+      dest->copy("OFF", 3, system_charset_info);
+    }
   }
 };
 
@@ -837,6 +857,16 @@ class Sys_var_multi_enum : public sys_var {
       if (my_strcasecmp(system_charset_info, aliases[i].alias, text) == 0)
         return aliases[i].number;
     return -1;
+  }
+
+  /**
+    Return the string alias for a given value, or nullptr if the
+    alias isn't found.
+  */
+  const char *find_alias(const uint number) const {
+    for (uint i = 0; aliases[i].alias != nullptr; ++i)
+      if (aliases[i].number == number) return aliases[i].alias;
+    return nullptr;
   }
 
   /**
@@ -963,7 +993,7 @@ class Sys_var_multi_enum : public sys_var {
     longlong10_to_str((longlong)var->save_result.ulonglong_value, def_val, 10);
   }
 
-  const uchar *session_value_ptr(THD *, THD *, LEX_STRING *) override {
+  const uchar *session_value_ptr(THD *, THD *, std::string_view) override {
     DBUG_TRACE;
     assert(0);
     /*
@@ -974,9 +1004,16 @@ class Sys_var_multi_enum : public sys_var {
     */
     return nullptr;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     DBUG_TRACE;
     return pointer_cast<const uchar *>(aliases[global_var(ulong)].alias);
+  }
+
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const auto *str = find_alias((longlong)var->save_result.ulonglong_value);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
   }
 
  private:
@@ -1097,28 +1134,56 @@ class Sys_var_charptr : public sys_var {
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
+  }
 };
 
 class Sys_var_version : public Sys_var_charptr {
+ private:
+  char withsuffix[SERVER_VERSION_LENGTH];
+  char *withsuffix_ptr;
+
  public:
   Sys_var_version(const char *name_arg, const char *comment, int flag_args,
                   ptrdiff_t off, size_t size, CMD_LINE getopt,
                   enum charset_enum is_os_charset_arg, const char *def_val)
       : Sys_var_charptr(name_arg, comment, flag_args, off, size, getopt,
-                        is_os_charset_arg, def_val) {}
+                        is_os_charset_arg, def_val),
+        withsuffix_ptr(withsuffix) {}
 
   ~Sys_var_version() override = default;
 
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *base) override {
-    const uchar *value = Sys_var_charptr::global_value_ptr(thd, base);
+  const uchar *global_value_ptr(THD *thd,
+                                std::string_view keycache_name) override {
+    const char *const *version_ptr = reinterpret_cast<const char *const *>(
+        Sys_var_charptr::global_value_ptr(thd, keycache_name));
+    if (version_ptr == nullptr || *version_ptr == nullptr) return nullptr;
 
-    DBUG_EXECUTE_IF("alter_server_version_str", {
-      static const char *altered_value = "some-other-version";
-      const uchar *altered_value_ptr = pointer_cast<uchar *>(&altered_value);
-      value = altered_value_ptr;
-    });
+    sys_var *suffix_var = find_static_system_variable("version_suffix");
+    if (suffix_var == nullptr)
+      return reinterpret_cast<const uchar *>(version_ptr);
 
-    return value;
+    const char *const *suffix_ptr = reinterpret_cast<const char *const *>(
+        suffix_var->value_ptr(thd, OPT_GLOBAL, {}));
+    if (suffix_ptr == nullptr || *suffix_ptr == nullptr)
+      return reinterpret_cast<const uchar *>(version_ptr);
+
+    size_t suffix_ptr_len = strlen(*suffix_ptr);
+    size_t version_ptr_len = strlen(*version_ptr);
+
+    /* prepare concatenated @@version variable */
+    if (suffix_ptr_len + version_ptr_len + 1 > SERVER_VERSION_LENGTH)
+      suffix_ptr_len = SERVER_VERSION_LENGTH - version_ptr_len - 1;
+
+    memcpy(withsuffix, *version_ptr, version_ptr_len);
+    memcpy(withsuffix + version_ptr_len, *suffix_ptr, suffix_ptr_len);
+    withsuffix[suffix_ptr_len + version_ptr_len] = 0;
+
+    return reinterpret_cast<uchar *>(&withsuffix_ptr);
   }
 };
 
@@ -1151,10 +1216,13 @@ class Sys_var_proxy_user : public sys_var {
     assert(false);
   }
   bool check_update_type(Item_result) override { return true; }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
+  }
 
  protected:
   const uchar *session_value_ptr(THD *, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     const char *proxy_user = target_thd->security_context()->proxy_user().str;
     return proxy_user[0] ? pointer_cast<const uchar *>(proxy_user) : nullptr;
   }
@@ -1168,7 +1236,7 @@ class Sys_var_external_user : public Sys_var_proxy_user {
 
  protected:
   const uchar *session_value_ptr(THD *, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     LEX_CSTRING external_user = target_thd->security_context()->external_user();
     return external_user.length ? pointer_cast<const uchar *>(external_user.str)
                                 : nullptr;
@@ -1214,6 +1282,38 @@ class Sys_var_lexstring : public Sys_var_charptr {
 };
 
 #ifndef NDEBUG
+
+static inline void trigger_buffer_overrun() {
+  int *mem = static_cast<int *>(my_malloc(127, 0, MYF(0)));
+  // Allocations are usually aligned, so even if 127 bytes were requested,
+  // it's mostly safe to assume there are 128 bytes. Writing into the last
+  // byte is safe for the rest of the code, but still enough to trigger
+  // AddressSanitizer (ASAN) or Valgrind.
+  *static_cast<volatile int *>(mem + (128 / sizeof(*mem)) - 1) = 1;
+  free(mem);
+}
+
+class Debug_shutdown_actions {
+ public:
+  static Debug_shutdown_actions instance;
+
+  bool crash;
+  bool hang;
+  bool buffer_overrun;
+
+ public:
+  Debug_shutdown_actions() : crash(false), hang(false), buffer_overrun(false) {}
+
+  ~Debug_shutdown_actions() {
+    if (crash) DBUG_SUICIDE();
+
+    if (hang)
+      while (1) my_sleep(1000000);
+
+    if (buffer_overrun) trigger_buffer_overrun();
+  }
+};
+
 /**
   @@session.dbug and @@global.dbug variables.
 
@@ -1257,6 +1357,21 @@ class Sys_var_dbug : public sys_var {
       DBUG_POP();
     else
       DBUG_SET(val);
+
+    DBUG_EXECUTE_IF("shutdown_crash",
+                    { Debug_shutdown_actions::instance.crash = true; });
+    DBUG_EXECUTE_IF("shutdown_hang",
+                    { Debug_shutdown_actions::instance.hang = true; });
+    DBUG_EXECUTE_IF("shutdown_buffer_overrun", {
+      Debug_shutdown_actions::instance.buffer_overrun = true;
+    });
+    DBUG_EXECUTE_IF("leak_memory", {
+      my_malloc(127, 0, MYF(0));  // Intentional memory leak.
+    });
+    DBUG_EXECUTE_IF("wait_forever", {
+      while (1) my_sleep(1000000);
+    });
+    DBUG_EXECUTE_IF("buffer_overrun", { trigger_buffer_overrun(); });
     return false;
   }
   bool global_update(THD *, set_var *var) override {
@@ -1274,18 +1389,24 @@ class Sys_var_dbug : public sys_var {
            var->save_result.string_value.length);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     char buf[512];
     DBUG_EXPLAIN(buf, sizeof(buf));
     return (uchar *)running_thd->mem_strdup(buf);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     char buf[512];
     DBUG_EXPLAIN_INITIAL(buf, sizeof(buf));
     return (uchar *)thd->mem_strdup(buf);
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
   }
 };
 #endif
@@ -1334,25 +1455,25 @@ class Sys_var_keycache : public Sys_var_ulonglong {
   bool global_update(THD *thd, set_var *var) override {
     ulonglong new_value = var->save_result.ulonglong_value;
 
-    if (var->base.str)
-      push_warning_printf(thd, Sql_condition::SL_WARNING,
-                          ER_WARN_DEPRECATED_SYNTAX,
-                          "%s.%s syntax "
-                          "is deprecated and will be removed in a "
-                          "future release",
-                          var->base.str, name.str);
+    assert(var->m_var_tracker.is_keycache_var());
+    std::string_view base_name = var->m_var_tracker.get_keycache_name();
 
-    LEX_CSTRING base_name = var->base;
     /* If no basename, assume it's for the key cache named 'default' */
-    if (!base_name.length) base_name = default_key_cache_base;
+    if (!base_name.empty()) {
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_WARN_DEPRECATED_SYNTAX,
+          "%.*s.%s syntax "
+          "is deprecated and will be removed in a "
+          "future release",
+          static_cast<int>(base_name.size()), base_name.data(), name.str);
+    }
 
-    KEY_CACHE *key_cache = get_key_cache(&base_name);
+    KEY_CACHE *key_cache = get_key_cache(base_name);
 
     if (!key_cache) {  // Key cache didn't exists */
       if (!new_value)  // Tried to delete cache
         return false;  // Ok, nothing to do
-      if (!(key_cache = create_key_cache(base_name.str, base_name.length)))
-        return true;
+      if (!(key_cache = create_key_cache(base_name))) return true;
     }
 
     /**
@@ -1364,17 +1485,18 @@ class Sys_var_keycache : public Sys_var_ulonglong {
 
     return keycache_update(thd, key_cache, offset, new_value);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *base) override {
-    if (base != nullptr && base->str)
+  const uchar *global_value_ptr(THD *thd,
+                                std::string_view keycache_name) override {
+    if (!keycache_name.empty())
       push_warning_printf(thd, Sql_condition::SL_WARNING,
                           ER_WARN_DEPRECATED_SYNTAX,
-                          "@@global.%s.%s syntax "
+                          "@@global.%.*s.%s syntax "
                           "is deprecated and will be removed in a "
                           "future release",
-                          base->str, name.str);
+                          static_cast<int>(keycache_name.size()),
+                          keycache_name.data(), name.str);
 
-    LEX_CSTRING cstr = to_lex_cstring(*base);
-    KEY_CACHE *key_cache = get_key_cache(&cstr);
+    KEY_CACHE *key_cache = get_key_cache(keycache_name);
     if (!key_cache) key_cache = &zero_key_cache;
     return keycache_var_ptr(key_cache, offset);
   }
@@ -1439,6 +1561,9 @@ class Sys_var_double : public sys_var {
   void saved_value_to_string(THD *, set_var *var, char *def_val) override {
     my_fcvt(var->save_result.double_value, 6, def_val, nullptr);
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_real(var->save_result.double_value, 6, system_charset_info);
+  }
 };
 
 /**
@@ -1463,7 +1588,7 @@ class Sys_var_test_flag : public Sys_var_bool {
                      NO_CMD_LINE, DEFAULT(false)) {
     test_flag_mask = mask;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     test_flag_value = ((test_flags & test_flag_mask) > 0);
     return (uchar *)&test_flag_value;
   }
@@ -1493,11 +1618,11 @@ class Sys_var_max_user_conn : public Sys_var_uint {
                      max_val, def_val, block_size, lock, binlog_status_arg,
                      on_check_func, on_update_func, substitute) {}
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *base) override {
+                                 std::string_view keycache_name) override {
     const USER_CONN *uc = target_thd->get_user_connect();
     if (uc && uc->user_resources.user_conn)
       return pointer_cast<const uchar *>(&(uc->user_resources.user_conn));
-    return global_value_ptr(running_thd, base);
+    return global_value_ptr(running_thd, keycache_name);
   }
 };
 
@@ -1598,14 +1723,21 @@ class Sys_var_flagset : public Sys_var_typelib {
                              typelib.type_names));
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     return (uchar *)flagset_to_string(running_thd, nullptr,
                                       session_var(target_thd, ulonglong),
                                       typelib.type_names);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     return (uchar *)flagset_to_string(thd, nullptr, global_var(ulonglong),
                                       typelib.type_names);
+  }
+  void persist_only_to_string(THD *thd, set_var *var, String *dest) override {
+    const char *str = flagset_to_string(
+        thd, nullptr, var->save_result.ulonglong_value, typelib.type_names);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
   }
 };
 
@@ -1695,14 +1827,21 @@ class Sys_var_set : public Sys_var_typelib {
                          typelib.type_names));
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     return (uchar *)set_to_string(running_thd, nullptr,
                                   session_var(target_thd, ulonglong),
                                   typelib.type_names);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     return (uchar *)set_to_string(thd, nullptr, global_var(ulonglong),
                                   typelib.type_names);
+  }
+  void persist_only_to_string(THD *thd, set_var *var, String *dest) override {
+    const auto *str = set_to_string(
+        thd, nullptr, var->save_result.ulonglong_value, typelib.type_names);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
   }
 };
 
@@ -1811,17 +1950,22 @@ class Sys_var_plugin : public sys_var {
     return type != STRING_RESULT;
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     plugin_ref plugin = session_var(target_thd, plugin_ref);
     return (uchar *)(plugin ? running_thd->strmake(plugin_name(plugin)->str,
                                                    plugin_name(plugin)->length)
                             : nullptr);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     plugin_ref plugin = global_var(plugin_ref);
     return (uchar *)(plugin ? thd->strmake(plugin_name(plugin)->str,
                                            plugin_name(plugin)->length)
                             : nullptr);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->copy(plugin_name(var->save_result.plugin)->str,
+               plugin_name(var->save_result.plugin)->length,
+               system_charset_info);
   }
 };
 
@@ -1872,15 +2016,18 @@ class Sys_var_debug_sync : public sys_var {
     assert(false);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     return debug_sync_value_ptr(running_thd);
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 #endif /* defined(ENABLED_DEBUG_SYNC) */
@@ -1953,16 +2100,20 @@ class Sys_var_bit : public Sys_var_typelib {
     longlong10_to_str((longlong)var->save_result.ulonglong_value, def_val, 10);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     running_thd->sys_var_tmp.bool_value = static_cast<bool>(
         reverse_semantics ^
         ((session_var(target_thd, ulonglong) & bitmask) != 0));
     return (uchar *)&running_thd->sys_var_tmp.bool_value;
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     thd->sys_var_tmp.bool_value = static_cast<bool>(
         reverse_semantics ^ ((global_var(ulonglong) & bitmask) != 0));
     return (uchar *)&thd->sys_var_tmp.bool_value;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_int(static_cast<longlong>(var->save_result.ulonglong_value), true,
+                  system_charset_info);
   }
 };
 
@@ -2021,11 +2172,11 @@ class Sys_var_session_special : public Sys_var_ulonglong {
     assert(false);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     running_thd->sys_var_tmp.ulonglong_value = read_func(target_thd);
     return (uchar *)&running_thd->sys_var_tmp.ulonglong_value;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
   }
@@ -2073,11 +2224,11 @@ class Sys_var_session_special_double : public Sys_var_double {
     assert(false);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     running_thd->sys_var_tmp.double_value = read_func(target_thd);
     return (uchar *)&running_thd->sys_var_tmp.double_value;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
   }
@@ -2128,15 +2279,16 @@ class Sys_var_have : public sys_var {
   void session_save_default(THD *, set_var *) override {}
   void global_save_default(THD *, set_var *) override {}
   void saved_value_to_string(THD *, set_var *, char *) override {}
-  const uchar *session_value_ptr(THD *, THD *, LEX_STRING *) override {
+  const uchar *session_value_ptr(THD *, THD *, std::string_view) override {
     assert(false);
     return nullptr;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     return pointer_cast<const uchar *>(
         show_comp_option_name[global_var(enum SHOW_COMP_OPTION)]);
   }
   bool check_update_type(Item_result) override { return false; }
+  void persist_only_to_string(THD *, set_var *, String *) override {}
 };
 
 /**
@@ -2169,7 +2321,7 @@ class Sys_var_have_func : public Sys_var_have {
                      substitute),
         func_(func) {}
 
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     return pointer_cast<const uchar *>(show_comp_option_name[func_(thd)]);
   }
 
@@ -2244,13 +2396,22 @@ class Sys_var_struct : public sys_var {
     return type != INT_RESULT && type != STRING_RESULT;
   }
   const uchar *session_value_ptr(THD *, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     const Struct_type *ptr = session_var(target_thd, const Struct_type *);
     return ptr ? Name_getter(ptr).get_name() : nullptr;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     const Struct_type *ptr = global_var(const Struct_type *);
     return ptr ? Name_getter(ptr).get_name() : nullptr;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const Struct_type *ptr =
+        static_cast<const Struct_type *>(var->save_result.ptr);
+    if (ptr != nullptr) {
+      const char *res_str =
+          pointer_cast<const char *>(Name_getter(ptr).get_name());
+      dest->copy(res_str, strlen(res_str), system_charset_info);
+    }
   }
 };
 
@@ -2313,7 +2474,7 @@ class Sys_var_tz : public sys_var {
     strcpy(def_val, var->save_result.time_zone->get_name()->ptr());
   }
   const uchar *session_value_ptr(THD *, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     /*
       This is an ugly fix for replication: we don't replicate properly queries
       invoking system variables' values to update tables; but
@@ -2326,12 +2487,16 @@ class Sys_var_tz : public sys_var {
     return pointer_cast<const uchar *>(
         session_var(target_thd, Time_zone *)->get_name()->ptr());
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     return pointer_cast<const uchar *>(
         global_var(Time_zone *)->get_name()->ptr());
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const String *str = var->save_result.time_zone->get_name();
+    dest->copy(str->ptr(), str->length(), system_charset_info);
   }
 };
 
@@ -2434,7 +2599,7 @@ class Sys_var_gtid_next : public sys_var {
     return type != STRING_RESULT;
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     DBUG_TRACE;
     char buf[Gtid_specification::MAX_TEXT_LENGTH + 1];
     global_sid_lock->rdlock();
@@ -2444,9 +2609,12 @@ class Sys_var_gtid_next : public sys_var {
     char *ret = running_thd->mem_strdup(buf);
     return (uchar *)ret;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 
@@ -2510,7 +2678,7 @@ class Sys_var_gtid_set : public sys_var {
   }
   bool check_update_type(Item_result type) { return type != STRING_RESULT; }
   uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                           LEX_STRING *base) {
+                           const std::string &) override {
     DBUG_TRACE;
     Gtid_set_or_null *gsn = (Gtid_set_or_null *)session_var_ptr(target_thd);
     Gtid_set *gs = gsn->get_gtid_set();
@@ -2525,7 +2693,7 @@ class Sys_var_gtid_set : public sys_var {
     global_sid_lock->unlock();
     return (uchar *)buf;
   }
-  uchar *global_value_ptr(THD *thd, LEX_STRING *base) {
+  uchar *global_value_ptr(THD *thd, const std::string &) override {
     assert(false);
     return NULL;
   }
@@ -2573,13 +2741,16 @@ class Sys_var_charptr_func : public sys_var {
     assert(false);
     return true;
   }
-  const uchar *session_value_ptr(THD *, THD *, LEX_STRING *) override {
+  const uchar *session_value_ptr(THD *, THD *, std::string_view) override {
     assert(false);
     return nullptr;
   }
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 
@@ -2591,7 +2762,7 @@ class Sys_var_gtid_executed : Sys_var_charptr_func {
   Sys_var_gtid_executed(const char *name_arg, const char *comment_arg)
       : Sys_var_charptr_func(name_arg, comment_arg, GLOBAL) {}
 
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     DBUG_TRACE;
     global_sid_lock->wrlock();
     const Gtid_set *gs = gtid_state->get_executed_gtids();
@@ -2615,9 +2786,9 @@ class Sys_var_system_time_zone : Sys_var_charptr_func {
     is_os_charset = true;
   }
 
-  const uchar *global_value_ptr(THD *, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *, std::string_view) override {
     DBUG_TRACE;
-    time_t current_time = my_time(0);
+    time_t current_time = time(nullptr);
     DBUG_EXECUTE_IF("set_cet_before_dst", {
       // 1616893190 => Sunday March 28, 2021 01:59:50 (am) (CET)
       current_time = 1616893190;
@@ -2660,12 +2831,12 @@ class Sys_var_gtid_purged : public sys_var {
 
   bool global_update(THD *thd, set_var *var) override;
 
-  void global_save_default(THD *, set_var *var) override {
+  void global_save_default(THD *, set_var *) override {
     /* gtid_purged does not have default value */
-    my_error(ER_NO_DEFAULT, MYF(0), var->var->name.str);
+    my_error(ER_NO_DEFAULT, MYF(0), name.str);
   }
-  void saved_value_to_string(THD *, set_var *var, char *) override {
-    my_error(ER_NO_DEFAULT, MYF(0), var->var->name.str);
+  void saved_value_to_string(THD *, set_var *, char *) override {
+    my_error(ER_NO_DEFAULT, MYF(0), name.str);
   }
 
   bool do_check(THD *thd, set_var *var) override {
@@ -2690,7 +2861,7 @@ class Sys_var_gtid_purged : public sys_var {
     return type != STRING_RESULT;
   }
 
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     DBUG_TRACE;
     const Gtid_set *gs;
     global_sid_lock->wrlock();
@@ -2714,9 +2885,16 @@ class Sys_var_gtid_purged : public sys_var {
     return (uchar *)buf;
   }
 
-  const uchar *session_value_ptr(THD *, THD *, LEX_STRING *) override {
+  const uchar *session_value_ptr(THD *, THD *, std::string_view) override {
     assert(false);
     return nullptr;
+  }
+
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
   }
 };
 
@@ -2727,7 +2905,7 @@ class Sys_var_gtid_owned : Sys_var_charptr_func {
 
  public:
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *) override {
+                                 std::string_view) override {
     DBUG_TRACE;
     char *buf = nullptr;
     bool remote = (target_thd != running_thd);
@@ -2763,7 +2941,7 @@ class Sys_var_gtid_owned : Sys_var_charptr_func {
     return (uchar *)buf;
   }
 
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *) override {
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
     DBUG_TRACE;
     const Owned_gtids *owned_gtids = gtid_state->get_owned_gtids();
     global_sid_lock->wrlock();
@@ -2817,6 +2995,114 @@ class Sys_var_binlog_encryption : public Sys_var_bool {
       : Sys_var_bool(name_arg, comment, flag_args | PERSIST_AS_READ_ONLY, off,
                      size, getopt, def_val, lock, binlog_status_arg,
                      on_check_func) {}
+  bool global_update(THD *thd, set_var *var) override;
+};
+
+class Sys_var_errors_set : public sys_var {
+ public:
+  Sys_var_errors_set(
+      const char *name_arg, const char *comment, int flag_args, ptrdiff_t off,
+      size_t size MY_ATTRIBUTE((unused)), CMD_LINE getopt,
+      enum charset_enum is_os_charset_arg, PolyLock *lock = nullptr,
+      enum binlog_status_enum binlog_status_arg = VARIABLE_NOT_IN_BINLOG,
+      on_check_function on_check_func = nullptr,
+      on_update_function on_update_func = nullptr,
+      const char *substitute = nullptr, int parse_flag = PARSE_NORMAL)
+      : sys_var(&all_sys_vars, name_arg, comment, flag_args, off, getopt.id,
+                getopt.arg_type, SHOW_CHAR, 0, lock, binlog_status_arg,
+                on_check_func, on_update_func, substitute, parse_flag) {
+    is_os_charset = is_os_charset_arg == IN_FS_CHARSET;
+    assert(size == sizeof(Query_errors_set));
+    static_cast<Query_errors_set *>(option.value)->clear_all();
+  }
+
+  void saved_value_to_string(THD *, set_var *var, char *dest) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val_str = var->value->val_str(&str);
+      strncpy(dest, val_str->ptr(), val_str->length());
+    }
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val_str = var->value->val_str(&str);
+      dest->copy(val_str->ptr(), val_str->length(), system_charset_info);
+    }
+  }
+  bool check_update_type(Item_result type) override {
+    return type != STRING_RESULT;
+  }
+  bool do_check(THD *, set_var *var) override {
+    String str;
+    String *val = var->value->val_str(&str);
+    return !Query_errors_set::check(val);
+  }
+  void session_save_default(THD *thd, set_var *) override {
+    ((Query_errors_set *)session_var_ptr(thd))->clear_all();
+  }
+  void global_save_default(THD *, set_var *) override {
+    ((Query_errors_set *)global_var_ptr())->clear_all();
+  }
+  bool session_update(THD *thd, set_var *var) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val = var->value->val_str(&str);
+      return !((Query_errors_set *)session_var_ptr(thd))->set_codes(val);
+    }
+    return false;
+  }
+  bool global_update(THD *, set_var *var) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val = var->value->val_str(&str);
+      return !((Query_errors_set *)global_var_ptr())->set_codes(val);
+    }
+    return false;
+  }
+  const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
+                                 std::string_view) override {
+    char buf[Query_errors_set::MAX_TEXT_LENGTH + 1];
+    ((Query_errors_set *)session_var_ptr(target_thd))->to_string(buf);
+    char *ret = running_thd->mem_strdup(buf);
+    return (uchar *)ret;
+  }
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
+    char buf[Query_errors_set::MAX_TEXT_LENGTH + 1];
+    ((Query_errors_set *)global_var_ptr())->to_string(buf);
+    char *ret = thd->mem_strdup(buf);
+    return (uchar *)ret;
+  }
+};
+
+extern std::size_t buffered_error_log_size;
+
+/**
+  Class for @@global.replica_enable_event.
+*/
+class Sys_var_replica_enable_event : Sys_var_charptr_func {
+ public:
+  Sys_var_replica_enable_event(const char *name_arg, const char *comment_arg)
+      : Sys_var_charptr_func(name_arg, comment_arg, GLOBAL) {}
+
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
+    std::string value;
+    Rpl_event_ctx::get_instance().get_events_wild_list(value);
+    return reinterpret_cast<uchar *>(
+        thd->strmake(value.c_str(), value.length()));
+  }
+};
+
+class Sys_var_enum_default_table_encryption : public Sys_var_enum {
+ public:
+  Sys_var_enum_default_table_encryption(
+      const char *name_arg, const char *comment, int flag_args, ptrdiff_t off,
+      size_t size, CMD_LINE getopt, const char *values[], uint def_val,
+      PolyLock *lock, enum binlog_status_enum binlog_status_arg,
+      on_check_function on_check_func = 0)
+      : Sys_var_enum(name_arg, comment, flag_args, off, size, getopt, values,
+                     def_val, lock, binlog_status_arg, on_check_func, nullptr) {
+  }
   bool global_update(THD *thd, set_var *var) override;
 };
 

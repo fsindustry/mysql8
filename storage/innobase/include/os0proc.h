@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2021, Oracle and/or its affiliates.
+Copyright (c) 1995, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -47,7 +47,7 @@ extern std::atomic<ulint> os_total_large_mem_allocated;
 extern bool os_use_large_pages;
 
 /** Large page size. This may be a boot-time option on some platforms */
-extern uint os_large_page_size;
+extern ulint os_large_page_size;
 
 /** Converts the current process id to a number.
 @return process id as a number */

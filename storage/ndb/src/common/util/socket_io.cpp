@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,12 +22,12 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include <ndb_global.h>
+#include "ndb_global.h"
 
-#include <portlib/NdbTCP.h>
-#include <portlib/NdbTick.h>
-#include <util/socket_io.h>
-#include <util/BaseString.hpp>
+#include "portlib/ndb_socket_poller.h"
+#include "portlib/NdbTick.h"
+#include "util/socket_io.h"
+#include "util/BaseString.hpp"
 
 static inline
 int
@@ -41,8 +41,7 @@ poll_socket(ndb_socket_t socket, bool read, bool write,
   if (timeout_millis <= 0)
     return 0; // Timeout occurred
 
-  const int res =
-    ndb_poll(socket, read, write, false, timeout_millis);
+  const int res = ndb_poll(socket, read, write, timeout_millis);
 
   // Calculate elapsed time in this function
   const NDB_TICKS now = NdbTick_getCurrentTicks();
@@ -55,9 +54,8 @@ poll_socket(ndb_socket_t socket, bool read, bool write,
 }
 
 
-extern "C"
 int
-read_socket(NDB_SOCKET_TYPE socket, int timeout_millis, 
+read_socket(ndb_socket_t socket, int timeout_millis,
 	    char * buf, int buflen){
   if(buflen < 1)
     return 0;
@@ -71,9 +69,8 @@ read_socket(NDB_SOCKET_TYPE socket, int timeout_millis,
   return (int)ndb_recv(socket, &buf[0], buflen, 0);
 }
 
-extern "C"
 int
-readln_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
+readln_socket(ndb_socket_t socket, int timeout_millis, int *time,
 	      char * buf, int buflen, NdbMutex *mutex){
   if(buflen <= 1)
     return 0;
@@ -163,9 +160,8 @@ readln_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
   return -1;
 }
 
-extern "C"
 int
-write_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
+write_socket(ndb_socket_t socket, int timeout_millis, int *time,
 	     const char buf[], int len){
 
   if (poll_socket(socket, false, true, timeout_millis, time) != 1)

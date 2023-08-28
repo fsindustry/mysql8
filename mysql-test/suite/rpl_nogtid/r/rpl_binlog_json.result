@@ -5,7 +5,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 CREATE TABLE tab1 (json_col1 JSON);
 INSERT INTO tab1 (json_col1) VALUES ('{"key": "value", "key2": [1, 2, 3]}');
@@ -110,6 +110,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`tab1`
@@ -134,6 +135,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`tab1`
@@ -160,6 +162,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`tab1`
@@ -186,6 +189,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
 ### UPDATE `test`.`tab1`
@@ -212,6 +216,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`tab1`
@@ -236,6 +241,7 @@ BEGIN
 /*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`tab1` mapped to number #
+# has_generated_invisible_primary_key=0
 # at #
 # # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
 ### DELETE FROM `test`.`tab1`

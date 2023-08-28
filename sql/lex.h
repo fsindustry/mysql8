@@ -1,7 +1,7 @@
 #ifndef LEX_INCLUDED
 #define LEX_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,6 +47,8 @@
 #define SYM_HK(T, A) STRING_WITH_LEN(T), SYM_OR_NULL(A), SG_HINTABLE_KEYWORDS
 #define SYM_H(T, A) STRING_WITH_LEN(T), SYM_OR_NULL(A), SG_HINTS
 
+#define SYM_PERCONA(T, A) SYM(T, A)
+
 /*
   Symbols are broken into separated arrays to allow field names with
   same name as functions.
@@ -83,9 +85,7 @@ static const SYMBOL symbols[] = {
     {SYM("AGGREGATE", AGGREGATE_SYM)},
     {SYM("ALL", ALL)},
     {SYM("ALGORITHM", ALGORITHM_SYM)},
-    {SYM("ALTER", ALTER)},
     {SYM("ALWAYS", ALWAYS_SYM)},
-    {SYM("ANALYZE", ANALYZE_SYM)},
     {SYM("AND", AND_SYM)},
     {SYM("ANY", ANY_SYM)},
     {SYM("ARRAY", ARRAY_SYM)},
@@ -115,10 +115,10 @@ static const SYMBOL symbols[] = {
     {SYM("BOTH", BOTH)},
     {SYM("BTREE", BTREE_SYM)},
     {SYM("BUCKETS", BUCKETS_SYM)},
+    {SYM("BULK", BULK_SYM)},
     {SYM("BY", BY)},
     {SYM("BYTE", BYTE_SYM)},
     {SYM("CACHE", CACHE_SYM)},
-    {SYM("CALL", CALL_SYM)},
     {SYM("CASCADE", CASCADE)},
     {SYM("CASCADED", CASCADED)},
     {SYM("CASE", CASE_SYM)},
@@ -131,13 +131,14 @@ static const SYMBOL symbols[] = {
     {SYM("CHAR", CHAR_SYM)},
     {SYM("CHARACTER", CHAR_SYM)},
     {SYM("CHARSET", CHARSET)},
-    {SYM("CHECK", CHECK_SYM)},
     {SYM("CHECKSUM", CHECKSUM_SYM)},
     {SYM("CIPHER", CIPHER_SYM)},
     {SYM("CLASS_ORIGIN", CLASS_ORIGIN_SYM)},
     {SYM("CLIENT", CLIENT_SYM)},
+    {SYM_PERCONA("CLIENT_STATISTICS", CLIENT_STATS_SYM)},
     {SYM("CLONE", CLONE_SYM)},
     {SYM("CLOSE", CLOSE_SYM)},
+    {SYM_PERCONA("CLUSTERING", CLUSTERING_SYM)},
     {SYM("COALESCE", COALESCE)},
     {SYM("CODE", CODE_SYM)},
     {SYM("COLLATE", COLLATE_SYM)},
@@ -154,6 +155,7 @@ static const SYMBOL symbols[] = {
     {SYM("COMPONENT", COMPONENT_SYM)},
     {SYM("COMPRESSION", COMPRESSION_SYM)},
     {SYM("COMPRESSED", COMPRESSED_SYM)},
+    {SYM_PERCONA("COMPRESSION_DICTIONARY", COMPRESSION_DICTIONARY_SYM)},
     {SYM("ENCRYPTION", ENCRYPTION_SYM)},
     {SYM("CONCURRENT", CONCURRENT)},
     {SYM("CONDITION", CONDITION_SYM)},
@@ -168,7 +170,6 @@ static const SYMBOL symbols[] = {
     {SYM("CONTINUE", CONTINUE_SYM)},
     {SYM("CONVERT", CONVERT_SYM)},
     {SYM("CPU", CPU_SYM)},
-    {SYM("CREATE", CREATE)},
     {SYM("CROSS", CROSS)},
     {SYM("CUBE", CUBE_SYM)},
     {SYM("CUME_DIST", CUME_DIST_SYM)},
@@ -221,6 +222,7 @@ static const SYMBOL symbols[] = {
     {SYM("DUPLICATE", DUPLICATE_SYM)},
     {SYM("DYNAMIC", DYNAMIC_SYM)},
     {SYM("EACH", EACH_SYM)},
+    {SYM_PERCONA("EFFECTIVE", EFFECTIVE_SYM)},
     {SYM("ELSE", ELSE)},
     {SYM("ELSEIF", ELSEIF_SYM)},
     {SYM("EMPTY", EMPTY_SYM)},
@@ -290,6 +292,7 @@ static const SYMBOL symbols[] = {
     {SYM("GET_MASTER_PUBLIC_KEY", GET_MASTER_PUBLIC_KEY_SYM)},
     {SYM("GET_SOURCE_PUBLIC_KEY", GET_SOURCE_PUBLIC_KEY_SYM)},
     {SYM("GET", GET_SYM)},
+    {SYM("GENERATE", GENERATE_SYM)},
     {SYM("GENERATED", GENERATED)},
     {SYM("GLOBAL", GLOBAL_SYM)},
     {SYM("GRANT", GRANT)},
@@ -319,8 +322,9 @@ static const SYMBOL symbols[] = {
     {SYM("IN", IN_SYM)},
     {SYM("INACTIVE", INACTIVE_SYM)},
     {SYM("INDEX", INDEX_SYM)},
+    {SYM_PERCONA("INDEX_STATISTICS", INDEX_STATS_SYM)},
     {SYM("INDEXES", INDEXES)},
-    {SYM("INFILE", INFILE)},
+    {SYM("INFILE", INFILE_SYM)},
     {SYM("INITIAL", INITIAL_SYM)},
     {SYM("INITIAL_SIZE", INITIAL_SIZE_SYM)},
     {SYM("INITIATE", INITIATE_SYM)},
@@ -337,6 +341,7 @@ static const SYMBOL symbols[] = {
     {SYM("INT4", INT_SYM)},
     {SYM("INT8", BIGINT_SYM)},
     {SYM("INTEGER", INT_SYM)},
+    {SYM("INTERSECT", INTERSECT_SYM)},
     {SYM("INTERVAL", INTERVAL_SYM)},
     {SYM("INTO", INTO)},
     {SYM("IO", IO_SYM)},
@@ -377,7 +382,6 @@ static const SYMBOL symbols[] = {
     {SYM("LINES", LINES)},
     {SYM("LINESTRING", LINESTRING_SYM)},
     {SYM("LIST", LIST_SYM)},
-    {SYM("LOAD", LOAD)},
     {SYM("LOCAL", LOCAL_SYM)},
     {SYM("LOCALTIME", NOW_SYM)},
     {SYM("LOCALTIMESTAMP", NOW_SYM)},
@@ -486,7 +490,6 @@ static const SYMBOL symbols[] = {
     {SYM("ONE", ONE_SYM)},
     {SYM("ONLY", ONLY_SYM)},
     {SYM("OPEN", OPEN_SYM)},
-    {SYM("OPTIMIZE", OPTIMIZE)},
     {SYM("OPTIMIZER_COSTS", OPTIMIZER_COSTS_SYM)},
     {SYM("OPTIONS", OPTIONS_SYM)},
     {SYM("OPTION", OPTION)},
@@ -634,6 +637,7 @@ static const SYMBOL symbols[] = {
     {SYM("SERIAL", SERIAL_SYM)},
     {SYM("SERIALIZABLE", SERIALIZABLE_SYM)},
     {SYM("SESSION", SESSION_SYM)},
+    {SYM_PERCONA("SEQUENCE_TABLE", SEQUENCE_TABLE_SYM)},
     {SYM("SERVER", SERVER_SYM)},
     {SYM("SET", SET_SYM)},
     {SYM("SHARE", SHARE_SYM)},
@@ -733,6 +737,7 @@ static const SYMBOL symbols[] = {
     {SYM("TABLES", TABLES)},
     {SYM("TABLESPACE", TABLESPACE_SYM)},
     {SYM("TABLE_CHECKSUM", TABLE_CHECKSUM_SYM)},
+    {SYM_PERCONA("TABLE_STATISTICS", TABLE_STATS_SYM)},
     {SYM("TEMPORARY", TEMPORARY)},
     {SYM("TEMPTABLE", TEMPTABLE_SYM)},
     {SYM("TERMINATED", TERMINATED)},
@@ -740,6 +745,7 @@ static const SYMBOL symbols[] = {
     {SYM("THAN", THAN_SYM)},
     {SYM("THEN", THEN_SYM)},
     {SYM("THREAD_PRIORITY", THREAD_PRIORITY_SYM)},
+    {SYM_PERCONA("THREAD_STATISTICS", THREAD_STATS_SYM)},
     {SYM("TIES", TIES_SYM)},
     {SYM("TIME", TIME_SYM)},
     {SYM("TIMESTAMP", TIMESTAMP_SYM)},
@@ -774,10 +780,12 @@ static const SYMBOL symbols[] = {
     {SYM("UNSIGNED", UNSIGNED_SYM)},
     {SYM("UNTIL", UNTIL_SYM)},
     {SYM("UPGRADE", UPGRADE_SYM)},
+    {SYM("URL", URL_SYM)},
     {SYM("USAGE", USAGE)},
     {SYM("USE", USE_SYM)},
     {SYM("USER", USER)},
     {SYM("USER_RESOURCES", RESOURCES)},
+    {SYM_PERCONA("USER_STATISTICS", USER_STATS_SYM)},
     {SYM("USE_FRM", USE_FRM)},
     {SYM("USING", USING)},
     {SYM("UTC_DATE", UTC_DATE_SYM)},
@@ -826,6 +834,13 @@ static const SYMBOL symbols[] = {
     {SYM_HK("REPLACE", REPLACE_SYM)},
     {SYM_HK("SELECT", SELECT_SYM)},
     {SYM_HK("UPDATE", UPDATE_SYM)},
+    {SYM_HK("OPTIMIZE", OPTIMIZE)},
+    {SYM_HK("CALL", CALL_SYM)},
+    {SYM_HK("ALTER", ALTER)},
+    {SYM_HK("ANALYZE", ANALYZE_SYM)},
+    {SYM_HK("CHECK", CHECK_SYM)},
+    {SYM_HK("LOAD", LOAD)},
+    {SYM_HK("CREATE", CREATE)},
     /*
      Insert new function definitions after that commentary (by alphabetical
      order)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -65,7 +65,7 @@ struct PFS_single_stat {
     m_max = 0;
   }
 
-  inline void reset(void) {
+  inline void reset() {
     m_count = 0;
     m_sum = 0;
     m_min = ULLONG_MAX;
@@ -166,7 +166,7 @@ struct PFS_byte_stat : public PFS_single_stat {
 
   PFS_byte_stat() { reset(); }
 
-  inline void reset(void) {
+  inline void reset() {
     PFS_single_stat::reset();
     m_bytes = 0;
   }
@@ -191,7 +191,7 @@ struct PFS_mutex_stat {
 #endif
   }
 
-  inline void reset(void) {
+  inline void reset() {
     m_wait_stat.reset();
 #ifdef PFS_LATER
     m_lock_stat.reset();
@@ -224,7 +224,7 @@ struct PFS_rwlock_stat {
 #endif
   }
 
-  inline void reset(void) {
+  inline void reset() {
     m_wait_stat.reset();
 #ifdef PFS_LATER
     m_read_lock_stat.reset();
@@ -258,7 +258,7 @@ struct PFS_cond_stat {
 #endif
   }
 
-  inline void reset(void) {
+  inline void reset() {
     m_wait_stat.reset();
 #ifdef PFS_LATER
     m_signal_count = 0;
@@ -276,7 +276,7 @@ struct PFS_file_io_stat {
   /** Miscellaneous statistics */
   PFS_byte_stat m_misc;
 
-  inline void reset(void) {
+  inline void reset() {
     m_read.reset();
     m_write.reset();
     m_misc.reset();
@@ -315,14 +315,14 @@ struct PFS_file_stat {
   }
 
   /** Reset file statistics. */
-  inline void reset(void) { m_io_stat.reset(); }
+  inline void reset() { m_io_stat.reset(); }
 };
 
 /** Statistics for stage usage. */
 struct PFS_stage_stat {
   PFS_single_stat m_timer1_stat;
 
-  inline void reset(void) { m_timer1_stat.reset(); }
+  inline void reset() { m_timer1_stat.reset(); }
 
   inline void aggregate_counted() { m_timer1_stat.aggregate_counted(); }
 
@@ -339,7 +339,7 @@ struct PFS_stage_stat {
 struct PFS_sp_stat {
   PFS_single_stat m_timer1_stat;
 
-  inline void reset(void) { m_timer1_stat.reset(); }
+  inline void reset() { m_timer1_stat.reset(); }
 
   inline void aggregate_counted() { m_timer1_stat.aggregate_counted(); }
 
@@ -356,7 +356,7 @@ struct PFS_sp_stat {
 struct PFS_prepared_stmt_stat {
   PFS_single_stat m_timer1_stat;
 
-  inline void reset(void) { m_timer1_stat.reset(); }
+  inline void reset() { m_timer1_stat.reset(); }
 
   inline void aggregate_counted() { m_timer1_stat.aggregate_counted(); }
 
@@ -393,6 +393,14 @@ struct PFS_statement_stat {
   ulonglong m_sort_scan{0};
   ulonglong m_no_index_used{0};
   ulonglong m_no_good_index_used{0};
+  /**
+    CPU TIME.
+    Expressed in STORAGE units (nanoseconds).
+  */
+  ulonglong m_cpu_time{0};
+  ulonglong m_max_controlled_memory{0};
+  ulonglong m_max_total_memory{0};
+  ulonglong m_count_secondary{0};
 
   void reset() { new (this) PFS_statement_stat(); }
 
@@ -400,6 +408,15 @@ struct PFS_statement_stat {
 
   void aggregate_value(ulonglong value) {
     m_timer1_stat.aggregate_value(value);
+  }
+
+  void aggregate_memory_size(size_t controlled_size, size_t total_size) {
+    if (controlled_size > m_max_controlled_memory) {
+      m_max_controlled_memory = controlled_size;
+    }
+    if (total_size > m_max_total_memory) {
+      m_max_total_memory = total_size;
+    }
   }
 
   void aggregate(const PFS_statement_stat *stat) {
@@ -425,6 +442,14 @@ struct PFS_statement_stat {
       m_sort_scan += stat->m_sort_scan;
       m_no_index_used += stat->m_no_index_used;
       m_no_good_index_used += stat->m_no_good_index_used;
+      m_cpu_time += stat->m_cpu_time;
+      if (stat->m_max_controlled_memory > m_max_controlled_memory) {
+        m_max_controlled_memory = stat->m_max_controlled_memory;
+      }
+      if (stat->m_max_total_memory > m_max_total_memory) {
+        m_max_total_memory = stat->m_max_total_memory;
+      }
+      m_count_secondary += stat->m_count_secondary;
     }
   }
 };
@@ -444,11 +469,11 @@ struct PFS_transaction_stat {
     m_release_savepoint_count = 0;
   }
 
-  ulonglong count(void) {
+  ulonglong count() const {
     return (m_read_write_stat.m_count + m_read_only_stat.m_count);
   }
 
-  inline void reset(void) {
+  inline void reset() {
     m_read_write_stat.reset();
     m_read_only_stat.reset();
     m_savepoint_count = 0;
@@ -480,7 +505,7 @@ struct PFS_error_single_stat {
     m_last_seen = 0;
   }
 
-  ulonglong count(void) { return m_count; }
+  ulonglong count() const { return m_count; }
 
   inline void reset() {
     m_count = 0;
@@ -539,7 +564,7 @@ struct PFS_error_stat {
     return &m_stat[error_index];
   }
 
-  ulonglong count(void) {
+  ulonglong count() const {
     ulonglong total = 0;
     for (uint i = 0; i < m_max_errors; i++) {
       total += m_stat[i].count();
@@ -547,7 +572,9 @@ struct PFS_error_stat {
     return total;
   }
 
-  ulonglong count(uint error_index) { return m_stat[error_index].count(); }
+  ulonglong count(uint error_index) const {
+    return m_stat[error_index].count();
+  }
 
   inline void init(PFS_builtin_memory_class *memory_class, size_t max_errors) {
     if (max_errors == 0) {
@@ -609,7 +636,7 @@ struct PFS_error_stat {
       Sizes can be different, for example when aggregating
       per session statistics into global statistics.
     */
-    size_t common_max = std::min(m_max_errors, stat->m_max_errors);
+    const size_t common_max = std::min(m_max_errors, stat->m_max_errors);
     for (uint i = 0; i < common_max; i++) {
       m_stat[i].aggregate(&stat->m_stat[i]);
     }
@@ -630,7 +657,7 @@ struct PFS_table_io_stat {
 
   PFS_table_io_stat() { m_has_data = false; }
 
-  inline void reset(void) {
+  inline void reset() {
     m_has_data = false;
     m_fetch.reset();
     m_insert.reset();
@@ -682,7 +709,7 @@ enum PFS_TL_LOCK_TYPE {
 struct PFS_table_lock_stat {
   PFS_single_stat m_stat[COUNT_PFS_TL_LOCK_TYPE];
 
-  inline void reset(void) {
+  inline void reset() {
     PFS_single_stat *pfs = &m_stat[0];
     PFS_single_stat *pfs_last = &m_stat[COUNT_PFS_TL_LOCK_TYPE];
     for (; pfs < pfs_last; pfs++) {
@@ -723,7 +750,7 @@ struct PFS_table_stat {
   PFS_table_lock_stat m_lock_stat;
 
   /** Reset table I/O statistic. */
-  inline void reset_io(void) {
+  inline void reset_io() {
     PFS_table_io_stat *stat = &m_index_stat[0];
     PFS_table_io_stat *stat_last = &m_index_stat[MAX_INDEXES + 1];
     for (; stat < stat_last; stat++) {
@@ -732,25 +759,23 @@ struct PFS_table_stat {
   }
 
   /** Reset table lock statistic. */
-  inline void reset_lock(void) { m_lock_stat.reset(); }
+  inline void reset_lock() { m_lock_stat.reset(); }
 
   /** Reset table statistic. */
-  inline void reset(void) {
+  inline void reset() {
     reset_io();
     reset_lock();
   }
 
-  inline void fast_reset_io(void) {
+  inline void fast_reset_io() {
     memcpy(&m_index_stat, &g_reset_template.m_index_stat, sizeof(m_index_stat));
   }
 
-  inline void fast_reset_lock(void) {
+  inline void fast_reset_lock() {
     memcpy(&m_lock_stat, &g_reset_template.m_lock_stat, sizeof(m_lock_stat));
   }
 
-  inline void fast_reset(void) {
-    memcpy(this, &g_reset_template, sizeof(*this));
-  }
+  inline void fast_reset() { memcpy(this, &g_reset_template, sizeof(*this)); }
 
   inline void aggregate_io(const PFS_table_stat *stat, uint key_count) {
     PFS_table_io_stat *to_stat;
@@ -818,7 +843,7 @@ struct PFS_socket_io_stat {
   /** Miscellaneous statistics */
   PFS_byte_stat m_misc;
 
-  inline void reset(void) {
+  inline void reset() {
     m_read.reset();
     m_write.reset();
     m_misc.reset();
@@ -851,7 +876,7 @@ struct PFS_socket_stat {
   PFS_socket_io_stat m_io_stat;
 
   /** Reset socket statistics. */
-  inline void reset(void) { m_io_stat.reset(); }
+  inline void reset() { m_io_stat.reset(); }
 };
 
 struct PFS_memory_stat_alloc_delta {
@@ -897,9 +922,9 @@ struct PFS_memory_safe_stat {
   size_t m_alloc_size_capacity;
   size_t m_free_size_capacity;
 
-  void reset(void);
+  void reset();
 
-  void rebase(void);
+  void rebase();
 
   PFS_memory_stat_alloc_delta *count_alloc(size_t size,
                                            PFS_memory_stat_alloc_delta *delta);
@@ -981,9 +1006,174 @@ struct PFS_memory_monitoring_stat {
   ssize_t m_low_size_used;
   ssize_t m_high_size_used;
 
-  void reset(void);
+  void reset();
 
   void normalize(bool global);
+};
+
+struct PFS_all_memory_stat {
+  /** The current memory size allocated. */
+  size_t m_size;
+  /** The maximum memory size allocated, for a sub statement. */
+  size_t m_max_local_size;
+  /** The maximum memory size allocated, for a statement. */
+  size_t m_max_stmt_size;
+  /** The maximum memory size allocated, for this session. */
+  size_t m_max_session_size;
+
+  void reset() {
+    m_size = 0;
+    m_max_local_size = 0;
+    m_max_stmt_size = 0;
+    m_max_session_size = 0;
+  }
+
+  void start_top_statement() {
+    if (m_max_session_size < m_max_local_size) {
+      m_max_session_size = m_max_local_size;
+    }
+    m_max_stmt_size = m_size;
+    m_max_local_size = m_size;
+  }
+
+  void end_top_statement(size_t *stmt_size) {
+    if (m_max_stmt_size < m_max_local_size) {
+      m_max_stmt_size = m_max_local_size;
+    }
+    *stmt_size = m_max_stmt_size;
+  }
+
+  void start_nested_statement(size_t *local_size_start,
+                              size_t *stmt_size_start) {
+    if (m_max_session_size < m_max_local_size) {
+      m_max_session_size = m_max_local_size;
+    }
+    if (m_max_stmt_size < m_max_local_size) {
+      m_max_stmt_size = m_max_local_size;
+    }
+    *local_size_start = m_size;
+    m_max_local_size = m_size;
+
+    /* PUSH m_max_stmt_size = m_size */
+    *stmt_size_start = m_max_stmt_size;
+    m_max_stmt_size = m_size;
+  }
+
+  void end_nested_statement(size_t local_size_start, size_t stmt_size_start,
+                            size_t *stmt_size) {
+    if (m_max_session_size < m_max_local_size) {
+      m_max_session_size = m_max_local_size;
+    }
+    if (m_max_stmt_size < m_max_local_size) {
+      m_max_stmt_size = m_max_local_size;
+    }
+    if (m_max_stmt_size > local_size_start) {
+      *stmt_size = m_max_stmt_size - local_size_start;
+    } else {
+      *stmt_size = 0;
+    }
+
+    /* POP m_max_stmt_size */
+    m_max_stmt_size = stmt_size_start;
+  }
+
+  void count_alloc(size_t size) {
+    m_size += size;
+    if (m_max_local_size < m_size) {
+      m_max_local_size = m_size;
+    }
+  }
+
+  void count_free(size_t size) {
+    if (m_size >= size) {
+      m_size -= size;
+    } else {
+      /*
+        Thread 1, allocates memory : owner = T1
+        Thread 1 puts the memory in a global cache,
+        but does not use unclaim.
+        Thread 1 disconnects.
+
+        The memory in the cache has owner = T1,
+        pointing to a defunct thread.
+
+        Thread 2 connects,
+        Thread 2 purges the global cache,
+        but does not use claim.
+
+        As a result, it appears that:
+        - T1 'leaks' memory, even when there are no leaks.
+        - T2 frees 'non existent' memory, even when it was allocated.
+
+        Long term fix is to enforce use of:
+        - unclaim in T1
+        - claim in T2,
+        to make sure memory transfers are properly accounted for.
+
+        Short term fix, here, we discover (late) that:
+        - the thread T2 uses more memory that was claimed
+          (because it takes silently ownership of the global cache)
+        - it releases more memory that it is supposed to own.
+
+        The net consumption of T2 is adjusted to 0,
+        as it can not be negative.
+      */
+      m_size = 0;
+    }
+  }
+
+  size_t get_session_size() const { return m_size; }
+
+  size_t get_session_max() const {
+    if (m_max_session_size < m_max_local_size) {
+      return m_max_local_size;
+    }
+    return m_max_session_size;
+  }
+};
+
+struct PFS_session_all_memory_stat {
+  PFS_all_memory_stat m_controlled;
+  PFS_all_memory_stat m_total;
+
+  void reset();
+
+  void start_top_statement() {
+    m_controlled.start_top_statement();
+    m_total.start_top_statement();
+  }
+
+  void end_top_statement(size_t *controlled_size, size_t *total_size) {
+    m_controlled.end_top_statement(controlled_size);
+    m_total.end_top_statement(total_size);
+  }
+
+  void start_nested_statement(size_t *controlled_local_size_start,
+                              size_t *controlled_stmt_size_start,
+                              size_t *total_local_size_start,
+                              size_t *total_stmt_size_start) {
+    m_controlled.start_nested_statement(controlled_local_size_start,
+                                        controlled_stmt_size_start);
+    m_total.start_nested_statement(total_local_size_start,
+                                   total_stmt_size_start);
+  }
+
+  void end_nested_statement(size_t controlled_local_size_start,
+                            size_t controlled_stmt_size_start,
+                            size_t total_local_size_start,
+                            size_t total_stmt_size_start,
+                            size_t *controlled_size, size_t *total_size) {
+    m_controlled.end_nested_statement(controlled_local_size_start,
+                                      controlled_stmt_size_start,
+                                      controlled_size);
+    m_total.end_nested_statement(total_local_size_start, total_stmt_size_start,
+                                 total_size);
+  }
+
+  void count_controlled_alloc(size_t size);
+  void count_uncontrolled_alloc(size_t size);
+  void count_controlled_free(size_t size);
+  void count_uncontrolled_free(size_t size);
 };
 
 void memory_partial_aggregate(PFS_memory_safe_stat *from,
@@ -1034,18 +1224,43 @@ void memory_monitoring_aggregate(const PFS_memory_shared_stat *from,
 
 /** Connections statistics. */
 struct PFS_connection_stat {
-  PFS_connection_stat() : m_current_connections(0), m_total_connections(0) {}
+  PFS_connection_stat()
+      : m_current_connections(0),
+        m_total_connections(0),
+        m_max_session_controlled_memory(0),
+        m_max_session_total_memory(0) {}
 
   ulonglong m_current_connections;
   ulonglong m_total_connections;
+  ulonglong m_max_session_controlled_memory;
+  ulonglong m_max_session_total_memory;
 
-  inline void aggregate_active(ulonglong active) {
+  inline void aggregate_active(ulonglong active, ulonglong controlled_memory,
+                               ulonglong total_memory) {
     m_current_connections += active;
     m_total_connections += active;
+
+    if (m_max_session_controlled_memory < controlled_memory) {
+      m_max_session_controlled_memory = controlled_memory;
+    }
+
+    if (m_max_session_total_memory < total_memory) {
+      m_max_session_total_memory = total_memory;
+    }
   }
 
-  inline void aggregate_disconnected(ulonglong disconnected) {
+  inline void aggregate_disconnected(ulonglong disconnected,
+                                     ulonglong controlled_memory,
+                                     ulonglong total_memory) {
     m_total_connections += disconnected;
+
+    if (m_max_session_controlled_memory < controlled_memory) {
+      m_max_session_controlled_memory = controlled_memory;
+    }
+
+    if (m_max_session_total_memory < total_memory) {
+      m_max_session_total_memory = total_memory;
+    }
   }
 };
 

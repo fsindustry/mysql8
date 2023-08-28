@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -224,8 +224,9 @@ class DukHeap {
     duk_module_shim_init(context(), module_prefixes);
   }
 
-  void prepare(std::string filename,
-               const std::map<std::string, std::string> &session_data) {
+  void prepare(
+      std::string filename,
+      std::map<std::string, std::function<std::string()>> &session_data) {
     auto ctx = context();
     duk_push_global_stash(ctx);
     if (nullptr == shared_.get()) {
@@ -290,7 +291,7 @@ class DukHeap {
   }
 
   void prepare_mysqld_object(
-      const std::map<std::string, std::string> &session_data) {
+      const std::map<std::string, std::function<std::string()>> &session_data) {
     auto ctx = context();
     // mysqld = {
     //   session: {
@@ -303,8 +304,9 @@ class DukHeap {
     duk_push_object(ctx);
 
     // map of string and json-string
-    for (auto &el : session_data) {
-      duk_push_lstring(ctx, el.second.data(), el.second.size());
+    for (const auto &el : session_data) {
+      const std::string val = el.second();
+      duk_push_lstring(ctx, val.data(), val.size());
       duk_json_decode(ctx, -1);
       duk_put_prop_lstring(ctx, -2, el.first.data(), el.first.size());
     }
@@ -404,7 +406,7 @@ class DukHeapPool {
 
   std::unique_ptr<DukHeap> get(
       const std::string &filename, std::vector<std::string> module_prefixes,
-      std::map<std::string, std::string> session_data,
+      std::map<std::string, std::function<std::string()>> session_data,
       std::shared_ptr<MockServerGlobalScope> shared_globals) {
     {
       std::lock_guard<std::mutex> lock(pool_mtx_);
@@ -509,9 +511,9 @@ struct DuktapeStatementReader::Pimpl {
       throw std::runtime_error("expect an object");
     }
 
-    return {0,  // affected_rows
-            get_object_integer_value<uint16_t>(-1, "last_insert_id", 0),
-            0,  // status
+    return {get_object_integer_value<uint32_t>(-1, "affected_rows", 0),
+            get_object_integer_value<uint32_t>(-1, "last_insert_id", 0),
+            get_object_integer_value<uint16_t>(-1, "status", 0),
             get_object_integer_value<uint16_t>(-1, "warning_count", 0)};
   }
 
@@ -581,7 +583,7 @@ struct DuktapeStatementReader::Pimpl {
         duk_enum(ctx, -1, DUK_ENUM_ARRAY_INDICES_ONLY);
         while (duk_next(ctx, -1, 1)) {
           if (duk_is_null(ctx, -1)) {
-            row_values.emplace_back(stdx::make_unexpected());
+            row_values.emplace_back(std::nullopt);
           } else {
             row_values.emplace_back(duk_to_string(ctx, -1));
           }
@@ -779,7 +781,7 @@ static void check_handshake_section(duk_context *ctx) {
 
 DuktapeStatementReader::DuktapeStatementReader(
     std::string filename, std::vector<std::string> module_prefixes,
-    std::map<std::string, std::string> session_data,
+    std::map<std::string, std::function<std::string()>> session_data,
     std::shared_ptr<MockServerGlobalScope> shared_globals)
     : pimpl_{std::make_unique<Pimpl>(DukHeapPool::instance()->get(
           std::move(filename), std::move(module_prefixes), session_data,
@@ -815,7 +817,7 @@ DuktapeStatementReader::server_greeting(bool with_tls) {
       classic_protocol::capabilities::no_schema |
       // compress (not yet)
       classic_protocol::capabilities::odbc |
-      // local_files (never)
+      classic_protocol::capabilities::local_files |
       // ignore_space (client only)
       classic_protocol::capabilities::protocol_41 |
       // interactive (client-only)
@@ -824,13 +826,13 @@ DuktapeStatementReader::server_greeting(bool with_tls) {
       classic_protocol::capabilities::transactions |
       classic_protocol::capabilities::secure_connection |
       // multi_statements (not yet)
-      // multi_results (not yet)
-      // ps_multi_results (not yet)
+      classic_protocol::capabilities::multi_results |
+      classic_protocol::capabilities::ps_multi_results |
       classic_protocol::capabilities::plugin_auth |
       classic_protocol::capabilities::connect_attributes |
-      // client_auth_method_data_varint
+      classic_protocol::capabilities::client_auth_method_data_varint |
       classic_protocol::capabilities::expired_passwords |
-      // session_track (not yet)
+      classic_protocol::capabilities::session_track |
       classic_protocol::capabilities::text_result_with_session_tracking
       // optional_resultset_metadata (not yet)
       // compress_zstd (not yet)
@@ -867,6 +869,8 @@ DuktapeStatementReader::server_greeting(bool with_tls) {
           -1, "status_flags", status_flags);
       character_set = pimpl_->get_object_integer_value<uint8_t>(
           -1, "character_set", character_set);
+      server_capabilities = pimpl_->get_object_integer_value<uint32_t>(
+          -1, "capabilities", server_capabilities.to_ulong());
       auth_method =
           pimpl_->get_object_string_value(-1, "auth_method", auth_method);
       nonce = pimpl_->get_object_string_value(-1, "nonce", nonce);
@@ -932,13 +936,13 @@ stdx::expected<DuktapeStatementReader::handshake_data, ErrorResponse>
 DuktapeStatementReader::handshake() {
   auto *ctx = pimpl_->ctx;
 
-  stdx::expected<ErrorResponse, void> error{stdx::make_unexpected()};
+  std::optional<ErrorResponse> error;
 
-  stdx::expected<std::string, void> username{stdx::make_unexpected()};
-  stdx::expected<std::string, void> password{stdx::make_unexpected()};
+  std::optional<std::string> username;
+  std::optional<std::string> password;
   bool cert_required{false};
-  stdx::expected<std::string, void> cert_issuer{stdx::make_unexpected()};
-  stdx::expected<std::string, void> cert_subject{stdx::make_unexpected()};
+  std::optional<std::string> cert_issuer;
+  std::optional<std::string> cert_subject;
 
   std::error_code ec{};
 

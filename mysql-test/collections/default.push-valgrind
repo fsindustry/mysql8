@@ -12,4 +12,3 @@ perl mysql-test-run.pl --timer --force --parallel=6 --comment=rpl-valgrind --var
 
 # Group Replication
 perl mysql-test-run.pl --timer --force --parallel=6 --comment=group_replication-valgrind --vardir=var-group_replication-valgrind --suite=group_replication
-

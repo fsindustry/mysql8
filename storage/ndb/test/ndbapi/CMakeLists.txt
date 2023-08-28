@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -22,9 +22,10 @@
 
 ADD_SUBDIRECTORY(bank)
 
-INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_ndbapitest.cmake)
 INCLUDE_DIRECTORIES(
   ${CMAKE_SOURCE_DIR}/storage/ndb/include/kernel
+  ${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi
+  ${CMAKE_SOURCE_DIR}/storage/ndb/test/include
 )
 
 NDB_ADD_EXECUTABLE(create_all_tabs create_all_tabs.cpp NDBTEST NDBCLIENT)
@@ -40,6 +41,10 @@ NDB_ADD_EXECUTABLE(testBasicAsynch testBasicAsynch.cpp NDBTEST NDBCLIENT)
 NDB_ADD_EXECUTABLE(testBlobs testBlobs.cpp NDBTEST NDBCLIENT)
 NDB_ADD_EXECUTABLE(testDataBuffers testDataBuffers.cpp NDBTEST NDBCLIENT)
 NDB_ADD_EXECUTABLE(testDict testDict.cpp NDBTEST NDBCLIENT)
+MY_CHECK_CXX_COMPILER_WARNING("-Wformat-overflow" HAS_WARN_FLAG)
+IF(HAS_WARN_FLAG)
+  ADD_COMPILE_FLAGS(testDict.cpp COMPILE_FLAGS "${HAS_WARN_FLAG}")
+ENDIF()
 NDB_ADD_EXECUTABLE(testIndex testIndex.cpp NDBTEST NDBCLIENT)
 NDB_ADD_EXECUTABLE(testMgm testMgm.cpp NDBTEST NDBCLIENT)
 NDB_ADD_EXECUTABLE(testNdbApi testNdbApi.cpp NDBTEST NDBCLIENT)

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -125,7 +125,8 @@ class Database_rewrite {
       unsigned char **m_buffer{nullptr};
 
      public:
-      Buffer_realloc_manager(unsigned char **buffer) : m_buffer{buffer} {}
+      explicit Buffer_realloc_manager(unsigned char **buffer)
+          : m_buffer{buffer} {}
       ~Buffer_realloc_manager() {
         if (m_buffer != nullptr) free(*m_buffer);
       }
@@ -209,7 +210,7 @@ class Database_rewrite {
     }
 
    public:
-    Transaction_payload_content_rewriter(Database_rewrite &rewriter)
+    explicit Transaction_payload_content_rewriter(Database_rewrite &rewriter)
         : m_event_rewriter(rewriter) {}
 
     /**
@@ -312,7 +313,7 @@ class Database_rewrite {
     database name that is to be rewritten into the target one.
 
     The key of the map is the "from" database name. The value of the
-    map is is the "to" database name that we are rewritting the
+    map is is the "to" database name that we are rewriting the
     name into.
    */
   std::map<std::string, std::string> m_dict;
@@ -563,7 +564,7 @@ class Database_rewrite {
   /**
     Shall unregister a rewrite rule for a given database. If the name is
     not registered, then no action is taken and no error reported.
-    The name of database to be used in this invokation is the original
+    The name of database to be used in this invocation is the original
     database name.
 
     @param from the original database name used when the rewrite rule
@@ -666,10 +667,10 @@ char server_version[SERVER_VERSION_LENGTH];
 ulong filter_server_id = 0;
 
 /*
-  This strucure is used to store the event and the log postion of the events
-  which is later used to print the event details from correct log postions.
+  This structure is used to store the event and the log position of the events
+  which is later used to print the event details from correct log positions.
   The Log_event *event is used to store the pointer to the current event and
-  the event_pos is used to store the current event log postion.
+  the event_pos is used to store the current event log position.
 */
 struct buff_event_info {
   Log_event *event;
@@ -681,7 +682,7 @@ struct buff_event_info {
   User_var_log_events, and Rand_log_events, followed by one
   Query_log_event. If statements are filtered out, the filter has to be
   checked for the Query_log_event. So we have to buffer the Intvar,
-  User_var, and Rand events and their corresponding log postions until we see
+  User_var, and Rand events and their corresponding log positions until we see
   the Query_log_event. This dynamic array buff_ev is used to buffer a structure
   which stores such an event and the corresponding log position.
 */
@@ -755,7 +756,7 @@ static ulonglong start_position, stop_position;
 #define stop_position_mot ((my_off_t)stop_position)
 
 static char *start_datetime_str, *stop_datetime_str;
-static my_time_t start_datetime = 0, stop_datetime = MY_TIME_T_MAX;
+static my_time_t start_datetime = 0, stop_datetime = MYTIME_MAX_VALUE;
 static ulonglong rec_count = 0;
 static MYSQL *mysql = nullptr;
 static char *dirname_for_local_load = nullptr;
@@ -847,6 +848,11 @@ class Load_log_processor {
           -1)
         return res;
     }
+    char errbuf[MYSYS_STRERROR_SIZE];
+    error(
+        "create_unique_file: "
+        "my_create failed on filename %s, my_errno %d (%s)",
+        filename, my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     return -1;
   }
 
@@ -1363,8 +1369,8 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
   IO_CACHE *const head = &print_event_info->head_cache;
 
   /*
-    Format events are not concerned by --offset and such, we always need to
-    read them to be able to process the wanted events.
+    Format and Start encryptions events are not concerned by --offset and such,
+    we always need to read them to be able to process the wanted events.
   */
   if (((rec_count >= offset) &&
        ((my_time_t)(ev->common_header->when.tv_sec) >= start_datetime)) ||
@@ -1482,6 +1488,7 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
         if (head->error == -1) goto err;
         break;
       }
+        // fallthrough
 
       case binary_log::INTVAR_EVENT: {
         buff_event.event = ev;
@@ -1729,6 +1736,8 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
       case binary_log::ANONYMOUS_GTID_LOG_EVENT:
       case binary_log::GTID_LOG_EVENT: {
         seen_gtid = true;
+        print_event_info->immediate_server_version =
+            down_cast<Gtid_log_event *>(ev)->immediate_server_version;
         if (print_event_info->skipped_event_in_transaction == true)
           fprintf(result_file, "COMMIT /* added by mysqlbinlog */%s\n",
                   print_event_info->delimiter);
@@ -1815,14 +1824,14 @@ static struct my_option my_long_options[] = {
      &rewrite, &rewrite, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr,
      0, nullptr},
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit.", 0, 0, 0,
-     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
+    {"debug", '#', "This is a non-debug version. Catch this and exit.", nullptr,
+     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"debug-check", OPT_DEBUG_CHECK,
-     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
-     NO_ARG, 0, 0, 0, 0, 0, 0},
+     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
+     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"debug-info", OPT_DEBUG_INFO,
-     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
-     NO_ARG, 0, 0, 0, 0, 0, 0},
+     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
+     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #else
     {"debug", '#', "Output debug log.", &default_dbug_option,
      &default_dbug_option, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0,
@@ -1958,7 +1967,7 @@ static struct my_option my_long_options[] = {
      &start_position, &start_position, nullptr, GET_ULL, REQUIRED_ARG,
      BIN_LOG_HEADER_SIZE, BIN_LOG_HEADER_SIZE,
      /* COM_BINLOG_DUMP accepts only 4 bytes for the position */
-     (ulonglong)(~(uint32)0), nullptr, 0, nullptr},
+     (ulonglong)(~(uint64)0), nullptr, 0, nullptr},
     {"stop-datetime", OPT_STOP_DATETIME,
      "Stop reading the binlog at first event having a datetime equal or "
      "posterior to the argument; the argument must be a date and time "
@@ -2162,7 +2171,7 @@ the mysql command line client.\n\n");
 static my_time_t convert_str_to_timestamp(const char *str) {
   MYSQL_TIME_STATUS status;
   MYSQL_TIME l_time;
-  long dummy_my_timezone;
+  my_time_t dummy_my_timezone;
   bool dummy_in_dst_time_gap;
   /* We require a total specification (date AND time) */
   if (str_to_datetime(str, strlen(str), &l_time, 0, &status) ||
@@ -2285,6 +2294,10 @@ extern "C" bool get_one_option(int optid, const struct my_option *opt,
       warning(CLIENT_WARN_DEPRECATED_MSG("--stop-never-slave-server-id",
                                          "--connection-server-id"));
       break;
+    case 'C':
+      warning(
+          CLIENT_WARN_DEPRECATED_MSG("--compress", "--compression-algorithms"));
+      break;
   }
   if (tty_password) pass = get_tty_password(NullS);
 
@@ -2363,6 +2376,10 @@ static Exit_status safe_connect() {
     error("Failed on connect: %s", mysql_error(mysql));
     return ERROR_STOP;
   }
+
+  if (ssl_client_check_post_connect_ssl_setup(
+          mysql, [](const char *err) { error("%s", err); }))
+    return ERROR_STOP;
   mysql->reconnect = true;
   return OK_CONTINUE;
 }
@@ -2422,6 +2439,7 @@ static Exit_status dump_multiple_logs(int argc, char **argv) {
   print_event_info.skip_gtids = opt_skip_gtids;
   print_event_info.print_table_metadata = opt_print_table_metadata;
   print_event_info.require_row_format = opt_require_row_format;
+  print_event_info.immediate_server_version = UNDEFINED_SERVER_VERSION;
 
   // Dump all logs.
   my_off_t save_stop_position = stop_position;
@@ -2575,7 +2593,7 @@ static void fix_gtid_set(MYSQL_RPL *rpl, uchar *packet_gtid_set) {
 class Destroy_log_event_guard {
  public:
   Log_event **ev_del;
-  Destroy_log_event_guard(Log_event **ev_arg) { ev_del = ev_arg; }
+  explicit Destroy_log_event_guard(Log_event **ev_arg) { ev_del = ev_arg; }
   ~Destroy_log_event_guard() {
     if (*ev_del != nullptr) delete *ev_del;
   }
@@ -2617,7 +2635,7 @@ static Exit_status dump_remote_log_entries(PRINT_EVENT_INFO *print_event_info,
   if ((retval = check_master_version()) != OK_CONTINUE) return retval;
 
   /*
-    Fake a server ID to log continously. This will show as a
+    Fake a server ID to log continuously. This will show as a
     slave on the mysql server.
   */
   if (to_last_remote_log && stop_never) {
@@ -2875,15 +2893,48 @@ class Mysqlbinlog_event_data_istream : public Binlog_event_data_istream {
   bool read_event_data(unsigned char **buffer, unsigned int *length,
                        ALLOCATOR *allocator, bool verify_checksum,
                        enum_binlog_checksum_alg checksum_alg) {
-    return Binlog_event_data_istream::read_event_data(
-               buffer, length, allocator, verify_checksum, checksum_alg) ||
-           rewrite_db(buffer, length);
+    bool error = Binlog_event_data_istream::read_event_data(
+        buffer, length, allocator, verify_checksum, checksum_alg);
+
+    if (m_binlog_5_7_encrypted &&
+        m_error->get_type() != Binlog_read_error::READ_EOF) {
+      if (!force_opt) {
+        m_error->set_type(Binlog_read_error::ERROR_DECRYPTING_FILE);
+      } else {
+        m_error->set_type(Binlog_read_error::SUCCESS);
+        // We will be creating Unknown_log_events with events marked as
+        // encrypted
+      }
+      if (*buffer != nullptr) {
+        allocator->deallocate(*buffer);
+        *buffer = nullptr;
+      }
+      return true;
+    }
+
+    if (!error && (*buffer)[EVENT_TYPE_OFFSET] ==
+                      binary_log::START_5_7_ENCRYPTION_EVENT) {
+      m_binlog_5_7_encrypted = true;
+    }
+
+    return error || rewrite_db(buffer, length);
   }
+
+  bool start_decryption(binary_log::Start_encryption_event *see
+                        [[maybe_unused]]) {
+    m_binlog_5_7_encrypted = true;
+    return false;
+  }
+
+  void reset_crypto() noexcept { m_binlog_5_7_encrypted = false; }
+
+  bool is_5_7_binlog_encrypted() { return m_binlog_5_7_encrypted; }
 
   void set_multi_binlog_magic() { m_multi_binlog_magic = true; }
 
  private:
   bool m_multi_binlog_magic = false;
+  bool m_binlog_5_7_encrypted = false;
 
   bool rewrite_db(unsigned char **buffer, unsigned int *length) {
     bool ret{false};
@@ -3044,6 +3095,19 @@ static Exit_status dump_local_log_entries(PRINT_EVENT_INFO *print_event_info,
     my_off_t old_off = mysqlbinlog_file_reader.position();
 
     Log_event *ev = mysqlbinlog_file_reader.read_event_object();
+    if (mysqlbinlog_file_reader.event_data_istream()
+            ->is_5_7_binlog_encrypted() &&
+        mysqlbinlog_file_reader.get_error_type() !=
+            Binlog_read_error::READ_EOF &&
+        !ev) {
+      if (force_opt) {
+        const char empty_header[LOG_EVENT_MINIMAL_HEADER_LEN] = {0};
+        Unknown_log_event *unknown_event = new Unknown_log_event(
+            empty_header, mysqlbinlog_file_reader.format_description_event());
+        unknown_event->what = Unknown_log_event::kind::ENCRYPTED_WITH_5_7;
+        ev = unknown_event;
+      }
+    }
     if (ev == nullptr) {
       /*
         if binlog wasn't closed properly ("in use" flag is set) don't complain
@@ -3105,7 +3169,15 @@ static int args_post_process(void) {
         "BINLOG-DUMP-NON-GTIDS");
     return ERROR_STOP;
   }
-
+  if (opt_remote_proto != BINLOG_LOCAL &&
+      start_position > (ulonglong)(~(uint32)0)) {
+    error(
+        "The option --start-position cannot be used with values greater than 4 "
+        "GiB (4294967854), "
+        "when one of read-from-remote-server or read-from-remote-source "
+        "is used.");
+    return ERROR_STOP;
+  }
   if (raw_mode) {
     if (one_database)
       warning("The --database option is ignored with --raw mode");
@@ -3134,7 +3206,7 @@ static int args_post_process(void) {
     if (stop_position != (ulonglong)(~(my_off_t)0))
       warning("The --stop-position option is ignored in raw mode");
 
-    if (stop_datetime != MY_TIME_T_MAX)
+    if (stop_datetime != MYTIME_MAX_VALUE)
       warning("The --stop-datetime option is ignored in raw mode");
   } else if (output_file) {
     if (!(result_file =
@@ -3463,7 +3535,7 @@ void Transaction_payload_log_event::print(FILE *,
     process_event(info, ev, header()->log_pos, "", true);
 
     // lets make the buffer be allocated again, as the current
-    // buffer ownership has been handed over to the defferred event
+    // buffer ownership has been handed over to the deferred event
     if (is_deferred_event) {
       buffer = nullptr;        /* purecov: inspected */
       current_buffer_size = 0; /* purecov: inspected */

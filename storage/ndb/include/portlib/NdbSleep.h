@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,14 @@
 #define NDBSLEEP_H
 
 #include <ndb_global.h>
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
+#if defined(HAVE_NANOSLEEP)
+#include <time.h>
+#endif
 
 static inline void NdbSleep_MilliSleep(int milliseconds);
 
@@ -80,13 +88,11 @@ void NdbSleep_MilliSleep(int milliseconds)
 {
 #ifdef _WIN32
   Sleep(milliseconds);
-#elif defined(HAVE_SELECT)
+#else
   struct timeval t;
   t.tv_sec =  milliseconds / 1000L;
   t.tv_usec = (milliseconds % 1000L) * 1000L;
-  select(0,0,0,0,&t);
-#else
-#error No suitable function found to implement millisecond sleep.
+  select(0,nullptr,nullptr,nullptr,&t);
 #endif
 }
 

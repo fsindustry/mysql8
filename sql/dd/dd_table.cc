@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -92,6 +92,7 @@
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec_list
 #include "sql/sql_class.h"             // THD
 #include "sql/sql_const.h"
+#include "sql/sql_gipk.h"  // table_def_has_generated_invisible_primary_key
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_parse.h"
@@ -705,6 +706,14 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
     if (field.flags & NOT_SECONDARY_FLAG)
       col_options->set("not_secondary", true);
 
+    if (field.zip_dict_id != 0) {
+      DBUG_LOG("zip_dict", "Table: " << tab_obj->name()
+                                     << " setting field_name "
+                                     << field.field_name
+                                     << " to id: " << field.zip_dict_id);
+      col_options->set("zip_dict_id", field.zip_dict_id);
+    }
+
     if (field.is_array) {
       col_options->set("is_array", true);
     }
@@ -1095,6 +1104,10 @@ static void fill_dd_indexes_from_keyinfo(
     if (key->parser_name.str)
       idx_options->set("parser_name", key->parser_name.str);
 
+    if (key->flags & HA_CLUSTERING) {
+      idx_options->set("clustering_key", true);
+    }
+
     /*
       If we have no primary key, then we pick the first candidate primary
       key and promote it. When we promote, the field's of key_part needs to
@@ -1343,13 +1356,13 @@ static void set_partition_options(partition_element *part_elem,
 /*
   Helper function to add partition column values.
 
-  @param      part_info          Parition info.
+  @param      part_info          Partition info.
   @param      list_value         List of partition element value.
   @param      list_index         Element index.
   @param      part_obj           DD partition object.
   @param      create_info        Create info.
   @param      create_fields      List of fields being created.
-  @param[out] part_desc_str Partiton description string.
+  @param[out] part_desc_str Partition description string.
 */
 static bool add_part_col_vals(partition_info *part_info,
                               part_elem_value *list_value, uint list_index,
@@ -1411,7 +1424,7 @@ static void collect_partition_expr(const THD *thd, List<char> &field_list,
   @param[in]     thd            Thread handle.
   @param[in,out] tab_obj        Table object where to store the info.
   @param[in]     create_info    Create info.
-  @param[in]     create_fields  List of fiels in the new table.
+  @param[in]     create_fields  List of fields in the new table.
   @param[in]     part_info      Partition info object.
 
   @return false on success, else true.
@@ -1909,7 +1922,7 @@ bool invalid_tablespace_usage(THD *thd, const dd::String_type &schema_name,
     additionally, a system thread can do what it likes.
     Tables in the 'mysql' schema, with temporary names, are
     also allowed to be in the DD tablespace, since mysql_upgrade
-    will ned to do ALTER TABLE.
+    will need to do ALTER TABLE.
   */
   if (dd::get_dictionary()->is_dd_table_name(schema_name, table_name) ||
       (type != nullptr && *type == System_tables::Types::SYSTEM) ||
@@ -2123,6 +2136,22 @@ static bool fill_dd_table_from_create_info(
     table_options->set("encrypt_type", encrypt_type);
   }
 
+  // assign explicit encryption. explict_encryption can come from ENCRYPTION
+  // clause usage (used_fields) or from DD (create_info->explicit_encryption -
+  // this means table originally was created with explicit_encryption
+  // (ENCRYPTION clause was used with CREATE)).
+  if ((create_info->used_fields & HA_CREATE_USED_ENCRYPT) ||
+      create_info->explicit_encryption) {
+    // clear explicit encryption if SE does not support encryption
+    if (!(hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION)) {
+      table_options->set("explicit_encryption", false);
+    } else {
+      table_options->set("explicit_encryption", true);
+    }
+  } else {
+    table_options->set("explicit_encryption", false);
+  }
+
   // Storage media
   if (create_info->storage_media > HA_SM_DEFAULT)
     table_options->set("storage", create_info->storage_media);
@@ -2135,10 +2164,12 @@ static bool fill_dd_table_from_create_info(
   assert(create_info->default_table_charset);
   tab_obj->set_collation_id(create_info->default_table_charset->number);
 
-  // Secondary engine.
-  if (create_info->secondary_engine.str != nullptr)
+  // Secondary engine and secondary load.
+  if (create_info->secondary_engine.str != nullptr) {
     table_options->set("secondary_engine",
                        make_string_type(create_info->secondary_engine));
+    table_options->set("secondary_load", false);
+  }
 
   tab_obj->set_engine_attribute(create_info->engine_attribute);
   tab_obj->set_secondary_engine_attribute(
@@ -2189,6 +2220,36 @@ static bool fill_dd_table_from_create_info(
 
   if (invalid_tablespace_usage(thd, schema_name, table_name, create_info))
     return true;
+
+  /*
+    If table definition has a generated invisible primary key then set "gipk"
+    option for the table, primary key and key column.
+
+    At this point we use these "gipk" flags only in INFORMATION_SCHEMA
+    implementation to filter out information about the GIPK in
+    show_gipk_in_create_table_and_information_schema=OFF mode.
+  */
+  if (table_def_has_generated_invisible_primary_key(
+          thd, create_info->db_type, create_fields, keys, keyinfo)) {
+    // Set "gipk" option for the table.
+    table_options->set("gipk", true);
+
+    // Set "gipk" option for the primary key.
+    for (dd::Index *idx : *tab_obj->indexes()) {
+      if (idx->type() == dd::Index::IT_PRIMARY) {
+        idx->options().set("gipk", true);
+        break;
+      }
+    }
+
+    // Set "gipk" option for the column added for GIPK.
+    for (dd::Column *col : *tab_obj->columns()) {
+      if (is_generated_invisible_primary_key_column_name(col->name().c_str())) {
+        col->options().set("gipk", true);
+        break;
+      }
+    }
+  }
 
   /*
     Add hidden columns and indexes which are implicitly created by storage
@@ -2615,8 +2676,8 @@ bool recreate_table(THD *thd, const char *schema_name, const char *table_name) {
   build_table_filename(path, sizeof(path) - 1, schema_name, table_name, "", 0);
 
   // Attempt to reconstruct the table
-  return ha_create_table(thd, path, schema_name, table_name, &create_info, true,
-                         false, table_def);
+  return ha_create_table(thd, path, schema_name, table_name, &create_info,
+                         nullptr, true, false, table_def);
 }
 
 /**
@@ -2670,6 +2731,35 @@ inline void report_error_as_tablespace_missing(Object_id id) {
 
 inline void report_error_as_tablespace_missing(const String_type name) {
   my_error(ER_TABLESPACE_MISSING_WITH_NAME, MYF(0), name.c_str());
+}
+
+Encrypt_result is_system_tablespace_encrypted(THD *thd) {
+  MDL_request system_mdl_request;
+  MDL_REQUEST_INIT(&system_mdl_request, MDL_key::TABLESPACE, "",
+                   "innodb_system", MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
+
+  cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+
+  if (thd->mdl_context.acquire_lock(&system_mdl_request,
+                                    thd->variables.lock_wait_timeout)) {
+    return {true, false};
+  }
+
+  // Acquire the tablespace object.
+  const Tablespace *tsp = nullptr;
+  if (thd->dd_client()->acquire("innodb_system", &tsp)) {
+    return {true, false};
+  }
+  assert(tsp);
+
+  if (tsp->options().exists("encryption")) {
+    String_type e;
+    (void)tsp->options().get("encryption", &e);
+    assert(!e.empty());
+    return {false, is_encrypted(e)};
+  }
+
+  return {false, false};
 }
 
 /*

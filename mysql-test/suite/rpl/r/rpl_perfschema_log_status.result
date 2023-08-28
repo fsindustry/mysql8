@@ -1,7 +1,7 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 # First step
 CREATE TABLE ils_copy (
@@ -22,8 +22,11 @@ include/assert.inc [Collected master gtid_executed is correct]
 include/assert.inc [Collected default replication channel name is correct]
 include/assert.inc [Collected default replication channel relay log file name is correct]
 include/assert.inc [Collected default replication channel relay log file position is correct]
+include/assert.inc [Collected default replication channel relay master log file name is correct]
+include/assert.inc [Collected default replication channel relay master log file position is correct]
 include/assert.inc [Collected replication channel name for ch1 is correct]
 include/assert.inc [Collected replication channel relay log file name for ch1 is correct]
+include/assert.inc [Collected replication channel relay master log file name for ch1 is correct]
 include/assert.inc [Collected InnoDB LSN is in correct boundaries]
 include/assert.inc [Collected InnoDB LSN_checkpoint is in correct boundaries]
 # Second step

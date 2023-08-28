@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -19,6 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#include "my_cleanse.h"
 
 #include "plugin/keyring/common/keyring_key.h"
 
@@ -67,7 +69,7 @@ void Key::init(const char *a_key_id, const char *a_key_type,
 }
 
 Key::~Key() {
-  if (key) memset(key.get(), 0, key_len);
+  if (key) my_cleanse(key.get(), key_len);
 }
 
 void Key::store_field_length(uchar *buffer, size_t *buffer_position,
@@ -187,12 +189,16 @@ size_t Key::get_key_pod_size() const {
   return key_pod_size_aligned;
 }
 
+void Key::xor_data(uchar *data, size_t data_len) {
+  static const char *obfuscate_str = "*305=Ljt0*!@$Hnm(*-9-w;:";
+  for (size_t i = 0, l = 0; i < data_len;
+       ++i, l = ((l + 1) % strlen(obfuscate_str)))
+    data[i] ^= obfuscate_str[l];
+}
+
 void Key::xor_data() {
   if (key == nullptr) return;
-  static const char *obfuscate_str = "*305=Ljt0*!@$Hnm(*-9-w;:";
-  for (size_t i = 0, l = 0; i < key_len;
-       ++i, l = ((l + 1) % strlen(obfuscate_str)))
-    key.get()[i] ^= obfuscate_str[l];
+  xor_data(key.get(), key_len);
 }
 
 bool Key::is_key_id_valid() { return key_id.length() > 0; }

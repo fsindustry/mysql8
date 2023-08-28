@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -32,20 +32,55 @@ namespace ibt {
 /** Purpose for using tablespace */
 enum tbsp_purpose {
   TBSP_NONE = 0,  /*!< Tablespace is not being used for any
-                 temporary table */
+                  temporary table */
   TBSP_USER,      /*!< Tablespace is used for user temporary
-                 tables */
+                  tables */
   TBSP_INTRINSIC, /*!< Tablespace is used for intrinsic
                   tables */
-  TBSP_SLAVE      /*!< Tablespace is used by the slave node
+  TBSP_SLAVE,     /*!< Tablespace is used by the slave node
                   in a replication setup */
+
+  TBSP_ENC_USER,      /*!< Tablespace is used for encrypted user temporary
+                      tables */
+  TBSP_ENC_INTRINSIC, /*!< Tablespace is used for encrypted intrinsic
+                  tables */
+  TBSP_ENC_SLAVE,     /*!< Tablespace is used by the slave node
+                      in a replication setup for encrypted purpose */
 };
+
+/** @return const string for session tablespace purpose enum
+@param[in]   purpose   purpose of the session temp tablespace */
+inline const char *get_purpose_str(enum tbsp_purpose purpose) {
+  switch (purpose) {
+    case TBSP_NONE:
+      return ("NONE");
+    case TBSP_USER:
+      return ("USER");
+    case TBSP_INTRINSIC:
+      return ("INTRINSIC");
+    case TBSP_SLAVE:
+      return ("SLAVE");
+    case TBSP_ENC_USER:
+      return ("USER ENCRYPTED");
+    case TBSP_ENC_INTRINSIC:
+      return ("INTRINSIC ENCRYTPED");
+    case TBSP_ENC_SLAVE:
+      return ("SLAVE ENCRYPTED");
+    default:
+      ut_ad(0);
+      return ("");
+  }
+  /* to make compiler happy */
+  ut_ad(0);
+  return ("");
+}
+
 /** Create the session temporary tablespaces on startup
-@param[in] create_new_db	true if bootstrapping
+@param[in] create_new_db        true if bootstrapping
 @return DB_SUCCESS on success, else DB_ERROR on failure */
 dberr_t open_or_create(bool create_new_db);
 
-/** Sesssion Temporary tablespace */
+/** Session Temporary tablespace */
 class Tablespace {
  public:
   Tablespace();
@@ -100,7 +135,46 @@ class Tablespace {
   /** @return complete path including filename */
   std::string path() const;
 
+  /** Encrypt a session temporary tablespace
+  @return true if session tablespace is encrypted, else false */
+  bool encrypt();
+
+  /** @return true for encrypted purpose, else false */
+  bool is_encrypted() const { return (is_encrypted(m_purpose)); }
+
+  /** @return true for encrypted purpose, else false
+  @param[in]  purpose  the purpose of session temp tablespace */
+  static bool is_encrypted(enum tbsp_purpose purpose) {
+    switch (purpose) {
+      case TBSP_USER:
+      case TBSP_INTRINSIC:
+      case TBSP_SLAVE:
+        return (false);
+      case TBSP_ENC_USER:
+      case TBSP_ENC_INTRINSIC:
+      case TBSP_ENC_SLAVE:
+        return (true);
+      default:
+        ut_ad(0);
+    }
+    /* Make compilers happy */
+    ut_ad(0);
+    return (false);
+  }
+
+  /** Re-encrypt encrypted session temporary tablespace with the
+  new master key */
+  void rotate_encryption_key();
+
  private:
+  void acquire() { mutex_enter(&m_mutex); }
+
+  void release() { mutex_exit(&m_mutex); }
+
+  /** Remove encryption information from tablespace in-memory structure.
+  On-disk changes are not necessary */
+  void decrypt();
+
   /** The id used for name on disk temp_1.ibt, temp_2.ibt, etc
   @return the offset based on s_min_temp_space_id. The minimum offset is 1 */
   uint32_t file_id() const;
@@ -123,6 +197,9 @@ class Tablespace {
 
   /** Purpose for this tablespace */
   enum tbsp_purpose m_purpose;
+
+  /** Used only to synchronize truncate and rotate key operations */
+  ib_mutex_t m_mutex;
 };
 
 /** Pool of session temporary tablespaces. Each session gets at max two
@@ -138,7 +215,7 @@ class Tablespace_pool {
   using Pool = std::list<Tablespace *, ut::allocator<Tablespace *>>;
 
   /** Tablespace_pool constructor
-  @param[in]    init_size    Initial size of the tablespace pool */
+  @param[in] init_size    Initial size of the tablespace pool */
   Tablespace_pool(size_t init_size);
 
   /** Destructor */
@@ -176,6 +253,39 @@ class Tablespace_pool {
     release();
   }
 
+  /** Iterate through the list of "active" tablespaces and perform specified
+  operation on the tablespace on every iteration.
+  @param[in]    f                Function pointer for the function to be
+  executed on every iteration */
+  template <typename F>
+  void iterate_active_tbsp(F &&f) {
+    acquire();
+
+    std::for_each(begin(*m_active), end(*m_active), f);
+
+    release();
+  }
+
+  /** Re-encrypt encrypted session temporary tablespaces in the pool
+  with the new master key */
+  void rotate_encryption_keys() {
+    acquire();
+
+    std::for_each(begin(*m_active), end(*m_active),
+                  [](ibt::Tablespace *ts) { ts->rotate_encryption_key(); });
+
+    release();
+  }
+
+  /** Gets current pool size.
+  @return Number of tablespaces in the pool, both active and free ones. */
+  size_t get_size() {
+    acquire();
+    size_t current_size = m_active->size() + m_free->size();
+    release();
+    return current_size;
+  }
+
  private:
   /** Acquire the mutex. It is used for all
   operations on the pool */
@@ -185,14 +295,14 @@ class Tablespace_pool {
   void release() { mutex_exit(&m_mutex); }
 
   /** Expand the pool to the requested size
-  @param[in] size	Number of tablespaces to be created
+  @param[in] size       Number of tablespaces to be created
   @return DB_SUCCESS on success, else DB_ERROR on error */
   dberr_t expand(size_t size);
 
   /** Delete old session temporary tablespaces found
   on startup. This can happen if server is killed and
   started again
-  @param[in]	create_new_db	true if we are bootstrapping */
+  @param[in]    create_new_db   true if we are bootstrapping */
   void delete_old_pool(bool create_new_db);
 
  private:
@@ -229,5 +339,11 @@ void close_files();
 slave threads. Note this slave session tablespace could
 be used from many slave worker threads */
 Tablespace *get_rpl_slave_tblsp();
+
+/** @return a encrypted session tablespace dedicated for replication
+slave threads. Note this slave session tablespace could
+be used from many slave worker threads */
+Tablespace *get_enc_rpl_slave_tblsp();
+
 }  // namespace ibt
 #endif

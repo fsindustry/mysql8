@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection server1]
 
 # 1. Create a table on group
@@ -25,13 +25,13 @@ SELECT group_replication_switch_to_single_primary_mode("MEMBER1_UUID");
 #    member weight
 [connection server_1]
 SET @@GLOBAL.group_replication_member_weight= 100;
-ERROR 42000: The member weight for primary elections cannot be changed during group configuration changes.
+ERROR 42000: The member weight for primary elections cannot be changed while group configuration operation 'Change to single primary mode' is running initiated by 'SELECT group_replication_switch_to_single_primary_mode()'.
 
 # 6. Confirm server2 can't change value of member weight, an action is
 #    being executed on the group
 [connection server2]
 SET @@GLOBAL.group_replication_member_weight= 100;
-ERROR 42000: The member weight for primary elections cannot be changed during group configuration changes.
+ERROR 42000: The member weight for primary elections cannot be changed while group configuration operation 'Change to single primary mode' is running initiated by 'SELECT group_replication_switch_to_single_primary_mode()'.
 
 # 7. Unlock the tables and to allow action proceed
 UNLOCK TABLES;

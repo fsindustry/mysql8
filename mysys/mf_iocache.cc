@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,12 +34,11 @@
   Possibly use of asyncronic io.
   macros for read and writes for faster io.
   Used instead of FILE when reading or writing whole files.
-  This code makes mf_rec_cache obsolete (currently only used by ISAM)
-  One can change info->pos_in_file to a higher value to skip bytes in file if
-  also info->read_pos is set to info->read_end.
-  If called through open_cached_file(), then the temporary file will
-  only be created if a write exeeds the file buffer or if one calls
-  my_b_flush_io_cache().
+  This code makes mf_rec_cache obsolete (currently only used by ISAM).
+  One can change info->pos_in_file to a higher value to skip bytes in the file
+  if also info->read_pos is set to info->read_end. If called through
+  open_cached_file(), then the temporary file will only be created if a write
+  exceeds the file buffer or if one calls my_b_flush_io_cache().
 
   If one uses SEQ_READ_APPEND, then two buffers are allocated, one for
   reading and another for writing.  Reads are first done from disk and
@@ -109,7 +108,7 @@ bool binlog_cache_temporary_file_is_encrypted = false;
     info		IO_CACHE handler
 
   NOTES
-    This is called on automaticly on init or reinit of IO_CACHE
+    This is called on automatically on init or reinit of IO_CACHE
     It must be called externally if one moves or copies an IO_CACHE
     object.
 */
@@ -162,7 +161,7 @@ static void init_functions(IO_CACHE *info) {
                        If == 0 then use my_default_record_cache_size
     type               Type of cache
     seek_offset        Where cache should start reading/writing
-    use_async_io       Set to 1 of we should use async_io (if avaiable)
+    use_async_io       Set to 1 of we should use async_io (if available)
     cache_myflags      Bitmap of different flags
                        MY_WME | MY_FAE | MY_NABP | MY_FNABP |
                        MY_DONT_CHECK_FILESIZE
@@ -1639,9 +1638,12 @@ supposedly written\n");
 
 my_off_t mysql_encryption_file_seek(IO_CACHE *cache, my_off_t pos, int whence,
                                     myf flags) {
-  if (cache->m_encryptor != nullptr) cache->m_encryptor->set_stream_offset(pos);
-  if (cache->m_decryptor != nullptr) cache->m_decryptor->set_stream_offset(pos);
-  return mysql_file_seek(cache->file, pos, whence, flags);
+  auto result = mysql_file_seek(cache->file, pos, whence, flags);
+  if (cache->m_encryptor != nullptr)
+    cache->m_encryptor->set_stream_offset(result);
+  if (cache->m_decryptor != nullptr)
+    cache->m_decryptor->set_stream_offset(result);
+  return result;
 }
 
 size_t mysql_encryption_file_read(IO_CACHE *cache, uchar *buffer, size_t count,
@@ -1690,4 +1692,18 @@ size_t mysql_encryption_file_write(IO_CACHE *cache, const uchar *buffer,
   } else
     ret = mysql_file_write(cache->file, buffer, count, flags);
   return ret;
+}
+
+size_t mysql_encryption_file_pread(IO_CACHE *cache, uchar *buffer, size_t count,
+                                   my_off_t offset, myf flags) {
+  if (cache->m_encryptor == nullptr && cache->m_decryptor == nullptr)
+    return mysql_file_pread(cache->file, buffer, count, offset, flags);
+
+  auto result = mysql_encryption_file_seek(cache, offset, SEEK_SET, flags);
+  if (result == MY_FILEPOS_ERROR) return MY_FILE_ERROR;
+
+  result = mysql_encryption_file_read(cache, buffer, count, flags);
+  if (result == MY_FILE_ERROR) return MY_FILE_ERROR;
+
+  return (flags & (MY_NABP | MY_FNABP)) ? 0 : result;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,11 +27,12 @@
 #include "sql/dd/impl/system_views/character_sets.h"     // Character_sets
 #include "sql/dd/impl/system_views/check_constraints.h"  // Check_constraints
 #include "sql/dd/impl/system_views/collation_charset_applicability.h"  // Collati...
-#include "sql/dd/impl/system_views/collations.h"          // Collations
-#include "sql/dd/impl/system_views/column_statistics.h"   // Column_statistics
-#include "sql/dd/impl/system_views/columns.h"             // Columns
+#include "sql/dd/impl/system_views/collations.h"         // Collations
+#include "sql/dd/impl/system_views/column_statistics.h"  // Column_statistics
+#include "sql/dd/impl/system_views/columns.h"            // Columns
 #include "sql/dd/impl/system_views/columns_extensions.h"  // Columns_extensions
-
+#include "sql/dd/impl/system_views/compression_dictionary.h"  // Compression_dictionary
+#include "sql/dd/impl/system_views/compression_dictionary_tables.h"  // Compression_dictionary_tables
 #include "sql/dd/impl/system_views/enabled_roles.h"        // Enabled_roles
 #include "sql/dd/impl/system_views/events.h"               // Events
 #include "sql/dd/impl/system_views/files.h"                // Files
@@ -210,6 +211,8 @@ void System_tables::add_remaining_dd_tables() {
   register_table("backup_sbt_history", system);
   register_table("columns_priv", system);
   register_table("component", system);
+  register_table("compression_dictionary", system);
+  register_table("compression_dictionary_cols", system);
   register_table("db", system);
   register_table("default_roles", system);
   register_table("engine_cost", system);
@@ -273,6 +276,9 @@ void System_views::init() {
   register_view<dd::system_views::Columns>(is);
   register_view<dd::system_views::Columns_extensions>(is);
   register_view<dd::system_views::Column_statistics>(is);
+  register_view<dd::system_views::Compression_dictionary>(non_dd_based_is);
+  register_view<dd::system_views::Compression_dictionary_tables>(
+      non_dd_based_is);
   register_view<dd::system_views::Events>(is);
   register_view<dd::system_views::Files>(is);
   register_view<dd::system_views::Innodb_datafiles>(is);

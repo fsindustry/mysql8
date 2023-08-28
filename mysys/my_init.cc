@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -90,6 +90,8 @@ static void my_win_init();
 
 bool my_init_done = false;
 ulong my_thread_stack_size = 65536;
+MYSQL_FILE *mysql_stdin = NULL;
+static MYSQL_FILE instrumented_stdin;
 
 static ulong atoi_octal(const char *str) {
   long int tmp;
@@ -147,6 +149,10 @@ bool my_init() {
   /* Default creation of new dir's */
   if ((str = getenv("UMASK_DIR")) != nullptr)
     my_umask_dir = (int)(atoi_octal(str) | 0700);
+
+  instrumented_stdin.m_file = stdin;
+  instrumented_stdin.m_psi = NULL; /* not yet instrumented */
+  mysql_stdin = &instrumented_stdin;
 
   if (my_thread_global_init()) return true;
 
@@ -249,6 +255,24 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
   my_init_done = false;
 } /* my_end */
 
+/**
+  Pointer to function that handles abort. It is the std's abort() by default.
+*/
+static void (*my_abort_func)() = abort;
+
+[[noreturn]] void my_abort() {
+  my_abort_func();
+  /*
+    We should not reach here, it is required only because my_abort_func() is
+    not [[noreturn]].
+  */
+  abort();
+}
+
+void set_my_abort(void (*new_my_abort_func)()) {
+  my_abort_func = new_my_abort_func;
+}
+
 #ifdef _WIN32
 /*
   my_parameter_handler
@@ -259,9 +283,11 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
   e.g. iterator out-of-range, but pointing to valid memory.
 */
 
-void my_parameter_handler(const wchar_t *expression, const wchar_t *function,
-                          const wchar_t *file, unsigned int line,
-                          uintptr_t pReserved) {
+void my_parameter_handler(const wchar_t *expression [[maybe_unused]],
+                          const wchar_t *function [[maybe_unused]],
+                          const wchar_t *file [[maybe_unused]],
+                          unsigned int line [[maybe_unused]],
+                          uintptr_t pReserved [[maybe_unused]]) {
 #ifndef NDEBUG
   fprintf(stderr,
           "my_parameter_handler errno %d "
@@ -433,15 +459,17 @@ PSI_stage_info stage_waiting_for_table_level_lock = {
 PSI_stage_info stage_waiting_for_disk_space = {0, "Waiting for disk space", 0,
                                                PSI_DOCUMENT_ME};
 
-PSI_mutex_key key_IO_CACHE_append_buffer_lock, key_IO_CACHE_SHARE_mutex,
-    key_KEY_CACHE_cache_lock, key_THR_LOCK_charset, key_THR_LOCK_heap,
-    key_THR_LOCK_lock, key_THR_LOCK_malloc, key_THR_LOCK_mutex,
-    key_THR_LOCK_myisam, key_THR_LOCK_net, key_THR_LOCK_open,
-    key_THR_LOCK_threads, key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
+PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
+    key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_THR_LOCK_charset,
+    key_THR_LOCK_heap, key_THR_LOCK_lock, key_THR_LOCK_malloc,
+    key_THR_LOCK_mutex, key_THR_LOCK_myisam, key_THR_LOCK_net,
+    key_THR_LOCK_open, key_THR_LOCK_threads, key_TMPDIR_mutex,
+    key_THR_LOCK_myisam_mmap;
 
 #ifdef HAVE_PSI_MUTEX_INTERFACE
 
 static PSI_mutex_info all_mysys_mutexes[] = {
+    {&key_BITMAP_mutex, "BITMAP::mutex", 0, 0, PSI_DOCUMENT_ME},
     {&key_IO_CACHE_append_buffer_lock, "IO_CACHE::append_buffer_lock", 0, 0,
      PSI_DOCUMENT_ME},
     {&key_IO_CACHE_SHARE_mutex, "IO_CACHE::SHARE_mutex", 0, 0, PSI_DOCUMENT_ME},

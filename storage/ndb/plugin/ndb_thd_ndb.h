@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,11 +25,16 @@
 #ifndef NDB_THD_NDB_H
 #define NDB_THD_NDB_H
 
+#include <memory>
+#include <vector>
+
 #include "map_helpers.h"
+#include "storage/ndb/plugin/ndb_applier.h"
 #include "storage/ndb/plugin/ndb_share.h"
 #include "storage/ndb/plugin/ndb_thd.h"
 
 class THD;
+class Relay_log_info;
 
 /*
   Class for ndbcluster thread specific data
@@ -39,7 +44,6 @@ class Thd_ndb {
 
   Thd_ndb(THD *);
   ~Thd_ndb();
-  const bool m_slave_thread;  // cached value of thd->slave_thread
 
   uint32 options;
   uint32 trans_options;
@@ -115,7 +119,7 @@ class Thd_ndb {
     NO_LOG_SCHEMA_OP = 1 << 0,
     /*
       This Thd_ndb is a participant in a global schema distribution.
-      Whenver a GSL lock is required, it is acquired by the coordinator.
+      Whenever a GSL lock is required, it is acquired by the coordinator.
       The participant can then assume that the GSL lock is already held
       for the schema operation it is part of. Thus it should not take
       any GSL locks itself.
@@ -167,12 +171,6 @@ class Thd_ndb {
 
   enum Trans_options {
     /*
-       Remember that statement has written to ndb_apply_status and subsequent
-       writes need to do updates
-    */
-    TRANS_INJECTED_APPLY_STATUS = 1 << 0,
-
-    /*
        Indicates that no logging is performed by this MySQL Server and thus
        the anyvalue should have the nologging bit turned on
     */
@@ -196,19 +194,80 @@ class Thd_ndb {
   // trans options should be enabled
   void transaction_checks(void);
 
+ private:
+  // Threshold for when to flush a batch. Configured from @@ndb_batch_size or
+  // --ndb-replica-batch-size when transaction starts.
+  uint m_batch_size;
+
+  // The size in bytes to use when batching blob writes. Configured from
+  // @@ndb_blob_write_batch_bytes or
+  // --ndb-replica-blob-write-batch-bytes when transaction starts.
+  uint m_blob_write_batch_size;
+
+ public:
+  // Return the configured value for blob write batch size
+  uint get_blob_write_batch_size() const {
+    assert(trans);  // assume trans has been started
+    return m_blob_write_batch_size;
+  }
+
+ private:
+  // Block size for the batch memroot. First block will be allocated
+  // with this size, subsequent blocks will be 50% larger each time.
+  static constexpr size_t BATCH_MEM_ROOT_BLOCK_SIZE = 8192;
+
   /*
-    This is a memroot used to buffer rows for batched execution.
-    It is reset after every execute().
+    Memroot used for batched execution, it contains rows as well as
+    other control structures that need to be kept alive until next execute().
+    The allocated memory is then reset before next execute().
   */
   MEM_ROOT m_batch_mem_root;
+
+ public:
   /*
-    Estimated pending batched execution bytes, once this is > BATCH_FLUSH_SIZE
-    we execute() to flush the rows buffered in m_batch_mem_root.
+    Return a generic buffer that will remain valid until after next execute.
+
+    The memory is freed by the first call to add_row_check_if_batch_full()
+    following any execute() call. The intention is that the memory is associated
+    with one batch of operations during batched updates.
+
+    Note in particular that using get_buffer() / copy_to_batch_mem() separately
+    from add_row_check_if_batch_full() could make memory usage grow without
+    limit, and that this sequence:
+
+      execute()
+      get_buffer() / copy_to_batch_mem()
+      add_row_check_if_batch_full()
+      ...
+      execute()
+
+    will free the memory already at add_row_check_if_batch_full() time, it
+    will not remain valid until the second execute().
   */
-  uint m_unsent_bytes;
+  uchar *get_buffer(size_t size) {
+    // Allocate buffer memory from batch MEM_ROOT
+    return static_cast<uchar *>(m_batch_mem_root.Alloc(size));
+  }
+
+  /*
+    Copy data of given size into the batch memroot.
+    Return pointer to copy
+  */
+  uchar *copy_to_batch_mem(const void *data, size_t size) {
+    uchar *row = get_buffer(size);
+    if (unlikely(!row)) {
+      return nullptr;
+    }
+    memcpy(row, data, size);
+    return row;
+  }
+
+  // Number of unsent bytes in the transaction
+  ulong m_unsent_bytes;
+  // Flag for unsent blobs in the transaction
   bool m_unsent_blob_ops;
-  uint m_batch_size;
-  bool add_row_check_if_batch_full(uint size);
+
+  bool add_row_check_if_batch_full(uint row_size);
 
   uint m_execute_count;
 
@@ -271,8 +330,6 @@ class Thd_ndb {
   bool valid_ndb(void) const;
   bool recycle_ndb(void);
 
-  bool is_slave_thread(void) const { return m_slave_thread; }
-
   const THD *get_thd() const { return m_thd; }
 
   int sql_command() const { return thd_sql_command(m_thd); }
@@ -330,6 +387,37 @@ class Thd_ndb {
     @brief Destroy the Ndb_DDL_transaction_ctx instance.
   */
   void clear_ddl_transaction_ctx();
+
+ private:
+  std::unique_ptr<Ndb_applier> m_applier;
+
+  /**
+     @brief Check if this Thd_ndb will do applier work and need to be
+     extended with Ndb_applier state.
+
+     This means:
+      1) The SQL thread when not using workers
+      2) The SQL worker thread(s)
+
+    @return true this Thd_ndb will do applier work
+  */
+  bool will_do_applier_work() const;
+
+ public:
+  /**
+     @brief Initialize the Applier state for Thd_ndb which is replication
+     applier.
+
+     @return true for success
+   */
+  bool init_applier();
+
+  /**
+     @brief Get pointer to Applier state
+
+     @return pointer to Ndb_applier for Thd_ndb which is replication applier
+   */
+  Ndb_applier *get_applier() const { return m_applier.get(); }
 };
 
 #endif

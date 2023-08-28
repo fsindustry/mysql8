@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -1260,7 +1260,7 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
       if ((log_filter_xlate_keys[c].item == LOG_FILTER_ITEM_DEL) &&
           (*inp_readpos == '.'))  // end of statement reached, unset had no arg.
       {
-        int c;
+        int local_c;
         char *n;
         size_t key_len;
 
@@ -1272,11 +1272,11 @@ static int log_filter_dragnet_set(log_filter_ruleset *ruleset,
         }
 
         // see whether it's a well-known type
-        c = log_bi->wellknown_by_name(
+        local_c = log_bi->wellknown_by_name(
             delete_item->key, (key_len = log_bs->length(rule->match.key)));
 
         // for ad-hoc names, copy the key; otherwise use well-known record.
-        if (c != LOG_ITEM_TYPE_NOT_FOUND)
+        if (local_c != LOG_ITEM_TYPE_NOT_FOUND)
           n = nullptr;
         else if ((n = log_bs->strndup(rule->match.key, key_len)) == nullptr) {
           rr = -2; /* purecov: inspected */
@@ -1560,7 +1560,7 @@ DEFINE_METHOD(int, log_service_imp::run,
                      the server/logging framework. It must be released
                      on close.
 
-  @returns  LOG_SERVICE_SUCCESS        Success, returned hande is valid
+  @returns  LOG_SERVICE_SUCCESS        Success, returned handle is valid
   @returns  otherwise                  A new instance could not be created
 */
 DEFINE_METHOD(log_service_error, log_service_imp::open,
@@ -1680,7 +1680,8 @@ mysql_service_status_t log_filter_init() {
             log_bf->filter_ruleset_new(&rule_tag_dragnet, 0)) == nullptr) ||
       mysql_service_component_sys_variable_register->register_variable(
           LOG_FILTER_LANGUAGE_NAME, LOG_FILTER_SYSVAR_NAME,
-          PLUGIN_VAR_STR | PLUGIN_VAR_MEMALLOC,
+          PLUGIN_VAR_STR | PLUGIN_VAR_MEMALLOC |
+              PLUGIN_VAR_PERSIST_AS_READ_ONLY,
           "Error log filter rules (for the dragnet filter "
           "configuration language)",
           check_var_filter_rules, update_var_filter_rules,

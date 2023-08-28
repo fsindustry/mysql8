@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2021, Oracle and/or its affiliates.
+Copyright (c) 1995, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -40,6 +40,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <future>
 #include <sstream>
 #include <thread>
+#ifdef UNIV_LINUX
+#include <sys/types.h>
+#endif
+
+#include "my_compiler.h"
+#include "ut0dbg.h"
 
 class IB_thread {
  public:
@@ -66,12 +72,11 @@ class IB_thread {
 /** Operating system thread native handle */
 using os_thread_id_t = std::thread::native_handle_type;
 
-/** The thread sleeps at least the time given in microseconds.
-@param[in]	usecs		time in microseconds */
-#define os_thread_sleep(usecs)                                     \
-  do {                                                             \
-    std::this_thread::sleep_for(std::chrono::microseconds(usecs)); \
-  } while (false)
+namespace ut {
+/** The hash value of the current thread's id */
+const inline thread_local size_t this_thread_hash =
+    std::hash<std::thread::id>{}(std::this_thread::get_id());
+}  // namespace ut
 
 /** Returns the string representation of the thread ID supplied. It uses the
  only standard-compliant way of printing the thread ID.
@@ -81,6 +86,14 @@ using os_thread_id_t = std::thread::native_handle_type;
  be ignored.
 */
 std::string to_string(std::thread::id thread_id, bool hex_value = false);
+
+#ifdef _WIN32
+using os_tid_t = int;
+#else
+/** An alias for pid_t on Linux, where setpriority() accepts thread id
+of this type and not pthread_t */
+using os_tid_t = pid_t;
+#endif
 
 /** A class to allow any trivially copyable object to be XOR'ed. Trivially
 copyable according to
@@ -135,6 +148,37 @@ class Atomic_xor_of_things {
   std::array<std::atomic<T_digit>, digits_count> acc;
 };
 
+#ifdef _WIN32
+#include <Windows.h>
+#include "ut0class_life_cycle.h"
+
+/** Manages a Windows Event object. Destroys it when leaving a scope. */
+class Scoped_event : private ut::Non_copyable {
+ public:
+  /** Creates a new Windows Event object. It is created in manual-reset mode and
+  non-signalled start state. It asserts the Event object is created
+  successfully. */
+  Scoped_event() : m_event(CreateEvent(nullptr, TRUE, FALSE, nullptr)) {
+    /* In case different params are specified, like for example event name, then
+    the errors may be possible and could be handled. The m_event stored could be
+    NULL, for the application to test successful event creation with the
+    get_handle() method, but this is currently not supported (and thus not
+    tested) by this implementation. */
+    ut_a(m_event != NULL);
+  }
+  ~Scoped_event() {
+    if (m_event != NULL) {
+      CloseHandle(m_event);
+    }
+  }
+  /** Returns a HANDLE to managed Event. */
+  HANDLE get_handle() const { return m_event; }
+
+ private:
+  HANDLE m_event;
+};
+#endif
+
 /** A type for std::thread::id digit to store XOR efficiently. This will make
  the compiler to optimize the operations hopefully to single instruction. */
 using Xor_digit_for_thread_id =
@@ -144,5 +188,20 @@ using Xor_digit_for_thread_id =
 /** A type to store XORed objects of type std::thread::id */
 using Atomic_xor_of_thread_id =
     Atomic_xor_of_things<std::thread::id, Xor_digit_for_thread_id>;
+
+/** Returns the system-specific thread identifier of current
+thread. On Linux, returns tid. On other systems currently returns
+os_thread_get_curr_id().
+@return current thread identifier */
+MY_NODISCARD os_tid_t os_thread_get_tid() noexcept;
+
+/** Set relative scheduling priority for a given thread on
+Linux. Currently a no-op on other systems.
+@param[in]	thread_id	thread id
+@param[in]	relative_priority	system-specific priority value
+@return An actual thread priority after the update  */
+MY_NODISCARD
+unsigned long int os_thread_set_priority(
+    os_tid_t thread_id, unsigned long int relative_priority) noexcept;
 
 #endif /* !os0thread_h */

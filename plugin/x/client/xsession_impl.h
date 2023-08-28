@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -142,8 +142,7 @@ class Session_impl : public XSession {
   XProtocol_ptr m_protocol;
   Context_ptr m_context;
   Protocol_factory_ptr m_factory;
-  std::set<Auth> m_server_supported_auth_methods{Auth::k_mysql41, Auth::k_plain,
-                                                 Auth::k_sha256_memory};
+  std::set<Auth> m_server_supported_auth_methods;
 
   class Session_connect_timeout_scope_guard {
    public:

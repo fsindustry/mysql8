@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +38,8 @@
 #include "NdbImportUtil.hpp"
 #include "NdbImportCsv.hpp"
 #include "my_byteorder.h"
+#include "portlib/NdbTick.h"
+
 // STL
 #include <map>
 #include <algorithm>
@@ -673,9 +675,8 @@ public:
     void state_send();
     void str_state(char* str) const override;
     RelayState::State m_relaystate;
-    uchar* m_xfrmalloc;
-    uchar* m_xfrmbuf;
-    uint m_xfrmbuflen;
+    std::unique_ptr<uint64[]> m_xfrmbuf;
+    uint m_xfrmbuflen = 0;
     RowList m_rows;     // rows received
     RowList* m_rows_exec[g_max_ndb_nodes];      // sorted to per-node
   };
@@ -767,6 +768,8 @@ public:
     void state_send() override;
     void state_poll() override;
     void asynch_callback(Tx* tx);
+    void set_auto_inc_val(const Attr& attr, Row *row,
+                          Uint64 val, Error& error);
   };
 
   // diag team

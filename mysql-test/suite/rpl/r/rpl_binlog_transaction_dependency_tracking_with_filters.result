@@ -1,8 +1,9 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
+[connection slave]
 [connection master]
 SET @save_binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
 SET GLOBAL binlog_transaction_dependency_tracking = COMMIT_ORDER;
@@ -14,6 +15,8 @@ include/start_slave.inc
 SET @save_binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
 SET @save_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET GLOBAL replica_parallel_workers = 0;
+Warnings:
+Warning	1287	'0' is deprecated and will be removed in a future release. Please use 1 instead
 SET GLOBAL binlog_transaction_dependency_tracking = COMMIT_ORDER;
 [connection master]
 #

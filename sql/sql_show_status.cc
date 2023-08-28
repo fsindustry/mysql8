@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -261,7 +261,7 @@ static Query_block *build_query(const POS &pos, THD *thd,
 
   lex->sql_command = SQLCOM_SELECT;
   if (query_expression2->contextualize(&pc)) return nullptr;
-
+  if (pc.finalize_query_expression()) return nullptr;
   /* contextualize sets to COM_SELECT */
   lex->sql_command = command;
 
@@ -288,6 +288,18 @@ Query_block *build_show_session_variables(const POS &pos, THD *thd,
                                           const String *wild,
                                           Item *where_cond) {
   static const LEX_CSTRING table_name = {STRING_WITH_LEN("session_variables")};
+
+  DBUG_EXECUTE_IF("catch_show_gtid_mode", {
+    String gtid_mode;
+    static const char *gm = "gtid_mode";
+    unsigned int errors;
+    gtid_mode.copy(gm, strlen(gm), &my_charset_latin1, wild->charset(),
+                   &errors);
+    if (!my_strcasecmp(wild->charset(), const_cast<String *>(wild)->c_ptr(),
+                       gtid_mode.c_ptr())) {
+      DEBUG_SYNC_C("before_show_gtid_executed");
+    }
+  });
 
   return build_query(pos, thd, SQLCOM_SHOW_VARIABLES, table_name, wild,
                      where_cond);

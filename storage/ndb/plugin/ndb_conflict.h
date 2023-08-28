@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,19 +25,29 @@
 #ifndef NDB_CONFLICT_H
 #define NDB_CONFLICT_H
 
+#include <sys/types.h>
+
 #include "my_bitmap.h"
-#include "mysql/plugin.h"   // SHOW_VAR
+#include "my_inttypes.h"
 #include "mysql_com.h"      // NAME_CHAR_LEN
 #include "sql/sql_const.h"  // MAX_REF_PARTS
+#include "storage/ndb/include/ndb_types.h"
 #include "storage/ndb/include/ndbapi/NdbDictionary.hpp"
-#include "storage/ndb/include/ndbapi/NdbTransaction.hpp"
-#include "storage/ndb/plugin/ndb_conflict_trans.h"
+#include "storage/ndb/include/ndbapi/ndbapi_limits.h"
+
+class Ndb;
+class NdbTransaction;
+class NdbRecord;
+struct CHARSET_INFO;
+struct NdbError;
 
 enum enum_conflict_fn_type {
   CFT_NDB_UNDEF = 0,
   CFT_NDB_MAX,
   CFT_NDB_OLD,
   CFT_NDB_MAX_DEL_WIN,
+  CFT_NDB_MAX_INS,
+  CFT_NDB_MAX_DEL_WIN_INS,
   CFT_NDB_EPOCH,
   CFT_NDB_EPOCH_TRANS,
   CFT_NDB_EPOCH2,
@@ -106,7 +116,8 @@ typedef int (*prepare_detect_func)(struct NDB_CONFLICT_FN_SHARE *cfn_share,
                                    const MY_BITMAP *bi_cols,
                                    /* After image columns bitmap */
                                    const MY_BITMAP *ai_cols,
-                                   class NdbInterpretedCode *code);
+                                   class NdbInterpretedCode *code,
+                                   Uint64 max_rep_epoch);
 
 /**
  * enum_conflict_fn_flags
@@ -116,10 +127,11 @@ typedef int (*prepare_detect_func)(struct NDB_CONFLICT_FN_SHARE *cfn_share,
  * TODO : Encapsulate all these per-algorithm details inside the algorithm
  */
 enum enum_conflict_fn_flags {
-  CF_TRANSACTIONAL = 0x1,   /* Conflicts are handled per transaction */
-  CF_REFLECT_SEC_OPS = 0x2, /* Secondary operations are reflected back */
-  CF_USE_ROLE_VAR = 0x4,    /* Functionality controlled by role variable */
-  CF_DEL_DEL_CFT = 0x8      /* Delete finding no row is a conflict */
+  CF_TRANSACTIONAL = 0x1,    /* Conflicts are handled per transaction */
+  CF_REFLECT_SEC_OPS = 0x2,  /* Secondary operations are reflected back */
+  CF_USE_ROLE_VAR = 0x4,     /* Functionality controlled by role variable */
+  CF_DEL_DEL_CFT = 0x8,      /* Delete finding no row is a conflict */
+  CF_USE_INTERP_WRITE = 0x10 /* Use interpreted writeTuple() when configured */
 };
 
 struct st_conflict_fn_def {
@@ -174,7 +186,7 @@ class ExceptionsTableWriter {
       : m_pk_cols(0),
         m_cols(0),
         m_xcols(0),
-        m_ex_tab(NULL),
+        m_ex_tab(nullptr),
         m_count(0),
         m_extended(false),
         m_op_type_pos(0),
@@ -188,7 +200,7 @@ class ExceptionsTableWriter {
 
      Returns true if there is an Exceptions table
   */
-  bool hasTable() const { return m_ex_tab != NULL; }
+  bool hasTable() const { return m_ex_tab != nullptr; }
 
   /**
     init
@@ -321,139 +333,6 @@ enum enum_slave_conflict_role {
   SCR_PASS = 3
 };
 
-enum enum_slave_trans_conflict_apply_state {
-  /* Normal with optional row-level conflict detection */
-  SAS_NORMAL,
-
-  /*
-    SAS_TRACK_TRANS_DEPENDENCIES
-    Track inter-transaction dependencies
-  */
-  SAS_TRACK_TRANS_DEPENDENCIES,
-
-  /*
-    SAS_APPLY_TRANS_DEPENDENCIES
-    Apply only non conflicting transactions
-  */
-  SAS_APPLY_TRANS_DEPENDENCIES
-};
-
-enum enum_slave_conflict_flags {
-  /* Conflict detection Ops defined */
-  SCS_OPS_DEFINED = 1,
-  /* Conflict detected on table with transactional resolution */
-  SCS_TRANS_CONFLICT_DETECTED_THIS_PASS = 2
-};
-
-/*
-  State associated with the Slave thread
-  (From the Ndb handler's point of view)
-*/
-struct st_ndb_slave_state {
-  /* Counter values for current slave transaction */
-  Uint32 current_violation_count[CFT_NUMBER_OF_CFTS];
-
-  /**
-   * Number of delete-delete conflicts detected
-   * (delete op is applied, and row does not exist)
-   */
-  Uint32 current_delete_delete_count;
-
-  /**
-   * Number of reflected operations received that have been
-   * prepared (defined) to be executed.
-   */
-  Uint32 current_reflect_op_prepare_count;
-
-  /**
-   * Number of reflected operations that were not applied as
-   * they hit some error during execution
-   */
-  Uint32 current_reflect_op_discard_count;
-
-  /**
-   * Number of refresh operations that have been prepared
-   */
-  Uint32 current_refresh_op_count;
-
-  /* Track the current epoch from the immediate master,
-   * and whether we've committed it
-   */
-  Uint64 current_master_server_epoch;
-  bool current_master_server_epoch_committed;
-
-  Uint64 current_max_rep_epoch;
-  uint8 conflict_flags; /* enum_slave_conflict_flags */
-  /* Transactional conflict detection */
-  Uint32 retry_trans_count;
-  Uint32 current_trans_row_conflict_count;
-  Uint32 current_trans_row_reject_count;
-  Uint32 current_trans_in_conflict_count;
-
-  /* Last conflict epoch */
-  Uint64 last_conflicted_epoch;
-
-  /* Last stable epoch */
-  Uint64 last_stable_epoch;
-
-  /* Cumulative counter values */
-  Uint64 total_violation_count[CFT_NUMBER_OF_CFTS];
-  Uint64 total_delete_delete_count;
-  Uint64 total_reflect_op_prepare_count;
-  Uint64 total_reflect_op_discard_count;
-  Uint64 total_refresh_op_count;
-  Uint64 max_rep_epoch;
-  /* Mark if slave has been started/restarted */
-  bool applier_sql_thread_start;
-  /* Transactional conflict detection */
-  Uint64 trans_row_conflict_count;
-  Uint64 trans_row_reject_count;
-  Uint64 trans_detect_iter_count;
-  Uint64 trans_in_conflict_count;
-  Uint64 trans_conflict_commit_count;
-
-  static const Uint32 MAX_RETRY_TRANS_COUNT = 100;
-
-  /*
-    Slave Apply State
-
-    State of Binlog application from Ndb point of view.
-  */
-  enum_slave_trans_conflict_apply_state trans_conflict_apply_state;
-
-  MEM_ROOT conflict_mem_root;
-  class DependencyTracker *trans_dependency_tracker;
-
-  /* Methods */
-  void atStartSlave();
-  int atPrepareConflictDetection(const NdbDictionary::Table *table,
-                                 const NdbRecord *key_rec,
-                                 const uchar *row_data, Uint64 transaction_id,
-                                 bool &handle_conflict_now);
-  int atTransConflictDetected(Uint64 transaction_id);
-  int atConflictPreCommit(bool &retry_slave_trans);
-
-  void atBeginTransConflictHandling();
-  void atEndTransConflictHandling();
-
-  void atTransactionCommit(Uint64 epoch);
-  void atTransactionAbort();
-  void atResetSlave();
-
-  int atApplyStatusWrite(Uint32 master_server_id, Uint32 row_server_id,
-                         Uint64 row_epoch, bool is_row_server_id_local);
-  bool verifyNextEpoch(Uint64 next_epoch, Uint32 master_server_id) const;
-
-  void resetPerAttemptCounters();
-
-  static bool checkSlaveConflictRoleChange(enum_slave_conflict_role old_role,
-                                           enum_slave_conflict_role new_role,
-                                           const char **failure_cause);
-
-  st_ndb_slave_state();
-  ~st_ndb_slave_state();
-};
-
 constexpr int ERROR_CONFLICT_FN_VIOLATION = 9999;
 
 /**
@@ -475,14 +354,5 @@ void teardown_conflict_fn(Ndb *ndb, NDB_CONFLICT_FN_SHARE *cfn_share);
 void slave_reset_conflict_fn(NDB_CONFLICT_FN_SHARE *cfn_share);
 
 bool is_exceptions_table(const char *table_name);
-
-/**
-  show_ndb_status_conflict
-
-  Called as part of SHOW STATUS or performance_schema
-  queries. Returns info about ndb_conflict related status variables.
-*/
-
-int show_ndb_status_conflict(THD *thd, SHOW_VAR *var, char *buff);
 
 #endif

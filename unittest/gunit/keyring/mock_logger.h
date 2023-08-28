@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,8 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef MOCKLOGGER_H
-#define MOCKLOGGER_H
+#ifndef MOCK_LOGGER_H
+#define MOCK_LOGGER_H
 
 #include <gmock/gmock.h>
 
@@ -46,4 +46,4 @@ class Mock_logger : public ILogger {
   }
 };
 }  // namespace keyring
-#endif  // MOCKLOGGER_H
+#endif  // MOCK_LOGGER_H

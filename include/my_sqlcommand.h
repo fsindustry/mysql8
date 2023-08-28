@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -202,6 +202,14 @@ enum enum_sql_command {
   SQLCOM_RESTART_SERVER,
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
+  SQLCOM_SHOW_USER_STATS,
+  SQLCOM_SHOW_TABLE_STATS,
+  SQLCOM_SHOW_INDEX_STATS,
+  SQLCOM_SHOW_CLIENT_STATS,
+  SQLCOM_SHOW_THREAD_STATS,
+  SQLCOM_LOCK_TABLES_FOR_BACKUP,
+  SQLCOM_CREATE_COMPRESSION_DICTIONARY,
+  SQLCOM_DROP_COMPRESSION_DICTIONARY,
   /* This should be the last !!! */
   SQLCOM_END
 };

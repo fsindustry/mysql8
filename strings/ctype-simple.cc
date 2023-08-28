@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,6 +47,15 @@
 #include "stdarg.h"
 #include "template_utils.h"
 
+MY_COMPILER_DIAGNOSTIC_PUSH()
+// Suppress warning C4146 unary minus operator applied to unsigned type,
+// result still unsigned
+MY_COMPILER_MSVC_DIAGNOSTIC_IGNORE(4146)
+static inline longlong ulonglong_with_sign(bool negative, ulonglong ll) {
+  return negative ? -ll : ll;
+}
+MY_COMPILER_DIAGNOSTIC_POP()
+
 /*
   Returns the number of bytes required for strnxfrm().
 */
@@ -71,7 +80,7 @@ size_t my_strnxfrmlen_simple(const CHARSET_INFO *cs, size_t len) {
      is equal to comparing two original strings with my_strnncollsp_xxx().
 
      Not more than 'dstlen' bytes are written into 'dst'.
-     To garantee that the whole string is transformed, 'dstlen' must be
+     To guarantee that the whole string is transformed, 'dstlen' must be
      at least srclen*cs->strnxfrm_multiply bytes long. Otherwise,
      consequent memcmp() may return a non-accurate result.
 
@@ -528,12 +537,12 @@ longlong my_strntoll_8bit(const CHARSET_INFO *cs, const char *nptr, size_t l,
     return negative ? LLONG_MIN : LLONG_MAX;
   }
 
-  return negative ? -i : i;
+  return ulonglong_with_sign(negative, i);
 
 noconv:
   err[0] = EDOM;
   if (endptr != nullptr) *endptr = nptr;
-  return 0L;
+  return 0LL;
 }
 
 ulonglong my_strntoull_8bit(const CHARSET_INFO *cs, const char *nptr, size_t l,
@@ -603,7 +612,7 @@ ulonglong my_strntoull_8bit(const CHARSET_INFO *cs, const char *nptr, size_t l,
     return (~(ulonglong)0);
   }
 
-  return negative ? -i : i;
+  return ulonglong_with_sign(negative, i);
 
 noconv:
   err[0] = EDOM;
@@ -787,7 +796,7 @@ static int my_wildcmp_8bit_impl(const CHARSET_INFO *cs, const char *str,
       if ((cmp = *wildstr) == escape && wildstr + 1 != wildend)
         cmp = *++wildstr;
 
-      INC_PTR(cs, wildstr, wildend); /* This is compared trough cmp */
+      INC_PTR(cs, wildstr, wildend); /* This is compared through cmp */
       cmp = likeconv(cs, cmp);
       do {
         while (str != str_end && (uchar)likeconv(cs, *str) != cmp) str++;
@@ -1060,8 +1069,8 @@ static bool create_fromuni(CHARSET_INFO *cs, MY_CHARSET_LOADER *loader) {
     if (!idx[i].nchars) break;
 
     numchars = idx[i].uidx.to - idx[i].uidx.from + 1;
-    if (!(idx[i].uidx.tab = tab = (uchar *)(loader->once_alloc)(
-              numchars * sizeof(*idx[i].uidx.tab))))
+    if (!(idx[i].uidx.tab = tab =
+              (uchar *)loader->once_alloc(numchars * sizeof(*idx[i].uidx.tab))))
       return true;
 
     memset(tab, 0, numchars * sizeof(*idx[i].uidx.tab));
@@ -1084,7 +1093,7 @@ static bool create_fromuni(CHARSET_INFO *cs, MY_CHARSET_LOADER *loader) {
   /* Allocate and fill reverse table for each plane */
   n = i;
   if (!(cs->tab_from_uni = tab_from_uni =
-            (MY_UNI_IDX *)(loader->once_alloc)(sizeof(MY_UNI_IDX) * (n + 1))))
+            (MY_UNI_IDX *)loader->once_alloc(sizeof(MY_UNI_IDX) * (n + 1))))
     return true;
 
   for (i = 0; i < n; i++) tab_from_uni[i] = idx[i].uidx;
@@ -1171,7 +1180,7 @@ static ulonglong d10[DIGITS_IN_ULONGLONG] = {1,
   Convert a string to unsigned long long integer value
   with rounding.
 
-  SYNOPSYS
+  SYNOPSIS
     my_strntoull10_8bit()
       cs              in      pointer to character set
       str             in      pointer to the string to be converted

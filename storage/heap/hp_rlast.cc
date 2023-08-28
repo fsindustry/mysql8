@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,8 +40,8 @@ int heap_rlast(HP_INFO *info, uchar *record, int inx) {
                                          offsetof(TREE_ELEMENT, right)))) {
       memcpy(&pos, pos + (*keyinfo->get_key_length)(keyinfo, pos),
              sizeof(uchar *));
+      if (hp_extract_record(info, record, pos)) return my_errno();
       info->current_ptr = pos;
-      memcpy(record, pos, (size_t)share->reclength);
       info->update = HA_STATE_AKTIV;
     } else {
       set_my_errno(HA_ERR_END_OF_FILE);

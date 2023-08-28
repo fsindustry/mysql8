@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +38,7 @@ using std::min;
 void my_net_local_init(NET *net) {
   net->max_packet = (uint)global_system_variables.net_buffer_length;
 
+  net->read_timeout = net->write_timeout = 0;
   my_net_set_read_timeout(net, (uint)global_system_variables.net_read_timeout);
   my_net_set_write_timeout(net,
                            (uint)global_system_variables.net_write_timeout);

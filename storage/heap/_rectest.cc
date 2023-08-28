@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,8 @@
 int hp_rectest(HP_INFO *info, const uchar *old) {
   DBUG_TRACE;
 
-  if (memcmp(info->current_ptr, old, (size_t)info->s->reclength)) {
+  if (hp_process_record_data_to_chunkset(*info->s, old, info->current_ptr,
+                                         true)) {
     set_my_errno(HA_ERR_RECORD_CHANGED);
     return HA_ERR_RECORD_CHANGED; /* Record have changed */
   }

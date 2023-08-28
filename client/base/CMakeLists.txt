@@ -1,4 +1,4 @@
-# Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -51,4 +51,4 @@ ADD_LIBRARY(client_base STATIC
   ${CMAKE_SOURCE_DIR}/client/multi_factor_passwordopt-vars.cc
 )
 
-TARGET_LINK_LIBRARIES(client_base mysqlclient)
+TARGET_LINK_LIBRARIES(client_base perconaserverclient)

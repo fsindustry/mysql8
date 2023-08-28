@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,9 @@
 
 #include "my_config.h"
 
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 #include <stddef.h>
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -41,9 +44,9 @@
 
 #include "my_inttypes.h"
 #include "my_psi_config.h"  // IWYU pragma: keep
-#include "mysql/components/services/my_io_bits.h"
-#include "mysql/components/services/my_thread_bits.h"
-#include "mysql/components/services/mysql_socket_bits.h"
+#include "mysql/components/services/bits/my_io_bits.h"
+#include "mysql/components/services/bits/my_thread_bits.h"
+#include "mysql/components/services/bits/mysql_socket_bits.h"
 
 #include "mysql/psi/mysql_socket.h"
 
@@ -58,9 +61,14 @@ struct Vio;
 #if defined(__cplusplus) && defined(USE_PPOLL_IN_VIO)
 #include <signal.h>
 #include <atomic>
+#include <optional>
 #elif defined(__cplusplus) && defined(HAVE_KQUEUE)
 #include <sys/event.h>
 #include <atomic>
+#endif
+
+#if defined(__APPLE__)
+#define s6_addr32 __u6_addr.__u6_addr32
 #endif
 
 #ifdef HAVE_PSI_INTERFACE
@@ -140,7 +148,6 @@ enum enum_vio_io_event {
 #define VIO_LOCALHOST 1            /* a localhost connection */
 #define VIO_BUFFERED_READ 2        /* use buffered read */
 #define VIO_READ_BUFFER_SIZE 16384 /* size of read buffer */
-#define OPENSSL_ERROR_LENGTH 512   /* Openssl error code max length */
 
 MYSQL_VIO vio_new(my_socket sd, enum enum_vio_type type, uint flags);
 MYSQL_VIO mysql_socket_vio_new(MYSQL_SOCKET mysql_socket,
@@ -159,7 +166,8 @@ MYSQL_VIO vio_new_win32shared_memory(HANDLE handle_file_map, HANDLE handle_map,
 #endif /* _WIN32 */
 
 void vio_delete(MYSQL_VIO vio);
-int vio_shutdown(MYSQL_VIO vio);
+int vio_shutdown(MYSQL_VIO vio, int how);
+int vio_cancel(MYSQL_VIO vio, int how);
 bool vio_reset(MYSQL_VIO vio, enum enum_vio_type type, my_socket sd, void *ssl,
                uint flags);
 bool vio_is_blocking(Vio *vio);
@@ -168,6 +176,22 @@ int vio_set_blocking_flag(Vio *vio, bool set_blocking_flag);
 size_t vio_read(MYSQL_VIO vio, uchar *buf, size_t size);
 size_t vio_read_buff(MYSQL_VIO vio, uchar *buf, size_t size);
 size_t vio_write(MYSQL_VIO vio, const uchar *buf, size_t size);
+
+struct st_vio_network {
+  union {
+    struct in_addr in;
+    struct in6_addr in6;
+  } addr;
+  union {
+    struct in_addr in;
+    struct in6_addr in6;
+  } mask;
+  sa_family_t family;
+};
+
+void vio_proxy_protocol_add(const st_vio_network &net) noexcept;
+void vio_proxy_cleanup() noexcept;
+void vio_force_skip_proxy(MYSQL_VIO vio);
 /* setsockopt TCP_NODELAY at IPPROTO_TCP level, when possible */
 int vio_fastsend(MYSQL_VIO vio);
 /* setsockopt SO_KEEPALIVE at SOL_SOCKET level, when possible */
@@ -197,6 +221,9 @@ ssize_t vio_pending(MYSQL_VIO vio);
 #endif
 /* Set timeout for a network operation. */
 int vio_timeout(MYSQL_VIO vio, uint which, int timeout_sec);
+extern void vio_set_wait_callback(void (*before_wait)(void),
+                                  void (*after_wait)(void));
+
 /* Connect to a peer. */
 bool vio_socket_connect(MYSQL_VIO vio, struct sockaddr *addr, socklen_t len,
                         bool nonblocking, int timeout,
@@ -258,7 +285,7 @@ struct st_VioSSLFd {
 int sslaccept(struct st_VioSSLFd *, MYSQL_VIO, long timeout,
               unsigned long *errptr);
 int sslconnect(struct st_VioSSLFd *, MYSQL_VIO, long timeout,
-               unsigned long *errptr, SSL **ssl);
+               SSL_SESSION *session, unsigned long *errptr, SSL **ssl);
 
 struct st_VioSSLFd *new_VioSSLConnectorFd(
     const char *key_file, const char *cert_file, const char *ca_file,
@@ -267,12 +294,6 @@ struct st_VioSSLFd *new_VioSSLConnectorFd(
     const long ssl_ctx_flags, const char *server_host);
 
 long process_tls_version(const char *tls_version);
-
-int set_fips_mode(const uint fips_mode, char *err_string);
-
-uint get_fips_mode();
-
-int test_ssl_fips_mode(char *err_string);
 
 struct st_VioSSLFd *new_VioSSLAcceptorFd(
     const char *key_file, const char *cert_file, const char *ca_file,
@@ -296,7 +317,8 @@ void vio_end(void);
   (vio)->viokeepalive(vio, set_keep_alive)
 #define vio_should_retry(vio) (vio)->should_retry(vio)
 #define vio_was_timeout(vio) (vio)->was_timeout(vio)
-#define vio_shutdown(vio) ((vio)->vioshutdown)(vio)
+#define vio_shutdown(vio, how) ((vio)->vioshutdown)(vio, how)
+#define vio_cancel(vio, how) ((vio)->viocancel)(vio, how)
 #define vio_peer_addr(vio, buf, prt, buflen) \
   (vio)->peer_addr(vio, buf, prt, buflen)
 #define vio_io_wait(vio, event, timeout) (vio)->io_wait(vio, event, timeout)
@@ -305,6 +327,18 @@ void vio_end(void);
 #define vio_set_blocking(vio, val) (vio)->set_blocking(vio, val)
 #define vio_set_blocking_flag(vio, val) (vio)->set_blocking_flag(vio, val)
 #endif /* !defined(DONT_MAP_VIO) */
+
+#ifdef _WIN32
+/*
+  Set thread id for io cancellation (required on Windows XP only,
+  and should to be removed if XP is no more supported)
+*/
+
+#define vio_set_thread_id(vio, tid) \
+  if (vio) vio->thread_id = tid
+#else
+#define vio_set_thread_id(vio, tid)
+#endif
 
 /* This enumerator is used in parser - should be always visible */
 enum SSL_type {
@@ -329,6 +363,7 @@ struct Vio {
   int write_timeout = {-1}; /* Timeout value (ms) for write ops. */
   int retry_count = {1};    /* Retry count */
   bool inactive = {false};  /* Connection has been shutdown */
+  bool force_skip_proxy = {false};
 
   struct sockaddr_storage local;  /* Local internet address */
   struct sockaddr_storage remote; /* Remote internet address */
@@ -339,8 +374,18 @@ struct Vio {
   char *read_end = {nullptr};     /* end of unfetched data */
 
 #ifdef USE_PPOLL_IN_VIO
-  my_thread_t thread_id = {0};  // Thread PID
-  sigset_t signal_mask;         // Signal mask
+  /** Thread PID which is to be sent SIGALRM to terminate ppoll
+    wait when shutting down vio. It is made an std::optional so
+    that server code has the ability to set this to an illegal value
+    and thereby ensure that it is set before shutting down vio. In the server
+    the THD and thereby the Vio can switch between OS threads, so it does not
+    make sense to assign the thread id when creating the THD/Vio.
+
+    It is initialized to 0 here, meaning don't attempt to send a signal, to
+    keep non-server code unaffected.
+  */
+  std::optional<my_thread_t> thread_id = 0;
+  sigset_t signal_mask;  // Signal mask
   /*
     Flag to indicate whether we are in poll or shutdown.
     A true value of flag indicates either the socket
@@ -392,12 +437,18 @@ struct Vio {
      further communications can take place, however any related buffers,
      descriptors, handles can remain valid after a shutdown.
   */
-  int (*vioshutdown)(MYSQL_VIO) = {nullptr};
+  int (*vioshutdown)(MYSQL_VIO, int) = {nullptr};
+  /**
+    Partial shutdown. All the actions performed which shutdown performs,
+    but descriptor remains open and valid.
+  */
+  int (*viocancel)(Vio *, int) = {nullptr};
   bool (*is_connected)(MYSQL_VIO) = {nullptr};
   bool (*has_data)(MYSQL_VIO) = {nullptr};
   int (*io_wait)(MYSQL_VIO, enum enum_vio_io_event, int) = {nullptr};
   bool (*connect)(MYSQL_VIO, struct sockaddr *, socklen_t, int) = {nullptr};
 #ifdef _WIN32
+  DWORD thread_id; /* Used on XP only by vio_shutdown() */
 #ifdef __clang__
   OVERLAPPED overlapped = {0, 0, {{0, 0}}, nullptr};
 #else

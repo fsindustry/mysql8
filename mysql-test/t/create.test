@@ -33,7 +33,7 @@ create table t2 select auto+1 from t1;
 drop table if exists t1,t2;
 --error 1167
 create table t1 (b char(0) not null, index(b));
---error 1163
+# BLOB/TEXT fields are now supported by HEAP
 create table t1 (a int not null,b text) engine=heap;
 drop table if exists t1;
 
@@ -84,9 +84,9 @@ drop table t1;
 # Test that we get warning for this
 drop database if exists mysqltest;
 create database mysqltest;
-create table mysqltest.$test1 (a$1 int, $b int, c$ int);
-insert into mysqltest.$test1 values (1,2,3);
-select a$1, $b, c$ from mysqltest.$test1;
+create table mysqltest.`$test1` (a$1 int, `$b` int, c$ int);
+insert into mysqltest.`$test1` values (1,2,3);
+select a$1, `$b`, c$ from mysqltest.`$test1`;
 create table mysqltest.test2$ (a int);
 drop table mysqltest.test2$;
 drop database mysqltest;
@@ -2002,6 +2002,7 @@ SET SESSION sql_require_primary_key= ON;
 --error ER_TABLE_WITHOUT_PK
 CREATE TABLE t2 LIKE t1;
 
+
 --echo # Verify CREATE AS SELECT ...
 CREATE TABLE t3 (I INT PRIMARY KEY);
 
@@ -2023,9 +2024,10 @@ SHOW CREATE TABLE t4;
 CREATE TABLE t5(i INT PRIMARY KEY, j INT);
 ALTER TABLE t5 DROP PRIMARY KEY, ADD CONSTRAINT PRIMARY KEY (j);
 
---echo # Restriction also applies to temporary tables
---error ER_TABLE_WITHOUT_PK
 CREATE TEMPORARY TABLE t6(i INT);
+CREATE TEMPORARY TABLE t2 LIKE t1;
+DROP TABLE t2;
+DROP TABLE t6;
  
 --echo # Cleanup
 DROP TABLE t5;
@@ -2369,3 +2371,10 @@ CREATE TABLE t1(a INT) min_rows=18446744073709551615;
 SHOW TABLE STATUS LIKE 't1';
 DROP TABLE t1;
 
+--echo # Bug#34523475: Inconsequent type derivation when using @variable
+
+CREATE TABLE t1 AS SELECT @max_error_count UNION SELECT 'a';
+SHOW CREATE TABLE t1;
+CREATE TABLE t2 AS SELECT @max_error_count UNION SELECT 'a';
+SHOW CREATE TABLE t2;
+DROP TABLE t1, t2;

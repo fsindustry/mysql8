@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,7 @@ namespace keyring {
 
 class IKeyring_io : public Keyring_alloc {
  public:
-  virtual bool init(std::string *keyring_storage_url) = 0;
+  virtual bool init(const std::string *keyring_storage_url) = 0;
   virtual bool flush_to_backup(ISerialized_object *serialized_object) = 0;
   virtual bool flush_to_storage(ISerialized_object *serialized_object) = 0;
 

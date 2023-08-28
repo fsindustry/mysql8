@@ -146,8 +146,8 @@ CHANGE REPLICATION SOURCE TO SOURCE_USER= 'recovery_user', SOURCE_PASSWORD= 'rec
 SET SESSION sql_log_bin= 0;
 call mtr.add_suppression("There was an error when connecting to the donor server*");
 call mtr.add_suppression("For details please check performance_schema*");
-call mtr.add_suppression("Slave I/O for channel 'group_replication_recovery': Master command COM_REGISTER_SLAVE failed*");
-call mtr.add_suppression("Slave I/O thread couldn't register on master");
+call mtr.add_suppression("Replica I/O for channel 'group_replication_recovery': Source command COM_REGISTER_REPLICA failed*");
+call mtr.add_suppression("Replica I/O thread couldn't register on source");
 SET SESSION sql_log_bin= 1;
 
 --let $group_replication_start_member_state= RECOVERING
@@ -159,8 +159,8 @@ SET SESSION sql_log_bin= 1;
 --let $rpl_connection_name= server_1
 --source include/rpl_connection.inc
 
-SET DEBUG_SYNC= 'now SIGNAL waiting';
 SET @@GLOBAL.DEBUG= @debug_save;
+SET DEBUG_SYNC= 'now SIGNAL waiting';
 
 
 --echo
@@ -168,8 +168,9 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --echo # 10. Signal to continue T1 and T2 on server2.
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
-SET DEBUG_SYNC= 'now SIGNAL signal.after_before_message_send_after_applier_prepare_continue';
 SET @@GLOBAL.DEBUG= @debug_save;
+SET DEBUG_SYNC= 'now SIGNAL signal.after_before_message_send_after_applier_prepare_continue';
+SET DEBUG_SYNC= 'RESET';
 
 
 --echo
@@ -178,6 +179,7 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 --reap
+SET DEBUG_SYNC= 'RESET';
 
 --let $rpl_connection_name= server_1_1
 --source include/rpl_connection.inc
@@ -240,6 +242,8 @@ DROP TABLE t3;
 SET SESSION sql_log_bin= 0;
 DROP USER "recovery_user";
 SET SESSION sql_log_bin= 1;
+
+--disconnect server_1_2
 
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc

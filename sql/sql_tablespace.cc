@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,6 +23,7 @@
 #include "sql/sql_tablespace.h"
 
 #include <string.h>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -78,7 +79,7 @@ bool validate_tspnamelen(const LEXSTR &name) {
   if (name.length > NAME_LEN ||
       my_numchars_mb(system_charset_info, name.str, name.str + name.length) >
           NAME_CHAR_LEN) {
-    // Byte length exceeding NAME_LEN, and character lenght exceeding
+    // Byte length exceeding NAME_LEN, and character length exceeding
     // NAME_CHAR_LEN not allowed
     my_error(ER_TOO_LONG_IDENT, MYF(0), name.str);
     return true;
@@ -108,7 +109,8 @@ st_alter_tablespace::st_alter_tablespace(
       nodegroup_id{opts.nodegroup_id},
       wait_until_completed{opts.wait_until_completed},
       ts_comment{opts.ts_comment.str},
-      encryption{opts.encryption.str} {
+      encryption{opts.encryption.str},
+      explicit_encryption{opts.encryption.str != nullptr} {
   if (opts.autoextend_size.has_value()) {
     autoextend_size = opts.autoextend_size.value();
   }
@@ -245,6 +247,13 @@ bool lock_tablespace_names(THD *thd, Names... names) {
   }
 
   if (thd->global_read_lock.can_acquire_protection()) {
+    return true;
+  }
+
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (thd->backup_tables_lock.abort_if_acquired() ||
+      thd->backup_tables_lock.acquire_protection(
+          thd, MDL_TRANSACTION, thd->variables.lock_wait_timeout)) {
     return true;
   }
 
@@ -520,8 +529,22 @@ bool Sql_cmd_create_tablespace::execute(THD *thd) {
   // - Disallow encryption='y', if SE does not support it.
   if (hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION) {
     tablespace->options().set("encryption", encrypt_type);
+    tablespace->options().set("explicit_encryption",
+                              m_options->encryption.str ? true : false);
   } else if (encrypt_tablespace) {
     my_error(ER_CHECK_NOT_IMPLEMENTED, MYF(0), "ENCRYPTION");
+    return true;
+  }
+
+  // Validate tablespace comment string
+  std::string invalid_sub_str;
+  if (is_invalid_string(
+          LEX_CSTRING{m_options->ts_comment.str, m_options->ts_comment.length},
+          system_charset_info, invalid_sub_str)) {
+    // Provide contextual information
+    my_error(ER_COMMENT_CONTAINS_INVALID_STRING, MYF(0), "tablespace",
+             m_tablespace_name.str, system_charset_info->csname,
+             invalid_sub_str.c_str());
     return true;
   }
 
@@ -763,9 +786,9 @@ static bool set_table_encryption_type(THD *thd, const dd::Tablespace &ts,
 
   // If the source tablespace encryption type is same as request type.
   dd::String_type source_tablespace_encryption;
-  if (ts.options().exists("encryption"))
+  if (ts.options().exists("encryption")) {
     (void)ts.options().get("encryption", &source_tablespace_encryption);
-  else
+  } else
     source_tablespace_encryption = "N";
   if (dd::is_encrypted(source_tablespace_encryption) == is_request_to_encrypt)
     return false;
@@ -826,7 +849,7 @@ static bool set_table_encryption_type(THD *thd, const dd::Tablespace &ts,
     }
     // We throw warning only when creating a unencrypted table in a schema
     // which has default encryption enabled.
-    else if (is_request_to_encrypt == false)
+    if (is_request_to_encrypt == false)
       push_warning(thd, Sql_condition::SL_WARNING,
                    WARN_UNENCRYPTED_TABLE_IN_ENCRYPTED_DB,
                    ER_THD(thd, WARN_UNENCRYPTED_TABLE_IN_ENCRYPTED_DB));
@@ -872,15 +895,12 @@ static bool upgrade_lock_for_tables_in_tablespace(
 
   DEBUG_SYNC(thd, "upgrade_lock_for_tables_in_tablespace_kill_point");
 
-  MDL_request_list::Iterator it(*table_mdl_reqs);
-  const size_t req_count = table_mdl_reqs->elements();
-  for (size_t i = 0; i < req_count; ++i) {
-    MDL_request *r = it++;
-    if (r->key.mdl_namespace() == MDL_key::TABLE &&
-        thd->mdl_context.upgrade_shared_lock(r->ticket, MDL_EXCLUSIVE,
-                                             LONG_TIMEOUT))
-      return true;
-  }
+  if (thd->mdl_context.upgrade_shared_locks(
+          table_mdl_reqs, MDL_EXCLUSIVE, LONG_TIMEOUT, [](MDL_request *r) {
+            // Only process MDL_request's for table locks.
+            return r->key.mdl_namespace() == MDL_key::TABLE;
+          }))
+    return true;
 
   return false;
 }
@@ -957,6 +977,11 @@ bool Sql_cmd_alter_tablespace::execute(THD *thd) {
                                     &table_mdl_reqs))
         return true;
     }
+  }
+
+  if (hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION) {
+    tsmp.second->options().set("explicit_encryption",
+                               m_options->encryption.str ? true : false);
   }
 
   if (m_options->engine_attribute.str) {

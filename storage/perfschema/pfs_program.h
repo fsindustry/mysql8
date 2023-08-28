@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -33,11 +33,8 @@
 #include "storage/perfschema/pfs_column_types.h"
 #include "storage/perfschema/pfs_global.h"
 #include "storage/perfschema/pfs_instr.h"
+#include "storage/perfschema/pfs_name.h"
 #include "storage/perfschema/pfs_stat.h"
-
-#define PROGRAM_HASH_KEY_LENGTH                         \
-  sizeof(enum_object_type) + COL_OBJECT_NAME_SIZE + 1 + \
-      COL_OBJECT_SCHEMA_SIZE + 1
 
 extern LF_HASH program_hash;
 
@@ -45,27 +42,18 @@ extern LF_HASH program_hash;
   Hash key for a program.
 */
 struct PFS_program_key {
-  /**
-    Hash search key.
-    This has to be a string for @c LF_HASH,
-    the format is @c "<object_type><0x00><object_name><0x00><schema_name><0x00>"
-  */
-  char m_hash_key[PROGRAM_HASH_KEY_LENGTH];
-  uint m_key_length;
-};
-
-struct PFS_ALIGNED PFS_program : public PFS_instr {
+ public:
   /** Object type. */
   enum_object_type m_type;
 
-  /** Object name. */
-  const char *m_object_name;
-  int m_object_name_length;
-
   /** Object Schema name. */
-  const char *m_schema_name;
-  int m_schema_name_length;
+  PFS_schema_name m_schema_name;
 
+  /** Object name. */
+  PFS_routine_name m_object_name;
+};
+
+struct PFS_ALIGNED PFS_program : public PFS_instr {
   /** Hash key */
   PFS_program_key m_key;
 
@@ -83,9 +71,9 @@ struct PFS_ALIGNED PFS_program : public PFS_instr {
 };
 
 int init_program(const PFS_global_param *param);
-void cleanup_program(void);
+void cleanup_program();
 int init_program_hash(const PFS_global_param *param);
-void cleanup_program_hash(void);
+void cleanup_program_hash();
 
 void reset_esms_by_program();
 
@@ -93,7 +81,7 @@ PFS_program *find_or_create_program(PFS_thread *thread,
                                     enum_object_type object_type,
                                     const char *object_name,
                                     uint object_name_length, const char *schema,
-                                    uint schema_length);
+                                    uint schema_name_length);
 
 void drop_program(PFS_thread *thread, enum_object_type object_type,
                   const char *object_name, uint object_name_length,

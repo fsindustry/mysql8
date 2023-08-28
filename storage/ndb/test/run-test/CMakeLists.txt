@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +47,7 @@ MYSQL_ADD_EXECUTABLE(atrt
   test_execution_resources.cpp
   DESTINATION mysql-test/ndb
   ENABLE_EXPORTS
-  LINK_LIBRARIES ndbNDBT ndbclient_static mysqlclient
+  LINK_LIBRARIES ndbNDBT ndbclient_static perconaserverclient
   )
 
 IF(MY_COMPILER_IS_CLANG)

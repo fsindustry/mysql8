@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -142,6 +142,13 @@ SET(CLIENT_API_FUNCTIONS
   mysql_real_connect_dns_srv
   mysql_bind_param
   mysql_plugin_get_option
+  mysql_get_ssl_session_reused
+  mysql_get_ssl_session_data
+  mysql_free_ssl_session_data
+  # binlog API
+  mysql_binlog_close
+  mysql_binlog_fetch
+  mysql_binlog_open
   CACHE INTERNAL "Functions exported by client API"
 )
 
@@ -215,7 +222,10 @@ IF (WITH_CLIENT_PROTOCOL_TRACING)
 
 ENDIF (WITH_CLIENT_PROTOCOL_TRACING)
 
-ADD_CONVENIENCE_LIBRARY(clientlib ${CLIENT_SOURCES} DEPENDENCIES GenError)
+ADD_CONVENIENCE_LIBRARY(clientlib ${CLIENT_SOURCES}
+  DEPENDENCIES GenError
+  LINK_LIBRARIES ext::zlib
+  )
 
 SET(LIBS_TO_MERGE
   clientlib mytime strings vio mysys
@@ -223,15 +233,15 @@ SET(LIBS_TO_MERGE
 SET(LIBS_TO_LINK ${LIBDL})
 
 IF(WITH_ZLIB STREQUAL "bundled")
-  LIST(APPEND LIBS_TO_MERGE ${ZLIB_LIBRARY})
+  LIST(APPEND LIBS_TO_MERGE zlib)
 ELSE()
-  LIST(APPEND LIBS_TO_LINK ${ZLIB_LIBRARY})
+  LIST(APPEND LIBS_TO_LINK ext::zlib)
 ENDIF()
 
 IF(WITH_ZSTD STREQUAL "bundled")
-  LIST(APPEND LIBS_TO_MERGE ${ZSTD_LIBRARY})
+  LIST(APPEND LIBS_TO_MERGE zstd)
 ELSE()
-  LIST(APPEND LIBS_TO_LINK ${ZSTD_LIBRARY})
+  LIST(APPEND LIBS_TO_LINK ext::zstd)
 ENDIF()
 
 LIST(APPEND LIBS_TO_LINK ${SSL_LIBRARIES})
@@ -283,15 +293,15 @@ ADD_SUBDIRECTORY(authentication_kerberos)
 # authentication IAM client plug-in
 ADD_SUBDIRECTORY(authentication_oci_client)
 
-# Merge several convenience libraries into one big mysqlclient
-MERGE_CONVENIENCE_LIBRARIES(mysqlclient ${LIBS_TO_MERGE}
+# Merge several convenience libraries into one big perconaserverclient
+MERGE_CONVENIENCE_LIBRARIES(perconaserverclient ${LIBS_TO_MERGE}
   COMPONENT Development
   LINK_LIBRARIES ${LIBS_TO_LINK}
   )
 
 # Visual Studio users need debug  static library for debug projects
 IF(MSVC)
-  INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(perconaserverclient DESTINATION ${INSTALL_LIBDIR}/debug)
 
   INSTALL_DEBUG_TARGET(auth_win_client DESTINATION ${INSTALL_LIBDIR}/debug)
   INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
@@ -326,13 +336,13 @@ IF(UNIX)
     STRING_APPEND(OS_SHARED_LIB_VERSION
       ".${SHARED_LIB_MINOR_VERSION}.${SHARED_LIB_PATCH_VERSION}")
   ENDIF()
-  # Name of shared library is libmysqlclient on Unix
-  SET(UNIX_OUTPUT_NAME OUTPUT_NAME mysqlclient)
+  # Name of shared library is libperconaserverclient on Unix
+  SET(UNIX_OUTPUT_NAME OUTPUT_NAME perconaserverclient)
   SET(UNIX_VERSION     VERSION     "${OS_SHARED_LIB_VERSION}")
   SET(UNIX_SOVERSION   SOVERSION   "${SHARED_LIB_MAJOR_VERSION}")
 ENDIF()
 
-# Merge several convenience libraries into one big mysqlclient
+# Merge several convenience libraries into one big perconaserverclient
 # and link them together into shared library.
 MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
   EXPORTS
@@ -353,7 +363,7 @@ ENDIF()
 
 IF(LINUX_STANDALONE AND KERBEROS_CUSTOM_LIBRARY)
   ADD_DEPENDENCIES(libmysql ${kerberos_target})
-  ADD_DEPENDENCIES(mysqlclient ${kerberos_target})
+  ADD_DEPENDENCIES(perconaserverclient ${kerberos_target})
 ENDIF()
 
 IF(UNIX)
@@ -368,8 +378,8 @@ IF(UNIX)
   ENDIF()
 
   # clean direct output needs to be set several targets have the same name
-  #(mysqlclient in this case)
-  SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+  #(perconaserverclient in this case)
+  SET_TARGET_PROPERTIES(perconaserverclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
   SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 ENDIF()
 
@@ -424,7 +434,12 @@ IF(HAS_WARN_FLAG)
 ENDIF()
 
 # Verify that libmysql_api_test runs OK
-ADD_CUSTOM_COMMAND(TARGET libmysql_api_test POST_BUILD
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libmysql_api_test.out
+  DEPENDS libmysql_api_test
   COMMAND libmysql_api_test
   > ${CMAKE_CURRENT_BINARY_DIR}/libmysql_api_test.out
+  )
+MY_ADD_CUSTOM_TARGET(run_libmysql_api_test ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libmysql_api_test.out
   )

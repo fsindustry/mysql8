@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -132,7 +132,7 @@ bool Buffered_file_io::check_file_structure(File file, size_t file_size) {
 
 /**
   loads keyring file content into a Buffer serialized object
-  - only called when keyring is initalizing
+  - only called when keyring is initializing
 
   @param file       - file handle of keyring file
   @param buffer     - serializable object to store file content to
@@ -299,7 +299,7 @@ bool Buffered_file_io::check_if_keyring_file_can_be_opened_or_created() {
   @retval true      - there was an error with initializing keyring file
   @retval false     - keyring file has been initialized successfully
 */
-bool Buffered_file_io::init(std::string *keyring_filename) {
+bool Buffered_file_io::init(const std::string *keyring_filename) {
   // file name can't be empty
   assert(keyring_filename->empty() == false);
 

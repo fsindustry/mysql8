@@ -1,4 +1,4 @@
-// Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+// Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -86,6 +86,7 @@
 #include "my_dir.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
+#include "my_openssl_fips.h"
 #include "my_pointer_arithmetic.h"
 #include "my_stacktrace.h"
 #include "my_systime.h"  // my_sleep()
@@ -113,7 +114,7 @@
 #define MAX_VAR_NAME_LENGTH 256
 #define MAX_COLUMNS 256
 #define MAX_DELIMITER_LENGTH 16
-#define DEFAULT_MAX_CONN 128
+#define DEFAULT_MAX_CONN 1024
 #define REPLACE_ROUND_MAX 16
 
 /* Flags controlling send and reap */
@@ -195,6 +196,8 @@ static int opt_port = 0;
 static int opt_max_connect_retries;
 static int opt_result_format_version;
 static int opt_max_connections = DEFAULT_MAX_CONN;
+static bool backtick_lhs = false;
+static char *opt_init_command = nullptr;
 static bool opt_colored_diff = false;
 static bool opt_compress = false, silent = false, verbose = false,
             trace_exec = false;
@@ -252,7 +255,7 @@ static uint opt_test_ssl_fips_mode = 0;
 static DWORD opt_safe_process_pid;
 static HANDLE mysqltest_thread;
 // Event handle for stacktrace request event
-static HANDLE stacktrace_request_event = NULL;
+static HANDLE stacktrace_request_event = nullptr;
 static std::thread wait_for_stacktrace_request_event_thread;
 #endif
 
@@ -600,12 +603,12 @@ REPLACE *glob_replace = nullptr;
 void replace_strings_append(REPLACE *rep, DYNAMIC_STRING *ds, const char *from,
                             size_t len);
 
-static void cleanup_and_exit(int exit_code) MY_ATTRIBUTE((noreturn));
+[[noreturn]] static void cleanup_and_exit(int exit_code);
 
-void die(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)))
-    MY_ATTRIBUTE((noreturn));
-void abort_not_supported_test(const char *fmt, ...)
-    MY_ATTRIBUTE((format(printf, 1, 2))) MY_ATTRIBUTE((noreturn));
+[[noreturn]] void die(const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 1, 2)));
+[[noreturn]] void abort_not_supported_test(const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 1, 2)));
 void verbose_msg(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)));
 void log_msg(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)));
 void flush_ds_res();
@@ -715,7 +718,7 @@ static int socket_event_listen(my_socket fd) {
   FD_SET(fd, &readfds);
   FD_SET(fd, &writefds);
 
-  result = select((int)(fd + 1), &readfds, &writefds, &exceptfds, NULL);
+  result = select((int)(fd + 1), &readfds, &writefds, &exceptfds, nullptr);
   if (result < 0) {
     DWORD error_code = WSAGetLastError();
     verbose_msg("Cannot determine the status due to error :%lu\n", error_code);
@@ -1292,9 +1295,18 @@ void handle_error(struct st_command *command, std::uint32_t err_errno,
     return;
   }
 
-  if (command->abort_on_error)
+  if (command->abort_on_error) {
+    if (err_errno == ER_NO_SUCH_THREAD) {
+      /* No such thread id, let's dump the available ones */
+      fprintf(stderr,
+              "mysqltest: query '%s returned ER_NO_SUCH_THREAD, "
+              "dumping processlist\n",
+              command->query);
+      show_query(&cur_con->mysql, "SHOW PROCESSLIST");
+    }
     die("Query '%s' failed.\nERROR %d (%s): %s", command->query, err_errno,
         err_sqlstate, err_error);
+  }
 
   DBUG_PRINT("info", ("Expected errors count: %zu", expected_errors->count()));
 
@@ -1333,6 +1345,14 @@ void handle_error(struct st_command *command, std::uint32_t err_errno,
   }
 
   if (expected_errors->count()) {
+    if (err_errno == ER_NO_SUCH_THREAD) {
+      /* No such thread id, let's dump the available ones */
+      fprintf(stderr,
+              "mysqltest: query '%s returned ER_NO_SUCH_THREAD, "
+              "dumping processlist\n",
+              command->query);
+      show_query(&cur_con->mysql, "SHOW PROCESSLIST");
+    }
     if (expected_errors->count() == 1) {
       die("Query '%s' failed with wrong error %d: '%s', should have failed "
           "with error '%s'.",
@@ -1477,7 +1497,7 @@ static void close_files() {
 }
 
 static void free_used_memory() {
-  // Delete the exptected errors pointer
+  // Delete the expected errors pointer
   delete expected_errors;
 
   // Delete disabled and enabled warning list
@@ -1572,7 +1592,8 @@ static void cleanup_and_exit(int exit_code) {
 #ifdef _WIN32
   if (opt_safe_process_pid) {
     // Close the stack trace request event handle
-    if (stacktrace_request_event != NULL) CloseHandle(stacktrace_request_event);
+    if (stacktrace_request_event != nullptr)
+      CloseHandle(stacktrace_request_event);
 
     // Detach or stop the thread waiting for stack trace event to occur.
     if (wait_for_stacktrace_request_event_thread.joinable())
@@ -1580,7 +1601,7 @@ static void cleanup_and_exit(int exit_code) {
 
     // Close the thread handle
     if (!CloseHandle(mysqltest_thread))
-      die("CloseHandle failed, err = %d.\n", GetLastError());
+      die("CloseHandle failed, err = %lu.\n", GetLastError());
   }
 
   fflush(stdout);
@@ -1702,7 +1723,8 @@ void flush_ds_res() {
       cleanup_and_exit(1);
 
     if (!result_file_name) {
-      std::fwrite(ds_res.str, 1, ds_res.length, stdout);
+      if (std::fwrite(ds_res.str, 1, ds_res.length, stdout) != ds_res.length)
+        cleanup_and_exit(1);
       std::fflush(stdout);
     }
 
@@ -2014,7 +2036,7 @@ static bool show_diff(DYNAMIC_STRING *ds, const char *filename1,
     if (opt_colored_diff) {
       // Most "diff" tools return '> 1' if error
       exit_code = run_tool(diff_name, &ds_diff, "-u --color='always'",
-                           filename1, filename2, "2>&1", NULL);
+                           filename1, filename2, "2>&1", nullptr);
 
       if (exit_code > 1)
         die("Option '--colored-diff' is not supported on this machine. "
@@ -2025,19 +2047,19 @@ static bool show_diff(DYNAMIC_STRING *ds, const char *filename1,
       // diff with "diff -u".
       dynstr_set(&ds_diff, "");
       exit_code = run_tool(diff_name, &ds_diff, "-u", filename1, filename2,
-                           "2>&1", NULL);
+                           "2>&1", nullptr);
 
       if (exit_code > 1) {
         // Clear the diff string and fallback to context diff with "diff -c"
         dynstr_set(&ds_diff, "");
         exit_code = run_tool(diff_name, &ds_diff, "-c", filename1, filename2,
-                             "2>&1", NULL);
+                             "2>&1", nullptr);
 
         if (exit_code > 1) {
           // Clear the diff string and fallback to simple diff with "diff"
           dynstr_set(&ds_diff, "");
-          exit_code =
-              run_tool(diff_name, &ds_diff, filename1, filename2, "2>&1", NULL);
+          exit_code = run_tool(diff_name, &ds_diff, filename1, filename2,
+                               "2>&1", nullptr);
           if (exit_code > 1) diff_name = nullptr;
         }
       } else if (exit_code == 1 && opt_hypergraph &&
@@ -2252,7 +2274,7 @@ static int strip_surrounding(char *str, char c1, char c2) {
     /* Replace it with a space */
     *ptr = ' ';
 
-    /* Last non space charecter should be c2 */
+    /* Last non space character should be c2 */
     ptr = strend(str) - 1;
     while (*ptr && my_isspace(charset_info, *ptr)) ptr--;
     if (*ptr == c2) {
@@ -2394,7 +2416,7 @@ static VAR *var_obtain(const char *name, int len) {
 }
 
 /*
-  - if variable starts with a $ it is regarded as a local test varable
+  - if variable starts with a $ it is regarded as a local test variable
   - if not it is treated as a environment variable, and the corresponding
   environment variable will be updated
 */
@@ -2550,6 +2572,20 @@ void revert_properties() {
   once_property = false;
 }
 
+/* Operands available in if or while conditions */
+enum block_op { EQ_OP, NE_OP, GT_OP, GE_OP, LT_OP, LE_OP, ILLEG_OP };
+static enum block_op find_operand(const char *start) {
+  char first = *start;
+  char next = *(start + 1);
+  if (first == '=' && next == '=') return EQ_OP;
+  if (first == '!' && next == '=') return NE_OP;
+  if (first == '>' && next == '=') return GE_OP;
+  if (first == '>') return GT_OP;
+  if (first == '<' && next == '=') return LE_OP;
+  if (first == '<') return LT_OP;
+  return ILLEG_OP;
+}
+
 /*
   Set variable from the result of a query
 
@@ -2583,13 +2619,23 @@ static void var_query_set(VAR *var, const char *query, const char **query_end) {
   DBUG_TRACE;
 
   /* Only white space or ) allowed past ending ` */
-  while (end > query && *end != '`') {
-    if (*end && (*end != ' ' && *end != '\t' && *end != '\n' && *end != ')'))
+  const char *expr_end = end;
+
+  while ((end > query) && (*end != '`')) --end;
+  if (query == end) die("Syntax error in query, missing '`'");
+
+  const char *end_ptr = end;
+  end_ptr++;
+
+  while (my_isspace(charset_info, *end_ptr) && end_ptr < expr_end) end_ptr++;
+  if (end_ptr != expr_end) {
+    enum block_op operand = find_operand(end_ptr);
+    if (operand != ILLEG_OP && backtick_lhs)
+      die("LHS of expression must be variable");
+    else
       die("Spurious text after `query` expression");
-    --end;
   }
 
-  if (query == end) die("Syntax error in query, missing '`'");
   ++query;
 
   /* Eval the query, thus replacing all environment variables */
@@ -3222,7 +3268,6 @@ static FILE *my_popen(DYNAMIC_STRING *ds_cmd, const char *mode,
   if (command->type == Q_EXECW) {
     wchar_t wcmd[4096];
     wchar_t wmode[10];
-    const char *cmd = ds_cmd->str;
     uint dummy_errors;
     size_t len;
     len = my_convert((char *)wcmd, sizeof(wcmd) - sizeof(wcmd[0]),
@@ -3237,7 +3282,19 @@ static FILE *my_popen(DYNAMIC_STRING *ds_cmd, const char *mode,
   }
 #endif /* _WIN32 */
 
-  return popen(ds_cmd->str, mode);
+  errno = 0;
+  FILE *file = popen(ds_cmd->str, mode);
+  if (file == NULL) {
+    if (errno != 0) {
+      fprintf(stderr, "mysqltest: popen failed with errno %d (%s)\n", errno,
+              strerror(errno));
+    } else {
+      fprintf(stderr,
+              "mysqltest: popen returned NULL without setting errno "
+              "(out-of-memory?)\n");
+    }
+  }
+  return file;
 }
 
 static void init_builtin_echo(void) {
@@ -3626,7 +3683,7 @@ static void do_remove_files_wildcard(struct st_command *command) {
                      sizeof(rm_args) / sizeof(struct command_arg), ' ');
   fn_format(dirname, ds_directory.str, "", "", MY_UNPACK_FILENAME);
 
-  // Check if the retry value is passed, and if it is an interger
+  // Check if the retry value is passed, and if it is an integer
   int retry = 0;
   if (ds_retry.length) {
     retry = get_int_val(ds_retry.str);
@@ -3712,7 +3769,7 @@ static void do_copy_file(struct st_command *command) {
   check_command_args(command, command->first_argument, copy_file_args,
                      sizeof(copy_file_args) / sizeof(struct command_arg), ' ');
 
-  // Check if the retry value is passed, and if it is an interger
+  // Check if the retry value is passed, and if it is an integer
   int retry = 0;
   if (ds_retry.length) {
     retry = get_int_val(ds_retry.str);
@@ -3751,9 +3808,9 @@ static void do_copy_file(struct st_command *command) {
   SYNOPSIS
   recursive_copy
   ds_source      - pointer to dynamic string containing source
-                   directory informtion
+                   directory information
   ds_destination - pointer to dynamic string containing destination
-                   directory informtion
+                   directory information
 
   DESCRIPTION
   Recursive copy of <ds_source> to <ds_destination>
@@ -3802,7 +3859,7 @@ static int recursive_copy(DYNAMIC_STRING *ds_source,
         name and destination directory name are not same.
 
         For example, if source is "abc" and destintion is "def",
-        check for the existance of directory "def/abc". If it exists
+        check for the existence of directory "def/abc". If it exists
         then, copy the files from source directory(i.e "abc") to
         destination directory(i.e "def/abc"), otherwise create a new
         directory "abc" under "def" and copy the files from source to
@@ -4110,7 +4167,7 @@ static void do_move_file(struct st_command *command) {
   check_command_args(command, command->first_argument, move_file_args,
                      sizeof(move_file_args) / sizeof(struct command_arg), ' ');
 
-  // Check if the retry value is passed, and if it is an interger
+  // Check if the retry value is passed, and if it is an integer
   int retry = 0;
   if (ds_retry.length) {
     retry = get_int_val(ds_retry.str);
@@ -4210,7 +4267,7 @@ static void do_file_exist(struct st_command *command) {
   check_command_args(command, command->first_argument, file_exist_args,
                      sizeof(file_exist_args) / sizeof(struct command_arg), ' ');
 
-  // Check if the retry value is passed, and if it is an interger
+  // Check if the retry value is passed, and if it is an integer
   int retry = 0;
   if (ds_retry.length) {
     retry = get_int_val(ds_retry.str);
@@ -4271,7 +4328,7 @@ static void do_mkdir(struct st_command *command) {
   SYNOPSIS
   do_force_rmdir
   command    - command handle
-  ds_dirname - pointer to dynamic string containing directory informtion
+  ds_dirname - pointer to dynamic string containing directory information
 
   DESCRIPTION
   force-rmdir <dir_name>
@@ -4324,7 +4381,7 @@ void do_force_rmdir(struct st_command *command, DYNAMIC_STRING *ds_dirname) {
   do_rmdir
   command	called command
   force         Recursively delete a directory if the value is set to true,
-                otherwise delete an empty direcory
+                otherwise delete an empty directory
 
   DESCRIPTION
   rmdir <dir_name>
@@ -4749,14 +4806,18 @@ static void do_send_quit(struct st_command *command) {
 
 static void do_change_user(struct st_command *command) {
   MYSQL *mysql = &cur_con->mysql;
-  static DYNAMIC_STRING ds_user, ds_passwd, ds_db;
+  static DYNAMIC_STRING ds_user, ds_passwd, ds_db, ds_reconnect;
+  bool reconnect = true;
   const struct command_arg change_user_args[] = {
       {"user", ARG_STRING, false, &ds_user, "User to connect as"},
       {"password", ARG_STRING, false, &ds_passwd,
        "Password used when connecting"},
       {"database", ARG_STRING, false, &ds_db,
        "Database to select after connect"},
+      {"reconnect", ARG_STRING, false, &ds_reconnect, "Reconnect on fail"},
   };
+  const char *reconnect_on_fail = "reconnect_on_fail";
+  const char *do_not_reconnect_on_fail = "do_not_reconnect_on_fail";
 
   DBUG_TRACE;
 
@@ -4777,20 +4838,36 @@ static void do_change_user(struct st_command *command) {
     if (!ds_db.length) dynstr_set(&ds_db, mysql->db);
   }
 
-  DBUG_PRINT("info",
-             ("connection: '%s' user: '%s' password: '%s' database: '%s'",
-              cur_con->name, ds_user.str, ds_passwd.str, ds_db.str));
+  if (ds_reconnect.length != 0) {
+    if (strcmp(ds_reconnect.str, do_not_reconnect_on_fail) == 0)
+      reconnect = false;
+    else if (strcmp(ds_reconnect.str, reconnect_on_fail) == 0)
+      reconnect = true;
+    else
+      die("Wrong value specified for 'reconnect' parameter. "
+          "Allowed value are '%s' and '%s'",
+          do_not_reconnect_on_fail, reconnect_on_fail);
+  }
+
+  DBUG_PRINT("info", ("connection: '%s' user: '%s' password: '%s' "
+                      "database: '%s' reconnect: '%s'",
+                      cur_con->name, ds_user.str, ds_passwd.str, ds_db.str,
+                      reconnect ? "true" : "false"));
 
   if (mysql_change_user(mysql, ds_user.str, ds_passwd.str, ds_db.str)) {
     handle_error(curr_command, mysql_errno(mysql), mysql_error(mysql),
                  mysql_sqlstate(mysql), &ds_res);
-    mysql->reconnect = true;
-    mysql_reconnect(&cur_con->mysql);
-  }
+    if (reconnect) {
+      mysql->reconnect = true;
+      mysql_reconnect(&cur_con->mysql);
+    }
+  } else
+    handle_no_error(command);
 
   dynstr_free(&ds_user);
   dynstr_free(&ds_passwd);
   dynstr_free(&ds_db);
+  dynstr_free(&ds_reconnect);
 }
 
 /*
@@ -4943,11 +5020,12 @@ static void do_wait_for_slave_to_stop(struct st_command *c [[maybe_unused]]) {
             "ras.SERVICE_STATE='ON' AND rcs.SERVICE_STATE='ON'") ||
         !(res = mysql_store_result_wrapper(mysql)))
 
-      die("Query failed while probing slave for stop: %s", mysql_error(mysql));
+      die("Query failed while probing replica for stop: %s",
+          mysql_error(mysql));
 
     if (!(row = mysql_fetch_row_wrapper(res)) || !row[1]) {
       mysql_free_result_wrapper(res);
-      die("Strange result from query while probing slave for stop");
+      die("Strange result from query while probing replica for stop");
     }
     done = !std::strcmp(row[1], "OFF");
     mysql_free_result_wrapper(res);
@@ -5002,7 +5080,7 @@ static void do_sync_with_master2(struct st_command *command, long offset) {
         incorrect, or an error has occurred
       */
       die("%.*s failed: '%s' returned NULL "
-          "indicating slave SQL thread failure",
+          "indicating replica SQL thread failure",
           static_cast<int>(command->first_word_len), command->query, query_buf);
     }
 
@@ -5606,6 +5684,23 @@ static void do_disable_testcase(struct st_command *command) {
 }
 
 /**
+  A wrapper around kill call that prints diagnostics if the call failed with
+  any other error than ESRCH.
+
+  @param pid    Process id
+  @param sig    Signal to send to process
+  @return The return value of kill call
+*/
+static int my_kill(int pid, int sig) {
+  const int result = kill(pid, sig);
+  if (result == -1 && errno != ESRCH) {
+    log_msg("kill(%d, %d) returned errno %d (%s)", pid, sig, errno,
+            strerror(errno));
+  }
+  return result;
+}
+
+/**
   Check if process is active.
 
   @param pid  Process id.
@@ -5617,7 +5712,7 @@ static bool is_process_active(int pid) {
   DWORD exit_code;
   HANDLE proc;
   proc = OpenProcess(PROCESS_QUERY_INFORMATION, false, pid);
-  if (proc == NULL) return false; /* Process could not be found. */
+  if (proc == nullptr) return false; /* Process could not be found. */
 
   if (!GetExitCodeProcess(proc, &exit_code)) exit_code = 0;
 
@@ -5627,7 +5722,7 @@ static bool is_process_active(int pid) {
 
   return true;
 #else
-  return (kill(pid, 0) == 0);
+  return (my_kill(pid, 0) == 0);
 #endif
 }
 
@@ -5643,13 +5738,13 @@ static bool kill_process(int pid) {
 #ifdef _WIN32
   HANDLE proc;
   proc = OpenProcess(PROCESS_TERMINATE, false, pid);
-  if (proc == NULL) return true; /* Process could not be found. */
+  if (proc == nullptr) return true; /* Process could not be found. */
 
   if (!TerminateProcess(proc, 201)) killed = false;
 
   CloseHandle(proc);
 #else
-  killed = (kill(pid, SIGKILL) == 0);
+  killed = (my_kill(pid, SIGKILL) == 0);
 #endif
   return killed;
 }
@@ -5665,7 +5760,7 @@ static void abort_process(int pid, const char *path [[maybe_unused]]) {
   HANDLE proc;
   proc = OpenProcess(PROCESS_ALL_ACCESS, false, pid);
   verbose_msg("Aborting pid %d (handle: %p)\n", pid, proc);
-  if (proc != NULL) {
+  if (proc != nullptr) {
     char name[FN_REFLEN], *end;
     BOOL is_debugged;
 
@@ -5675,7 +5770,7 @@ static void abort_process(int pid, const char *path [[maybe_unused]]) {
       name[sizeof(name) - 1] = '\0';
       end = name + std::strlen(name);
       /* Make sure "/mysqld.nnnnnnnnnn.dmp" fits */
-      if ((end - name) < (sizeof(name) - 23)) {
+      if ((end - name) < static_cast<long long>(sizeof(name) - 23)) {
         if (!is_directory_separator(end[-1])) {
           end[0] = FN_LIBCHAR2;  // datadir path normally uses '/'.
           end++;
@@ -5691,7 +5786,7 @@ static void abort_process(int pid, const char *path [[maybe_unused]]) {
     if (CheckRemoteDebuggerPresent(proc, &is_debugged) && is_debugged) {
       if (!DebugBreakProcess(proc)) {
         DWORD err = GetLastError();
-        verbose_msg("DebugBreakProcess failed: %d\n", err);
+        verbose_msg("DebugBreakProcess failed: %lu\n", err);
       } else
         verbose_msg("DebugBreakProcess succeeded!\n");
       CloseHandle(proc);
@@ -5701,10 +5796,12 @@ static void abort_process(int pid, const char *path [[maybe_unused]]) {
     }
   } else {
     DWORD err = GetLastError();
-    verbose_msg("OpenProcess failed: %d\n", err);
+    verbose_msg("OpenProcess failed: %lu\n", err);
   }
 #else
-  kill(pid, SIGABRT);
+  log_msg("shutdown_server timeout exceeded, SIGABRT set to the server PID %d",
+          pid);
+  my_kill(pid, SIGABRT);
 #endif
 }
 
@@ -5735,7 +5832,7 @@ static void do_shutdown_server(struct st_command *command) {
       cleanup_and_exit(1);
   }
 
-  long timeout = 60;
+  long timeout = 600;
 
   if (ds_timeout.length) {
     char *endptr;
@@ -6503,7 +6600,7 @@ static int connect_n_handle_errors(struct st_command *command, MYSQL *con,
     dynstr_append_mem(ds, delimiter, delimiter_length);
     dynstr_append_mem(ds, "\n", 1);
   }
-  /* Simlified logging if enabled */
+  /* Simplified logging if enabled */
   if (!disable_connect_log && !disable_query_log) {
     replace_dynstr_append(ds, command->query);
     dynstr_append_mem(ds, ";\n", 2);
@@ -6717,6 +6814,8 @@ static void do_connect(struct st_command *command) {
 
   if (!mysql_init(&con_slot->mysql)) die("Failed on mysql_init()");
 
+  if (opt_init_command)
+    mysql_options(&con_slot->mysql, MYSQL_INIT_COMMAND, opt_init_command);
   if (opt_connect_timeout)
     mysql_options(&con_slot->mysql, MYSQL_OPT_CONNECT_TIMEOUT,
                   (void *)&opt_connect_timeout);
@@ -6724,8 +6823,7 @@ static void do_connect(struct st_command *command) {
   if (opt_compress || con_compress)
     mysql_options(&con_slot->mysql, MYSQL_OPT_COMPRESS, NullS);
   mysql_options(&con_slot->mysql, MYSQL_OPT_LOCAL_INFILE, nullptr);
-  mysql_options(&con_slot->mysql, MYSQL_SET_CHARSET_NAME,
-                replace_utf8_utf8mb3(charset_info->csname));
+  mysql_options(&con_slot->mysql, MYSQL_SET_CHARSET_NAME, charset_info->csname);
   if (opt_charsets_dir)
     mysql_options(&con_slot->mysql, MYSQL_SET_CHARSET_DIR, opt_charsets_dir);
 
@@ -6831,6 +6929,10 @@ static void do_connect(struct st_command *command) {
   if (ds_database.length && !std::strcmp(ds_database.str, "*NO-ONE*"))
     dynstr_set(&ds_database, "");
 
+  if (getenv("EXTERN")) {
+    dynstr_set(&ds_host, opt_host);
+  }
+
   if (connect_n_handle_errors(command, &con_slot->mysql, ds_host.str,
                               ds_user.str, ds_password1.str, ds_database.str,
                               con_port, ds_sock.str)) {
@@ -6889,24 +6991,6 @@ static int do_done(struct st_command *command) {
   return 0;
 }
 
-/* Operands available in if or while conditions */
-
-enum block_op { EQ_OP, NE_OP, GT_OP, GE_OP, LT_OP, LE_OP, ILLEG_OP };
-
-static enum block_op find_operand(const char *start) {
-  char first = *start;
-  char next = *(start + 1);
-
-  if (first == '=' && next == '=') return EQ_OP;
-  if (first == '!' && next == '=') return NE_OP;
-  if (first == '>' && next == '=') return GE_OP;
-  if (first == '>') return GT_OP;
-  if (first == '<' && next == '=') return LE_OP;
-  if (first == '<') return LT_OP;
-
-  return ILLEG_OP;
-}
-
 /*
   Process start of a "if" or "while" statement
 
@@ -6926,7 +7010,7 @@ static enum block_op find_operand(const char *start) {
   <block statements>
   }
 
-  assert (expr)
+  assert ([!]<expr>)
 
   Evaluates the <expr> and if it evaluates to
   greater than zero executes the following code block.
@@ -6973,7 +7057,7 @@ static void do_block(enum block_cmd cmd, struct st_command *command) {
       cur_block->ok = false;
       cur_block->delim[0] = '\0';
     }
-    /* No need to evaulate the condition */
+    /* No need to evaluate the condition */
     return;
   }
 
@@ -7083,10 +7167,28 @@ static void do_block(enum block_cmd cmd, struct st_command *command) {
 
     v.is_int = true;
     my_free(v2.str_val);
-  } else {
-    if (*expr_start != '`' && !my_isdigit(charset_info, *expr_start))
-      die("Expression in %s() must begin with $, ` or a number", cmd_name);
+  } else if (*expr_start == '`') {
+    backtick_lhs = true;
     eval_expr(&v, expr_start, &expr_end);
+    backtick_lhs = false;
+  } else {
+    /* First skip any leading white space or unary -+ */
+    if (*expr_start == '-' || *expr_start == '+') expr_start++;
+    while (my_isspace(charset_info, *expr_start)) expr_start++;
+    if (!my_isdigit(charset_info, *expr_start))
+      die("Expression in %s() must begin with $, !, ` or an integer", cmd_name);
+    eval_expr(&v, expr_start, &expr_end);
+    char *endptr;
+    v.int_val = (int)strtol(v.str_val, &endptr, 10);
+    while (my_isspace(charset_info, *endptr)) endptr++;
+
+    if (*endptr != '\0') {
+      enum block_op operand = find_operand(endptr);
+      if (operand == ILLEG_OP)
+        die("Found junk '%s' in %s() condition", endptr, cmd_name);
+      else
+        die("LHS of %s() must be a variable", cmd_name);
+    }
   }
 
 NO_COMPARE:
@@ -7339,7 +7441,7 @@ static int read_line(char *buf, int size) {
                                 start_lineno));
           }
 
-          /* Skip all space at begining of line */
+          /* Skip all space at beginning of line */
           skip_char = 1;
         } else if (end_of_query(c)) {
           *p = 0;
@@ -7347,7 +7449,7 @@ static int read_line(char *buf, int size) {
                               cur_file->lineno));
           return 0;
         } else if (c == '}') {
-          /* A "}" need to be by itself in the begining of a line to terminate
+          /* A "}" need to be by itself in the beginning of a line to terminate
            */
           *p++ = c;
           *p = 0;
@@ -7658,14 +7760,14 @@ static struct my_option my_long_options[] = {
     {"database", 'D', "Database to use.", &opt_db, &opt_db, nullptr, GET_STR,
      REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #ifdef NDEBUG
-    {"debug", '#', "This is a non-debug version. Catch this and exit.", 0, 0, 0,
-     GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
+    {"debug", '#', "This is a non-debug version. Catch this and exit.", nullptr,
+     nullptr, nullptr, GET_DISABLED, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"debug-check", OPT_DEBUG_CHECK,
-     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
-     NO_ARG, 0, 0, 0, 0, 0, 0},
+     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
+     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"debug-info", OPT_DEBUG_INFO,
-     "This is a non-debug version. Catch this and exit.", 0, 0, 0, GET_DISABLED,
-     NO_ARG, 0, 0, 0, 0, 0, 0},
+     "This is a non-debug version. Catch this and exit.", nullptr, nullptr,
+     nullptr, GET_DISABLED, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #else
     {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.", nullptr,
      nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
@@ -7706,14 +7808,19 @@ static struct my_option my_long_options[] = {
      "Write line number and elapsed time to <testname>.progress.",
      &opt_mark_progress, &opt_mark_progress, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
+    {"init-command", OPT_INIT_COMMAND,
+     "SQL Command to execute when connecting to MySQL server. Will "
+     "automatically be re-executed when reconnecting.",
+     &opt_init_command, &opt_init_command, nullptr, GET_STR, REQUIRED_ARG, 0, 0,
+     0, nullptr, 0, nullptr},
     {"max-connect-retries", OPT_MAX_CONNECT_RETRIES,
      "Maximum number of attempts to connect to server.",
      &opt_max_connect_retries, &opt_max_connect_retries, nullptr, GET_INT,
      REQUIRED_ARG, 500, 1, 10000, nullptr, 0, nullptr},
     {"max-connections", OPT_MAX_CONNECTIONS,
      "Max number of open connections to server", &opt_max_connections,
-     &opt_max_connections, nullptr, GET_INT, REQUIRED_ARG, 128, 8, 5120,
-     nullptr, 0, nullptr},
+     &opt_max_connections, nullptr, GET_INT, REQUIRED_ARG, DEFAULT_MAX_CONN, 8,
+     9120, nullptr, 0, nullptr},
     {"no-skip", OPT_NO_SKIP, "Force the test to run without skip.", &no_skip,
      &no_skip, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"no-skip-exclude-list", 'n',
@@ -7918,6 +8025,9 @@ static bool get_one_option(int optid, const struct my_option *opt,
     case '?':
       usage();
       exit(0);
+    case 'C':
+      CLIENT_WARN_DEPRECATED("--compress", "--compression-algorithms");
+      break;
   }
   return false;
 }
@@ -7927,7 +8037,7 @@ static bool get_one_option(int optid, const struct my_option *opt,
   (A-Z, a-z, 0-9), dash ('-') or underscore ('_'), but should not
   start with dash or underscore.
 
-  Check if a file name conatins any other special characters. If yes,
+  Check if a file name contains any other special characters. If yes,
   throw an error and abort the test run.
 
   @param[in] file_name File name
@@ -8107,13 +8217,12 @@ void init_win_path_patterns() {
 }
 
 void free_win_path_patterns() {
-  uint i = 0;
   const char **pat;
   for (pat = patterns->begin(); pat != patterns->end(); ++pat) {
     my_free(const_cast<char *>(*pat));
   }
   delete patterns;
-  patterns = NULL;
+  patterns = nullptr;
 }
 
 /*
@@ -8130,7 +8239,7 @@ void free_win_path_patterns() {
   => all \ from c:\mysql\m... until next space is converted into /
 */
 
-void fix_win_paths(const char *val, size_t len) {
+void fix_win_paths(const char *val, size_t len [[maybe_unused]]) {
   DBUG_TRACE;
   const char **pat;
   for (pat = patterns->begin(); pat != patterns->end(); ++pat) {
@@ -8139,7 +8248,7 @@ void fix_win_paths(const char *val, size_t len) {
 
     /* Find and fix each path in this string */
     p = const_cast<char *>(val);
-    while (p = strstr(p, *pat)) {
+    while ((p = strstr(p, *pat))) {
       DBUG_PRINT("info", ("Found %s in val p: %s", *pat, p));
       /* Found the pattern.  Back up to the start of this path */
       while (p > val && !my_isspace(charset_info, *(p - 1))) {
@@ -8570,7 +8679,7 @@ static void run_query_normal(struct st_connection *cn,
     */
     if ((counter == 0) && mysql_read_query_result_wrapper(&cn->mysql)) {
       /* we've failed to collect the result set */
-      cn->pending = true;
+      cn->pending = mysql_more_results(&cn->mysql);
       handle_error(command, mysql_errno(mysql), mysql_error(mysql),
                    mysql_sqlstate(mysql), ds);
       goto end;
@@ -8833,7 +8942,7 @@ end:
 /*
   Create a util connection if one does not already exists
   and use that to run the query
-  This is done to avoid implict commit when creating/dropping objects such
+  This is done to avoid implicit commit when creating/dropping objects such
   as view, sp etc.
 */
 
@@ -8845,6 +8954,8 @@ static int util_query(MYSQL *org_mysql, const char *query) {
     DBUG_PRINT("info", ("Creating util_mysql"));
     if (!(mysql = mysql_init(mysql))) die("Failed in mysql_init()");
 
+    if (opt_init_command)
+      mysql_options(mysql, MYSQL_INIT_COMMAND, opt_init_command);
     if (opt_connect_timeout)
       mysql_options(mysql, MYSQL_OPT_CONNECT_TIMEOUT,
                     (void *)&opt_connect_timeout);
@@ -8867,7 +8978,7 @@ static int util_query(MYSQL *org_mysql, const char *query) {
   SYNPOSIS
     run_query()
      mysql	mysql handle
-     command	currrent command pointer
+     command	current command pointer
 
   flags control the phased/stages of query execution to be performed
   if QUERY_SEND_FLAG bit is on, the query will be sent. If QUERY_REAP_FLAG
@@ -9267,8 +9378,8 @@ static void init_signal_handling(void) {
   UINT mode;
 
   mysqltest_thread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
-  if (mysqltest_thread == NULL)
-    die("OpenThread failed, err = %d.", GetLastError());
+  if (mysqltest_thread == nullptr)
+    die("OpenThread failed, err = %lu.", GetLastError());
 
   /* Set output destination of messages to the standard error stream. */
   _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
@@ -9298,37 +9409,37 @@ static void handle_wait_stacktrace_request_event() {
   fprintf(stderr, "Test case timeout failure.\n");
 
   // Suspend the thread running the test
-  if (SuspendThread(mysqltest_thread) == -1) {
+  if (SuspendThread(mysqltest_thread) == static_cast<DWORD>(-1)) {
     DWORD error = GetLastError();
     CloseHandle(mysqltest_thread);
-    die("Error suspending thread, err = %d.\n", error);
+    die("Error suspending thread, err = %lu.\n", error);
   }
 
   // Fetch the thread context
-  CONTEXT test_thread_ctx = {0};
+  CONTEXT test_thread_ctx = {};
   test_thread_ctx.ContextFlags = CONTEXT_FULL;
 
   if (GetThreadContext(mysqltest_thread, &test_thread_ctx) == FALSE) {
     DWORD error = GetLastError();
     CloseHandle(mysqltest_thread);
-    die("Error while fetching thread conext information, err = %d.\n", error);
+    die("Error while fetching thread conext information, err = %lu.\n", error);
   }
 
-  EXCEPTION_POINTERS exp = {0};
+  EXCEPTION_POINTERS exp = {};
   exp.ContextRecord = &test_thread_ctx;
 
   // Set up an Exception record with EXCEPTION_BREAKPOINT code
-  EXCEPTION_RECORD exc_rec = {0};
+  EXCEPTION_RECORD exc_rec = {};
   exc_rec.ExceptionCode = EXCEPTION_BREAKPOINT;
   exp.ExceptionRecord = &exc_rec;
 
   exception_filter(&exp);
 
   // Resume the suspended test thread
-  if (ResumeThread(mysqltest_thread) == -1) {
+  if (ResumeThread(mysqltest_thread) == static_cast<DWORD>(-1)) {
     DWORD error = GetLastError();
     CloseHandle(mysqltest_thread);
-    die("Error resuming thread, err = %d.\n", error);
+    die("Error resuming thread, err = %lu.\n", error);
   }
 
   my_set_exception_pointers(nullptr);
@@ -9343,7 +9454,7 @@ static void wait_stacktrace_request_event() {
       handle_wait_stacktrace_request_event();
       break;
     default:
-      die("Unexpected result %d from WaitForSingleObject.", wait_res);
+      die("Unexpected result %lu from WaitForSingleObject.", wait_res);
       break;
   }
   CloseHandle(stacktrace_request_event);
@@ -9358,11 +9469,11 @@ static void wait_stacktrace_request_event() {
 /// log file.
 static void create_stacktrace_request_event() {
   char event_name[64];
-  std::sprintf(event_name, "mysqltest[%d]stacktrace", opt_safe_process_pid);
+  std::sprintf(event_name, "mysqltest[%lu]stacktrace", opt_safe_process_pid);
 
   // Create an event for the signal handler
-  if ((stacktrace_request_event = CreateEvent(NULL, TRUE, FALSE, event_name)) ==
-      NULL)
+  if ((stacktrace_request_event =
+           CreateEvent(nullptr, TRUE, FALSE, event_name)) == nullptr)
     die("Failed to create timeout_event.");
 
   wait_for_stacktrace_request_event_thread =
@@ -9540,7 +9651,7 @@ int main(int argc, char **argv) {
 
   var_set_string("MYSQLTEST_FILE", cur_file->file_name);
 
-  /* Cursor protcol implies ps protocol */
+  /* Cursor protocol implies ps protocol */
   if (cursor_protocol) ps_protocol = true;
 
   ps_protocol_enabled = ps_protocol;
@@ -9553,18 +9664,18 @@ int main(int argc, char **argv) {
 
   st_connection *con = connections;
   if (!(mysql_init(&con->mysql))) die("Failed in mysql_init()");
+  if (opt_init_command)
+    mysql_options(&con->mysql, MYSQL_INIT_COMMAND, opt_init_command);
   if (opt_connect_timeout)
     mysql_options(&con->mysql, MYSQL_OPT_CONNECT_TIMEOUT,
                   (void *)&opt_connect_timeout);
   if (opt_compress) mysql_options(&con->mysql, MYSQL_OPT_COMPRESS, NullS);
   mysql_options(&con->mysql, MYSQL_OPT_LOCAL_INFILE, nullptr);
-  if (0 != std::strcmp(replace_utf8_utf8mb3(default_charset),
-                       replace_utf8_utf8mb3(charset_info->csname)) &&
+  if (0 != std::strcmp(default_charset, charset_info->csname) &&
       !(charset_info =
             get_charset_by_csname(default_charset, MY_CS_PRIMARY, MYF(MY_WME))))
     die("Invalid character set specified.");
-  mysql_options(&con->mysql, MYSQL_SET_CHARSET_NAME,
-                replace_utf8_utf8mb3(charset_info->csname));
+  mysql_options(&con->mysql, MYSQL_SET_CHARSET_NAME, charset_info->csname);
   if (opt_charsets_dir)
     mysql_options(&con->mysql, MYSQL_SET_CHARSET_DIR, opt_charsets_dir);
 
@@ -9583,7 +9694,7 @@ int main(int argc, char **argv) {
     mysql_options(&con->mysql, MYSQL_SHARED_MEMORY_BASE_NAME,
                   shared_memory_base_name);
 
-  if (opt_ssl_mode == SSL_MODE_DISABLED)
+  if (opt_ssl_mode == SSL_MODE_DISABLED && !opt_protocol)
     mysql_options(&con->mysql, MYSQL_OPT_PROTOCOL,
                   (char *)&opt_protocol_for_default_connection);
 #endif
@@ -9593,6 +9704,10 @@ int main(int argc, char **argv) {
 
   safe_connect(&con->mysql, con->name, opt_host, opt_user, opt_pass, opt_db,
                opt_port, unix_sock);
+
+  if (ssl_client_check_post_connect_ssl_setup(
+          &con->mysql, [](const char *err) { die("%s", err); }))
+    return 0;
 
   /* Use all time until exit if no explicit 'start_timer' */
   timer_start = timer_now();
@@ -10104,7 +10219,12 @@ int main(int argc, char **argv) {
           do_eval(&ds_skip_msg, command->first_argument, command->end, false);
 
           char skip_msg[FN_REFLEN];
-          strmake(skip_msg, ds_skip_msg.str, FN_REFLEN - 1);
+          if (ds_skip_msg.length > 0) {
+            strmake(skip_msg, ds_skip_msg.str, FN_REFLEN - 1);
+          } else {
+            skip_msg[0] = '\0';
+          }
+
           dynstr_free(&ds_skip_msg);
 
           if (!no_skip) {
@@ -10241,7 +10361,7 @@ int main(int argc, char **argv) {
 
   verbose_msg("Test has succeeded!");
   timer_output();
-  /* Yes, if we got this far the test has suceeded! Sakila smiles */
+  /* Yes, if we got this far the test has succeeded! Sakila smiles */
   cleanup_and_exit(0);
   return 0; /* Keep compiler happy too */
 }
@@ -10747,7 +10867,7 @@ struct REP_SET {
   uint found_len;             /* Best match to date */
   int found_offset;
   uint table_offset;
-  uint size_of_bits; /* For convinience */
+  uint size_of_bits; /* For convenience */
 };
 
 struct REP_SETS {
@@ -10841,7 +10961,7 @@ REPLACE *init_replace(const char **from, const char **to, uint count,
     return nullptr;
   }
   (void)make_new_set(&sets);  /* Set starting set */
-  make_sets_invisible(&sets); /* Hide previus sets */
+  make_sets_invisible(&sets); /* Hide previous sets */
   used_sets = -1;
   word_states = make_new_set(&sets);  /* Start of new word */
   start_states = make_new_set(&sets); /* This is first state */
@@ -11040,7 +11160,7 @@ int init_sets(REP_SETS *sets, uint states) {
   return 0;
 }
 
-/* Make help sets invisible for nicer codeing */
+/* Make help sets invisible for nicer coding */
 
 void make_sets_invisible(REP_SETS *sets) {
   sets->invisible = sets->count;

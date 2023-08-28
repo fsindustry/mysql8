@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -55,9 +56,11 @@
 #include "print_version.h"
 #include "welcome_copyright_notice.h" /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
 #include <pwd.h>
 #endif
+
+#include <openssl/ssl.h>
 
 /* Forward declarations */
 
@@ -84,6 +87,8 @@ enum certs {
 
 enum extfiles { CAV3_EXT = 0, CERTV3_EXT };
 
+constexpr const std::array rsa_key_sizes{2048, 2048, 2048, 3072, 7680, 15360};
+
 Sql_string_t cert_files[] = {
     create_string("ca.pem"),          create_string("ca-key.pem"),
     create_string("ca-req.pem"),      create_string("server-cert.pem"),
@@ -98,7 +103,7 @@ Sql_string_t ext_files[] = {create_string("cav3.ext"),
 #define MAX_PATH_LEN \
   (FN_REFLEN - strlen(FN_DIRSEP) - cert_files[SERVER_CERT].length() - 1)
 /*
-  Higest number of fixed characters in subject line is 47:
+  Highest number of fixed characters in subject line is 47:
   MySQL_SERVER_<suffix>_Auto_Generated_Server_Certificate
   Maximum size of subject is 64. So suffix can't be longer
   than 17 characters.
@@ -113,7 +118,7 @@ static char *opt_datadir = nullptr;
 static char default_data_dir[] = MYSQL_DATADIR;
 static char *opt_suffix = nullptr;
 static char default_suffix[] = MYSQL_SERVER_VERSION;
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
 static char *opt_userid = nullptr;
 struct passwd *user_info = nullptr;
 #endif /* HAVE_CHOWN */
@@ -137,7 +142,7 @@ static struct my_option my_options[] = {
     {"suffix", 's', "Suffix to be added in certificate subject line",
      &opt_suffix, &opt_suffix, nullptr, GET_STR_ALLOC, REQUIRED_ARG,
      (longlong)&default_suffix, 0, 0, nullptr, 0, nullptr},
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
     {"uid", 0, "The effective user id to be used for file permission",
      &opt_userid, &opt_userid, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
@@ -147,6 +152,37 @@ static struct my_option my_options[] = {
      0, nullptr, 0, nullptr}};
 
 /* Helper Functions */
+
+/*
+  Fetch the SSL security level
+*/
+int security_level(void) {
+  int current_sec_level = 2;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  /*
+    create a temporary SSL_CTX, we're going to use it to fetch
+    the current OpenSSL security level. So that we can generate
+    keys accordingly.
+  */
+  SSL_CTX *temp_ssl_ctx = SSL_CTX_new(TLS_server_method());
+
+  /* get the current security level */
+  current_sec_level = SSL_CTX_get_security_level(temp_ssl_ctx);
+
+  assert(current_sec_level <= 5);
+
+  /* current range for security level is [1,5] */
+  if (current_sec_level > 5)
+    current_sec_level = 5;
+  else if (current_sec_level <= 1)
+    current_sec_level = 2;
+
+  /* get rid of temp_ssl_ctx, we're done with it */
+  SSL_CTX_free(temp_ssl_ctx);
+#endif
+
+  return current_sec_level;
+}
 
 /**
   The string class will break if constructed with a NULL pointer. This wrapper
@@ -187,7 +223,7 @@ static int set_file_pair_permission(const Sql_string_t &priv,
           << pub.c_str() << endl;
     return 1;
   }
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
   if (user_info) {
     if (chown(priv.c_str(), user_info->pw_uid, user_info->pw_gid) ||
         chown(pub.c_str(), user_info->pw_uid, user_info->pw_gid)) {
@@ -217,14 +253,14 @@ static int remove_file(const Sql_string_t &filename, bool report_error = true) {
 static void free_resources() {
   if (opt_datadir) my_free(opt_datadir);
   if (opt_suffix) my_free(opt_suffix);
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
   if (opt_userid) my_free(opt_userid);
 #endif
 }
 
 class RSA_priv {
  public:
-  RSA_priv(uint32_t key_size = 2048) : m_key_size(key_size) {}
+  explicit RSA_priv(uint32_t key_size) : m_key_size(key_size) {}
 
   ~RSA_priv() = default;
 
@@ -253,15 +289,16 @@ class RSA_pub {
 
 class X509_key {
  public:
-  X509_key(const Sql_string_t &version, uint32_t validity = 10 * 365L)
+  explicit X509_key(const Sql_string_t &version, uint32_t validity = 10 * 365L)
       : m_validity(validity) {
     m_subj_prefix << "-subj /CN=MySQL_Server_" << version;
   }
 
   Sql_string_t operator()(Sql_string_t suffix, const Sql_string_t &key_file,
-                          const Sql_string_t &req_file) {
+                          const Sql_string_t &req_file,
+                          const Sql_string_t &key_size) {
     stringstream command;
-    command << "openssl req -newkey rsa:2048 -days " << m_validity
+    command << "openssl req -newkey rsa:" << key_size << " -days " << m_validity
             << " -nodes -keyout " << key_file << " " << m_subj_prefix.str()
             << suffix << " -out " << req_file << " && openssl rsa -in "
             << key_file << " -out " << key_file;
@@ -312,7 +349,7 @@ class X509v3_ext_writer {
 
 class X509_cert {
  public:
-  X509_cert(uint32_t validity = 10 * 365L) : m_validity(validity) {}
+  explicit X509_cert(uint32_t validity = 10 * 365L) : m_validity(validity) {}
 
   ~X509_cert() = default;
 
@@ -377,6 +414,7 @@ static bool check_suffix() {
 
 int main(int argc, char *argv[]) {
   int ret_val = 0;
+  int sec_level = security_level();
   Sql_string_t openssl_check("openssl version");
   bool save_skip_unknown = my_getopt_skip_unknown;
   MEM_ROOT alloc{PSI_NOT_INSTRUMENTED, 512};
@@ -473,7 +511,7 @@ int main(int argc, char *argv[]) {
       ret_val = 1;
       goto end;
     }
-#if HAVE_CHOWN
+#ifdef HAVE_CHOWN
     if (opt_userid && geteuid() == 0) {
       user_info = getpwnam(opt_userid);
       if (!user_info) {
@@ -528,7 +566,8 @@ int main(int argc, char *argv[]) {
       /* Generate CA Key and Certificate */
       if ((ret_val =
                execute_command(x509_key("_Auto_Generated_CA_Certificate",
-                                        cert_files[CA_KEY], cert_files[CA_REQ]),
+                                        cert_files[CA_KEY], cert_files[CA_REQ],
+                                        to_string(rsa_key_sizes[sec_level])),
                                "Error generating ca_key.pem and ca_req.pem")))
         goto end;
 
@@ -541,7 +580,8 @@ int main(int argc, char *argv[]) {
       /* Generate Server Key and Certificate */
       if ((ret_val = execute_command(
                x509_key("_Auto_Generated_Server_Certificate",
-                        cert_files[SERVER_KEY], cert_files[SERVER_REQ]),
+                        cert_files[SERVER_KEY], cert_files[SERVER_REQ],
+                        to_string(rsa_key_sizes[sec_level])),
                "Error generating server_key.pem and server_req.pem")))
         goto end;
 
@@ -555,7 +595,8 @@ int main(int argc, char *argv[]) {
       /* Generate Client Key and Certificate */
       if ((ret_val = execute_command(
                x509_key("_Auto_Generated_Client_Certificate",
-                        cert_files[CLIENT_KEY], cert_files[CLIENT_REQ]),
+                        cert_files[CLIENT_KEY], cert_files[CLIENT_REQ],
+                        to_string(rsa_key_sizes[sec_level])),
                "Error generating client_key.pem and client_req.pem")))
         goto end;
 
@@ -614,7 +655,7 @@ int main(int argc, char *argv[]) {
       info << "RSA key files are present in given dir. Skipping generation."
            << endl;
     } else {
-      RSA_priv rsa_priv;
+      RSA_priv rsa_priv(rsa_key_sizes[sec_level]);
       RSA_pub rsa_pub;
 
       /* Remove existing file if any */

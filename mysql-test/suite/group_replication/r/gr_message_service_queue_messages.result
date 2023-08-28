@@ -2,7 +2,7 @@ include/have_replication_observers_example_plugin.inc
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection server1]
 
 # 1. Load plugin replication observers example on server1
@@ -54,6 +54,7 @@ include/assert.inc [Server2 received view from server1 leaving the group]
 # 10. Remove debug point and release hold of messages
 # Removing debug point 'group_replication_message_service_hold_messages' from @@GLOBAL.debug
 SET DEBUG_SYNC= "now SIGNAL signal.notification_continue";
+SET DEBUG_SYNC= "RESET";
 
 # 11. Assert server2 received both messages transmitted by GR message
 #     delivery

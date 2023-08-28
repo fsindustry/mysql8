@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,8 @@
 #ifndef _ROUTER_MYSQL_SESSION_H_
 #define _ROUTER_MYSQL_SESSION_H_
 
+#include "mysqlrouter/router_export.h"
+
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -35,14 +37,12 @@
 
 #include "mysql/harness/stdx/expected.h"
 #include "mysqlrouter/log_filter.h"
-#ifdef FRIEND_TEST
-class MockMySQLSession;
-#endif
 
 namespace mysqlrouter {
 
 class MysqlError {
  public:
+  MysqlError() = default;
   MysqlError(unsigned int code, std::string message, std::string sql_state)
       : code_{code},
         message_{std::move(message)},
@@ -55,7 +55,7 @@ class MysqlError {
   unsigned int value() const { return code_; }
 
  private:
-  unsigned int code_;
+  unsigned int code_{0};
   std::string message_;
   std::string sql_state_;
 };
@@ -149,10 +149,10 @@ class Option<Opt, std::nullptr_t> {
 
 // mysql_options() may be used with MYSQL * == nullptr to get global values.
 
-class MySQLSession {
+class ROUTER_LIB_EXPORT MySQLSession {
  public:
-  static const int kDefaultConnectTimeout = 15;
-  static const int kDefaultReadTimeout = 30;
+  static constexpr int kDefaultConnectTimeout = 5;
+  static constexpr int kDefaultReadTimeout = 30;
   typedef std::vector<const char *> Row;
   typedef std::function<bool(const Row &)> RowProcessor;
   typedef std::function<void(unsigned, MYSQL_FIELD *)> FieldValidator;
@@ -325,16 +325,25 @@ class MySQLSession {
     Row row_;
   };
 
-  struct LoggingStrategy {
-    virtual void log(const std::string &msg) = 0;
+  struct ROUTER_LIB_EXPORT LoggingStrategy {
+    LoggingStrategy() = default;
+
+    LoggingStrategy(const LoggingStrategy &) = default;
+    LoggingStrategy(LoggingStrategy &&) = default;
+
+    LoggingStrategy &operator=(const LoggingStrategy &) = default;
+    LoggingStrategy &operator=(LoggingStrategy &&) = default;
+
     virtual ~LoggingStrategy() = default;
+
+    virtual void log(const std::string &msg) = 0;
   };
 
-  struct LoggingStrategyNone : public LoggingStrategy {
+  struct ROUTER_LIB_EXPORT LoggingStrategyNone : public LoggingStrategy {
     virtual void log(const std::string & /*msg*/) override {}
   };
 
-  struct LoggingStrategyDebugLogger : public LoggingStrategy {
+  struct ROUTER_LIB_EXPORT LoggingStrategyDebugLogger : public LoggingStrategy {
     virtual void log(const std::string &msg) override;
   };
 
@@ -397,12 +406,12 @@ class MySQLSession {
    * @retval false if option is not known.
    */
   template <class GettableMysqlOption>
-  stdx::expected<void, void> get_option(GettableMysqlOption &opt) {
+  bool get_option(GettableMysqlOption &opt) {
     if (0 != mysql_get_option(connection_, opt.option(), opt.data())) {
-      return stdx::make_unexpected();
+      return false;
     }
 
-    return {};
+    return true;
   }
 
   virtual void connect(const std::string &host, unsigned int port,
@@ -441,11 +450,18 @@ class MySQLSession {
       const std::string &query);  // throws Error, std::logic_error
   virtual void query(
       const std::string &query, const RowProcessor &processor,
-      const FieldValidator &validator =
-          null_field_validator);  // throws Error, std::logic_error
+      const FieldValidator &validator);  // throws Error, std::logic_error
   virtual std::unique_ptr<MySQLSession::ResultRow> query_one(
       const std::string &query,
-      const FieldValidator &validator = null_field_validator);  // throws Error
+      const FieldValidator &validator);  // throws Error
+                                         //
+  void query(const std::string &stmt, const RowProcessor &processor) {
+    return query(stmt, processor, [](unsigned, MYSQL_FIELD *) {});
+  }
+
+  std::unique_ptr<MySQLSession::ResultRow> query_one(const std::string &stmt) {
+    return query_one(stmt, [](unsigned, MYSQL_FIELD *) {});
+  }
 
   virtual uint64_t last_insert_id() noexcept;
 
@@ -462,8 +478,6 @@ class MySQLSession {
   virtual const char *ssl_cipher();
 
  protected:
-  static const std::function<void(unsigned, MYSQL_FIELD *)>
-      null_field_validator;
   std::unique_ptr<LoggingStrategy> logging_strategy_;
 
  private:
@@ -475,10 +489,6 @@ class MySQLSession {
   SQLLogFilter log_filter_;
 
   virtual MYSQL *raw_mysql() noexcept { return connection_; }
-
-#ifdef FRIEND_TEST
-  friend class ::MockMySQLSession;
-#endif
 
   class MYSQL_RES_Deleter {
    public:
@@ -498,7 +508,7 @@ class MySQLSession {
    *
    * @param q stmt to execute
    *
-   * @returns resultset on sucess, MysqlError on error
+   * @returns resultset on success, MysqlError on error
    */
   stdx::expected<mysql_result_type, MysqlError> real_query(
       const std::string &q);

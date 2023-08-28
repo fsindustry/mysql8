@@ -1,4 +1,5 @@
 --source include/have_udf.inc
+--source include/elide_costs.inc
 #
 # To run this test, "sql/udf_example.cc" need to be compiled into
 # udf_example.so and LD_LIBRARY_PATH should be setup to point out where
@@ -220,29 +221,31 @@ drop function if exists pi;
 --error ER_NATIVE_FCT_NAME_COLLISION
 CREATE FUNCTION pi RETURNS STRING SONAME "should_not_parse.so";
 
-# Verify that Stored Functions and UDF are mutually exclusive
+--echo
+--echo # Bug#33301931 LOADABLE AND STORED FUNCTIONS SHARE NAMESPACE INCONSISTENTLY
+--echo
+--echo # Verify that UDF and Stored function can be created with the same name.
+
+--echo
+--echo # UDF can be created with the same name as SF. UDF eclipses the stored function when used without schema qualifier
 DROP FUNCTION IF EXISTS metaphon;
-
-CREATE FUNCTION metaphon(a int) RETURNS int
-return 0;
-
-# this currently passes, and eclipse the stored function
+CREATE FUNCTION metaphon(a int) RETURNS int return 0;
 --replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
 eval CREATE FUNCTION metaphon RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+SELECT metaphon('a');
+SELECT test.metaphon(0);
+DROP FUNCTION test.metaphon;
 
-DROP FUNCTION metaphon;
-DROP FUNCTION metaphon;
-
+--echo
+--echo # SF can be created with the same name as UDF. UDF eclipses the stored function when used without schema qualifier
+DROP FUNCTION IF EXISTS metaphon;
 --replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
 eval CREATE FUNCTION metaphon RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
-
---error ER_UDF_EXISTS
-CREATE FUNCTION metaphon(a int) RETURNS int
-return 0;
-
---error ER_UDF_EXISTS
-CREATE FUNCTION test.metaphon(a int) RETURNS int
-return 0;
+CREATE FUNCTION metaphon(a int) RETURNS int return 0;
+SELECT metaphon('a');
+SELECT test.metaphon(0);
+DROP FUNCTION test.metaphon;
+# End of Bug#33301931
 
 # End of Bug#18239
 
@@ -857,12 +860,27 @@ let $query =
                  FROM t1 GROUP BY f1) as dt
   WHERE median != 1;
 
---replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+/rows=***/
+--replace_regex $elide_costs_and_rows
 --skip_if_hypergraph  # Hypergraph optimizer prints more costs.
 --eval EXPLAIN FORMAT=tree $query
 --eval $query
 
 DROP TABLE t1;
 DROP FUNCTION my_median;
+
+#
+# Bug#34666531: Mysqld failure - String::ptr()
+#
+
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION sequence RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1),(2),(3),(4);
+
+SELECT a FROM t1 WHERE a = sequence();
+SELECT a FROM (SELECT sequence() AS seq, a FROM t1) AS dt WHERE a = seq;
+
+DROP FUNCTION sequence;
+DROP TABLE t1;
 
 --echo # End of the 8.0 tests

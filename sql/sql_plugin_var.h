@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -197,7 +197,7 @@ class sys_var_pluginvar : public sys_var {
 
  public:
   bool is_plugin;
-  st_plugin_int *plugin;
+  st_plugin_int *plugin{nullptr};
   SYS_VAR *plugin_var;
   /**
     variable name from whatever is hard-coded in the plugin source
@@ -238,7 +238,8 @@ class sys_var_pluginvar : public sys_var {
                 (plugin_var_arg->flags & PLUGIN_VAR_INVISIBLE ? INVISIBLE : 0) |
                 (plugin_var_arg->flags & PLUGIN_VAR_PERSIST_AS_READ_ONLY
                      ? PERSIST_AS_READ_ONLY
-                     : 0),
+                     : 0) |
+                (plugin_var_arg->flags & PLUGIN_VAR_SENSITIVE ? SENSITIVE : 0),
             0, (plugin_var_arg->flags & PLUGIN_VAR_NOCMDOPT) ? -1 : 0,
             (plugin_var_arg->flags & PLUGIN_VAR_NOCMDARG
                  ? NO_ARG
@@ -263,20 +264,32 @@ class sys_var_pluginvar : public sys_var {
   uchar *real_value_ptr(THD *thd, enum_var_type type);
   TYPELIB *plugin_var_typelib(void);
   uchar *do_value_ptr(THD *running_thd, THD *target_thd, enum_var_type type,
-                      LEX_STRING *base);
-  uchar *do_value_ptr(THD *thd, enum_var_type type, LEX_STRING *base) {
-    return do_value_ptr(thd, thd, type, base);
+                      std::string_view keycache_name);
+  uchar *do_value_ptr(THD *thd, enum_var_type type,
+                      std::string_view keycache_name) {
+    return do_value_ptr(thd, thd, type, keycache_name);
   }
   const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
-                                 LEX_STRING *base) override {
-    return do_value_ptr(running_thd, target_thd, OPT_SESSION, base);
+                                 std::string_view keycache_name) override {
+    return do_value_ptr(running_thd, target_thd, OPT_SESSION, keycache_name);
   }
-  const uchar *global_value_ptr(THD *thd, LEX_STRING *base) override {
-    return do_value_ptr(thd, OPT_GLOBAL, base);
+  const uchar *global_value_ptr(THD *thd,
+                                std::string_view keycache_name) override {
+    return do_value_ptr(thd, OPT_GLOBAL, keycache_name);
   }
   bool do_check(THD *thd, set_var *var) override;
   void session_save_default(THD *, set_var *) override {}
   void saved_value_to_string(THD *thd, set_var *var, char *def_val) override;
+
+  /**
+    Set a PERSIST_ONLY value for a variable. The resulting value should be
+    set to a string representation of the actual value.
+
+    @param[in]     thd   Thread context.
+    @param[in]     var   Plugin variable.
+    @param[in,out] dest  Destination string pointer.
+  */
+  void persist_only_to_string(THD *, set_var *var, String *dest) override;
   void global_save_default(THD *, set_var *) override {}
   bool session_update(THD *thd, set_var *var) override;
   bool global_update(THD *thd, set_var *var) override;
@@ -289,7 +302,33 @@ class sys_var_pluginvar : public sys_var {
   bool is_non_persistent() override {
     return (plugin_var->flags & PLUGIN_VAR_NOPERSIST);
   }
+  bool is_hint_updateable() const override {
+    return (plugin_var->flags & PLUGIN_VAR_HINTUPDATEABLE);
+  }
+
   void set_is_plugin(bool val) override { is_plugin = val; }
+
+  /**
+    Check variable type.
+
+    @param[in]     type_mask   Type mask.
+    @return Completion status
+    @retval true Variable type matches with provided type mask
+    @retval false Variable type doesnt match with provided type mask
+  */
+  bool check_type(uint type_mask) const {
+    return ((plugin_var->flags & PLUGIN_VAR_TYPEMASK) == type_mask);
+  }
+
+  /**
+    Create item from plugin variable session value.
+
+    @param  thd  pointer to THD object
+
+    @return pointer to Item object or NULL if it's
+            impossible to obtain the value.
+  */
+  Item *copy_value(THD *thd) override;
 };
 
 /*

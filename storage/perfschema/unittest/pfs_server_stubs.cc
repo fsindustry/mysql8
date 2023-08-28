@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -44,6 +44,8 @@ uint lower_case_table_names = 0;
 CHARSET_INFO *files_charset_info = nullptr;
 CHARSET_INFO *system_charset_info = nullptr;
 
+extern "C" void sql_alloc_error_handler() {}
+
 extern "C" unsigned int thd_get_current_thd_terminology_use_previous() {
   return 0;
 }
@@ -55,6 +57,14 @@ void reset_status_vars() {}
 struct System_status_var *get_thd_status_var(THD *, bool *) {
   return nullptr;
 }
+
+#ifndef NDEBUG
+void thd_mem_cnt_alloc(THD *, size_t, const char *) {}
+#else
+void thd_mem_cnt_alloc(THD *, size_t) {}
+#endif
+
+void thd_mem_cnt_free(THD *, size_t) {}
 
 unsigned int mysql_errno_to_sqlstate_index(unsigned int) { return 0; }
 
@@ -69,3 +79,9 @@ int log_message(int, ...) {
   /* Do not pollute the unit test output with annoying messages. */
   return 0;
 }
+
+bool acl_is_utility_user(const char *, const char *, const char *) {
+  return false;
+}
+
+void reset_status_by_thd() {}

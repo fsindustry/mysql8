@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,6 +49,7 @@
 #include "plugin/group_replication/include/recovery.h"
 #include "plugin/group_replication/include/services/message_service/message_service.h"
 #include "plugin/group_replication/include/services/registry.h"
+#include "plugin/group_replication/include/services/server_services_references.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_interface.h"
 
 // Forward declarations
@@ -116,7 +117,6 @@ struct gr_modules {
     MESSAGE_SERVICE_HANDLER,
     BINLOG_DUMP_THREAD_KILL,
     MEMBER_ACTIONS_HANDLER,
-    MYSQL_THREAD_HANDLER,
     NUM_MODULES
   };
   using mask = std::bitset<NUM_MODULES>;
@@ -173,6 +173,8 @@ extern Autorejoin_thread *autorejoin_module;
 extern Message_service_handler *message_service_handler;
 extern Member_actions_handler *member_actions_handler;
 extern Mysql_thread *mysql_thread_handler;
+extern Mysql_thread *mysql_thread_handler_read_only_mode;
+extern Server_services_references *server_services_references_module;
 
 // Auxiliary Functionality
 extern Plugin_gcs_events_handler *events_handler;
@@ -190,8 +192,8 @@ extern SERVICE_TYPE_NO_CONST(mysql_runtime_error) * mysql_runtime_error_service;
 // Plugin global methods
 bool server_engine_initialized();
 void *get_plugin_pointer();
-mysql_mutex_t *get_plugin_running_lock();
-Plugin_waitlock *get_plugin_online_lock();
+Checkable_rwlock *get_plugin_running_lock();
+mysql_mutex_t *get_plugin_applier_module_initialize_terminate_lock();
 int initialize_plugin_and_join(enum_plugin_con_isolation sql_api_isolation,
                                Delayed_initialization_thread *delayed_init_thd);
 int initialize_plugin_modules(gr_modules::mask modules_to_init);
@@ -215,6 +217,7 @@ uint get_number_of_autorejoin_tries();
 ulonglong get_rejoin_timeout();
 void declare_plugin_cloning(bool is_running);
 bool get_allow_single_leader();
+uint get_auto_evict_timeout();
 /**
   Encapsulates the logic necessary to attempt a rejoin, i.e. gracefully leave
   the group, terminate GCS infrastructure, terminate auto-rejoin relevant plugin
@@ -230,12 +233,15 @@ bool get_plugin_is_stopping();
 bool get_wait_on_engine_initialization();
 void enable_server_shutdown_status();
 bool get_server_shutdown_status();
+void mysql_thread_handler_finalize();
 void set_plugin_is_setting_read_mode(bool value);
 bool get_plugin_is_setting_read_mode();
 const char *get_group_name_var();
 const char *get_view_change_uuid_var();
 ulong get_exit_state_action_var();
 ulong get_flow_control_mode_var();
+ulong get_certification_loop_sleep_time_var();
+ulong get_certification_loop_chunk_size_var();
 long get_flow_control_certifier_threshold_var();
 long get_flow_control_applier_threshold_var();
 long get_flow_control_min_quota_var();
@@ -247,8 +253,6 @@ int get_flow_control_hold_percent_var();
 int get_flow_control_release_percent_var();
 ulong get_components_stop_timeout_var();
 ulong get_communication_stack_var();
-void set_error_state_due_to_error_during_autorejoin();
-bool get_error_state_due_to_error_during_autorejoin();
 
 // Plugin public methods
 int plugin_group_replication_init(MYSQL_PLUGIN plugin_info);

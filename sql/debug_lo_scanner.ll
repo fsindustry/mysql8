@@ -1,5 +1,5 @@
 %top{
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -56,7 +56,7 @@
   yylloc_param->first_column = yycolumn; \
   yylloc_param->last_column = yycolumn+yyleng; \
   yycolumn += yyleng;
-  
+
 /*
   Allocate string token on the caller memory root.
 */
@@ -272,4 +272,3 @@ int main(int argc, char *argv[])
   fclose(data);
 }
 #endif /* TEST_MAIN */
-

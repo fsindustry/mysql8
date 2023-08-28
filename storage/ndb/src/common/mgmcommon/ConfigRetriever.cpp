@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,7 @@
 #include <ConfigValues.hpp>
 #include <DnsCache.hpp>
 #include <EventLogger.hpp>
+#include "portlib/NdbTCP.h"
 
 //****************************************************************************
 //****************************************************************************
@@ -59,7 +60,7 @@ ConfigRetriever::ConfigRetriever(const char * _connect_string,
 
   m_handle= ndb_mgm_create_handle();
 
-  if (m_handle == 0) {
+  if (m_handle == nullptr) {
     setError(CR_ERROR, "Unable to allocate mgm handle");
     DBUG_VOID_RETURN;
   }
@@ -136,9 +137,24 @@ int
 ConfigRetriever::do_connect(int no_retries,
 			    int retry_delay_in_seconds, int verbose)
 {
-  return
-    (ndb_mgm_connect(m_handle,no_retries,retry_delay_in_seconds,verbose)==0) ?
-    0 : -1;
+  if (ndb_mgm_connect(m_handle, no_retries, retry_delay_in_seconds, verbose) == 0)
+  {
+    return 0;
+  }
+  else
+  {
+    const int err = ndb_mgm_get_latest_error(m_handle);
+    if (err == NDB_MGM_ILLEGAL_CONNECT_STRING)
+    {
+      BaseString tmp(ndb_mgm_get_latest_error_msg(m_handle));
+      tmp.append(" : ");
+      tmp.append(ndb_mgm_get_latest_error_desc(m_handle));
+      setError(CR_ERROR, tmp.c_str());
+      return -2;
+    }
+    return -1;
+  }
+
 }
 
 int
@@ -201,18 +217,28 @@ ConfigRetriever::getConfig(NdbMgmHandle mgm_handle)
 ndb_mgm::config_ptr
 ConfigRetriever::getConfig(const char * filename)
 {
+  BaseString err;
+  ndb_mgm::config_ptr conf = getConfig(filename, err);
+  if (!conf)
+  {
+    setError(CR_ERROR, err);
+  }
+  return conf;
+}
+
+ndb_mgm::config_ptr
+ConfigRetriever::getConfig(const char * filename, BaseString& err)
+{
   if (access(filename, F_OK))
   {
-    BaseString err;
-    err.assfmt("Could not find file: '%s'", filename);
-    setError(CR_ERROR, err);
+    err.assfmt("Could not find file '%s'", filename);
     return {};
   }
 
   FILE * f = fopen(filename, "rb");
-  if(f == 0)
+  if(f == nullptr)
   {
-    setError(CR_ERROR, "Failed to open file");
+    err.assfmt("Failed to open file '%s'", filename);
     return {};
   }
 
@@ -223,7 +249,8 @@ ConfigRetriever::getConfig(const char * filename)
   {
     if (config_buf.append(read_buf, read_sz) != 0)
     {
-      setError(CR_ERROR, "Out of memory when appending read data");
+      err.assfmt("Out of memory when appending read data from file '%s'",
+                 filename);
       fclose(f);
       return {};
     }
@@ -233,7 +260,7 @@ ConfigRetriever::getConfig(const char * filename)
   ConfigValuesFactory cvf;
   if(!cvf.unpack_buf(config_buf))
   {
-    setError(CR_ERROR,  "Error while unpacking");
+    err.assfmt("Error while unpacking file '%s'", filename);
     return {};
   }
   return ndb_mgm::config_ptr(
@@ -255,7 +282,7 @@ ConfigRetriever::setError(ErrorType et, BaseString err){
 
 void
 ConfigRetriever::resetError(){
-  setError(CR_NO_ERROR,0);
+  setError(CR_NO_ERROR,nullptr);
 }
 
 int
@@ -292,7 +319,9 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
   }
 
   if(_type != (unsigned int)m_node_type){
-    const char *type_s, *alias_s, *type_s2, *alias_s2;
+    const char *alias_s, *alias_s2;
+    const char *type_s = nullptr;
+    const char *type_s2 = nullptr;
     alias_s=
       ndb_mgm_get_node_type_alias_string((enum ndb_mgm_node_type)m_node_type,
                                          &type_s);
@@ -345,7 +374,7 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     }
 
     char msg[150];
-    if (!SocketServer::tryBind(port, NULL, msg, sizeof(msg))) {
+    if (!SocketServer::tryBind(port, nullptr, msg, sizeof(msg))) {
       BaseString::snprintf(buf, 255,
                            "Mgmd node is started on port that is "
                            "already in use. Attempt to bind '*:%d' "
@@ -367,13 +396,12 @@ ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     Uint32 type = CONNECTION_TYPE_TCP + 1;
     if(iter.get(CFG_TYPE_OF_SECTION, &type)) continue;
     if(type != CONNECTION_TYPE_TCP) continue;
-    
-    Uint32 nodeId1, nodeId2, remoteNodeId;
+
+    Uint32 nodeId1, nodeId2;
     if(iter.get(CFG_CONNECTION_NODE_1, &nodeId1)) continue;
     if(iter.get(CFG_CONNECTION_NODE_2, &nodeId2)) continue;
     
     if(nodeId1 != nodeid && nodeId2 != nodeid) continue;
-    remoteNodeId = (nodeid == nodeId1 ? nodeId2 : nodeId1);
 
     Uint32 allow_unresolved = false;
     iter.get(CFG_CONNECTION_UNRES_HOSTS, & allow_unresolved);
@@ -448,7 +476,7 @@ ConfigRetriever::allocNodeId(int no_retries, int retry_delay_in_seconds,
         ndb_mgm_alloc_nodeid(m_handle, m_version, m_node_type,
                              no_retries == 0 /* only log last retry */);
       if (res >= 0)
-        return (Uint32)res; // Sucess!!
+        return (Uint32)res; // Success!!
     }
 
     error = ndb_mgm_get_latest_error(m_handle);

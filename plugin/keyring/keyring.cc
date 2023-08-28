@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,7 @@
 #include <mysql/plugin_keyring.h>
 #include <memory>
 
+#include <my_rnd.h>
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/log_builtins.h>
 #include <openssl/err.h>
@@ -33,6 +34,7 @@
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_psi_config.h"
+#include "mysql/psi/mysql_rwlock.h"
 #include "mysqld_error.h"
 #include "plugin/keyring/buffered_file_io.h"
 #include "plugin/keyring/common/keyring.h"
@@ -87,7 +89,7 @@ static char *keyring_file_data_value = nullptr;
 static MYSQL_SYSVAR_STR(
     data,                                              /* name       */
     keyring_file_data_value,                           /* value      */
-    PLUGIN_VAR_RQCMDARG,                               /* flags      */
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_NODEFAULT,        /* flags      */
     "The path to the keyring file. Must be specified", /* comment    */
     check_keyring_file_data,                           /* check()    */
     update_keyring_file_data,                          /* update()   */
@@ -111,9 +113,11 @@ static int keyring_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
 
   try {
     SSL_library_init();  // always returns 1
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
     ERR_load_BIO_strings();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
 #ifdef HAVE_PSI_INTERFACE
     keyring_init_psi_keys();

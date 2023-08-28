@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,6 @@
 #include <utility>  // move
 
 #include "classic_mock_session.h"
-#include "common.h"  // ScopeGuard
 #include "duktape_statement_reader.h"
 #include "mock_session.h"
 #include "mysql/harness/logging/logging.h"
@@ -50,6 +49,7 @@
 #include "mysqlrouter/classic_protocol_message.h"
 #include "mysqlrouter/utils.h"  // to_string
 #include "router/src/mock_server/src/statement_reader.h"
+#include "scope_guard.h"
 #include "x_mock_session.h"
 
 IMPORT_LOG_FUNCTIONS()
@@ -186,7 +186,7 @@ class Acceptor {
 
     sock_.async_accept(client_ep_, [this](std::error_code ec,
                                           protocol_type::socket client_sock) {
-      mysql_harness::ScopeGuard guard([&]() {
+      Scope_guard guard([&]() {
         work_.serialize_with_cv([](auto &work, auto &cv) {
           // leaving acceptor.
           //
@@ -273,19 +273,24 @@ class Acceptor {
 };
 
 void MySQLServerMock::run(mysql_harness::PluginFuncEnv *env) {
-  Acceptor acceptor{io_ctx_,
-                    protocol_name_,
-                    client_sessions_,
-                    DuktapeStatementReaderFactory{
-                        expected_queries_file_,
-                        module_prefixes_,
-                        // expose session data as json-encoded string
-                        {{"port", std::to_string(bind_port_)},
-                         {"ssl_cipher", "\"\""},
-                         {"mysqlx_ssl_cipher", "\"\""}},
-                        MockServerComponent::get_instance().get_global_scope()},
-                    tls_server_ctx_,
-                    ssl_mode_ != SSL_MODE_DISABLED};
+  Acceptor acceptor{
+      io_ctx_,
+      protocol_name_,
+      client_sessions_,
+      DuktapeStatementReaderFactory{
+          expected_queries_file_,
+          module_prefixes_,
+          // expose session data as json-encoded string
+          {{"port", [this]() { return std::to_string(bind_port_); }},
+           {"ssl_cipher", []() { return "\"\""s; }},
+           {"mysqlx_ssl_cipher", []() { return "\"\""s; }},
+           {"ssl_session_cache_hits",
+            [this]() {
+              return std::to_string(tls_server_ctx_.session_cache_hits());
+            }}},
+          MockServerComponent::get_instance().get_global_scope()},
+      tls_server_ctx_,
+      ssl_mode_ != SSL_MODE_DISABLED};
 
   auto res = acceptor.init(bind_address_, bind_port_);
   if (!res) {

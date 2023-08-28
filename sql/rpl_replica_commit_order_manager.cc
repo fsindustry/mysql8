@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,7 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_sys.h"
-#include "mysql/components/services/psi_stage_bits.h"
+#include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysqld_error.h"
@@ -174,7 +174,7 @@ bool Commit_order_manager::wait(Slave_worker *worker) {
 
       DBUG_PRINT("info", ("thd has seen an error signal from old thread"));
       worker_thd->get_stmt_da()->set_overwrite_status(true);
-      my_error(ER_SLAVE_WORKER_STOPPED_PREVIOUS_THD_ERROR, MYF(0));
+      my_error(ER_REPLICA_WORKER_STOPPED_PREVIOUS_THD_ERROR, MYF(0));
     }
     /*
       Set HA_IGNORE_DURABILITY so that transaction is not flushed to the
@@ -267,10 +267,11 @@ void Commit_order_manager::finish_one(Slave_worker *worker) {
     assert(this->m_workers.front() == worker->id);
     assert(!this->m_workers.is_empty());
 
-    auto this_seq_nr{0};
+    cs::apply::Commit_order_queue::sequence_type this_seq_nr{0};
     auto this_worker{cs::apply::Commit_order_queue::NO_WORKER};
     std::tie(this_worker, this_seq_nr) = this->m_workers.pop();
-    auto next_seq_nr = this_seq_nr + 1;
+    auto next_seq_nr =
+        cs::apply::Commit_order_queue::get_next_sequence_nr(this_seq_nr);
     assert(worker->id == this_worker);
 
     auto next_worker = this->m_workers.front();
@@ -338,7 +339,7 @@ void Commit_order_manager::check_and_report_deadlock(THD *thd_self,
   /* Check if both workers are working for the same channel */
   if (mngr != nullptr && self_w->c_rli == wait_for_w->c_rli &&
       wait_for_w->sequence_number() > self_w->sequence_number()) {
-    DBUG_PRINT("info", ("Found slave order commit deadlock"));
+    DBUG_PRINT("info", ("Found replica order commit deadlock"));
     mngr->report_deadlock(wait_for_w);
   }
 }
@@ -498,7 +499,7 @@ bool Commit_order_manager::visit_lock_graph(
   return false;
 }
 
-bool has_commit_order_manager(THD *thd) {
+bool has_commit_order_manager(const THD *thd) {
   return is_mts_worker(thd) &&
          thd->rli_slave->get_commit_order_manager() != nullptr;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,7 +61,7 @@
 #include "sql/sql_lex.h"
 #include "sql/sql_parse.h"  // dispatch_sql_command
 #include "sql/sql_profile.h"
-#include "sql/sys_vars_shared.h"  // intern_find_sys_var
+#include "sql/sys_vars_shared.h"  // find_static_system_variable
 #include "sql/system_variables.h"
 #include "sql/thd_raii.h"
 #include "sql/transaction_info.h"
@@ -250,7 +250,7 @@ static int process_iterator(THD *thd, Command_iterator *it,
 
     // Ignore ER_TOO_LONG_KEY for system tables.
     thd->push_internal_handler(&error_handler);
-    dispatch_sql_command(thd, &parser_state);
+    dispatch_sql_command(thd, &parser_state, true);
     thd->pop_internal_handler();
 
     error = thd->is_error();
@@ -364,6 +364,20 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
 
   thd->set_new_thread_id();
 
+  DBUG_EXECUTE_IF("bootstrap_crash", DBUG_SUICIDE(););
+  DBUG_EXECUTE_IF("bootstrap_hang", {
+    while (1) my_sleep(1000000);
+  });
+  DBUG_EXECUTE_IF("bootstrap_buffer_overrun", {
+    int *mem = static_cast<int *>(my_malloc(PSI_NOT_INSTRUMENTED, 127, 0));
+    // Allocations are usually aligned, so even if 127 bytes were requested,
+    // it's mostly safe to assume there are 128 bytes. Writing into the last
+    // byte is safe for the rest of the code, but still enough to trigger
+    // AddressSanitizer (ASAN) or Valgrind.
+    *static_cast<volatile int *>(mem + (128 / sizeof(*mem)) - 1) = 1;
+    my_free(mem);
+  });
+
   handle_bootstrap_args args;
 
   args.m_thd = thd;
@@ -373,7 +387,8 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
 
   // Set server default sql_mode irrespective of mysqld server command line
   // argument.
-  thd->variables.sql_mode = intern_find_sys_var("sql_mode", 0)->get_default();
+  thd->variables.sql_mode =
+      find_static_system_variable("sql_mode")->get_default();
 
   // Set session server and connection collation irrespective of
   // mysqld server command line argument.
@@ -386,7 +401,7 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
   // avoid problems due to transactions being active when they are
   // not supposed to.
   thd->variables.completion_type =
-      intern_find_sys_var("completion_type", 0)->get_default();
+      find_static_system_variable("completion_type")->get_default();
 
   /*
     Set default value for explicit_defaults_for_timestamp variable. Bootstrap
@@ -395,7 +410,8 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
     the user.
   */
   thd->variables.explicit_defaults_for_timestamp =
-      intern_find_sys_var("explicit_defaults_for_timestamp", 0)->get_default();
+      find_static_system_variable("explicit_defaults_for_timestamp")
+          ->get_default();
 
   /*
     The global table encryption default setting applies to user threads.

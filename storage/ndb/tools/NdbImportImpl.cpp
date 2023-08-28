@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,9 +22,11 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include "util/ndb_math.h"
+#include "util/require.h"
 #include "NdbImportImpl.hpp"
-
 #include <inttypes.h>
+#include <new>
 
 NdbImportImpl::NdbImportImpl(NdbImport& facade) :
   NdbImport(*this),
@@ -2401,16 +2403,12 @@ NdbImportImpl::RelayOpWorker::RelayOpWorker(Team& team, uint n) :
   DbWorker(team, n)
 {
   m_relaystate = RelayState::State_null;
-  m_xfrmalloc = 0;
-  m_xfrmbuf = 0;
-  m_xfrmbuflen = 0;
   for (uint i = 0; i < g_max_ndb_nodes; i++)
     m_rows_exec[i] = 0;
 }
 
 NdbImportImpl::RelayOpWorker::~RelayOpWorker()
 {
-  delete [] m_xfrmalloc;
   for (uint i = 0; i < g_max_ndb_nodes; i++)
     delete m_rows_exec[i];
 }
@@ -2420,13 +2418,18 @@ NdbImportImpl::RelayOpWorker::do_init()
 {
   log_debug(1, "do_init");
   create_ndb(1);
-  uint len = (MAX_KEY_SIZE_IN_WORDS << 2) + sizeof(uint64);
-  m_xfrmalloc = new uchar [len];
-  // copied from Ndb::computeHash()
-  UintPtr org = UintPtr(m_xfrmalloc);
-  UintPtr use = (org + 7) & ~(UintPtr)7;
-  m_xfrmbuf = (uchar*)use;
-  m_xfrmbuflen = len - uint(use - org);
+  const Opt& opt = m_util.c_opt;
+  if (!opt.m_no_hint)
+  {
+    uint len = (MAX_KEY_SIZE_IN_WORDS << 2) * MAX_XFRM_MULTIPLY;
+    if (opt.m_errins_type != nullptr &&
+        strcmp(opt.m_errins_type, "bug34917498") == 0)
+      len = MAX_KEY_SIZE_IN_WORDS << 2;
+    const uint count64 = ndb_ceil_div<uint64>(len, sizeof(uint64)) + 1;
+    uint64* ptr = new uint64 [count64];
+    m_xfrmbuf.reset(ptr);
+    m_xfrmbuflen = count64 * sizeof(uint64);
+  }
   uint nodecnt = m_impl.c_nodes.m_nodecnt;
   require(nodecnt != 0);
   for (uint i = 0; i < nodecnt; i++)
@@ -2494,18 +2497,27 @@ NdbImportImpl::RelayOpWorker::state_define()
     const Table& table = m_util.get_table(row->m_tabid);
     const bool no_hint = opt.m_no_hint;
     uint nodeid = 0;
-    if (no_hint)
+    if (!no_hint)
+    {
+      require(m_xfrmbuf);
+      Uint32 hash;
+      int ret = m_ndb->computeHash(&hash, table.m_keyrec,
+                                   (const char*)row->m_data,
+                                   m_xfrmbuf.get(), m_xfrmbuflen);
+      if (ret != 0)
+      {
+        m_util.set_error_ndb(m_error, __LINE__, m_ndb->getNdbError(ret));
+      }
+      else
+      {
+        uint fragid = (uint)table.m_tab->getPartitionId(hash);
+        nodeid = table.get_nodeid(fragid);
+      }
+    }
+    if (nodeid == 0)
     {
       uint i = get_rand() % c.m_nodecnt;
       nodeid = c.m_nodes[i].m_nodeid;
-    }
-    else
-    {
-      Uint32 hash;
-      m_ndb->computeHash(&hash, table.m_keyrec, (const char*)row->m_data,
-                         m_xfrmbuf, m_xfrmbuflen);
-      uint fragid = (uint)table.m_tab->getPartitionId(hash);
-      nodeid = table.get_nodeid(fragid);
     }
     require(nodeid < g_max_nodes);
     uint nodeindex = c.m_index[nodeid];
@@ -2974,7 +2986,6 @@ NdbImportImpl::ExecOpWorkerAsynch::do_end()
     //   2) Release the ops not called with insertTuple()
     //      These will be taken care of when import resumes
     Op* one_op = NULL;
-    log_debug(1, "Mai async do_end ops " << m_ops.cnt());
     while ((one_op = m_ops.pop_front()) != NULL)
     {
       if (one_op->m_row != NULL)
@@ -3072,6 +3083,75 @@ NdbImportImpl::ExecOpWorkerAsynch::asynch_callback(Tx* tx)
 }
 
 void
+NdbImportImpl::ExecOpWorkerAsynch::set_auto_inc_val(const Attr& attr,
+                                                     Row *row,
+                                                     Uint64 val,
+                                                     Error& error) {
+  switch (attr.m_type) {
+    case NdbDictionary::Column::Tinyint: {
+      const int8 byteval = val;
+      attr.set_value(row, &byteval, 1);
+      break;
+    }
+    case NdbDictionary::Column::Tinyunsigned: {
+      const uint8 byteval = val;
+      attr.set_value(row, &byteval, 1);
+      break;
+    }
+    case NdbDictionary::Column::Smallint: {
+      const int16 shortval = val;
+      attr.set_value(row, &shortval, 2);
+      break;
+    }
+    case NdbDictionary::Column::Smallunsigned: {
+      const uint16 shortval = val;
+      attr.set_value(row, &shortval, 2);
+      break;
+    }
+    case NdbDictionary::Column::Mediumint: {
+      uchar val3[3];
+      int3store(val3, val);
+      attr.set_value(row, val3, 3);
+      break;
+    }
+    case NdbDictionary::Column::Mediumunsigned:
+    {
+      uchar val3[3];
+      int3store(val3, val);
+      attr.set_value(row, val3, 3);
+      break;
+    }
+    case NdbDictionary::Column::Int:
+    {
+      const Int32 intval = val;
+      attr.set_value(row, &intval, 4);
+      break;
+    }
+    case NdbDictionary::Column::Unsigned:
+    {
+      const Uint32 uintval = val;
+      attr.set_value(row, &uintval, 4);
+      break;
+    }
+    case NdbDictionary::Column::Bigint:
+    {
+      const Int64 int64val = val;
+      attr.set_value(row, &int64val, 8);
+      break;
+    }
+    case NdbDictionary::Column::Bigunsigned: {
+      // val is of type Uint64, no conversion needed
+      attr.set_value(row, &val, 8);
+      break;
+    }
+    default: {
+      require(false);
+      break;
+    }
+  }
+}
+
+void
 NdbImportImpl::ExecOpWorkerAsynch::state_define()
 {
   log_debug(2, "state_define/asynch");
@@ -3091,47 +3171,62 @@ NdbImportImpl::ExecOpWorkerAsynch::state_define()
     op = m_ops.pop_front();
     Row* row = op->m_row;
     require(row != 0);
+
     const Table& table = m_util.get_table(row->m_tabid);
-    if (table.m_has_hidden_pk)
-    {
+    if (table.m_autoIncAttrId != Inval_uint) {
       const Attrs& attrs = table.m_attrs;
-      const uint attrcnt = attrs.size();
-      const Attr& attr = attrs[attrcnt - 1];
-      require(attr.m_type == NdbDictionary::Column::Bigunsigned);
-      Uint64 val;
-      if (m_ndb->getAutoIncrementValue(table.m_tab, val,
-                                       opt.m_ai_prefetch_sz,
-                                       opt.m_ai_increment,
-                                       opt.m_ai_offset) == -1)
-      {
-        const NdbError& ndberror = m_ndb->getNdbError();
-        require(ndberror.code != 0);
-        if (ndberror.status == NdbError::TemporaryError)
+      const Attr& attr = attrs[table.m_autoIncAttrId];
+
+      const bool ai_value_not_provided = attr.ai_value_not_provided(row);
+      if (ai_value_not_provided) {
+        // No auto inc value was provided in the input file for an
+        // auto inc field, generate one
+        Uint64 val;
+        /**
+         * Each and every worker caches opt.m_ai_prefetch_sz auto inc
+         * values by calling getAutoIncrementValue(). If no cached
+         * value available, this call will update the table meta data
+         * next-autoincrement value in SYSTAB to cache another
+         * opt.m_ai_prefetch_sz range exclusively for this worker.
+         */
+        if (m_ndb->getAutoIncrementValue(table.m_tab, val,
+                                         opt.m_ai_prefetch_sz,
+                                         opt.m_ai_increment,
+                                         opt.m_ai_offset) == -1)
         {
-          m_errormap.add_one(ndberror.code);
-          uint temperrors = m_errormap.get_sum();
-          if (temperrors <= opt.m_temperrors)
+          const NdbError& ndberror = m_ndb->getNdbError();
+          require(ndberror.code != 0);
+          if (ndberror.status == NdbError::TemporaryError)
           {
-            log_debug(1, "get autoincr try " << temperrors << ": " << ndberror);
-            m_ops.push_front(op);
-            NdbSleep_MilliSleep(opt.m_tempdelay);
-            continue;
+            m_errormap.add_one(ndberror.code);
+            uint temperrors = m_errormap.get_sum();
+            if (temperrors <= opt.m_temperrors)
+            {
+              log_debug(1, "get autoincr try " << temperrors << ": " << ndberror);
+              m_ops.push_front(op);
+              NdbSleep_MilliSleep(opt.m_tempdelay);
+              continue;
+            }
+            m_util.set_error_gen(m_error, __LINE__,
+                                 "number of transaction tries with"
+                                 " temporary errors is %u (limit %u)",
+                                 temperrors, opt.m_temperrors);
+            break;
           }
-          m_util.set_error_gen(m_error, __LINE__,
-                               "number of transaction tries with"
-                               " temporary errors is %u (limit %u)",
-                               temperrors, opt.m_temperrors);
-          break;
+          else
+          {
+            m_util.set_error_ndb(m_error, __LINE__, ndberror,
+                                 "table %s: get autoincrement failed",
+                                 table.m_tab->getName());
+            break;
+          }
         }
-        else
-        {
-          m_util.set_error_ndb(m_error, __LINE__, ndberror,
-                               "table %s: get autoincrement failed",
-                               table.m_tab->getName());
+
+        set_auto_inc_val(attr, row, val, m_error);
+        if (m_util.has_error()) {
           break;
         }
       }
-      attr.set_value(row, &val, 8);
     }
     const bool no_hint = opt.m_no_hint;
     Tx* tx = 0;

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,9 @@
 
 class NdbRecAttr;
 class Thd_ndb;
+namespace dd {
+class Table;
+}
 
 // Base class used for working with tables created in NDB by the
 // ndbcluster plugin
@@ -49,12 +52,12 @@ class Ndb_util_table {
                          NdbDictionary::Column::Type type,
                          const char *type_name) const;
 
-  void push_ndb_error_warning(const NdbError &ndb_err) const;
-
  protected:
+  const NdbDictionary::Column *get_column_by_number(Uint32 number) const;
   const NdbDictionary::Column *get_column(const char *name) const;
   void push_warning(const char *fmt, ...) const
       MY_ATTRIBUTE((format(printf, 2, 3)));
+  void push_ndb_error_warning(const NdbError &ndb_err) const;
 
   Ndb_util_table(Thd_ndb *, std::string db_name, std::string table_name,
                  bool hidden, bool create_events = true);
@@ -66,6 +69,7 @@ class Ndb_util_table {
   bool check_column_exist(const char *name) const;
 
   bool check_column_varbinary(const char *name) const;
+  bool check_column_varchar(const char *name) const;
   bool check_column_binary(const char *name) const;
   bool check_column_unsigned(const char *name) const;
   bool check_column_bigunsigned(const char *name) const;
@@ -83,7 +87,7 @@ class Ndb_util_table {
      @brief Define the NdbApi table definition
      @param table NdbApi table to populate
      @param mysql_version Force the table to be defined as it looked in
-     a specifc MySQL version. This is primarily used for testing of upgrade.
+     a specific MySQL version. This is primarily used for testing of upgrade.
      @return true if definition was filled without problem
    */
   virtual bool define_table_ndb(NdbDictionary::Table &table,
@@ -94,9 +98,17 @@ class Ndb_util_table {
   bool create_table_in_NDB(const NdbDictionary::Table &new_table) const;
   bool drop_table_in_NDB(const NdbDictionary::Table &old_table) const;
 
-  virtual bool define_indexes(unsigned int mysql_version) const;
-  bool create_index(const NdbDictionary::Index &) const;
-  bool create_primary_ordered_index() const;
+  virtual bool create_indexes(const NdbDictionary::Table &new_table) const;
+  bool create_index(const NdbDictionary::Table &new_table,
+                    const NdbDictionary::Index &new_index) const;
+  bool create_primary_ordered_index(
+      const NdbDictionary::Table &new_table) const;
+
+  virtual bool create_events_in_NDB(const NdbDictionary::Table &new_table
+                                    [[maybe_unused]]) const {
+    return true;
+  }
+  bool create_event_in_NDB(const NdbDictionary::Event &new_event) const;
 
   /**
     @brief Code to be executed before upgrading the table.
@@ -106,10 +118,10 @@ class Ndb_util_table {
 
     @return true on success.
    */
-  virtual bool pre_upgrade() const { return true; }
+  virtual bool pre_upgrade() { return true; }
 
   /**
-    @brief Code to be executed after installing the table.
+    @brief Code to be executed after installing the table in NDB.
 
     @note  The derived class has to override this method if it wants to
            execute code after installing the table.
@@ -117,6 +129,17 @@ class Ndb_util_table {
     @return true on success.
    */
   virtual bool post_install() const { return true; }
+
+  /**
+    @brief Code to be executed after installing the table in the data
+    dictionary.
+
+    @note The derived class has to override this method to execute additional
+    code.
+
+    @return true on success, false otherwise
+  */
+  virtual bool post_install_in_DD() const { return true; }
 
   /**
      @brief Drop the events related to this table from NDB
@@ -151,6 +174,28 @@ class Ndb_util_table {
   */
   std::string unpack_varbinary(const char *column_name,
                                const char *packed_str) const;
+
+  /**
+     @brief Pack the string to be written to a column of a util table
+     @note Table definition must be loaded with open() before this function is
+           called
+     @param column_name  Column name
+     @param src          String to be packed
+     @param dst [out]    Packed string
+  */
+  void pack_varchar(const char *column_name, std::string_view src,
+                    char *dst) const;
+
+  /**
+     @brief Pack the string to be written to a column of a util table
+     @note Table definition must be loaded with open() before this function is
+           called
+     @param column_number Column number
+     @param src          String to be packed
+     @param dst [out]    Packed string
+  */
+  void pack_varchar(Uint32 column_number, std::string_view src,
+                    char *dst) const;
 
   /**
      @brief Unpack a non nullable blob column
@@ -223,6 +268,12 @@ class Ndb_util_table {
   bool create(bool is_upgrade = false);
 
   /**
+     @brief Create table in DD and finalize it
+     @return true if successful, false otherwise
+  */
+  bool create_in_DD();
+
+  /**
      @brief Check if table need to be upgraded
      @return true if upgrade is needed
    */
@@ -233,6 +284,14 @@ class Ndb_util_table {
      @return true if table was upgraded successfully
    */
   bool upgrade();
+
+  /**
+     @brief Check if table need to be reinstalled in DD.
+     This mechanism can be used to rewrite the table definition in DD without
+     changing the physical table in NDB.
+     @return true if reinstall is needed
+   */
+  virtual bool need_reinstall(const dd::Table *) const { return false; }
 
   /**
      @brief Create DDL for creating the table definition

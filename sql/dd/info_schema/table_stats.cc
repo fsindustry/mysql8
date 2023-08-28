@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -313,7 +313,7 @@ static bool report_error_except_ignore_dup(THD *thd, const char *object_type) {
 namespace dd {
 namespace info_schema {
 
-bool update_table_stats(THD *thd, TABLE_LIST *table) {
+bool update_table_stats(THD *thd, Table_ref *table) {
   // Update the object properties
   HA_CREATE_INFO create_info;
 
@@ -339,7 +339,7 @@ bool update_table_stats(THD *thd, TABLE_LIST *table) {
          report_error_except_ignore_dup(thd, "table");
 }
 
-bool update_index_stats(THD *thd, TABLE_LIST *table) {
+bool update_index_stats(THD *thd, Table_ref *table) {
   // Update the object properties
   TABLE *analyze_table = table->table;
   KEY *key_info = analyze_table->s->key_info;
@@ -493,7 +493,9 @@ ulonglong Table_statistics::read_stat(
   handlerton *hton = nullptr;
   const bool hton_implements_get_statistics =
       (tmp_plugin && (hton = plugin_data<handlerton *>(tmp_plugin)) &&
-       hton->get_index_column_cardinality && hton->get_table_statistics);
+       (hton->get_index_column_cardinality ||
+        stype != enum_table_stats_type::INDEX_COLUMN_CARDINALITY) &&
+       hton->get_table_statistics);
 
   // Try to get statistics without opening the table.
   if (!partition_name && hton_implements_get_statistics)
@@ -711,8 +713,8 @@ ulonglong Table_statistics::read_stat_by_open_table(
     goto end;
   }
 
-  TABLE_LIST *table_list;
-  table_list = lex->query_block->table_list.first;
+  Table_ref *table_list;
+  table_list = lex->query_block->get_table_list();
   table_list->required_type = dd::enum_table_type::BASE_TABLE;
 
   /*
@@ -887,7 +889,7 @@ ulonglong Table_statistics::read_stat_by_open_table(
   }
 
 end:
-  lex->cleanup(thd, true);
+  lex->cleanup(true);
 
   /* Restore original LEX value, statement's arena and THD arena values. */
   lex_end(thd->lex);

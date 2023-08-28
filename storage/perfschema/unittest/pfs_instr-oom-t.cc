@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -35,8 +35,10 @@
 #include "storage/perfschema/pfs_instr_class.h"
 #include "storage/perfschema/pfs_stat.h"
 #include "storage/perfschema/pfs_user.h"
+#include "storage/perfschema/unittest/stub_digest.h"
 #include "storage/perfschema/unittest/stub_pfs_global.h"
 #include "storage/perfschema/unittest/stub_pfs_plugin_table.h"
+#include "storage/perfschema/unittest/stub_server_telemetry.h"
 #include "unittest/mytap/tap.h"
 
 PSI_thread_key thread_key_1;
@@ -268,6 +270,7 @@ static void test_oom() {
   file_2 =
       find_or_create_file(&fake_thread, &dummy_file_class, "dummy2", 6, true);
   ok(file_2 == nullptr, "oom (create file)");
+  cleanup_file_hash();
   cleanup_instruments();
 
   /* Create socket. */

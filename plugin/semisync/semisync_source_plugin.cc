@@ -1,5 +1,5 @@
 /* Copyright (C) 2007 Google Inc.
-   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -140,7 +140,7 @@ static int repl_semi_binlog_dump_start(Binlog_transmit_param *param,
 
   if (semi_sync_slave != 0) {
     if (ack_receiver->add_slave(current_thd)) {
-      LogErr(ERROR_LEVEL, ER_SEMISYNC_FAILED_REGISTER_SLAVE_TO_RECEIVER);
+      LogErr(ERROR_LEVEL, ER_SEMISYNC_FAILED_REGISTER_REPLICA_TO_RECEIVER);
       return -1;
     }
 
@@ -160,7 +160,7 @@ static int repl_semi_binlog_dump_start(Binlog_transmit_param *param,
   } else
     param->set_dont_observe_flag();
 
-  LogErr(INFORMATION_LEVEL, ER_SEMISYNC_START_BINLOG_DUMP_TO_SLAVE,
+  LogErr(INFORMATION_LEVEL, ER_SEMISYNC_START_BINLOG_DUMP_TO_REPLICA,
          semi_sync_slave != 0 ? "semi-sync" : "asynchronous", param->server_id,
          log_file, (unsigned long)log_pos);
   return 0;
@@ -169,7 +169,7 @@ static int repl_semi_binlog_dump_start(Binlog_transmit_param *param,
 static int repl_semi_binlog_dump_end(Binlog_transmit_param *param) {
   bool semi_sync_slave = is_semi_sync_dump();
 
-  LogErr(INFORMATION_LEVEL, ER_SEMISYNC_STOP_BINLOG_DUMP_TO_SLAVE,
+  LogErr(INFORMATION_LEVEL, ER_SEMISYNC_STOP_BINLOG_DUMP_TO_REPLICA,
          semi_sync_slave ? "semi-sync" : "asynchronous", param->server_id);
 
   if (semi_sync_slave) {
@@ -366,7 +366,7 @@ static void fix_rpl_semi_sync_source_trace_level(MYSQL_THD, SYS_VAR *,
 
 static void fix_rpl_semi_sync_source_enabled(MYSQL_THD, SYS_VAR *, void *ptr,
                                              const void *val) {
-  *static_cast<char *>(ptr) = *static_cast<const char *>(val);
+  *static_cast<bool *>(ptr) = *static_cast<const bool *>(val);
   if (rpl_semi_sync_source_enabled) {
     if (repl_semisync->enableMaster() != 0)
       rpl_semi_sync_source_enabled = false;
@@ -393,8 +393,8 @@ static void fix_rpl_semi_sync_source_wait_for_replica_count(MYSQL_THD,
 static void fix_rpl_semi_sync_source_wait_no_replica(MYSQL_THD, SYS_VAR *,
                                                      void *ptr,
                                                      const void *val) {
-  if (rpl_semi_sync_source_wait_no_replica != *static_cast<const char *>(val)) {
-    *static_cast<char *>(ptr) = *static_cast<const char *>(val);
+  if (rpl_semi_sync_source_wait_no_replica != *static_cast<const bool *>(val)) {
+    *static_cast<bool *>(ptr) = *static_cast<const bool *>(val);
     repl_semisync->set_wait_no_replica(val);
   }
 }
@@ -654,6 +654,15 @@ static int semi_sync_master_plugin_init(void *p) {
   return 0;
 }
 
+static int semi_sync_source_plugin_check_uninstall(void *) {
+  int ret = rpl_semi_sync_source_clients ? 1 : 0;
+  if (ret) {
+    my_error(ER_PLUGIN_CANNOT_BE_UNINSTALLED, MYF(0), SEMI_SYNC_PLUGIN_NAME,
+             "Stop any active semisynchronous replicas of this source first.");
+  }
+  return ret;
+}
+
 static int semi_sync_master_plugin_deinit(void *p) {
   // the plugin was not initialized, there is nothing to do here
   if (ack_receiver == nullptr || repl_semisync == nullptr) return 0;
@@ -699,9 +708,9 @@ mysql_declare_plugin(semi_sync_master){
     PLUGIN_AUTHOR_ORACLE,
     "Source-side semi-synchronous replication.",
     PLUGIN_LICENSE_GPL,
-    semi_sync_master_plugin_init,   /* Plugin Init */
-    nullptr,                        /* Plugin Check uninstall */
-    semi_sync_master_plugin_deinit, /* Plugin Deinit */
+    semi_sync_master_plugin_init,            /* Plugin Init */
+    semi_sync_source_plugin_check_uninstall, /* Plugin Check uninstall */
+    semi_sync_master_plugin_deinit,          /* Plugin Deinit */
     0x0100 /* 1.0 */,
     semi_sync_master_status_vars, /* status variables */
     semi_sync_master_system_vars, /* system variables */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -95,7 +95,7 @@ Member_actions_handler_configuration::enable_disable_action(
     error |= table->file->ha_write_row(table->record[0]);
   }
 
-  error |= key_access.deinit();
+  error |= static_cast<int>(key_access.deinit());
 
   if (!error) {
     error = table_op.increment_version();
@@ -110,7 +110,7 @@ Member_actions_handler_configuration::enable_disable_action(
     }
   }
 
-  error |= table_op.close(error);
+  error |= static_cast<int>(table_op.close(error));
   if (error) {
     return std::make_pair<bool, std::string>(
         true, "Unable to persist the configuration.");
@@ -315,6 +315,7 @@ bool Member_actions_handler_configuration::update_all_actions_internal(
   assert(action_list.version() > 0);
   assert(action_list.action_size() > 0);
   bool error = false;
+  bool mysql_start_failover_channels_if_primary_updated = false;
 
   Rpl_sys_table_access table_op(s_schema_name, s_table_name, s_fields_number);
 
@@ -362,7 +363,7 @@ bool Member_actions_handler_configuration::update_all_actions_internal(
       key_access.init(table, Rpl_sys_key_access::enum_key_type::INDEX_NEXT);
   if (!key_error) {
     do {
-      error |= table->file->ha_delete_row(table->record[0]);
+      error |= table->file->ha_delete_row(table->record[0]) != 0;
       if (error) {
         return true;
       }
@@ -387,6 +388,11 @@ bool Member_actions_handler_configuration::update_all_actions_internal(
   Field **fields = table->field;
   for (const protobuf_replication_group_member_actions::Action &action :
        action_list.action()) {
+    if (action.name().compare("mysql_start_failover_channels_if_primary") ==
+        0) {
+      mysql_start_failover_channels_if_primary_updated = true;
+    }
+
     field_store(fields[0], action.name());
     field_store(fields[1], action.event());
     field_store(fields[2], action.enabled());
@@ -394,7 +400,29 @@ bool Member_actions_handler_configuration::update_all_actions_internal(
     field_store(fields[4], action.priority());
     field_store(fields[5], action.error_handling());
 
-    error |= table->file->ha_write_row(table->record[0]);
+    error |= table->file->ha_write_row(table->record[0]) != 0;
+    if (error) {
+      /* purecov: begin inspected */
+      return true;
+      /* purecov: end */
+    }
+  }
+
+  /*
+    When a 8.0.27+ server joins a 8.0.26 group, the joining server
+    will not receive the action "mysql_start_failover_channels_if_primary",
+    the group does not know it, as such we need to add its default value.
+  */
+  if (!mysql_start_failover_channels_if_primary_updated) {
+    Field **fields = table->field;
+    field_store(fields[0], "mysql_start_failover_channels_if_primary");
+    field_store(fields[1], "AFTER_PRIMARY_ELECTION");
+    field_store(fields[2], 1);
+    field_store(fields[3], "INTERNAL");
+    field_store(fields[4], 10);
+    field_store(fields[5], "CRITICAL");
+
+    error |= table->file->ha_write_row(table->record[0]) != 0;
     if (error) {
       /* purecov: begin inspected */
       return true;

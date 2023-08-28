@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@
   One can change info->pos_in_file to a higher value to skip bytes in file if
   also info->rc_pos is set to info->rc_end.
   If called through open_cached_file(), then the temporary file will
-  only be created if a write exeeds the file buffer or if one calls
+  only be created if a write exceeds the file buffer or if one calls
   flush_io_cache().
 */
 
@@ -42,6 +42,7 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_rnd.h"
 #include "my_sys.h"
 #include "mysql_com.h"
 #include "sql/current_thd.h"
@@ -89,4 +90,35 @@ int _my_b_net_read(IO_CACHE *info, uchar *Buffer,
   info->read_pos++;
 
   return 0;
+}
+
+/*
+** A wrapper for 'open_cached_file()' which also initializes encryption
+** subsystem depending on the value of 'encrypted' parameter.
+*/
+bool open_cached_file_encrypted(IO_CACHE *cache, const char *dir,
+                                const char *prefix, size_t cache_size,
+                                myf cache_myflags, bool encrypted) {
+  DBUG_ENTER("open_cached_file_encrypted");
+  bool res = open_cached_file(cache, dir, prefix, cache_size, cache_myflags);
+  if (res) DBUG_RETURN(true);
+  if (!encrypted) DBUG_RETURN(false);
+
+  Key_string password_str;
+  unsigned char password[Aes_ctr::PASSWORD_LENGTH];
+
+  /* Generate password, it is a random string. */
+  if (my_rand_buffer(password, sizeof(password)) != 0) DBUG_RETURN(true);
+  password_str.append(password, sizeof(password));
+
+  auto encryptor = std::make_unique<Aes_ctr_encryptor>();
+  if (encryptor->open(password_str, 0)) DBUG_RETURN(true);
+
+  auto decryptor = std::make_unique<Aes_ctr_decryptor>();
+  if (decryptor->open(password_str, 0)) DBUG_RETURN(true);
+
+  cache->m_encryptor = encryptor.release();
+  cache->m_decryptor = decryptor.release();
+
+  DBUG_RETURN(false);
 }

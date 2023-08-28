@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <string>
 
+#include <iostream>
 #include "lex_string.h"
 #include "m_string.h"
 #include "my_alloc.h"
@@ -89,6 +90,7 @@
 #include "sql/sql_show.h"   // view_store_options
 #include "sql/sql_table.h"  // build_tablename
 #include "sql/sql_view.h"   // mysql_create_view
+#include "sql/sql_zip_dict.h"
 #include "sql/system_variables.h"
 #include "sql/table.h"                     // Table_check_intact
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
@@ -380,10 +382,11 @@ bool Trigger_loader::load_triggers(THD *thd, MEM_ROOT *mem_root,
 
     lex_string_set(
         &default_connection_cl_name,
-        const_cast<char *>(thd->variables.collation_connection->name));
+        const_cast<char *>(thd->variables.collation_connection->m_coll_name));
 
-    lex_string_set(&default_db_cl_name,
-                   const_cast<char *>(thd->variables.collation_database->name));
+    lex_string_set(
+        &default_db_cl_name,
+        const_cast<char *>(thd->variables.collation_database->m_coll_name));
   }
 
   LEX_CSTRING db_name_str = {db_name, strlen(db_name)};
@@ -467,10 +470,10 @@ bool Trigger_loader::load_triggers(THD *thd, MEM_ROOT *mem_root,
     LEX_CSTRING definer_host_name{definer_host.str, definer_host.length};
 
     // Set timeval to use for Created field.
-    timeval timestamp_value;
+    my_timeval timestamp_value;
     if (created_timestamp) {
-      timestamp_value.tv_sec = static_cast<long>(*created_timestamp / 100);
-      timestamp_value.tv_usec = (*created_timestamp % 100) * 10000;
+      timestamp_value.m_tv_sec = *created_timestamp / 100;
+      timestamp_value.m_tv_usec = (*created_timestamp % 100) * 10000;
     } else {
       // Trigger created before 5.7.2, set created value.
       timestamp_value = thd->query_start_timeval_trunc(2);
@@ -693,7 +696,18 @@ static void fill_create_info_for_upgrade(HA_CREATE_INFO *create_info,
 
   create_info->init_create_options_from_share(table->s, 0);
 
-  create_info->row_type = table->s->row_type;
+  /*
+    For TokuDB upgrades where ROW_FORMAT was used with a Toku specific
+    format, we need to rip that from the table definition.  It will not change
+    the underlying TokuDB tables compression.  It simply eliminates the
+    ROW_FORMAT specification from the table definition.  Users can continue to
+    specify compression via session variable tokudb_row_format.
+  */
+  if (ha_legacy_type(table->s->db_type()) == DB_TYPE_TOKUDB &&
+      table->s->row_type > ROW_TYPE_PAGED)
+    create_info->row_type = ROW_TYPE_DEFAULT;
+  else
+    create_info->row_type = table->s->row_type;
 
   // DD framework handles only these options
   uint db_create_options = table->s->db_create_options;
@@ -715,40 +729,40 @@ static const int REQUIRED_VIEW_PARAMETERS = 12;
 */
 static File_option view_parameters[] = {
     {{STRING_WITH_LEN("query")},
-     my_offsetof_upgrade(TABLE_LIST, select_stmt),
+     my_offsetof_upgrade(Table_ref, select_stmt),
      FILE_OPTIONS_ESTRING},
     {{STRING_WITH_LEN("updatable")},
-     my_offsetof_upgrade(TABLE_LIST, updatable_view),
+     my_offsetof_upgrade(Table_ref, updatable_view),
      FILE_OPTIONS_ULONGLONG},
     {{STRING_WITH_LEN("algorithm")},
-     my_offsetof_upgrade(TABLE_LIST, algorithm),
+     my_offsetof_upgrade(Table_ref, algorithm),
      FILE_OPTIONS_ULONGLONG},
     {{STRING_WITH_LEN("definer_user")},
-     my_offsetof_upgrade(TABLE_LIST, definer.user),
+     my_offsetof_upgrade(Table_ref, definer.user),
      FILE_OPTIONS_STRING},
     {{STRING_WITH_LEN("definer_host")},
-     my_offsetof_upgrade(TABLE_LIST, definer.host),
+     my_offsetof_upgrade(Table_ref, definer.host),
      FILE_OPTIONS_STRING},
     {{STRING_WITH_LEN("suid")},
-     my_offsetof_upgrade(TABLE_LIST, view_suid),
+     my_offsetof_upgrade(Table_ref, view_suid),
      FILE_OPTIONS_ULONGLONG},
     {{STRING_WITH_LEN("with_check_option")},
-     my_offsetof_upgrade(TABLE_LIST, with_check),
+     my_offsetof_upgrade(Table_ref, with_check),
      FILE_OPTIONS_ULONGLONG},
     {{STRING_WITH_LEN("timestamp")},
-     my_offsetof_upgrade(TABLE_LIST, timestamp),
+     my_offsetof_upgrade(Table_ref, timestamp),
      FILE_OPTIONS_TIMESTAMP},
     {{STRING_WITH_LEN("source")},
-     my_offsetof_upgrade(TABLE_LIST, source),
+     my_offsetof_upgrade(Table_ref, source),
      FILE_OPTIONS_ESTRING},
     {{STRING_WITH_LEN("client_cs_name")},
-     my_offsetof_upgrade(TABLE_LIST, view_client_cs_name),
+     my_offsetof_upgrade(Table_ref, view_client_cs_name),
      FILE_OPTIONS_STRING},
     {{STRING_WITH_LEN("connection_cl_name")},
-     my_offsetof_upgrade(TABLE_LIST, view_connection_cl_name),
+     my_offsetof_upgrade(Table_ref, view_connection_cl_name),
      FILE_OPTIONS_STRING},
     {{STRING_WITH_LEN("view_body_utf8")},
-     my_offsetof_upgrade(TABLE_LIST, view_body_utf8),
+     my_offsetof_upgrade(Table_ref, view_body_utf8),
      FILE_OPTIONS_ESTRING},
     {{NullS, 0}, 0, FILE_OPTIONS_STRING}};
 
@@ -757,14 +771,14 @@ static File_option view_parameters[] = {
   information.
 
   @param[in] thd       Thread handle.
-  @param[in] view_ref  TABLE_LIST to store view data.
+  @param[in] view_ref  Table_ref to store view data.
 
   @retval false  ON SUCCESS
   @retval true   ON FAILURE
 */
-static bool create_unlinked_view(THD *thd, TABLE_LIST *view_ref) {
+static bool create_unlinked_view(THD *thd, Table_ref *view_ref) {
   Query_block *backup_query_block = thd->lex->query_block;
-  TABLE_LIST *saved_query_tables = thd->lex->query_tables;
+  Table_ref *saved_query_tables = thd->lex->query_tables;
   SQL_I_List<Sroutine_hash_entry> saved_sroutines_list;
   // For creation of view without column information.
   Query_block select(thd->mem_root, nullptr, nullptr);
@@ -803,16 +817,16 @@ static bool create_unlinked_view(THD *thd, TABLE_LIST *view_ref) {
 /**
   Construct ALTER VIEW statement to fix the column list
   and dependency information but retains the previous
-  view defintion entry in DD.
+  view definition entry in DD.
 
   @param[in]  thd       Thread handle.
-  @param[in]  view_ref  TABLE_LIST to store view data.
+  @param[in]  view_ref  Table_ref to store view data.
   @param[out] str       String object to store view definition.
   @param[in]  db_name   database name.
   @param[in]  view_name view name.
   @param[in]  cs        Charset Information.
 */
-static void create_alter_view_stmt(const THD *thd, TABLE_LIST *view_ref,
+static void create_alter_view_stmt(const THD *thd, Table_ref *view_ref,
                                    String *str, const String_type &db_name,
                                    const String_type &view_name,
                                    const CHARSET_INFO *cs) {
@@ -838,7 +852,7 @@ static void create_alter_view_stmt(const THD *thd, TABLE_LIST *view_ref,
   View will be marked invalid if ALTER VIEW statement fails on the view.
 
   @param[in] thd                     Thread handle.
-  @param[in] view_ref                TABLE_LIST with view data.
+  @param[in] view_ref                Table_ref with view data.
   @param[in] db_name                 database name.
   @param[in] view_name               view name.
 
@@ -846,7 +860,7 @@ static void create_alter_view_stmt(const THD *thd, TABLE_LIST *view_ref,
   @retval true   ON FAILURE
 
 */
-static bool fix_view_cols_and_deps(THD *thd, TABLE_LIST *view_ref,
+static bool fix_view_cols_and_deps(THD *thd, Table_ref *view_ref,
                                    const String_type &db_name,
                                    const String_type &view_name) {
   bool error = false;
@@ -945,8 +959,8 @@ static bool migrate_view_to_dd(THD *thd, const FRM_context &frm_context,
                                const String_type &db_name,
                                const String_type &view_name, MEM_ROOT *mem_root,
                                bool is_fix_view_cols_and_deps) {
-  TABLE_LIST table_list(db_name.c_str(), db_name.length(), view_name.c_str(),
-                        view_name.length(), view_name.c_str(), TL_READ);
+  Table_ref table_list(db_name.c_str(), db_name.length(), view_name.c_str(),
+                       view_name.length(), view_name.c_str(), TL_READ);
 
   // Initialize timestamp
   table_list.timestamp.str = table_list.timestamp_buffer;
@@ -1008,14 +1022,14 @@ static bool migrate_view_to_dd(THD *thd, const FRM_context &frm_context,
   if (invalid_ctx) {
     cs = system_charset_info;
     size_t cs_length = strlen(cs->csname);
-    size_t length = strlen(cs->name);
+    size_t length = strlen(cs->m_coll_name);
 
     table_list.view_client_cs_name.str =
         strmake_root(mem_root, cs->csname, cs_length);
     table_list.view_client_cs_name.length = cs_length;
 
     table_list.view_connection_cl_name.str =
-        strmake_root(mem_root, cs->name, length);
+        strmake_root(mem_root, cs->m_coll_name, length);
     table_list.view_connection_cl_name.length = length;
 
     if (table_list.view_client_cs_name.str == nullptr ||
@@ -1024,6 +1038,18 @@ static bool migrate_view_to_dd(THD *thd, const FRM_context &frm_context,
              view_name.c_str());
       return true;
     }
+  }
+
+  // Validate body definition to avoid invalid UTF8 characters.
+  std::string invalid_sub_str;
+  if (is_invalid_string(LEX_CSTRING{table_list.view_body_utf8.str,
+                                    table_list.view_body_utf8.length},
+                        system_charset_info, invalid_sub_str)) {
+    // Provide contextual information
+    my_error(ER_DEFINITION_CONTAINS_INVALID_STRING, MYF(0), "view",
+             db_name.c_str(), view_name.c_str(), system_charset_info->csname,
+             invalid_sub_str.c_str());
+    return true;
   }
 
   // View is already created, we are recreating it now.
@@ -1230,7 +1256,7 @@ static bool add_triggers_to_table(THD *thd, TABLE *table,
       sp_head::destroy(sp);
 
     }  // End of while loop
-  }    // End of If condition to check Trigger existance
+  }    // End of If condition to check Trigger existence
   return false;
 }
 
@@ -1494,9 +1520,11 @@ static bool migrate_table_to_dd(THD *thd, const String_type &schema_name,
   }
 
   // Create table share for tables and views.
-  if (create_table_share_for_upgrade(thd, path, &share, &frm_context,
-                                     schema_name.c_str(), table_name.c_str(),
-                                     is_fix_view_cols_and_deps)) {
+  int r = create_table_share_for_upgrade(
+      thd, path, &share, &frm_context, schema_name.c_str(), table_name.c_str(),
+      is_fix_view_cols_and_deps);
+  if (r == -2) return false;  // No error, ignoring file
+  if (r != 0) {
     LogErr(ERROR_LEVEL, ER_CANT_CREATE_TABLE_SHARE_FROM_FRM,
            table_name.c_str());
     return true;
@@ -1665,7 +1693,8 @@ static bool migrate_table_to_dd(THD *thd, const String_type &schema_name,
   List_iterator<Create_field> it_create(alter_info.create_list);
 
   for (int field_no = 0; (sql_field = it_create++); field_no++) {
-    if (prepare_create_field(thd, &create_info, &alter_info.create_list,
+    if (prepare_create_field(thd, schema_name.c_str(), table_name.c_str(),
+                             &create_info, &alter_info.create_list,
                              &select_field_pos, table.file, sql_field,
                              field_no))
       return true;
@@ -1790,6 +1819,28 @@ static bool migrate_table_to_dd(THD *thd, const String_type &schema_name,
     return true;
   }
 
+  const dd::Table *new_table_def = nullptr;
+  if (thd->dd_client()->acquire(schema_name.c_str(), table_name.c_str(),
+                                &new_table_def)) {
+    DBUG_LOG("zip_dict",
+             "Upgrade: Acquiring dictionary table object failed "
+             " table_db: "
+                 << schema_name << " table_name: " << table_name);
+    return (true);
+  }
+
+  /* New table is successfully created, check if any columns have
+  compression dictionary and add entry for them in
+  mysql.compression_dictionary_cols table */
+  if (compression_dict::cols_table_insert(thd, *new_table_def)) {
+    LogErr(ERROR_LEVEL, ER_DD_ERROR_CREATING_ENTRY, schema_name.c_str(),
+           table_name.c_str());
+    trans_rollback_stmt(thd);
+    // Full rollback in case we have THD::transaction_rollback_request.
+    trans_rollback(thd);
+    return true;
+  }
+
   if (trans_commit_stmt(thd) || trans_commit(thd)) {
     LogErr(ERROR_LEVEL, ER_DD_ERROR_CREATING_ENTRY, schema_name.c_str(),
            table_name.c_str());
@@ -1822,9 +1873,11 @@ bool migrate_plugin_table_to_dd(THD *thd) {
 }
 
 /**
-  Migration of NDB tables is deferred until later, except for legacy privilege
-  tables stored in NDB, which must be migrated now so that they can be moved to
-  InnoDB later in the upgrade.
+  Migration of NDB tables is deferred until later, except for:
+  1. Legacy privilege tables stored in NDB, which must be migrated now so that
+     they can be moved to InnoDB later in the upgrade.
+  2. Tables that have associated triggers which must be migrated now to avoid
+     loss of the triggers.
 
   To check whether the table is a NDB table, look for the presence of a
   table_name.ndb file in the data directory. These files still exist at this
@@ -1848,6 +1901,8 @@ static bool is_skipped_ndb_table(const char *db_name, const char *table_name) {
       return false;
     }
   }
+
+  if (Trigger_loader::trg_file_exists(db_name, table_name)) return false;
 
   return true;
 }
@@ -1900,7 +1955,11 @@ bool migrate_all_frm_to_dd(THD *thd, const char *dbname,
       file.erase(file.size() - 4, 4);
       // Construct the schema name from its canonical format.
       filename_to_tablename(dbname, schema_name, sizeof(schema_name));
-      filename_to_tablename(file.c_str(), table_name, sizeof(table_name));
+
+      bool has_invalid_name = false;
+      filename_to_tablename(file.c_str(), table_name, sizeof(table_name), false,
+                            &has_invalid_name);
+      if (has_invalid_name) error = true;
 
       /*
         Check that schema- and table names do not break the selected l_c_t_n
@@ -1957,8 +2016,6 @@ bool migrate_all_frm_to_dd(THD *thd, const char *dbname,
       // Skip NDB tables which are upgraded later by the ndbcluster plugin
       if (is_skipped_ndb_table(schema_name, table_name)) continue;
 
-      log_sink_buffer_check_timeout();
-
       // Create an entry in the new DD.
       bool result = false;
       result = migrate_table_to_dd(thd, schema_name, table_name,
@@ -1974,7 +2031,7 @@ bool migrate_all_frm_to_dd(THD *thd, const char *dbname,
         Upgrade process does not stop immediately if it encounters any error.
         All the tables in the data directory are processed and all error are
         reported to user at once. Server code has many checks for error in DA.
-        if thd->is_error() return true, atempt to upgrade all subsequent tables
+        if thd->is_error() return true, attempt to upgrade all subsequent tables
         will fail and error log will report error false positives.
        */
       thd->clear_error();

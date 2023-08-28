@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -273,7 +273,8 @@ File create_temp_file(char *to, const char *dir, const char *prefix,
 
 #else /* mkstemp() is available on all non-Windows supported platforms. */
 #ifdef HAVE_O_TMPFILE
-  if (unlink_or_keep == UNLINK_FILE) {
+  if (unlink_or_keep == UNLINK_FILE &&
+      DBUG_EVALUATE_IF("enforce_legacy_temp_files", false, true)) {
     if (!dir && !(dir = getenv("TMPDIR"))) dir = DEFAULT_TMPDIR;
 
     char dirname_buf[FN_REFLEN];

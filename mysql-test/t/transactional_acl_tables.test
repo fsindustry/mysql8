@@ -1,5 +1,5 @@
 
---source include/no_valgrind_without_big.inc
+--source include/not_valgrind.inc
 --source include/have_debug_sync.inc
 
 CALL mtr.add_suppression("Storage engine '.*' does not support system tables. \\[mysql.*\\]");
@@ -1369,7 +1369,7 @@ DROP USER u2@l;
 # Suppress server log like "Did not write failed 'GRANT SELECT ON ...' into
 # binary log while granting/revoking privileges in databases.
 call mtr.add_suppression("Did not write failed .*");
-call mtr.add_suppression("REVOKE/GRANT failed .* An incident event has been written to the binary log which will stop the slaves.");
+call mtr.add_suppression("REVOKE/GRANT failed .* An incident event has been written to the binary log which will stop the replicas.");
 
 # It is not possible to execute a GRANT statement only for some users
 # (unlike 'DROP USER' which drops only existing users from the lists).
@@ -1686,22 +1686,6 @@ SHOW WARNINGS;
 --error ER_NONEXISTING_GRANT
 SHOW GRANTS FOR u1@h;
 SET debug="-d,wl7158_handle_grant_table_1";
-
-SET debug="+d,wl7158_handle_grant_table_2";
---error ER_ACL_OPERATION_FAILED
-CREATE USER u1@h;
-SHOW WARNINGS;
---error ER_NONEXISTING_GRANT
-SHOW GRANTS FOR u1@h;
-SET debug="-d,wl7158_handle_grant_table_2";
-
-SET debug="+d,wl7158_handle_grant_table_3";
---error ER_ACL_OPERATION_FAILED
-CREATE USER u1@h;
-SHOW WARNINGS;
---error ER_NONEXISTING_GRANT
-SHOW GRANTS FOR u1@h;
-SET debug="-d,wl7158_handle_grant_table_3";
 
 CREATE USER u1@h;
 SET debug="+d,wl7158_modify_grant_table_1";

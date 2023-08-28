@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,7 @@
 #include "sql_string.h"
 #include "storage/perfschema/pfs_column_types.h"
 #include "storage/perfschema/pfs_engine_table.h"
+#include "storage/perfschema/pfs_name.h"
 #include "storage/perfschema/table_helper.h"
 
 class Field;
@@ -104,20 +105,14 @@ struct row_events_statements {
   /** Column DIGEST and DIGEST_TEXT. */
   PFS_digest_row m_digest;
   /** Column CURRENT_SCHEMA. */
-  char m_current_schema_name[NAME_LEN];
-  /** Length in bytes of @c m_current_schema_name. */
-  uint m_current_schema_name_length;
+  PFS_schema_name m_current_schema_name;
 
   /** Column OBJECT_TYPE. */
   enum_object_type m_object_type;
   /** Column OBJECT_SCHEMA. */
-  char m_schema_name[NAME_LEN];
-  /** Length in bytes of @c m_schema_name. */
-  uint m_schema_name_length;
+  PFS_schema_name m_schema_name;
   /** Column OBJECT_NAME. */
-  char m_object_name[NAME_LEN];
-  /** Length in bytes of @c m_object_name. */
-  uint m_object_name_length;
+  PFS_object_name m_object_name;
 
   /** Column MESSAGE_TEXT. */
   char m_message_text[MYSQL_ERRMSG_SIZE + 1];
@@ -161,21 +156,29 @@ struct row_events_statements {
   ulonglong m_no_index_used;
   /** Column NO_GOOD_INDEX_USED. */
   ulonglong m_no_good_index_used;
+  /** Column CPU_TIME. */
+  ulonglong m_cpu_time;
+  /** Column MAX_CONTROLLED_MEMORY. */
+  ulonglong m_max_controlled_memory;
+  /** Column MAX_TOTAL_MEMORY. */
+  ulonglong m_max_total_memory;
 
   /** Column STATEMENT_ID. */
   ulonglong m_statement_id;
+  /** Column EXECUTION_ENGINE. */
+  bool m_secondary;
 };
 
 /** Position of a cursor on PERFORMANCE_SCHEMA.EVENTS_STATEMENTS_CURRENT. */
 struct pos_events_statements_current : public PFS_double_index {
   pos_events_statements_current() : PFS_double_index(0, 0) {}
 
-  inline void reset(void) {
+  inline void reset() {
     m_index_1 = 0;
     m_index_2 = 0;
   }
 
-  inline void next_thread(void) {
+  inline void next_thread() {
     m_index_1++;
     m_index_2 = 0;
   }
@@ -185,12 +188,12 @@ struct pos_events_statements_current : public PFS_double_index {
 struct pos_events_statements_history : public PFS_double_index {
   pos_events_statements_history() : PFS_double_index(0, 0) {}
 
-  inline void reset(void) {
+  inline void reset() {
     m_index_1 = 0;
     m_index_2 = 0;
   }
 
-  inline void next_thread(void) {
+  inline void next_thread() {
     m_index_1++;
     m_index_2 = 0;
   }
@@ -229,7 +232,7 @@ class table_events_statements_current : public table_events_statements_common {
   static int delete_all_rows();
   static ha_rows get_row_count();
 
-  void reset_position(void) override;
+  void reset_position() override;
 
   int rnd_init(bool scan) override;
   int rnd_next() override;
@@ -278,7 +281,7 @@ class table_events_statements_history : public table_events_statements_common {
   int rnd_init(bool scan) override;
   int rnd_next() override;
   int rnd_pos(const void *pos) override;
-  void reset_position(void) override;
+  void reset_position() override;
 
  protected:
   table_events_statements_history();
@@ -315,7 +318,7 @@ class table_events_statements_history_long
   int rnd_init(bool scan) override;
   int rnd_next() override;
   int rnd_pos(const void *pos) override;
-  void reset_position(void) override;
+  void reset_position() override;
 
  protected:
   table_events_statements_history_long();

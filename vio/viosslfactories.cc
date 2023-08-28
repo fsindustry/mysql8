@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -45,6 +45,11 @@
 #include <openssl/ec.h>
 #endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#include <dh_keys.h>
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
+
+#include "my_openssl_fips.h"
 #define TLS_VERSION_OPTION_SIZE 256
 
 /*
@@ -138,68 +143,35 @@ static const char tls_cipher_blocked[] = {
 
 static bool ssl_initialized = false;
 
-/*
-  Diffie-Hellman key.
-  Generated using: >openssl dhparam -5 -C 2048
+/* Helper functions */
 
-  -----BEGIN DH PARAMETERS-----
-  MIIBCAKCAQEAil36wGZ2TmH6ysA3V1xtP4MKofXx5n88xq/aiybmGnReZMviCPEJ
-  46+7VCktl/RZ5iaDH1XNG1dVQmznt9pu2G3usU+k1/VB4bQL4ZgW4u0Wzxh9PyXD
-  glm99I9Xyj4Z5PVE4MyAsxCRGA1kWQpD9/zKAegUBPLNqSo886Uqg9hmn8ksyU9E
-  BV5eAEciCuawh6V0O+Sj/C3cSfLhgA0GcXp3OqlmcDu6jS5gWjn3LdP1U0duVxMB
-  h/neTSCSvtce4CAMYMjKNVh9P1nu+2d9ZH2Od2xhRIqMTfAS1KTqF3VmSWzPFCjG
-  mjxx/bg6bOOjpgZapvB6ABWlWmRmAAWFtwIBBQ==
-  -----END DH PARAMETERS-----
- */
-static unsigned char dh2048_p[] = {
-    0x8A, 0x5D, 0xFA, 0xC0, 0x66, 0x76, 0x4E, 0x61, 0xFA, 0xCA, 0xC0, 0x37,
-    0x57, 0x5C, 0x6D, 0x3F, 0x83, 0x0A, 0xA1, 0xF5, 0xF1, 0xE6, 0x7F, 0x3C,
-    0xC6, 0xAF, 0xDA, 0x8B, 0x26, 0xE6, 0x1A, 0x74, 0x5E, 0x64, 0xCB, 0xE2,
-    0x08, 0xF1, 0x09, 0xE3, 0xAF, 0xBB, 0x54, 0x29, 0x2D, 0x97, 0xF4, 0x59,
-    0xE6, 0x26, 0x83, 0x1F, 0x55, 0xCD, 0x1B, 0x57, 0x55, 0x42, 0x6C, 0xE7,
-    0xB7, 0xDA, 0x6E, 0xD8, 0x6D, 0xEE, 0xB1, 0x4F, 0xA4, 0xD7, 0xF5, 0x41,
-    0xE1, 0xB4, 0x0B, 0xE1, 0x98, 0x16, 0xE2, 0xED, 0x16, 0xCF, 0x18, 0x7D,
-    0x3F, 0x25, 0xC3, 0x82, 0x59, 0xBD, 0xF4, 0x8F, 0x57, 0xCA, 0x3E, 0x19,
-    0xE4, 0xF5, 0x44, 0xE0, 0xCC, 0x80, 0xB3, 0x10, 0x91, 0x18, 0x0D, 0x64,
-    0x59, 0x0A, 0x43, 0xF7, 0xFC, 0xCA, 0x01, 0xE8, 0x14, 0x04, 0xF2, 0xCD,
-    0xA9, 0x2A, 0x3C, 0xF3, 0xA5, 0x2A, 0x83, 0xD8, 0x66, 0x9F, 0xC9, 0x2C,
-    0xC9, 0x4F, 0x44, 0x05, 0x5E, 0x5E, 0x00, 0x47, 0x22, 0x0A, 0xE6, 0xB0,
-    0x87, 0xA5, 0x74, 0x3B, 0xE4, 0xA3, 0xFC, 0x2D, 0xDC, 0x49, 0xF2, 0xE1,
-    0x80, 0x0D, 0x06, 0x71, 0x7A, 0x77, 0x3A, 0xA9, 0x66, 0x70, 0x3B, 0xBA,
-    0x8D, 0x2E, 0x60, 0x5A, 0x39, 0xF7, 0x2D, 0xD3, 0xF5, 0x53, 0x47, 0x6E,
-    0x57, 0x13, 0x01, 0x87, 0xF9, 0xDE, 0x4D, 0x20, 0x92, 0xBE, 0xD7, 0x1E,
-    0xE0, 0x20, 0x0C, 0x60, 0xC8, 0xCA, 0x35, 0x58, 0x7D, 0x3F, 0x59, 0xEE,
-    0xFB, 0x67, 0x7D, 0x64, 0x7D, 0x8E, 0x77, 0x6C, 0x61, 0x44, 0x8A, 0x8C,
-    0x4D, 0xF0, 0x12, 0xD4, 0xA4, 0xEA, 0x17, 0x75, 0x66, 0x49, 0x6C, 0xCF,
-    0x14, 0x28, 0xC6, 0x9A, 0x3C, 0x71, 0xFD, 0xB8, 0x3A, 0x6C, 0xE3, 0xA3,
-    0xA6, 0x06, 0x5A, 0xA6, 0xF0, 0x7A, 0x00, 0x15, 0xA5, 0x5A, 0x64, 0x66,
-    0x00, 0x05, 0x85, 0xB7,
-};
-
-static unsigned char dh2048_g[] = {
-    0x05,
-};
-
-static DH *get_dh2048(void) {
-  DH *dh;
-  if ((dh = DH_new())) {
-    BIGNUM *p = BN_bin2bn(dh2048_p, sizeof(dh2048_p), nullptr);
-    BIGNUM *g = BN_bin2bn(dh2048_g, sizeof(dh2048_g), nullptr);
-    if (!p || !g
+int vio_security_level(void) {
+  int vio_security_level = 2;
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-        || !DH_set0_pqg(dh, p, nullptr, g)
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10100000L */
-    ) {
-      /* DH_free() will free 'p' and 'g' at once. */
-      DH_free(dh);
-      return nullptr;
-    }
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-    dh->p = p;
-    dh->g = g;
-#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
-  }
-  return (dh);
+  /*
+    create a temporary SSL_CTX, we're going to use it to fetch
+    the current OpenSSL security level. So that we can generate
+    keys accordingly.
+  */
+  SSL_CTX *temp_ssl_ctx = SSL_CTX_new(TLS_server_method());
+
+  /* get the current security level */
+  vio_security_level = SSL_CTX_get_security_level(temp_ssl_ctx);
+
+  assert(vio_security_level <= 5);
+
+  /* current range for security level is [1,5] */
+  if (vio_security_level > 5)
+    vio_security_level = 5;
+  else if (vio_security_level <= 1)
+    vio_security_level = 2;
+
+  /* get rid of temp_ssl_ctx, we're done with it */
+  SSL_CTX_free(temp_ssl_ctx);
+#endif
+
+  DBUG_EXECUTE_IF("crypto_policy_3", vio_security_level = 3;);
+  return vio_security_level;
 }
 
 static void report_errors() {
@@ -210,9 +182,13 @@ static void report_errors() {
 
   DBUG_TRACE;
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  while ((l = ERR_get_error_all(&file, &line, nullptr, &data, &flags))) {
+#else          /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   while ((l = ERR_get_error_line_data(&file, &line, &data, &flags)) > 0) {
+#endif         /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #ifndef NDEBUG /* Avoid warning */
-    char buf[200];
+    char buf[512];
     DBUG_PRINT("error", ("OpenSSL: %s:%s:%d:%s\n", ERR_error_string(l, buf),
                          file, line, (flags & ERR_TXT_STRING) ? data : ""));
 #endif
@@ -249,8 +225,7 @@ static int vio_set_cert_stuff(SSL_CTX *ctx, const char *cert_file,
 
   if (!key_file && cert_file) key_file = cert_file;
 
-  if (cert_file &&
-      SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
+  if (cert_file && SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
     *error = SSL_INITERR_CERT;
     DBUG_PRINT("error",
                ("%s from file '%s'", sslGetErrString(*error), cert_file));
@@ -340,7 +315,7 @@ static void openssl_lock(int mode, openssl_lock_t *lock,
 
       fprintf(stderr, "Fatal: OpenSSL interface problem (mode=0x%x)", mode);
       fflush(stderr);
-      abort();
+      my_abort();
   }
   if (err) {
     DBUG_PRINT("error", ("Fatal OpenSSL: %s:%d: can't %s OpenSSL lock\n", file,
@@ -348,7 +323,7 @@ static void openssl_lock(int mode, openssl_lock_t *lock,
 
     fprintf(stderr, "Fatal: can't %s OpenSSL lock", what);
     fflush(stderr);
-    abort();
+    my_abort();
   }
 }
 
@@ -362,7 +337,7 @@ static void openssl_lock_function(int mode, int n,
 
     fprintf(stderr, "Fatal: OpenSSL interface problem (n = %d)", n);
     fflush(stderr);
-    abort();
+    my_abort();
   }
   openssl_lock(mode, &openssl_stdlocks[n], file, line);
 }
@@ -437,6 +412,7 @@ static void deinit_lock_callback_functions() {
 
 void vio_ssl_end() {
   if (ssl_initialized) {
+    fips_deinit();
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
     ERR_remove_thread_state(0);
 #endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
@@ -461,6 +437,7 @@ void ssl_start() {
   if (!ssl_initialized) {
     ssl_initialized = true;
 
+    fips_init();
     SSL_library_init();
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
@@ -472,93 +449,22 @@ void ssl_start() {
   }
 }
 
-/**
-  Set fips mode in openssl library,
-  When we set fips mode ON/STRICT, it will perform following operations:
-  1. Check integrity of openssl library
-  2. Run fips related tests.
-  3. Disable non fips complaint algorithms
-  4. Should be set par process before openssl library initialization
-  5. When FIPs mode ON(1/2), calling weak algorithms  may results into process
-  abort.
-
-  @param [in]  fips_mode     0 for fips mode off, 1/2 for fips mode ON
-  @param [out] err_string    If fips mode set fails, err_string will have detail
-  failure reason.
-
-  @returns openssl set fips mode errors
-    @retval non 1 for Error
-    @retval 1 Success
-*/
-int set_fips_mode(const uint fips_mode, char err_string[OPENSSL_ERROR_LENGTH]) {
-  int rc = -1;
-  unsigned int fips_mode_old = -1;
-  unsigned long err_library = 0;
-  if (fips_mode > 2) {
-    goto EXIT;
-  }
-  fips_mode_old = FIPS_mode();
-  if (fips_mode_old == fips_mode) {
-    rc = 1;
-    goto EXIT;
-  }
-  if (!(rc = FIPS_mode_set(fips_mode))) {
-    /*
-      If OS doesn't have FIPS enabled openssl library and user sets FIPS mode
-      ON, It fails with proper error. But in the same time it doesn't allow to
-      perform any cryptographic operation. Now if FIPS mode set fails with
-      error, setting old working FIPS mode value in the OpenSSL library. It will
-      allow successful cryptographic operation and will not abort the server.
-    */
-    FIPS_mode_set(fips_mode_old);
-    err_library = ERR_get_error();
-    ERR_error_string_n(err_library, err_string, OPENSSL_ERROR_LENGTH - 1);
-    err_string[OPENSSL_ERROR_LENGTH - 1] = '\0';
-  }
-EXIT:
-  return rc;
-}
-
-/**
-  Get fips mode from openssl library,
-
-  @returns openssl current fips mode
-*/
-uint get_fips_mode() { return FIPS_mode(); }
-
-/**
-  Toggle FIPS mode, to see whether it is available with the current SSL library.
-  @retval 0 FIPS is not supported.
-  @retval non-zero: FIPS is supported.
-*/
-int test_ssl_fips_mode(char *err_string) {
-  int ret = FIPS_mode_set(FIPS_mode() == 0 ? 1 : 0);
-  unsigned long err = (ret == 0) ? ERR_get_error() : 0;
-
-  if (err != 0) {
-    ERR_error_string_n(err, err_string, OPENSSL_ERROR_LENGTH - 1);
-  }
-  return ret;
-}
-
 long process_tls_version(const char *tls_version) {
   const char *separator = ",";
   char *token, *lasts = nullptr;
 
 #ifdef HAVE_TLSv13
-  const char *tls_version_name_list[] = {"TLSv1", "TLSv1.1", "TLSv1.2",
-                                         "TLSv1.3"};
-  const char ctx_flag_default[] = "TLSv1,TLSv1.1,TLSv1.2,TLSv1.3";
-  const long tls_ctx_list[] = {SSL_OP_NO_TLSv1, SSL_OP_NO_TLSv1_1,
-                               SSL_OP_NO_TLSv1_2, SSL_OP_NO_TLSv1_3};
+  const char *tls_version_name_list[] = {"TLSv1.2", "TLSv1.3"};
+  const char ctx_flag_default[] = "TLSv1.2,TLSv1.3";
+  const long tls_ctx_list[] = {SSL_OP_NO_TLSv1_2, SSL_OP_NO_TLSv1_3};
   long tls_ctx_flag = SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2 |
-                      SSL_OP_NO_TLSv1_3;
+                      SSL_OP_NO_TLSv1_3 | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 #else
-  const char *tls_version_name_list[] = {"TLSv1", "TLSv1.1", "TLSv1.2"};
-  const char ctx_flag_default[] = "TLSv1,TLSv1.1,TLSv1.2";
-  const long tls_ctx_list[] = {SSL_OP_NO_TLSv1, SSL_OP_NO_TLSv1_1,
-                               SSL_OP_NO_TLSv1_2};
-  long tls_ctx_flag = SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2;
+  const char *tls_version_name_list[] = {"TLSv1.2"};
+  const char ctx_flag_default[] = "TLSv1.2";
+  const long tls_ctx_list[] = {SSL_OP_NO_TLSv1_2};
+  long tls_ctx_flag = SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2 |
+                      SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 #endif /* HAVE_TLSv13 */
   const unsigned int tls_versions_count = array_elements(tls_version_name_list);
   char tls_version_option[TLS_VERSION_OPTION_SIZE] = "";
@@ -568,9 +474,9 @@ long process_tls_version(const char *tls_version) {
       !my_strcasecmp(&my_charset_latin1, tls_version, ctx_flag_default))
     return 0;
 
-  if (strlen(tls_version) - 1 > sizeof(tls_version_option)) return -1;
+  if (strlen(tls_version) + 1 > sizeof(tls_version_option)) return -1;
 
-  strncpy(tls_version_option, tls_version, sizeof(tls_version_option));
+  snprintf(tls_version_option, sizeof(tls_version_option), "%s", tls_version);
   token = my_strtok_r(tls_version_option, separator, &lasts);
   while (token) {
     for (unsigned int i = 0; i < tls_versions_count; i++) {
@@ -583,10 +489,8 @@ long process_tls_version(const char *tls_version) {
     token = my_strtok_r(nullptr, separator, &lasts);
   }
 
-  if (!tls_found)
-    return -1;
-  else
-    return tls_ctx_flag;
+  if (!tls_found) return -1;
+  return tls_ctx_flag;
 }
 
 /************************ VioSSLFd **********************************/
@@ -596,9 +500,9 @@ static struct st_VioSSLFd *new_VioSSLFd(
     const char *ciphersuites [[maybe_unused]], bool is_client,
     enum enum_ssl_init_error *error, const char *crl_file, const char *crl_path,
     const long ssl_ctx_flags, const char *server_host [[maybe_unused]]) {
-  DH *dh;
   struct st_VioSSLFd *ssl_fd;
-  long ssl_ctx_options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+  long ssl_ctx_options =
+      SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
   int ret_set_cipherlist = 0;
   std::string cipher_list;
 #if OPENSSL_VERSION_NUMBER < 0x10002000L
@@ -739,13 +643,32 @@ static struct st_VioSSLFd *new_VioSSLFd(
   }
 
   /* DH stuff */
-  dh = get_dh2048();
-  if (SSL_CTX_set_tmp_dh(ssl_fd->ssl_context, dh) == 0) {
-    DH_free(dh);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  if (SSL_CTX_set_dh_auto(ssl_fd->ssl_context, 1) != 1) {
     *error = SSL_INITERR_DHFAIL;
     goto error;
   }
-  DH_free(dh);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+  {
+    int sec_level = vio_security_level();
+
+    BIO *bio_storage =
+        BIO_new_mem_buf(const_cast<char *>(dh_keys[sec_level].data()),
+                        dh_keys[sec_level].size());
+
+    DH *dh = PEM_read_bio_DHparams(bio_storage, NULL, NULL, NULL);
+
+    if (SSL_CTX_set_tmp_dh(ssl_fd->ssl_context, dh) == 0) {
+      printf("%s\n", ERR_error_string(ERR_get_error(), NULL));
+      DH_free(dh);
+      BIO_free(bio_storage);
+      *error = SSL_INITERR_DHFAIL;
+      goto error;
+    }
+    DH_free(dh);
+    BIO_free(bio_storage);
+  }
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   /* ECDH stuff */
 #if OPENSSL_VERSION_NUMBER < 0x10002000L
@@ -789,9 +712,37 @@ static struct st_VioSSLFd *new_VioSSLFd(
       }
     }
   }
-#endif
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
 
   SSL_CTX_set_options(ssl_fd->ssl_context, ssl_ctx_options);
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+  {
+    const auto ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+    if (!ecdh) {
+      *error = SSL_INITERR_DHFAIL;
+      goto error;
+    }
+
+    if (SSL_CTX_set_tmp_ecdh(ssl_fd->ssl_context, ecdh) != 1) {
+      EC_KEY_free(ecdh);
+      *error = SSL_INITERR_DHFAIL;
+      goto error;
+    }
+    EC_KEY_free(ecdh);
+  }
+
+#else  /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+
+  if (SSL_CTX_set_ecdh_auto(ssl_fd->ssl_context, 1) != 1) {
+    *error = SSL_INITERR_DHFAIL;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
+    report_errors();
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    return nullptr;
+  }
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
 
   DBUG_PRINT("exit", ("OK 1"));
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -147,19 +147,19 @@ PFS_engine_table *table_metadata_locks::create(PFS_engine_table_share *) {
   return new table_metadata_locks();
 }
 
-ha_rows table_metadata_locks::get_row_count(void) {
+ha_rows table_metadata_locks::get_row_count() {
   return global_mdl_container.get_row_count();
 }
 
 table_metadata_locks::table_metadata_locks()
     : PFS_engine_table(&m_share, &m_pos), m_pos(0), m_next_pos(0) {}
 
-void table_metadata_locks::reset_position(void) {
+void table_metadata_locks::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
-int table_metadata_locks::rnd_next(void) {
+int table_metadata_locks::rnd_next() {
   PFS_metadata_lock *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -209,7 +209,7 @@ int table_metadata_locks::index_init(uint idx, bool) {
   return 0;
 }
 
-int table_metadata_locks::index_next(void) {
+int table_metadata_locks::index_next() {
   PFS_metadata_lock *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -288,7 +288,7 @@ int table_metadata_locks::read_row_values(TABLE *table, unsigned char *buf,
           set_field_mdl_status(f, m_row.m_mdl_status);
           break;
         case 8: /* SOURCE */
-          set_field_varchar_utf8(f, m_row.m_source, m_row.m_source_length);
+          set_field_varchar_utf8mb4(f, m_row.m_source, m_row.m_source_length);
           break;
         case 9: /* OWNER_THREAD_ID */
           if (m_row.m_owner_thread_id != 0) {

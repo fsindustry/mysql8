@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include "util/require.h"
 #include <ndb_global.h>
 #include <ndb_opts.h>
 #include <time.h>
@@ -51,28 +52,36 @@ static NdbNodeBitmask nowait_nodes_bitmask;
 
 static struct my_option my_long_options[] =
 {
-  NDB_STD_OPTS("ndb_waiter"),
+  NdbStdOpt::usage,
+  NdbStdOpt::help,
+  NdbStdOpt::version,
+  NdbStdOpt::ndb_connectstring,
+  NdbStdOpt::mgmd_host,
+  NdbStdOpt::connectstring,
+  NdbStdOpt::connect_retry_delay,
+  NdbStdOpt::connect_retries,
+  NDB_STD_OPT_DEBUG
   { "no-contact", 'n', "Wait for cluster no contact",
-    (uchar**) &_no_contact, (uchar**) &_no_contact, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 }, 
+    &_no_contact, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, nullptr, 0, nullptr },
   { "not-started", NDB_OPT_NOSHORT, "Wait for cluster not started",
-    (uchar**) &_not_started, (uchar**) &_not_started, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 }, 
+    &_not_started, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, nullptr, 0, nullptr },
   { "single-user", NDB_OPT_NOSHORT,
     "Wait for cluster to enter single user mode",
-    (uchar**) &_single_user, (uchar**) &_single_user, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 }, 
+    &_single_user, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, nullptr, 0, nullptr },
   { "timeout", 't', "Timeout to wait in seconds",
-    (uchar**) &_timeout, (uchar**) &_timeout, 0,
-    GET_INT, REQUIRED_ARG, 120, 0, 0, 0, 0, 0 }, 
+    &_timeout, nullptr, nullptr, GET_INT, REQUIRED_ARG,
+    120, 0, 0, nullptr, 0, nullptr },
   { "wait-nodes", 'w', "Node ids to wait on, e.g. '1,2-4'",
-    (uchar**) &_wait_nodes, (uchar**) &_wait_nodes, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &_wait_nodes, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, nullptr, 0, nullptr },
   { "nowait-nodes", NDB_OPT_NOSHORT,
     "Nodes that will not be waited for, e.g. '2,3,4-7'",
-    (uchar**) &_nowait_nodes, (uchar**) &_nowait_nodes, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+    &_nowait_nodes, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, nullptr, 0, nullptr },
+  NdbStdOpt::end_of_options
 };
 
 extern "C"
@@ -279,16 +288,28 @@ waitClusterStatus(const char* _addr,
     ndberr << "Could not create ndb_mgm handle" << endl;
     return -1;
   }
-  ndbout << "Connecting to mgmsrv at " << _addr << endl;
+
   if (ndb_mgm_set_connectstring(handle, _addr))
   {
     MGMERR(handle);
-    ndberr  << "Connectstring " << _addr << " invalid" << endl;
+    if (_addr != nullptr)
+    {
+      ndberr << "Connectstring " << _addr << " is invalid" << endl;
+    }
+    else
+    {
+      ndberr << "Connectstring is invalid" << endl;
+    }
     return -1;
   }
+  char buf[1024];
+  ndbout << "Connecting to management server at "
+         << ndb_mgm_get_connectstring(handle, buf, sizeof(buf)) << endl;
   if (ndb_mgm_connect(handle, opt_connect_retries - 1, opt_connect_retry_delay, 1)) {
     MGMERR(handle);
-    ndberr  << "Connection to " << _addr << " failed" << endl;
+    ndberr << "Connection to "
+           << ndb_mgm_get_connectstring(handle, buf, sizeof(buf)) << " failed"
+           << endl;
     return -1;
   }
 

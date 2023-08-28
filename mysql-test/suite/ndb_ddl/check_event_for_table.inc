@@ -6,8 +6,6 @@
 #  check_event_dbname - db of table
 #  [check_event_full - expect a full event]
 #
-# NOTE: retrieve_event_list.inc must be used before
-#       this inc file can be sourced
 #
 
 if (!$check_event_tabname)
@@ -35,11 +33,20 @@ if ($check_event_full)
 let $expected_event_name =
   $event_prefix\\\$$check_event_dbname/$check_event_tabname;
 #echo expected_event_name: $expected_event_name;
-let $found_event = `SELECT count(*) FROM test.event_list
-                      WHERE event_name = '$expected_event_name'`;
+let $found_event = `SELECT count(*) FROM ndbinfo.events
+                      WHERE name = '$expected_event_name'`;
 if ($found_event)
 {
   echo Found event for '$check_event_dbname.$check_event_tabname';
+
+  #
+  # Check how report options for the event is configured. Use the 'reporting'
+  # column of ndbinfo.events which is a SET that correspond to the flags
+  # describing what should be reported
+  let $reporting = `SELECT reporting FROM ndbinfo.events
+                      WHERE name = '$expected_event_name'`;
+  echo Report flags: '$reporting';
+
 }
 if (!$found_event)
 {

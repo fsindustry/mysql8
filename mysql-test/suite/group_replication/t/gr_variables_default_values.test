@@ -91,7 +91,7 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_paxos_single_leader = `SELECT @@GLOBAL.group_replication_paxos_single_leader;`
 
 # Total number of GR variables.
---let $total_gr_vars= 61
+--let $total_gr_vars= 64
 
 --echo #
 --echo # Test Unit#1
@@ -366,8 +366,8 @@ SET @@SESSION.group_replication_consistency= default;
 --source include/assert.inc
 
 # group_replication_recovery_tls_version
---let $assert_text= Default group_replication_recovery_tls_version is "TLSv1,TLSv1.1,TLSv1.2,TLSv1.3"
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_tls_version]" = "TLSv1,TLSv1.1,TLSv1.2,TLSv1.3"
+--let $assert_text= Default group_replication_recovery_tls_version is "TLSv1.2,TLSv1.3"
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_tls_version]" = "TLSv1.2,TLSv1.3"
 --source include/assert.inc
 
 # group_replication_recovery_tls_ciphersuites

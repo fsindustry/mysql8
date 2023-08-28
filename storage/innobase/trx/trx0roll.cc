@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -85,12 +85,12 @@ static void trx_rollback_to_savepoint_low(
   mem_heap_t *heap;
   roll_node_t *roll_node;
 
-  heap = mem_heap_create(512);
+  heap = mem_heap_create(512, UT_LOCATION_HERE);
 
   roll_node = roll_node_create(heap);
 
   if (savept != nullptr) {
-    roll_node->partial = TRUE;
+    roll_node->partial = true;
     roll_node->savept = *savept;
     check_trx_state(trx);
   } else {
@@ -146,7 +146,7 @@ dberr_t trx_rollback_to_savepoint(
 {
   ut_ad(!trx_mutex_own(trx));
 
-  trx_start_if_not_started_xa(trx, true);
+  trx_start_if_not_started_xa(trx, true, UT_LOCATION_HERE);
 
   trx_rollback_to_savepoint_low(trx, savept);
 
@@ -175,7 +175,7 @@ static dberr_t trx_rollback_for_mysql_low(
 }
 
 /** Rollback a transaction used in MySQL
-@param[in, out]	trx	transaction
+@param[in, out] trx     transaction
 @return error code or DB_SUCCESS */
 static dberr_t trx_rollback_low(trx_t *trx) {
   /* We are reading trx->state without mutex protection here,
@@ -482,7 +482,6 @@ dberr_t trx_rollback_to_savepoint_for_mysql(
   }
 
   ut_error;
-  return (DB_CORRUPTION);
 }
 
 /** Creates a named savepoint. If the transaction is not yet started, starts it.
@@ -500,7 +499,7 @@ dberr_t trx_savepoint_for_mysql(
 {
   trx_named_savept_t *savep;
 
-  trx_start_if_not_started_xa(trx, false);
+  trx_start_if_not_started_xa(trx, false, UT_LOCATION_HERE);
 
   savep = trx_savepoint_find(trx, savepoint_name);
 
@@ -555,7 +554,7 @@ dberr_t trx_release_savepoint_for_mysql(
  in crash recovery.
  @return true if trx is an incomplete transaction that is being rolled
  back in crash recovery */
-ibool trx_is_recv(const trx_t *trx) /*!< in: transaction */
+bool trx_is_recv(const trx_t *trx) /*!< in: transaction */
 {
   return (trx == trx_roll_crash_recv_trx);
 }
@@ -581,7 +580,7 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
   int64_t rows_to_undo;
   const char *unit = "";
 
-  heap = mem_heap_create(512);
+  heap = mem_heap_create(512, UT_LOCATION_HERE);
 
   fork = que_fork_create(nullptr, nullptr, QUE_FORK_RECOVERY, heap);
   fork->trx = trx;
@@ -644,10 +643,10 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
  lock if it does a clean up or rollback.
  @return true if the transaction was cleaned up or rolled back
  and trx_sys->mutex was released. */
-static ibool trx_rollback_or_clean_resurrected(
+static bool trx_rollback_or_clean_resurrected(
     trx_t *trx, /*!< in: transaction to rollback or clean */
-    ibool all)  /*!< in: FALSE=roll back dictionary transactions;
-                TRUE=roll back all non-PREPARED transactions */
+    bool all)   /*!< in: false=roll back dictionary transactions;
+                 true=roll back all non-PREPARED transactions */
 {
   ut_ad(trx_sys_mutex_own());
   ut_ad(trx->in_rw_trx_list);
@@ -673,7 +672,7 @@ static ibool trx_rollback_or_clean_resurrected(
 
   if (!is_recovered) {
     ut_ad(state != TRX_STATE_COMMITTED_IN_MEMORY);
-    return (FALSE);
+    return false;
   }
 
   switch (state) {
@@ -685,25 +684,24 @@ static ibool trx_rollback_or_clean_resurrected(
       trx_cleanup_at_db_startup(trx);
       trx_free_resurrected(trx);
       ut_ad(!trx->is_recovered);
-      return (TRUE);
+      return true;
     case TRX_STATE_ACTIVE:
       if (all || trx->ddl_operation) {
         trx_sys_mutex_exit();
         trx_rollback_active(trx);
         trx_free_for_background(trx);
         ut_ad(!trx->is_recovered);
-        return (TRUE);
+        return true;
       }
-      return (FALSE);
+      return false;
     case TRX_STATE_PREPARED:
-      return (FALSE);
+      return false;
     case TRX_STATE_NOT_STARTED:
     case TRX_STATE_FORCED_ROLLBACK:
       break;
   }
 
   ut_error;
-  return (FALSE);
 }
 
 /** Rollback or clean up any incomplete transactions which were
@@ -711,8 +709,8 @@ static ibool trx_rollback_or_clean_resurrected(
  committed, then we clean up a possible insert undo log. If the
  transaction was not yet committed, then we roll it back. */
 void trx_rollback_or_clean_recovered(
-    ibool all) /*!< in: FALSE=roll back dictionary transactions;
-               TRUE=roll back all non-PREPARED transactions */
+    bool all) /*!< in: false=roll back dictionary transactions;
+               true=roll back all non-PREPARED transactions */
 {
   ut_ad(!srv_read_only_mode);
 
@@ -782,10 +780,52 @@ encountered in crash recovery.  If the transaction already was
 committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back.
 Note: this is done in a background thread. */
-void trx_recovery_rollback_thread() {
-  THD *thd = create_internal_thd();
-
+void trx_recovery_rollback(THD *thd) {
+  std::vector<MDL_ticket *> shared_mdl_list;
   ut_ad(!srv_read_only_mode);
+
+  // Take MDL locks
+  /* During this stage the server is not open for external connections, and
+   * there will not be any concurrent threads requesting MDL, hence we don't
+   * have risk of hitting a deadlock.
+   * TODO: We can improvize code by following some order while taking MDL locks.
+   */
+  for (const auto &element : to_rollback_trx_tables) {
+    trx_id_t trx_id = element.first;
+    table_id_t table_id = element.second;
+
+    /* Passing false as we only intend to validate if the transaction is already
+     * committed/rolled back during other stages of recovery. */
+    auto trx = trx_rw_is_active(trx_id, false);
+
+    /* Ignore transactions that has already finished. */
+    if (trx == nullptr) {
+      /* Currently these recovered transactions are not expected to finish
+       * earlier. Assert in Debug mode. */
+      ut_ad(false);
+      continue;
+    }
+    auto table = dd_table_open_on_id(table_id, nullptr, nullptr, false, true);
+    if (table == nullptr) {
+      continue;
+    }
+    std::string table_name;
+    std::string schema_name;
+    table->get_table_name(schema_name, table_name);
+    MDL_ticket *mdl_ticket;
+    if (dd_mdl_acquire(thd, &mdl_ticket, schema_name.data(),
+                       table_name.data())) {
+      ut_error;
+    }
+    shared_mdl_list.push_back(mdl_ticket);
+    lock_table_ix_resurrect(table, trx);
+    ib::info(ER_IB_RESURRECT_ACQUIRE_TABLE_LOCK, ulong(table->id),
+             table->name.m_name);
+    dd_table_close(table, nullptr, nullptr, false);
+  }
+
+  /* Let the startup thread proceed now */
+  os_event_set(recovery_lock_taken);
 
   while (DBUG_EVALUATE_IF("pause_rollback_on_recovery", true, false)) {
     if (srv_shutdown_state.load() >= SRV_SHUTDOWN_RECOVERY_ROLLBACK) {
@@ -794,7 +834,23 @@ void trx_recovery_rollback_thread() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 
-  trx_rollback_or_clean_recovered(TRUE);
+  trx_rollback_or_clean_recovered(true);
+
+  // Release MDL locks
+  for (auto mdl_ticket : shared_mdl_list) {
+    dd_release_mdl(mdl_ticket);
+  }
+}
+
+/** Rollback or clean up any incomplete transactions which were
+encountered in crash recovery.  If the transaction already was
+committed, then we clean up a possible insert undo log. If the
+transaction was not yet committed, then we roll it back.
+Note: this is done in a background thread. */
+void trx_recovery_rollback_thread() {
+  THD *thd = create_internal_thd();
+
+  trx_recovery_rollback(thd);
 
   destroy_internal_thd(thd);
 }
@@ -821,10 +877,10 @@ static void trx_roll_try_truncate(
 
 /** Pops the topmost undo log record in a single undo log and updates the info
 about the topmost record in the undo log memory struct.
-@param[in]	trx		transaction
-@param[in]	undo		undo log
-@param[in]	mtr		mtr
-@param[out]	undo_offset	offset of undo record in the page
+@param[in]      trx             transaction
+@param[in]      undo            undo log
+@param[in]      mtr             mtr
+@param[out]     undo_offset     offset of undo record in the page
 @return Undo page where undo log record resides, the page s-latched */
 static const page_t *trx_roll_pop_top_rec(trx_t *trx, trx_undo_t *undo,
                                           mtr_t *mtr, uint32_t *undo_offset) {
@@ -840,7 +896,7 @@ static const page_t *trx_roll_pop_top_rec(trx_t *trx, trx_undo_t *undo,
                             undo->hdr_page_no, undo->hdr_offset, true, mtr);
 
   if (prev_rec == nullptr) {
-    undo->empty = TRUE;
+    undo->empty = true;
   } else {
     page_t *prev_rec_page = page_align(prev_rec);
 
@@ -874,7 +930,6 @@ static trx_undo_rec_t *trx_roll_pop_top_rec_of_trx_low(
   trx_undo_rec_t *undo_rec_copy;
   const page_t *undo_page;
   undo_no_t undo_no;
-  ibool is_insert;
   uint32_t undo_offset;
   trx_rseg_t *rseg;
   mtr_t mtr;
@@ -912,7 +967,7 @@ static trx_undo_rec_t *trx_roll_pop_top_rec_of_trx_low(
     return (nullptr);
   }
 
-  is_insert = (undo == ins_undo);
+  auto is_insert = (undo == ins_undo);
 
   *roll_ptr = trx_undo_build_roll_ptr(is_insert, undo->rseg->space_id,
                                       undo->top_page_no, undo->top_offset);
@@ -985,9 +1040,9 @@ trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
  performed by executing this query graph like a query subprocedure call.
  The reply about the completion of the rollback will be sent by this
  graph.
-@param[in,out]	trx			transaction
-@param[in]	partial_rollback	true if partial rollback
-@return	the query graph */
+@param[in,out]  trx                     transaction
+@param[in]      partial_rollback        true if partial rollback
+@return the query graph */
 static que_t *trx_roll_graph_build(trx_t *trx, bool partial_rollback) {
   mem_heap_t *heap;
   que_fork_t *fork;
@@ -995,7 +1050,7 @@ static que_t *trx_roll_graph_build(trx_t *trx, bool partial_rollback) {
 
   ut_ad(trx_mutex_own(trx));
 
-  heap = mem_heap_create(512);
+  heap = mem_heap_create(512, UT_LOCATION_HERE);
   fork = que_fork_create(nullptr, nullptr, QUE_FORK_ROLLBACK, heap);
   fork->trx = trx;
 
@@ -1008,11 +1063,11 @@ static que_t *trx_roll_graph_build(trx_t *trx, bool partial_rollback) {
 
 /** Starts a rollback operation, creates the UNDO graph that will do the
  actual undo operation.
-@param[in]	trx	transaction
-@param[in]	roll_limit	 rollback to undo no (for
+@param[in]      trx     transaction
+@param[in]      roll_limit       rollback to undo no (for
                                  partial undo), 0 if we are rolling back
                                  the entire transaction
-@param[in]	partial_rollback true if partial rollback
+@param[in]      partial_rollback true if partial rollback
 @return query graph thread that will perform the UNDO operations. */
 static que_thr_t *trx_rollback_start(trx_t *trx, ib_id_t roll_limit,
                                      bool partial_rollback) {

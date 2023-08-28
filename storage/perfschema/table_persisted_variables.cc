@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -87,13 +87,12 @@ PFS_engine_table *table_persisted_variables::create(PFS_engine_table_share *) {
   return new table_persisted_variables();
 }
 
-ha_rows table_persisted_variables::get_row_count(void) {
+ha_rows table_persisted_variables::get_row_count() {
   Persisted_variables_cache *pv = Persisted_variables_cache::get_instance();
   if (pv) {
-    return pv->get_persisted_variables()->size();
-  } else {
-    return 0;
+    return pv->get_persisted_dynamic_variables()->size();
   }
+  return 0;
 }
 
 table_persisted_variables::table_persisted_variables()
@@ -102,7 +101,7 @@ table_persisted_variables::table_persisted_variables()
       m_pos(0),
       m_next_pos(0) {}
 
-void table_persisted_variables::reset_position(void) {
+void table_persisted_variables::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -114,7 +113,7 @@ int table_persisted_variables::rnd_init(bool /* scan */) {
   return 0;
 }
 
-int table_persisted_variables::rnd_next(void) {
+int table_persisted_variables::rnd_next() {
   for (m_pos.set_at(&m_next_pos); m_pos.m_index < m_sysvar_cache.size();
        m_pos.next()) {
     if (m_sysvar_cache.is_materialized()) {
@@ -158,7 +157,7 @@ int table_persisted_variables::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_persisted_variables::index_next(void) {
+int table_persisted_variables::index_next() {
   for (m_pos.set_at(&m_next_pos); m_pos.m_index < m_sysvar_cache.size();
        m_pos.next()) {
     if (m_sysvar_cache.is_materialized()) {
@@ -202,8 +201,8 @@ int table_persisted_variables::read_row_values(TABLE *table, unsigned char *buf,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* VARIABLE_NAME */
-          set_field_varchar_utf8(f, m_row.m_variable_name.m_str,
-                                 m_row.m_variable_name.m_length);
+          set_field_varchar_utf8mb4(f, m_row.m_variable_name.m_str,
+                                    m_row.m_variable_name.m_length);
           break;
         case 1: /* VARIABLE_VALUE */
           m_row.m_variable_value.set_field(f);

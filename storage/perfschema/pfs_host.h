@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -39,12 +39,14 @@
 #include "storage/perfschema/pfs_con_slice.h"
 #include "storage/perfschema/pfs_global.h"
 #include "storage/perfschema/pfs_lock.h"
+#include "storage/perfschema/pfs_name.h"
 
 struct PFS_global_param;
 struct PFS_memory_stat_alloc_delta;
 struct PFS_memory_stat_free_delta;
 struct PFS_memory_shared_stat;
 struct PFS_thread;
+struct PFS_account;
 
 /**
   @addtogroup performance_schema_buffers
@@ -53,36 +55,31 @@ struct PFS_thread;
 
 /** Hash key for a host. */
 struct PFS_host_key {
-  /**
-    Hash search key.
-    This has to be a string for @c LF_HASH,
-    the format is @c "<hostname><0x00>"
-  */
-  char m_hash_key[HOSTNAME_LENGTH + 1];
-  uint m_key_length;
+  /** Host name. */
+  PFS_host_name m_host_name;
 };
 
 /** Per host statistics. */
 struct PFS_ALIGNED PFS_host : PFS_connection_slice {
  public:
-  inline void init_refcount(void) { m_refcount.store(1); }
+  inline void init_refcount() { m_refcount.store(1); }
 
-  inline int get_refcount(void) { return m_refcount.load(); }
+  inline int get_refcount() { return m_refcount.load(); }
 
-  inline void inc_refcount(void) { ++m_refcount; }
+  inline void inc_refcount() { ++m_refcount; }
 
-  inline void dec_refcount(void) { --m_refcount; }
+  inline void dec_refcount() { --m_refcount; }
 
   void aggregate(bool alive);
-  void aggregate_waits(void);
-  void aggregate_stages(void);
-  void aggregate_statements(void);
-  void aggregate_transactions(void);
-  void aggregate_errors(void);
+  void aggregate_waits();
+  void aggregate_stages();
+  void aggregate_statements();
+  void aggregate_transactions();
+  void aggregate_errors();
   void aggregate_memory(bool alive);
-  void aggregate_status(void);
-  void aggregate_stats(void);
-  void release(void);
+  void aggregate_status();
+  void aggregate_stats();
+  void release();
 
   /** Reset all memory statistics. */
   void rebase_memory_stats();
@@ -115,10 +112,20 @@ struct PFS_ALIGNED PFS_host : PFS_connection_slice {
   /* Internal lock. */
   pfs_lock m_lock;
   PFS_host_key m_key;
-  const char *m_hostname;
-  uint m_hostname_length;
+
+  void reset_connections_stats() {
+    m_disconnected_count = 0;
+    m_max_controlled_memory = 0;
+    m_max_total_memory = 0;
+  }
+
+  void aggregate_stats_from(PFS_account *pfs);
+  void aggregate_disconnect(ulonglong controlled_memory,
+                            ulonglong total_memory);
 
   ulonglong m_disconnected_count;
+  ulonglong m_max_controlled_memory;
+  ulonglong m_max_total_memory;
 
  private:
   std::atomic<int> m_refcount;
@@ -133,15 +140,14 @@ struct PFS_ALIGNED PFS_host : PFS_connection_slice {
 };
 
 int init_host(const PFS_global_param *param);
-void cleanup_host(void);
+void cleanup_host();
 int init_host_hash(const PFS_global_param *param);
-void cleanup_host_hash(void);
+void cleanup_host_hash();
 
-PFS_host *find_or_create_host(PFS_thread *thread, const char *hostname,
-                              uint hostname_length);
+PFS_host *find_or_create_host(PFS_thread *thread, const PFS_host_name *host);
 
 PFS_host *sanitize_host(PFS_host *unsafe);
-void purge_all_host(void);
+void purge_all_host();
 
 /* For show status. */
 

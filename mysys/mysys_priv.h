@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,21 +33,22 @@
 #include "my_macros.h"
 
 #include "my_psi_config.h"
-#include "mysql/components/services/mysql_mutex_bits.h"  // for mysql_mutex_t
-#include "mysql/components/services/psi_cond_bits.h"
-#include "mysql/components/services/psi_file_bits.h"    // for PSI_file_key
-#include "mysql/components/services/psi_memory_bits.h"  // for PSI_memory_key
-#include "mysql/components/services/psi_mutex_bits.h"
-#include "mysql/components/services/psi_rwlock_bits.h"  // for PSI_rwlock_key
-#include "mysql/components/services/psi_stage_bits.h"   // for PSI_stage_info
-#include "mysql/components/services/psi_thread_bits.h"  // for PSI_thread_key
-#include "mysql/psi/mysql_mutex.h"                      // for mysql_mutex_lock
+#include "mysql/components/services/bits/mysql_mutex_bits.h"  // for mysql_mutex_t
+#include "mysql/components/services/bits/psi_cond_bits.h"
+#include "mysql/components/services/bits/psi_file_bits.h"    // for PSI_file_key
+#include "mysql/components/services/bits/psi_memory_bits.h"  // for PSI_memory_key
+#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/bits/psi_rwlock_bits.h"  // for PSI_rwlock_key
+#include "mysql/components/services/bits/psi_stage_bits.h"  // for PSI_stage_info
+#include "mysql/components/services/bits/psi_thread_bits.h"  // for PSI_thread_key
+#include "mysql/psi/mysql_mutex.h"  // for mysql_mutex_lock
 
-extern PSI_mutex_key key_IO_CACHE_append_buffer_lock, key_IO_CACHE_SHARE_mutex,
-    key_KEY_CACHE_cache_lock, key_THR_LOCK_charset, key_THR_LOCK_heap,
-    key_THR_LOCK_lock, key_THR_LOCK_malloc, key_THR_LOCK_mutex,
-    key_THR_LOCK_myisam, key_THR_LOCK_net, key_THR_LOCK_open,
-    key_THR_LOCK_threads, key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
+extern PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
+    key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_THR_LOCK_charset,
+    key_THR_LOCK_heap, key_THR_LOCK_lock, key_THR_LOCK_malloc,
+    key_THR_LOCK_mutex, key_THR_LOCK_myisam, key_THR_LOCK_net,
+    key_THR_LOCK_open, key_THR_LOCK_threads, key_TMPDIR_mutex,
+    key_THR_LOCK_myisam_mmap;
 
 extern PSI_rwlock_key key_SAFE_HASH_lock;
 

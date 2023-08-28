@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -161,8 +161,9 @@ void Client::activate_tls() {
   const auto real_connect_timeout =
       std::min<uint32_t>(connect_timeout, m_read_timeout);
 
-  if (m_server->ssl_context()->activate_tls(&connection(),
-                                            real_connect_timeout)) {
+  m_ssl = m_server->ssl_context();
+
+  if (m_ssl->activate_tls(&connection(), real_connect_timeout)) {
     session()->mark_as_tls_session();
   } else {
     log_debug("%s: Error during SSL handshake", client_id());

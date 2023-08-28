@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -54,6 +54,8 @@ public:
 
   struct Request;
   struct TreeNode;
+  struct ScanFragHandle;
+
 private:
   BLOCK_DEFINES(Dbspj);
 
@@ -103,11 +105,40 @@ private:
 
   void sendSTTORRY(Signal* signal);
 
-protected:
-  //virtual bool getParam(const char* name, Uint32* count);
+  /**
+   * Security layer:
+   *   Provide verification of 'i-pointers' used in the signaling protocol.
+   *   - 'insert' the GuardedPtr to allow it to be referred.
+   *   - 'remove' at end of lifecycle.
+   *   - 'get' will fetch the 'real' pointer to the object.
+   * Crash if ptrI is unknown to us.
+   */
+  void insertGuardedPtr(Ptr<Request>, Ptr<TreeNode>);
+  void removeGuardedPtr(Ptr<TreeNode>);
+  bool getGuardedPtr(Ptr<TreeNode>&, Uint32 ptrI);
+
+  void insertGuardedPtr(Ptr<Request>, Ptr<ScanFragHandle>);
+  void removeGuardedPtr(Ptr<ScanFragHandle>);
+  bool getGuardedPtr(Ptr<ScanFragHandle>&, Uint32 ptrI);
+
+  /**
+   * Calculate a reasonable good hashKey for an i-pointer.
+   * Lower 13 bits in i-pointer is the page offset, with those above
+   * the page no. As the same page_no is reused for multiple object,
+   * and the objects are of same size, there *will* be repeating patterns.
+   * Thus a good hash function is required, based on murmur3 hash.
+   */
+  static Uint32 hashPtrI(Uint32 ptrI)
+  {
+    Uint32 k = (ptrI >> 13) ^ ptrI;  // Fold page_no and pos
+    // Murmur scramble:
+    k *= 0xcc9e2d51;
+    k = (k << 15) | (k >> 17);
+    k *= 0x1b873593;
+    return k;
+  }
 
 public:
-  struct ScanFragHandle;
   typedef DataBuffer<14, LocalArenaPool<DataBufferSegment<14> > > Correlation_list;
   typedef LocalDataBuffer<14, LocalArenaPool<DataBufferSegment<14> > > Local_correlation_list;
   typedef DataBuffer<14, LocalArenaPool<DataBufferSegment<14> > > Dependency_map;
@@ -215,10 +246,10 @@ public:
   struct RowBuffer;  // forward decl.
 
   /**
-   * Define overlayed 'base class' for SLFifoRowList and RowMap.
+   * Define overlaid 'base class' for SLFifoRowList and RowMap.
    * As we want these to be POD struct, we does not use 
    * inheritance, but have to take care that first part
-   * of these struct are correctly overlayed.
+   * of these struct are correctly overlaid.
    */
   struct RowCollectionBase
   {
@@ -228,7 +259,7 @@ public:
   struct SLFifoRowList //: public RowCollectionBase
   {
     /**
-     * BEWARE: Overlayed 'struct RowCollectionBase'
+     * BEWARE: Overlaid 'struct RowCollectionBase'
      */
     RowBuffer* m_rowBuffer;
 
@@ -251,7 +282,7 @@ public:
   struct RowMap //: public RowCollectionBase
   {
     /**
-     * BEWARE: Overlayed 'struct RowCollectionBase'
+     * BEWARE: Overlaid 'struct RowCollectionBase'
      */
     RowBuffer* m_rowBuffer;
 
@@ -313,11 +344,11 @@ public:
   };
 
   /**
-   * Define overlayed 'base class' for SLFifoRowListIterator
+   * Define overlaid 'base class' for SLFifoRowListIterator
    * and RowMapIterator.
    * As we want these to be POD struct, we does not use 
    * inheritance, but have to take care that first part
-   * of these struct are correctly overlayed.
+   * of these struct are correctly overlaid.
    */
   struct RowIteratorBase
   {
@@ -331,7 +362,7 @@ public:
   struct SLFifoRowListIterator //: public RowIteratorBase
   {
     /**
-     * BEWARE: Overlayed 'struct RowIteratorBase'
+     * BEWARE: Overlaid 'struct RowIteratorBase'
      */
     RowRef m_ref;
     Uint32 * m_row_ptr;
@@ -344,7 +375,7 @@ public:
   struct RowMapIterator //: public RowIteratorBase
   {
     /**
-     * BEWARE: Overlayed 'struct RowIteratorBase'
+     * BEWARE: Overlaid 'struct RowIteratorBase'
      */
     RowRef m_ref;
     Uint32 * m_row_ptr;
@@ -427,7 +458,6 @@ public:
     Uint32 m_cnt;
     Uint32 m_scanPrio;
     Uint32 m_savepointId;
-    Uint32 m_batch_size_rows;
     Uint32 m_resultRef;  // API
     Uint32 m_resultData; // API
     Uint32 m_senderRef;  // TC (used for routing)
@@ -563,7 +593,7 @@ public:
      * This function is called on the *child* by the *parent* when
      *   child should release buffers related to parents current batch
      */
-    void (Dbspj::*m_parent_batch_cleanup)(Ptr<Request>,Ptr<TreeNode>);
+    void (Dbspj::*m_parent_batch_cleanup)(Ptr<Request>,Ptr<TreeNode>,bool);
 
     /**
      * This function is called when getting a SCAN_NEXTREQ
@@ -635,12 +665,15 @@ public:
 
     void init(Uint32 fid, bool readBackup)
     {
-      m_ref = 0;
       m_fragId = fid;
       m_state = SFH_NOT_STARTED;
+      m_readBackup = readBackup;
+      m_ref = 0;
+      m_rangeCnt = 0;
       m_rangePtrI = RNIL;
       m_paramPtrI = RNIL;
-      m_readBackup = readBackup;
+      m_keysSent = 0;
+      m_totalRows = 0;
     }
 
     Uint32 m_magic;
@@ -650,8 +683,32 @@ public:
     Uint8 m_readBackup;
     Uint32 m_ref;
     Uint32 m_next_ref;
+    Uint32 m_rangeCnt;
     Uint32 m_rangePtrI;  // Set of lower/upper bound keys.
     Uint32 m_paramPtrI;  // Set of interpreter parameters
+
+    /**
+     * Number of range/keys sent to this fragment in last SCAN_FRAGREQ.
+     */
+    Uint32 m_keysSent;
+
+    /**
+     * Total number of rows received from this fragment
+     * for the active SCAN_FRAGREQ.
+     */
+    Uint32 m_totalRows;
+
+    // Below are requirements for the hash lists
+    bool equal(const ScanFragHandle &other) const {
+      return key == other.key;
+    }
+    Uint32 hashValue() const {
+      return hashPtrI(key);
+    }
+
+    Uint32 key;  // Its own ptrI, used as hash key
+    Uint32 nextHash, prevHash;
+
     union {
       Uint32 nextList;
       Uint32 nextPool;
@@ -661,45 +718,35 @@ public:
   typedef RecordPool<ArenaPool<ScanFragHandle> > ScanFragHandle_pool;
   typedef SLFifoList<ScanFragHandle_pool> ScanFragHandle_list;
   typedef LocalSLFifoList<ScanFragHandle_pool> Local_ScanFragHandle_list;
+  typedef KeyTable<ScanFragHandle_pool> ScanFragHandle_hash;
 
   /**
    * This class computes mean and standard deviation incrementally for a series
-   * of samples.
+   * of samples. It is based on the NdbStatistics class which implement a
+   * 'moving average' where the weight of older samples decrease exponentially.
+   * The statistics may then adapt if different regions of the retrieved data set
+   * has different properties.
    */
-  class IncrementalStatistics
+  class IncrementalStatistics : public NdbStatistics
   {
   public:
-    /**
-     * We cannot have a (non-trivial) constructor, since this class is used in
-     * unions.
-     */
-    void init()
+    IncrementalStatistics() : NdbStatistics(5) {}
+
+    void sample(double observation)
     {
-      m_mean = m_sumSquare = 0.0;
-      m_noOfSamples = 0;
-    }
-
-    // Add another sample.
-    void sample(double observation);
-
-    double getMean() const {
-      return m_mean;
-    }
-
-    double getStdDev() const { 
-      return m_noOfSamples < 2 ? 0.0 : sqrt(m_sumSquare/(m_noOfSamples - 1));
+      update(observation);
     }
 
     bool isValid() const {
       return (m_noOfSamples > 0);
     }
 
-  private:
-    // Mean of all samples
-    double m_mean;
-    //Sum of square of differences from the current mean.
-    double m_sumSquare;
-    Uint32 m_noOfSamples;
+    /* Upper 95% percentile of estimated rows returned pr key range */
+    double getUpperEstimate() const {
+      return (m_noOfSamples >= 2)
+              ? getMean() + (2 * getStdDev())
+              : getMean() * 1.20;
+    }
   }; // IncrementalStatistics
 
   struct ScanFragData
@@ -718,17 +765,56 @@ public:
     Uint32 m_fragCount;
     // The number of fragments that we scan in parallel.
     Uint32 m_parallelism;
-    // True if we are still receiving the first batch for this operation.
-    bool   m_firstBatch;
+
     /**
-     * Mean and standard deviation for the optimal parallelism for earlier
-     * executions of this operation.
+     * The next correlation id known to be available if starting
+     * more fragment scans.
      */
-    IncrementalStatistics m_parallelismStat;
-    // Total number of rows for the current execution of this operation.
+    Uint32 m_corrIdStart;
+
+    /**
+     * Mean and standard deviation statistic for the 'record pr key'
+     * (fanout) returned for each key/bound sent *pr fragment*
+     */
+    IncrementalStatistics m_recsPrKeyStat;
+
+    /**
+     * Statistics for the 'BatchByteSize' consumed for each record.
+     */
+    IncrementalStatistics m_recSizeStat;
+
+    /**
+     * Total number of key/bounds in the process of being sent to
+     * the fragments. (Not yet sent)
+     */
+    Uint32 m_keysToSend;
+
+    /**
+     * Total number of key/bounds sent and where the frag scans
+     * has been reported as completed.
+     */
+    Uint32 m_completedKeys;
+
+    /**
+     * Number of rows returned from fragment scans where the scans
+     * has been reported as completed.
+     */
+    Uint32 m_completedRows;
+
+    /**
+     * Total number of rows/bytes reported by SCAN_FRAGCONF for the current
+     * execution of this operation.
+     */
     Uint32 m_totalRows;
-    // Total number of bytes for the current execution of this operation.
     Uint32 m_totalBytes;
+
+    /**
+     * Non-pruned firstMatch may save their original range and param's
+     * before removeMatchedKeys()
+     */
+    Uint32 m_rangeCntSave;
+    Uint32 m_rangePtrISave;  // Set of lower/upper bound keys.
+    Uint32 m_paramPtrISave;  // Set of interpreter parameters
 
     ScanFragHandle_list::HeadPOD m_fragments; // ScanFrag states
     union
@@ -736,17 +822,33 @@ public:
       PatternStore::HeadPOD m_prunePattern;
       Uint32 m_constPrunePtrI;
     };
-    /**
-     * Max number of rows seen in a batch. Used for calculating the number of
-     * rows per fragment in the next next batch when using adaptive batch size.
-     */
-    Uint32 m_largestBatchRows;
-    /**
-     * Max number of bytes seen in a batch. Used for calculating the number of
-     * rows per fragment in the next next batch when using adaptive batch size.
-     */
-    Uint32 m_largestBatchBytes;
     Uint32 m_scanFragReq[ScanFragReq::SignalLength + 2];
+
+    ScanFragData()
+    : m_frags_complete(0),
+      m_frags_outstanding(0),
+      m_frags_not_started(0),
+      m_rows_received(0),
+      m_rows_expecting(0),
+      m_batch_chunks(0),
+      m_scanCookie(0),
+      m_fragCount(0),
+      m_parallelism(0),
+      m_corrIdStart(0),
+      m_recsPrKeyStat(),
+      m_recSizeStat(),
+      m_keysToSend(0),
+      m_completedKeys(0),
+      m_completedRows(0),
+      m_totalRows(0),
+      m_totalBytes(0),
+      m_rangeCntSave(0),
+      m_rangePtrISave(RNIL),
+      m_paramPtrISave(RNIL),
+      m_fragments()
+    {
+      m_fragments.init();
+    }
   };
 
   struct DeferredParentOps
@@ -882,7 +984,7 @@ public:
        */
       T_UNIQUE_INDEX_LOOKUP = 0x40,
 
-      /*
+      /**
        * Should this node buffers its rows or 'm_matched' bitmask?
        *  We could request the buffer to store either the 'ROW',
        *  as received by TRANSID_AI, and/or a 'MATCH' bitMask.
@@ -971,6 +1073,14 @@ public:
        */
       T_CHK_CONGESTION = 0x400000,
 
+      /**
+       * Reduce number of keys/ranges to be requested in remaining
+       * SCAN_FRAGREQ. Is a part of firstMatch optimization, which in
+       * some cases allows us to conclude the 'firstMatch' after the
+       * first matching row was found.
+       */
+      T_REDUCE_KEYS = 0x800000,
+
       // End marker...
       T_END = 0
     };
@@ -1024,7 +1134,7 @@ public:
     Dependency_map::Head m_next_nodes;
 
     /**
-     * We provide some TreeNodeBitMap's. Usefull to check how
+     * We provide some TreeNodeBitMap's. Useful to check how
      * a specific node relates to other TreeNodes:
      *
      * - 'ancestors' are the set of TreeNodes reachable through
@@ -1067,7 +1177,7 @@ public:
      * T_CHK_CONGESTION may cause execution of child operations to
      * be deferred.  These operations are queued in the 'struct DeferredParentOps'
      * The congestion check will always happen on a Scan TreeNode having
-     * some Lookup childrens, which are the operations which might be deferred.
+     * some Lookup children, which are the operations which might be deferred.
      */
     DeferredParentOps m_deferred;
 
@@ -1099,6 +1209,18 @@ public:
       Uint32 m_attrInfoPtrI;     // attrInfoSection
     } m_send;
 
+
+    // Below are requirements for the hash lists
+    bool equal(const TreeNode &other) const {
+      return key == other.key;
+    }
+    Uint32 hashValue() const {
+      return hashPtrI(key);
+    }
+
+    Uint32 key;  // Its own ptrI, used as hash key
+    Uint32 nextHash, prevHash;
+
     union {
       Uint32 nextList;
       Uint32 nextPool;
@@ -1110,13 +1232,12 @@ public:
   static const Ptr<TreeNode> NullTreeNodePtr;
 
   typedef RecordPool<ArenaPool<TreeNode> > TreeNode_pool;
+  typedef KeyTable<TreeNode_pool> TreeNode_hash;
   typedef DLFifoList<TreeNode_pool> TreeNode_list;
   typedef LocalDLFifoList<TreeNode_pool> Local_TreeNode_list;
 
-  typedef SLList<TreeNode_pool, IA_Cursor>
-  TreeNodeCursor_list;
-  typedef LocalSLList<TreeNode_pool, IA_Cursor>
-  Local_TreeNodeCursor_list;
+  typedef SLList<TreeNode_pool, IA_Cursor> TreeNodeCursor_list;
+  typedef LocalSLList<TreeNode_pool, IA_Cursor> Local_TreeNodeCursor_list;
 
   /**
    * A request (i.e a query + parameters)
@@ -1211,7 +1332,7 @@ private:
   enum CounterId
   {
     /**
-     * This is the number of incomming LQHKEYREQ messages (i.e queries with a
+     * This is the number of incoming LQHKEYREQ messages (i.e queries with a
      * lookup as root).
      */
     CI_READS_RECEIVED = 0,
@@ -1231,12 +1352,12 @@ private:
     /**
      * No of lookup operations which did not return a row (LQHKEYREF).
      * (Most likely due to non matching key, or predicate
-     * filter which evalueted  to 'false').
+     * filter which evaluated  to 'false').
      */
     CI_READS_NOT_FOUND = 3,
 
     /**
-     * This is the number of incomming queries where the root operation is a
+     * This is the number of incoming queries where the root operation is a
      * fragment scan and this is a "direct scan" that does not go via an index.
      */
     CI_TABLE_SCANS_RECEIVED = 4,
@@ -1248,7 +1369,7 @@ private:
     CI_LOCAL_TABLE_SCANS_SENT = 5,
 
     /**
-     * This is the number of incomming queries where the root operation is a
+     * This is the number of incoming queries where the root operation is a
      * fragment scan which scans the fragment via an ordered index..
      */
     CI_RANGE_SCANS_RECEIVED = 6,
@@ -1331,7 +1452,9 @@ private:
   Request_hash m_lookup_request_hash;
   ArenaPool<DataBufferSegment<14> > m_dependency_map_pool;
   TreeNode_pool m_treenode_pool;
+  TreeNode_hash m_treenode_hash;
   ScanFragHandle_pool m_scanfraghandle_pool;
+  ScanFragHandle_hash m_scanfraghandle_hash;
 
   TableRecord *m_tableRecord;
   UintR c_tabrecFilesize;
@@ -1375,7 +1498,8 @@ private:
 
   Uint32 planSequentialExec(Ptr<Request>  requestPtr,
                             const Ptr<TreeNode> branchPtr,
-                            Ptr<TreeNode> prevExecPtr);
+                            Ptr<TreeNode> prevExecPtr,
+                            TreeNodeBitMask outerJoins = TreeNodeBitMask());
 
   Uint32 appendTreeNode(Ptr<Request>  requestPtr,
                         Ptr<TreeNode> treeNodePtr,
@@ -1383,6 +1507,9 @@ private:
 
   void dumpExecPlan(Ptr<Request>, Ptr<TreeNode> node);
 
+  /**
+   * Prepare and execute
+   */
   void prepare(Signal*, Ptr<Request>);
   void checkPrepareComplete(Signal*, Ptr<Request>);
   void checkBatchComplete(Signal*, Ptr<Request>);
@@ -1390,8 +1517,8 @@ private:
   void prepareNextBatch(Signal*, Ptr<Request>);
   void sendConf(Signal*, Ptr<Request>, bool is_complete);
   void complete(Signal*, Ptr<Request>);
-  void cleanup(Ptr<Request>);
-  void cleanupBatch(Ptr<Request>);
+  void cleanup(Ptr<Request>, bool in_hash);
+  void cleanupBatch(Ptr<Request>, bool done);
   void abort(Signal*, Ptr<Request>, Uint32 errCode);
   Uint32 nodeFail(Signal*, Ptr<Request>, NdbNodeBitmask mask);
 
@@ -1401,6 +1528,8 @@ private:
   void registerActiveCursor(Ptr<Request>, Ptr<TreeNode>);
   void nodeFail_checkRequests(Signal*);
   void cleanup_common(Ptr<Request>, Ptr<TreeNode>);
+
+  void removeMatchedKeys(Ptr<Request>, Ptr<TreeNode>, Ptr<ScanFragHandle>);
 
   /**
    * Row buffering
@@ -1542,8 +1671,14 @@ private:
                        Ptr<TreeNode> treeNodePtr,
                        Uint32 noOfFrags,
                        Uint32 bs_bytes,
-                       Uint32 bs_rows,
-                       Uint32& batchRange);
+                       Uint32 bs_rows);
+  Uint32 scanFrag_send_NEXTREQ(
+                       Signal* signal,
+                       Ptr<Request> requestPtr,
+                       Ptr<TreeNode> treeNodePtr,
+                       Uint32 noOfFrags,
+                       Uint32 bs_bytes,
+                       Uint32 bs_rows);
   void scanFrag_batchComplete(Signal* signal);
   Uint32 scanFrag_findFrag(Local_ScanFragHandle_list &, Ptr<ScanFragHandle>&,
                            Uint32 fragId);
@@ -1554,7 +1689,7 @@ private:
   void scanFrag_abort(Signal*, Ptr<Request>, Ptr<TreeNode>);
   Uint32 scanFrag_execNODE_FAILREP(Signal*signal, Ptr<Request>, Ptr<TreeNode>,
                                    NdbNodeBitmask);
-  void scanFrag_parent_batch_cleanup(Ptr<Request>, Ptr<TreeNode>);
+  void scanFrag_parent_batch_cleanup(Ptr<Request>, Ptr<TreeNode>, bool);
   void scanFrag_cleanup(Ptr<Request>, Ptr<TreeNode>);
 
   void scanFrag_release_rangekeys(Ptr<Request>, Ptr<TreeNode>);
@@ -1568,6 +1703,18 @@ private:
 
   void scanFrag_dumpNode(const Ptr<Request> requestPtr,
                          const Ptr<TreeNode> treeNodePtr);
+
+  Uint32 scanFrag_getBatchSize(Ptr<TreeNode> treeNodePtr,
+                               Uint32 &availableBatchBytes,
+                               Uint32 &availableBatchRows);
+
+  Uint32 scanFrag_parallelism(Ptr<Request> requestPtr,
+                              Ptr<TreeNode> treeNodePtr,
+                              Uint32 batchRows);
+
+  double estmMaxKeys(Ptr<Request> requestPtr,
+                     Ptr<TreeNode> treeNodePtr,
+                     double fanout = 1.0);
 
   Uint32 check_own_location_domain(const Uint32 *nodes, Uint32 node_count);
   void send_close_scan(Signal*, Ptr<ScanFragHandle>, Ptr<Request>);

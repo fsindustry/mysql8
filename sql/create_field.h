@@ -1,7 +1,7 @@
 #ifndef SQL_CREATE_FIELD_INCLUDED
 #define SQL_CREATE_FIELD_INCLUDED
 
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -96,8 +96,8 @@ class Create_field {
     NULL for columns added.
   */
   const char *change;
-  const char *after;    // Put column after this one
-  LEX_CSTRING comment;  // Comment for field
+  const char *after{nullptr};  // Put column after this one
+  LEX_CSTRING comment;         // Comment for field
 
   /**
      The declared default value, if any, otherwise NULL. Note that this member
@@ -163,6 +163,8 @@ class Create_field {
   */
   uint pack_length_override{0};
 
+  LEX_CSTRING zip_dict_name;  // Compression dictionary name
+
   /* Generated column expression information */
   Value_generator *gcol_info{nullptr};
   /*
@@ -178,6 +180,13 @@ class Create_field {
 
   // Whether the field is actually an array of the field's type;
   bool is_array{false};
+
+  /*
+    Store dict_id after verifying zip_dict_name exists. The stored id
+    is filled in dd::Column::options and later used to fill TABLE_SHARE*
+    zip_dict_name and zip_dict_data
+  */
+  uint64_t zip_dict_id;
 
   LEX_CSTRING m_engine_attribute = EMPTY_CSTR;
   LEX_CSTRING m_secondary_engine_attribute = EMPTY_CSTR;
@@ -196,8 +205,10 @@ class Create_field {
         */
         treat_bit_as_char(false),
         pack_length_override(0),
+        zip_dict_name(NULL_CSTR),
         stored_in_db(false),
-        m_default_val_expr(nullptr) {}
+        m_default_val_expr(nullptr),
+        zip_dict_id(0) {}
   Create_field(Field *field, Field *orig_field);
 
   /* Used to make a clone of this object for ALTER/CREATE TABLE */
@@ -221,8 +232,8 @@ class Create_field {
             const LEX_CSTRING *comment, const char *change,
             List<String> *interval_list, const CHARSET_INFO *cs,
             bool has_explicit_collation, uint uint_geom_type,
-            Value_generator *gcol_info, Value_generator *default_val_expr,
-            std::optional<gis::srid_t> srid,
+            const LEX_CSTRING *zip_dict_name, Value_generator *gcol_info,
+            Value_generator *default_val_expr, std::optional<gis::srid_t> srid,
             dd::Column::enum_hidden_type hidden, bool is_array = false);
 
   ha_storage_media field_storage_type() const {
@@ -233,11 +244,16 @@ class Create_field {
     return (column_format_type)((flags >> FIELD_FLAGS_COLUMN_FORMAT) & 3);
   }
 
+  void set_column_format(column_format_type column_format_arg) noexcept {
+    flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
+    flags |= (column_format_arg << FIELD_FLAGS_COLUMN_FORMAT);
+  }
+
  private:
   /// The maximum display width of this column.
   ///
   /// The "display width" is the number of code points that is needed to print
-  /// out the string represenation of a value. It can be given by the user
+  /// out the string representation of a value. It can be given by the user
   /// both explicitly and implicitly. If a user creates a table with the columns
   /// "a VARCHAR(3), b INT(3)", both columns are given an explicit display width
   /// of 3 code points. But if a user creates a table with the columns
@@ -248,7 +264,7 @@ class Create_field {
   /// This is related to storage size for some types (VARCHAR, BLOB etc), but
   /// not for all types (an INT is four bytes regardless of the display width).
   ///
-  /// A "code point" is bascially a numeric value. For instance, ASCII
+  /// A "code point" is basically a numeric value. For instance, ASCII
   /// compromises of 128 code points (0x00 to 0x7F), while unicode contains way
   /// more. In most cases a code point represents a single graphical unit (aka
   /// grapheme), but not always. For instance, É may consists of two code points

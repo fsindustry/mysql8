@@ -23,6 +23,7 @@
 ################################################################################
 --source include/only_mts_replica_parallel_workers.inc
 --source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start = 1
 --source include/group_replication.inc
 
 # If these assert fails there is no point in continue the test,
@@ -39,6 +40,11 @@
 --let $assert_cond= [SELECT @@GLOBAL.REPLICA_PRESERVE_COMMIT_ORDER] = 1
 --source include/assert.inc
 
+# Start and stop Group Replication to ensure that `group_replication_applier`
+# channel exists.
+--source include/start_and_bootstrap_group_replication.inc
+--source include/stop_group_replication.inc
+
 # Save defaults.
 SET @replica_parallel_type_saved= @@GLOBAL.REPLICA_PARALLEL_TYPE;
 SET @replica_parallel_workers_saved= @@GLOBAL.REPLICA_PARALLEL_WORKERS;
@@ -51,7 +57,7 @@ SET GLOBAL REPLICA_PRESERVE_COMMIT_ORDER= OFF;
 --echo #    parallel workers number set to 4.
 STOP SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 SET GLOBAL REPLICA_PARALLEL_WORKERS=4;
---error ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
 START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 
 --echo
@@ -61,7 +67,7 @@ START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 STOP SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 SET @@GLOBAL.REPLICA_PARALLEL_TYPE= "DATABASE";
 SET GLOBAL REPLICA_PARALLEL_WORKERS= 4;
---error ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
 START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 
 --echo
@@ -71,7 +77,7 @@ START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 STOP SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 SET @@GLOBAL.REPLICA_PARALLEL_TYPE= "LOGICAL_CLOCK";
 SET GLOBAL REPLICA_PARALLEL_WORKERS= 4;
---error ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED
+--error ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
 START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 
 --echo
@@ -104,4 +110,5 @@ SET @@GLOBAL.REPLICA_PARALLEL_WORKERS= @replica_parallel_workers_saved;
 SET @@GLOBAL.REPLICA_PRESERVE_COMMIT_ORDER= @slave_preserver_commit_order_saved;
 START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 
+--source include/gr_stop_applier_sql_thread.inc
 --source include/group_replication_end.inc

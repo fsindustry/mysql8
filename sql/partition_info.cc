@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,7 +61,7 @@
 #include "sql/sql_partition.h"
 #include "sql/sql_tablespace.h"  // validate_tablespace_name
 #include "sql/system_variables.h"
-#include "sql/table.h"                     // TABLE_LIST
+#include "sql/table.h"                     // Table_ref
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/thr_malloc.h"
 #include "sql/trigger_chain.h"  // Trigger_chain
@@ -247,7 +247,7 @@ bool partition_info::set_read_partitions(List<String> *partition_names) {
 /**
   Set read/lock_partitions bitmap over non pruned partitions
 
-  @param table_list   Possible TABLE_LIST which can contain
+  @param table_list   Possible Table_ref which can contain
                       list of partition names to query
 
   @return Operation status
@@ -258,7 +258,7 @@ bool partition_info::set_read_partitions(List<String> *partition_names) {
   @note OK to call multiple times without the need for free_bitmaps.
 */
 
-bool partition_info::set_partition_bitmaps(TABLE_LIST *table_list) {
+bool partition_info::set_partition_bitmaps(Table_ref *table_list) {
   DBUG_TRACE;
 
   assert(bitmaps_are_initialized);
@@ -350,7 +350,7 @@ bool partition_info::can_prune_insert(
   }
 
   /*
-    Can't prune partitions over generated default expresssions, as their values
+    Can't prune partitions over generated default expressions, as their values
     are calculated much later.
   */
   if (table->gen_def_fields_ptr) {
@@ -800,7 +800,7 @@ bool partition_info::set_up_defaults_for_partitioning(
     no parameters
 
   RETURN VALUE
-    Erroneus field name  Error, there are two fields with same name
+    Erroneous field name  Error, there are two fields with same name
     NULL                 Ok, no field defined twice
 
   DESCRIPTION
@@ -896,7 +896,6 @@ partition_element *partition_info::get_part_elem(const char *partition_name,
 const char *partition_info::find_duplicate_name() {
   collation_unordered_set<string> partition_names{system_charset_info,
                                                   PSI_INSTRUMENT_ME};
-  uint max_names;
   List_iterator<partition_element> parts_it(partitions);
   partition_element *p_elem;
 
@@ -908,8 +907,6 @@ const char *partition_info::find_duplicate_name() {
     And this only happens when in ALTER TABLE with full table copy.
   */
 
-  max_names = num_parts;
-  if (is_sub_partitioned()) max_names += num_parts * num_subparts;
   while ((p_elem = (parts_it++))) {
     const char *partition_name = p_elem->partition_name;
     if (!partition_names.insert(partition_name).second) return partition_name;
@@ -1621,7 +1618,7 @@ end:
 void partition_info::print_no_partition_found(THD *thd, TABLE *table_arg) {
   char buf[100];
   const char *buf_ptr = buf;
-  TABLE_LIST table_list;
+  Table_ref table_list;
 
   table_list.db = table_arg->s->db.str;
   table_list.table_name = table_arg->s->table_name.str;
@@ -1733,7 +1730,6 @@ bool partition_info::set_up_charset_field_preps() {
   uchar **char_ptrs;
   unsigned i;
   size_t size;
-  uint tot_fields = 0;
   uint tot_part_fields = 0;
   uint tot_subpart_fields = 0;
   DBUG_TRACE;
@@ -1745,7 +1741,6 @@ bool partition_info::set_up_charset_field_preps() {
     while ((field = *(ptr++))) {
       if (field_is_partition_charset(field)) {
         tot_part_fields++;
-        tot_fields++;
       }
     }
     size = tot_part_fields * sizeof(char *);
@@ -1776,7 +1771,6 @@ bool partition_info::set_up_charset_field_preps() {
     while ((field = *(ptr++))) {
       if (field_is_partition_charset(field)) {
         tot_subpart_fields++;
-        tot_fields++;
       }
     }
     size = tot_subpart_fields * sizeof(char *);
@@ -2060,7 +2054,7 @@ void Parser_partition_info::init_col_val(part_column_list_val *col_val,
 bool Parser_partition_info::add_column_list_value(THD *thd, Item *item) {
   part_column_list_val *col_val;
   Name_resolution_context *context = &thd->lex->current_query_block()->context;
-  TABLE_LIST *save_list = context->table_list;
+  Table_ref *save_list = context->table_list;
   const char *save_where = thd->where;
   DBUG_TRACE;
 
@@ -2747,6 +2741,58 @@ bool has_external_data_or_index_dir(partition_info &pi) {
     }
   }
   return false;
+}
+
+/**
+   Fill output buffer with the name of the first partition / subpartition
+   found in the specified partition_info.
+
+   @param[in]  part_info       - Partition info.
+   @param[in]  normalized_path - Normalized path name of table and database
+   @param[out] first_name      - The name of the first partition.
+   Must be at least FN_REFLEN bytes long.
+
+   @return true - On failure.
+   @return false - On success.
+*/
+bool fill_first_partition_name(const partition_info *part_info,
+                               const char *normalized_path, char *first_name) {
+  // Do nothing if table is not partitioned.
+  if (!part_info) return false;
+
+  if (part_info->is_sub_partitioned()) {
+    // Traverse through all partitions.
+    List_iterator<partition_element> part_it(
+        const_cast<partition_info *>(part_info)->partitions);
+    partition_element *part_elem;
+    while ((part_elem = part_it++)) {
+      // Traverse through all subpartitions.
+      List_iterator<partition_element> sub_it(part_elem->subpartitions);
+      partition_element *sub_elem;
+      while ((sub_elem = sub_it++)) {
+        if (sub_elem->partition_name != nullptr) {
+          create_subpartition_name(first_name, normalized_path,
+                                   part_elem->partition_name,
+                                   sub_elem->partition_name);
+          return false;
+        }
+      }
+    }
+  } else {
+    // Traverse through all partitions.
+    List_iterator<partition_element> part_it(
+        const_cast<partition_info *>(part_info)->partitions);
+    partition_element *part_elem;
+    while ((part_elem = part_it++)) {
+      if (part_elem->partition_name != nullptr) {
+        create_partition_name(first_name, normalized_path,
+                              part_elem->partition_name, false);
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 /**

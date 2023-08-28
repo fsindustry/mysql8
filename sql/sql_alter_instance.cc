@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -127,6 +127,13 @@ bool Rotate_innodb_master_key::execute() {
     return true;
   }
 
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (m_thd->backup_tables_lock.abort_if_acquired() ||
+      m_thd->backup_tables_lock.acquire_protection(
+          m_thd, MDL_TRANSACTION, m_thd->variables.lock_wait_timeout)) {
+    return true;
+  }
+
   if (hton->rotate_encryption_master_key()) {
     /* SE should have raised error */
     assert(m_thd->get_stmt_da()->is_error());
@@ -137,7 +144,7 @@ bool Rotate_innodb_master_key::execute() {
     /*
       Though we failed to write to binlog,
       there is no way we can undo this operation.
-      So, covert error to a warning and let user
+      So, convert error to a warning and let user
       know that something went wrong while trying
       to make entry in binlog.
     */
@@ -182,6 +189,13 @@ bool Innodb_redo_log::execute() {
                                     true) ||
       acquire_shared_backup_lock(m_thd, m_thd->variables.lock_wait_timeout)) {
     assert(m_thd->get_stmt_da()->is_error());
+    return true;
+  }
+
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (m_thd->backup_tables_lock.abort_if_acquired() ||
+      m_thd->backup_tables_lock.acquire_protection(
+          m_thd, MDL_TRANSACTION, m_thd->variables.lock_wait_timeout)) {
     return true;
   }
 
@@ -237,11 +251,18 @@ bool Reload_keyring::execute() {
     return true;
   }
 
-  if (srv_keyring_load->load(opt_plugin_dir, mysql_real_data_home) == true) {
+  if (srv_keyring_load->load(opt_plugin_dir, mysql_real_data_home) != 0) {
     /* We encountered an error. Figure out what it is. */
     my_error(ER_RELOAD_KEYRING_FAILURE, MYF(0));
     return true;
   }
+
+  /*
+    Persisted variables require keyring support to
+    persist SENSITIVE variables in a secure manner.
+  */
+  persisted_variables_refresh_keyring_support();
+
   my_ok(m_thd);
   return false;
 }

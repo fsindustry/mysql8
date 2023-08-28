@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +38,7 @@
 #include "sql/item.h"
 #include "sql/item_timefunc.h"  // get_interval_value
 #include "sql/mysqld.h"         // server_id
+#include "sql/rpl_event_ctx.h"  // Rpl_event_ctx
 #include "sql/sp_head.h"        // sp_name
 #include "sql/sql_class.h"      // THD
 #include "sql/sql_const.h"
@@ -73,7 +74,7 @@ void Event_parse_data::init_name(THD *thd, sp_name *spn) {
   ENDS or AT is in the past, we are trying to create an event that
   will never be executed.  If it has ON COMPLETION NOT PRESERVE
   (default), then it would normally be dropped already, so on CREATE
-  EVENT we give a warning, and do not create anyting.  On ALTER EVENT
+  EVENT we give a warning, and do not create anything.  On ALTER EVENT
   we give a error, and do not change the event.
 
   If the event has ON COMPLETION PRESERVE, then we see if the event is
@@ -144,6 +145,21 @@ bool Event_parse_data::check_dates(THD *thd, int previous_on_completion) {
   return do_not_create;
 }
 
+/// Resolves an item and checks that it returns a single column.
+static bool ResolveScalarItem(THD *thd, Item **item) {
+  if (!(*item)->fixed) {
+    if ((*item)->fix_fields(thd, item)) {
+      return true;
+    }
+  }
+
+  if ((*item)->check_cols(1)) {
+    return true;
+  }
+
+  return false;
+}
+
 /*
   Sets time for execution for one-time event.
 
@@ -164,9 +180,9 @@ int Event_parse_data::init_execute_at(THD *thd) {
 
   if (!item_execute_at) return 0;
 
-  if (!item_execute_at->fixed &&
-      item_execute_at->fix_fields(thd, &item_execute_at))
-    goto wrong_value;
+  if (ResolveScalarItem(thd, &item_execute_at)) {
+    return ER_WRONG_VALUE;
+  }
 
   /* no starts and/or ends in case of execute_at */
   DBUG_PRINT("info", ("starts_null && ends_null should be 1 is %d",
@@ -208,9 +224,6 @@ wrong_value:
 */
 
 int Event_parse_data::init_interval(THD *thd) {
-  String value;
-  Interval interval_tmp;
-
   DBUG_TRACE;
   if (!item_expression) return 0;
 
@@ -226,11 +239,13 @@ int Event_parse_data::init_interval(THD *thd) {
       break;
   }
 
-  if (!item_expression->fixed &&
-      item_expression->fix_fields(thd, &item_expression))
-    goto wrong_value;
+  StringBuffer<MAX_DATETIME_FULL_WIDTH + 1> value;
+  Interval interval_tmp;
 
-  value.alloc(MAX_DATETIME_FULL_WIDTH * MY_CHARSET_BIN_MB_MAXLEN);
+  if (ResolveScalarItem(thd, &item_expression)) {
+    return ER_WRONG_VALUE;
+  }
+
   if (get_interval_value(item_expression, interval, &value, &interval_tmp))
     goto wrong_value;
 
@@ -310,7 +325,7 @@ wrong_value:
     EVERY 5 MINUTE STARTS "2004-12-12 10:00:00" means that
     the event will be executed every 5 minutes but this will
     start at the date shown above. Expressions are possible :
-    DATE_ADD(NOW(), INTERVAL 1 DAY)  -- start tommorow at
+    DATE_ADD(NOW(), INTERVAL 1 DAY)  -- start tomorrow at
     same time.
 
   RETURN VALUE
@@ -325,8 +340,9 @@ int Event_parse_data::init_starts(THD *thd) {
   DBUG_TRACE;
   if (!item_starts) return 0;
 
-  if (!item_starts->fixed && item_starts->fix_fields(thd, &item_starts))
-    goto wrong_value;
+  if (ResolveScalarItem(thd, &item_starts)) {
+    return ER_WRONG_VALUE;
+  }
 
   if ((item_starts->get_date(&ltime, TIME_NO_ZERO_DATE))) goto wrong_value;
 
@@ -359,7 +375,7 @@ wrong_value:
     EVERY 5 MINUTE ENDS "2004-12-12 10:00:00" means that
     the event will be executed every 5 minutes but this will
     end at the date shown above. Expressions are possible :
-    DATE_ADD(NOW(), INTERVAL 1 DAY)  -- end tommorow at
+    DATE_ADD(NOW(), INTERVAL 1 DAY)  -- end tomorrow at
     same time.
 
   RETURN VALUE
@@ -374,8 +390,9 @@ int Event_parse_data::init_ends(THD *thd) {
   DBUG_TRACE;
   if (!item_ends) return 0;
 
-  if (!item_ends->fixed && item_ends->fix_fields(thd, &item_ends))
-    goto error_bad_params;
+  if (ResolveScalarItem(thd, &item_ends)) {
+    return EVEX_BAD_PARAMS;
+  }
 
   DBUG_PRINT("info", ("convert to TIME"));
 
@@ -439,8 +456,17 @@ bool Event_parse_data::check_parse_data(THD *thd) {
              ("execute_at: %p  expr=%p  starts=%p  ends=%p", item_execute_at,
               item_expression, item_starts, item_ends));
 
-  if (is_invalid_string(to_lex_cstring(comment), system_charset_info))
+  // Validate event comment string
+  std::string invalid_sub_str;
+  if (is_invalid_string(to_lex_cstring(comment), system_charset_info,
+                        invalid_sub_str)) {
+    my_error(ER_COMMENT_CONTAINS_INVALID_STRING, MYF(0), "event",
+             (std::string(identifier->m_db.str) + "." +
+              std::string(identifier->m_name.str))
+                 .c_str(),
+             system_charset_info->csname, invalid_sub_str.c_str());
     return true;
+  }
 
   init_name(thd, identifier);
 
@@ -502,9 +528,16 @@ void Event_parse_data::check_originator_id(THD *thd) {
   if ((thd->system_thread == SYSTEM_THREAD_SLAVE_SQL) ||
       (thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER) ||
       (thd->system_thread == SYSTEM_THREAD_SLAVE_IO)) {
-    DBUG_PRINT("info", ("Invoked object status set to SLAVESIDE_DISABLED."));
-    if ((status == Event_parse_data::ENABLED) ||
+    /*
+       Check if the event needs to remain enabled as per
+       --replica-enable-event option.
+    */
+    bool event_needs_reenable =
+        Rpl_event_ctx::get_instance().event_needs_reenable(to_string(dbname),
+                                                           to_string(name));
+    if ((status == Event_parse_data::ENABLED && !event_needs_reenable) ||
         (status == Event_parse_data::DISABLED)) {
+      DBUG_PRINT("info", ("Invoked object status set to SLAVESIDE_DISABLED."));
       status = Event_parse_data::SLAVESIDE_DISABLED;
       status_changed = true;
     }

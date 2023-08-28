@@ -4,7 +4,7 @@
 include/group_replication.inc [rpl_server_count=2]
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection server1]
 CREATE TABLE t1(c1 INT NOT NULL PRIMARY KEY);
 include/rpl_sync.inc
@@ -20,8 +20,7 @@ call mtr.add_suppression("The member has failed to gracefully leave the group.")
 call mtr.add_suppression("read failed");
 SET SESSION sql_log_bin=1;
 INSERT INTO t1 VALUES(1);
-include/gr_stop_applier_sql_thread.inc
-STOP REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
+SET @@GLOBAL.DEBUG='+d,block_applier_updates';
 [connection server_2]
 START GROUP_REPLICATION;
 # Wait until donor is confirmed
@@ -38,8 +37,10 @@ DROP TABLE t1;
 # Cleanup
 #
 [connection server_1]
-include/gr_start_applier_sql_thread.inc
-START REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
+SET DEBUG_SYNC = "now WAIT_FOR applier_read_blocked";
+SET @@GLOBAL.DEBUG='-d,block_applier_updates';
+SET DEBUG_SYNC = "now SIGNAL resume_applier_read";
 include/stop_group_replication.inc
+SET DEBUG_SYNC= 'RESET';
 DROP TABLE t1;
 include/group_replication_end.inc

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -112,14 +112,14 @@ PFS_engine_table *table_ets_by_host_by_event_name::create(
   return new table_ets_by_host_by_event_name();
 }
 
-int table_ets_by_host_by_event_name::delete_all_rows(void) {
+int table_ets_by_host_by_event_name::delete_all_rows() {
   reset_events_transactions_by_thread();
   reset_events_transactions_by_account();
   reset_events_transactions_by_host();
   return 0;
 }
 
-ha_rows table_ets_by_host_by_event_name::get_row_count(void) {
+ha_rows table_ets_by_host_by_event_name::get_row_count() {
   return global_host_container.get_row_count() * transaction_class_max;
 }
 
@@ -128,14 +128,14 @@ table_ets_by_host_by_event_name::table_ets_by_host_by_event_name()
   m_normalizer = time_normalizer::get_transaction();
 }
 
-void table_ets_by_host_by_event_name::reset_position(void) {
+void table_ets_by_host_by_event_name::reset_position() {
   m_pos.reset();
   m_next_pos.reset();
 }
 
 int table_ets_by_host_by_event_name::rnd_init(bool) { return 0; }
 
-int table_ets_by_host_by_event_name::rnd_next(void) {
+int table_ets_by_host_by_event_name::rnd_next() {
   PFS_host *host;
   PFS_transaction_class *transaction_class;
   bool has_more_host = true;
@@ -181,7 +181,7 @@ int table_ets_by_host_by_event_name::index_init(uint idx [[maybe_unused]],
   return 0;
 }
 
-int table_ets_by_host_by_event_name::index_next(void) {
+int table_ets_by_host_by_event_name::index_next() {
   PFS_host *host;
   PFS_transaction_class *transaction_class;
   bool has_more_host = true;
@@ -250,7 +250,7 @@ int table_ets_by_host_by_event_name::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* HOST */
-          m_row.m_host.set_field(f);
+          m_row.m_host.set_nullable_field(f);
           break;
         case 1: /* EVENT_NAME */
           m_row.m_event_name.set_field(f);

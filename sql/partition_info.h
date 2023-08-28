@@ -1,7 +1,7 @@
 #ifndef PARTITION_INFO_INCLUDED
 #define PARTITION_INFO_INCLUDED
 
-/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,7 @@ struct handlerton;
 class Create_field;
 class partition_info;
 struct PARTITION_ITERATOR;
-struct TABLE_LIST;
+class Table_ref;
 
 /**
   A "Get next" function for partition iterator.
@@ -155,7 +155,7 @@ typedef int (*get_subpart_id_func)(partition_info *part_info, uint32 *part_id);
 
   @return Operation status
     @retval 0   No matching partitions, iterator not initialized
-    @retval 1   Some partitions would match, iterator intialized for traversing
+    @retval 1   Some partitions would match, iterator initialized for traversing
   them
     @retval -1  All partitions would match, iterator not initialized
 */
@@ -297,7 +297,7 @@ class partition_info {
     * lock_partitions  - partitions that must be locked (read or write).
     Usually read_partitions is the same set as lock_partitions, but
     in case of UPDATE the WHERE clause can limit the read_partitions set,
-    but not neccesarily the lock_partitions set.
+    but not necessarily the lock_partitions set.
     Usage pattern:
     * Initialized in ha_partition::open().
     * read+lock_partitions is set  according to explicit PARTITION,
@@ -470,7 +470,7 @@ class partition_info {
   partition_info *get_clone(THD *thd, bool reset = false);
   partition_info *get_full_clone(THD *thd);
   bool set_named_partition_bitmap(const char *part_name, size_t length);
-  bool set_partition_bitmaps(TABLE_LIST *table_list);
+  bool set_partition_bitmaps(Table_ref *table_list);
   bool set_read_partitions(List<String> *partition_names);
   /* Answers the question if subpartitioning is used for a certain table */
   inline bool is_sub_partitioned() const {
@@ -590,6 +590,22 @@ static inline void init_all_partitions_iterator(partition_info *part_info,
   part_iter->ret_null_part = part_iter->ret_null_part_orig = false;
   part_iter->get_next = get_next_partition_id_range;
 }
+
+/**
+   Fill output buffer with the name of the first partition / subpartition
+   found in the specified partition_info.
+
+   @param[in]  part_info       - Partition info.
+   @param[in]  normalized_path - Normalized path name of table and database
+   @param[out] first_name      - The name of the first partition.
+   Must be at least FN_REFLEN bytes long.
+
+   @return true - On failure.
+   @return false - On success.
+*/
+MY_NODISCARD
+bool fill_first_partition_name(const partition_info *part_info,
+                               const char *normalized_path, char *first_name);
 
 bool fill_partition_tablespace_names(partition_info *part_info,
                                      Tablespace_hash_set *tablespace_set);

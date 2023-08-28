@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -112,6 +112,12 @@
 #define OVER_MAX_DBS_IN_EVENT_MTS 254
 
 /**
+  Maximum length of time zone name that we support (Time zone name is
+  char(64) in db). mysqlbinlog needs it.
+*/
+#define MAX_TIME_ZONE_NAME_LENGTH (NAME_LEN + 1)
+
+/**
   Max number of possible extra bytes in a replication event compared to a
   packet (i.e. a query) sent from client to master;
   First, an auxiliary log_event status vars estimation:
@@ -119,17 +125,19 @@
 #define MAX_SIZE_LOG_EVENT_STATUS                                             \
   (1U + 4 /* type, flags2 */ + 1U + 8 /* type, sql_mode */ + 1U + 1 +         \
    255 /* type, length, catalog */ + 1U + 4 /* type, auto_increment */ + 1U + \
-   6 /* type, charset */ + 1U + 1 + 255 /* type, length, time_zone */ + 1U +  \
+   6 /* type, charset */ + 1U + 1 +                                           \
+   MAX_TIME_ZONE_NAME_LENGTH /* type, length, time_zone */ + 1U +             \
    2 /* type, lc_time_names_number */ + 1U +                                  \
    2 /* type, charset_database_number */ + 1U +                               \
-   8 /* type, table_map_for_update */ + 1U +                                  \
-   4 /* type, master_data_written */ + /* type, db_1, db_2, ... */            \
-   1U + (MAX_DBS_IN_EVENT_MTS * (1 + NAME_LEN)) + 3U +                        \
-   /* type, microseconds */ +1U + 32 * 3 + /* type, user_len, user */         \
-   1 + 255 /* host_len, host */ + 1U + 1 /* type, explicit_def..ts*/ + 1U +   \
-   8 /* type, xid of DDL */ + 1U +                                            \
-   2 /* type, default_collation_for_utf8mb4_number */ +                       \
-   1 /* sql_require_primary_key */ + 1 /* type, default_table_encryption */)
+   8 /* type, table_map_for_update */ + 1U + 1 +                              \
+   32 * 3 /* type, user_len, user */ + 1 + 255 /* host_len, host */           \
+   + 1U + 1 +                                                                 \
+   (MAX_DBS_IN_EVENT_MTS * (1 + NAME_LEN)) /* type, db_1, db_2, ... */        \
+   + 1U + 3 /* type, microseconds */ + 1U + 1 /* type, explicit_def..ts*/ +   \
+   1U + 8 /* type, xid of DDL */ + 1U +                                       \
+   2 /* type, default_collation_for_utf8mb4_number */ + 1U +                  \
+   1 /* sql_require_primary_key */ + 1U +                                     \
+   1 /* type, default_table_encryption */)
 
 /**
    Uninitialized timestamp value (for either last committed or sequence number).
@@ -348,10 +356,23 @@ enum Log_event_type {
 
   TRANSACTION_PAYLOAD_EVENT = 40,
 
+  HEARTBEAT_LOG_EVENT_V2 = 41,
   /**
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
+
+  /* New MySQL events are to be added right above this comment */
+  MYSQL_END_EVENT,
+
+  /* Add new Percona Server events here - its ids should go downwards
+   * starting from MARIA_EVENTS_BEGIN, i.e. 159, 158 ..
+   * till MYSQL_END_EVENT */
+
+  START_5_7_ENCRYPTION_EVENT = 159,
+
+  MARIA_EVENTS_BEGIN = 160,
+
   ENUM_END_EVENT /* end marker */
 };
 
@@ -799,9 +820,11 @@ class Binary_log_event {
   /*
      The number of types we handle in Format_description_event (UNKNOWN_EVENT
      is not to be handled, it does not exist in binlogs, it does not have a
-     format).
+     format - unless it's START_5_7_ENCRYPTION_EVENT - then
+     Format_description_event is not aware of it. That's OK as this event never
+     leaves the server - it's not sent to slave).
   */
-  static const int LOG_EVENT_TYPES = (ENUM_END_EVENT - 1);
+  static constexpr int LOG_EVENT_TYPES = (MYSQL_END_EVENT - 1);
 
   /**
     The lengths for the fixed data part of each event.
@@ -837,6 +860,7 @@ class Binary_log_event {
     VIEW_CHANGE_HEADER_LEN = 52,
     XA_PREPARE_HEADER_LEN = 0,
     TRANSACTION_PAYLOAD_HEADER_LEN = 0,
+    START_5_7_ENCRYPTION_HEADER_LEN = 0
   };  // end enum_post_header_length
  protected:
   /**

@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -193,7 +193,7 @@ args: -n NodeFailLcpStall T1
 max-time: 360
 
 cmd: testBlobs
-args: -bug 28746560 -pk2cs utf8 -skip p -loop 10
+args: -bug 28746560 -pk2cs utf8mb3 -skip p -loop 10
 max-time: 900
 
 cmd: testLimits
@@ -247,3 +247,35 @@ max-time: 120
 cmd: testNodeRestart
 args: -n pnr_lcp D2 D3
 max-time: 2000
+
+cmd: testRedo
+args: -n RedoStallRecover T1
+max-time : 180
+
+cmd: testInterpreter
+args: -n BranchNonZeroLabel T6 T16
+max-time: 180
+
+cmd: testBasic
+args : -n AbortIgnoreError T2 T3 D1
+max-time: 360
+
+cmd: testNodeRestart
+args: -n WatchdogSlowShutdown T1
+max-time: 180
+
+cmd: test_event
+args: -n DelayedEventDrop T1
+max-time: 120
+
+cmd: testScan
+args : -n ScanApiDisconnect T1
+max-time: 120
+
+cmd: testIndex
+args: -n ScanOrderedIndexWithChurn T1
+max-time: 120
+
+cmd: testScan
+args: -n ScanOnDMLLateUnlock T1
+max-time : 120

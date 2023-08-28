@@ -19,6 +19,49 @@ echo *** on master it should be empty ***;
 select * from mysql.ndb_apply_status where server_id <> 0;
 
 sync_slave_with_master;
+
+--echo #
+--echo # Bug#14139386 DDL APPLY SET MYSQL.NDB_APPLY_STATUS EPOCH=0
+--echo #  - check that ndb_apply_status.epoch is not set to 0 by DDL
+--echo #
+# ***
+connection slave;
+select epoch from mysql.ndb_apply_status into @epoch_before_alter;
+
+connection master;
+alter table t1 add key k(b);
+
+sync_slave_with_master;
+select epoch=@epoch_before_alter from mysql.ndb_apply_status;
+
+--echo # Check again with copying alter table
+--source include/rpl_connection_master.inc
+alter table t1 modify b varchar(255);
+
+sync_slave_with_master;
+select epoch=@epoch_before_alter from mysql.ndb_apply_status;
+
+--echo # Check copying alter without any row in ndb_apply_status -> should insert
+--echo # row for source server_id with epoch 0
+--source include/rpl_connection_slave.inc
+stop replica;
+reset replica;
+select count(*) from mysql.ndb_apply_status;
+
+--source include/rpl_connection_master.inc
+reset master;
+alter table t1 modify b varchar(255);
+
+--source include/rpl_connection_slave.inc
+start replica;
+
+--source include/rpl_connection_master.inc
+sync_slave_with_master;
+select server_id, epoch, log_name from mysql.ndb_apply_status;
+
+# ***
+--echo # End of test for Bug#14139386
+
 echo *** on slave there should be one row ***;
 select count(*) from mysql.ndb_apply_status;
 

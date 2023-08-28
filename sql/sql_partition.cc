@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +39,7 @@
   which is often referred to as column lists in the code variables. This
   enables a user to specify a set of columns and their concatenated value
   as the partition value. By comparing the concatenation of these values
-  the proper partition can be choosen.
+  the proper partition can be chosen.
 */
 
 #include "sql/sql_partition.h"
@@ -60,8 +60,8 @@
 #include "my_io.h"
 #include "my_sqlcommand.h"
 #include "my_sys.h"
-#include "mysql/components/services/my_io_bits.h"  // File
-#include "mysql/components/services/psi_statement_bits.h"
+#include "mysql/components/services/bits/my_io_bits.h"  // File
+#include "mysql/components/services/bits/psi_statement_bits.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/service_mysql_alloc.h"
@@ -210,7 +210,7 @@ static uint32 get_list_array_idx_for_endpoint(partition_info *part_info,
 Item *convert_charset_partition_constant(Item *item, const CHARSET_INFO *cs) {
   THD *thd = current_thd;
   Name_resolution_context *context = &thd->lex->current_query_block()->context;
-  TABLE_LIST *save_list = context->table_list;
+  Table_ref *save_list = context->table_list;
   const char *save_where = thd->where;
 
   item = item->safe_charset_converter(thd, cs);
@@ -251,7 +251,7 @@ static bool is_name_in_list(const char *name, List<String> list_names) {
 
   SYNOPSIS
     partition_default_handling()
-    table                         Table object
+    part_handler                  Partition handler
     part_info                     Partition info to set up
     is_create_table_ind           Is this part of a table creation
     normalized_path               Normalized path name of table and database
@@ -261,17 +261,12 @@ static bool is_name_in_list(const char *name, List<String> list_names) {
     false                         Success
 */
 
-static bool partition_default_handling(TABLE *table, partition_info *part_info,
+MY_NODISCARD
+static bool partition_default_handling(Partition_handler *part_handler,
+                                       partition_info *part_info,
                                        bool is_create_table_ind,
                                        const char *normalized_path) {
-  Partition_handler *part_handler = table->file->get_partition_handler();
   DBUG_TRACE;
-
-  if (!part_handler) {
-    assert(0);
-    my_error(ER_PARTITION_CLAUSE_ON_NONPARTITIONED, MYF(0));
-    return true;
-  }
 
   if (!is_create_table_ind) {
     if (part_info->use_default_num_partitions) {
@@ -772,10 +767,9 @@ static bool handle_list_of_fields(List_iterator<char> it, TABLE *table,
           array for partitioning fields.
         */
         return false;
-      } else {
-        my_error(ER_FIELD_NOT_FOUND_PART_ERROR, MYF(0));
-        return true;
       }
+      my_error(ER_FIELD_NOT_FOUND_PART_ERROR, MYF(0));
+      return true;
     }
   }
   result = set_up_field_array(table, is_sub_part);
@@ -845,7 +839,7 @@ static bool init_lex_with_single_table(THD *thd, TABLE *table, LEX *lex) {
       thd->get_protocol(), table->s->db, table->s->table_name, true);
   if (table_ident == nullptr) return true;
 
-  TABLE_LIST *table_list =
+  Table_ref *table_list =
       query_block->add_table_to_list(thd, table_ident, nullptr, 0);
   if (table_list == nullptr) return true;
 
@@ -1457,12 +1451,12 @@ bool check_part_func_fields(Field **ptr, bool ok_with_charsets) {
   DESCRIPTION
     The name parameter contains the full table name and is used to get the
     database name of the table which is used to set-up a correct
-    TABLE_LIST object for use in fix_fields.
+    Table_ref object for use in fix_fields.
 
 NOTES
     This function is called as part of opening the table by opening the .frm
     file. It is a part of CREATE TABLE to do this so it is quite permissible
-    that errors due to erroneus syntax isn't found until we come here.
+    that errors due to erroneous syntax isn't found until we come here.
     If the user has used a non-existing field in the table is one such example
     of an error that is not discovered until here.
 */
@@ -1482,7 +1476,15 @@ bool fix_partition_func(THD *thd, TABLE *table, bool is_create_table_ind) {
   thd->want_privilege = 0;
 
   if (!is_create_table_ind || thd->lex->sql_command != SQLCOM_CREATE_TABLE) {
-    if (partition_default_handling(table, part_info, is_create_table_ind,
+    part_handler = table->file->get_partition_handler();
+
+    if (!part_handler) {
+      assert(0);
+      my_error(ER_PARTITION_CLAUSE_ON_NONPARTITIONED, MYF(0));
+      return true;
+    }
+
+    if (partition_default_handling(part_handler, part_info, is_create_table_ind,
                                    table->s->normalized_path.str)) {
       return true;
     }
@@ -1626,10 +1628,8 @@ static int add_write(File fptr, const char *buf, size_t len) {
   size_t ret_code =
       mysql_file_write(fptr, (const uchar *)buf, len, MYF(MY_FNABP));
 
-  if (likely(ret_code == 0))
-    return 0;
-  else
-    return 1;
+  if (likely(ret_code == 0)) return 0;
+  return 1;
 }
 
 static int add_string_object(File fptr, String *string) {
@@ -2499,10 +2499,8 @@ bool partition_key_modified(TABLE *table, const MY_BITMAP *fields) {
 static inline int part_val_int(Item *item_expr, longlong *result) {
   *result = item_expr->val_int();
   if (item_expr->null_value) {
-    if (current_thd->is_error())
-      return true;
-    else
-      *result = LLONG_MIN;
+    if (current_thd->is_error()) return true;
+    *result = LLONG_MIN;
   }
   return false;
 }
@@ -2692,7 +2690,6 @@ static void copy_to_part_field_buffers(Field **ptr, uchar **field_bufs,
     }
     field_bufs++;
   }
-  return;
 }
 
 /*
@@ -2711,7 +2708,6 @@ static void restore_part_field_pointers(Field **ptr, uchar **restore_ptr) {
     field->set_field_ptr(*restore_ptr);
     restore_ptr++;
   }
-  return;
 }
 
 /*
@@ -2941,7 +2937,7 @@ static uint32 get_partition_id_cols_list_for_endpoint(partition_info *part_info,
   @param include_endpoint  true iff the interval includes the endpoint
 
   This function finds the sub-array of part_info->list_array where values of
-  list_array[idx].list_value are contained within the specifed interval.
+  list_array[idx].list_value are contained within the specified interval.
   list_array is ordered by list_value, so
   1. For [a; +inf) or (a; +inf)-type intervals (left_endpoint==true), the
      sought sub-array starts at some index idx and continues till array end.
@@ -3597,8 +3593,7 @@ bool verify_data_with_partition(TABLE *table, TABLE *part_table,
 err:
   set_field_ptr(part_info->full_part_field_array, old_rec, table->record[0]);
   part_table->record[0] = old_rec;
-  if (error) return true;
-  return false;
+  return error != 0;
 }
 
 /*
@@ -3711,7 +3706,8 @@ void get_partition_set(const TABLE *table, uchar *buf, const uint index,
         */
         prune_partition_set(table, part_spec);
         return;
-      } else if (part_info->is_sub_partitioned()) {
+      }
+      if (part_info->is_sub_partitioned()) {
         if (part_info->all_fields_in_SPF.is_set(index)) {
           if (get_sub_part_id_from_key(table, buf, key_info, key_spec,
                                        &sub_part)) {
@@ -3753,7 +3749,8 @@ void get_partition_set(const TABLE *table, uchar *buf, const uint index,
           */
           prune_partition_set(table, part_spec);
           return;
-        } else if (part_info->is_sub_partitioned()) {
+        }
+        if (part_info->is_sub_partitioned()) {
           if (check_part_func_bound(part_info->subpart_field_array)) {
             if (get_sub_part_id_from_key(table, buf, key_info, key_spec,
                                          &sub_part)) {
@@ -3858,7 +3855,7 @@ void get_partition_set(const TABLE *table, uchar *buf, const uint index,
 
    RETURN VALUE
      true                          Error
-     false                         Sucess
+     false                         Success
 
    DESCRIPTION
      Read the partition syntax from the current position in the frm file.
@@ -4011,6 +4008,92 @@ end:
   end_lex_with_single_table(thd, table, old_lex);
   thd->variables.character_set_client = old_character_set_client;
   return result;
+}
+
+/**
+  Fill first_name with the name of the first partition in the given
+  partition expression. The partition expression is parsed first.
+
+  @param[in]  thd                - Thread invoking the function
+  @param[in]  part_handler       - Partition handler
+  @param[in]  normalized_path    - Normalized path name of table and database
+  @param[in]  partition_info_str - The partition expression.
+  @param[in]  partition_info_len - The partition expression length.
+  @param[out] first_name         - The name of the first partition.
+                                   Must be at least FN_REFLEN bytes long.
+
+  @retval true  - On failure.
+  @retval false - On success.
+*/
+bool get_first_partition_name(THD *thd, Partition_handler *part_handler,
+                              const char *normalized_path,
+                              const char *partition_info_str,
+                              uint partition_info_len, char *first_name) {
+  // Backup query arena
+  Query_arena *backup_stmt_arena_ptr = thd->stmt_arena;
+  Query_arena backup_arena;
+  Query_arena part_func_arena(thd->mem_root, Query_arena::STMT_INITIALIZED);
+  thd->swap_query_arena(part_func_arena, &backup_arena);
+  thd->stmt_arena = &part_func_arena;
+  partition_info *part_info = nullptr;
+
+  //
+  // Parsing the partition expression.
+  //
+
+  // Save old state and prepare new LEX
+  const CHARSET_INFO *old_character_set_client =
+      thd->variables.character_set_client;
+  thd->variables.character_set_client = system_charset_info;
+  LEX *old_lex = thd->lex;
+  LEX lex;
+  Query_expression unit(CTX_NONE);
+  Query_block select(thd->mem_root, nullptr, nullptr);
+  lex.new_static_query(&unit, &select);
+  thd->lex = &lex;
+
+  sql_digest_state *parent_digest = thd->m_digest;
+  PSI_statement_locker *parent_locker = thd->m_statement_psi;
+
+  Partition_expr_parser_state parser_state;
+  bool error = true;
+  if ((error = parser_state.init(thd, partition_info_str, partition_info_len)))
+    goto end;
+
+  // Parse the string and filling the partition_info.
+  thd->m_digest = nullptr;
+  thd->m_statement_psi = nullptr;
+
+  error = parse_sql(thd, &parser_state, nullptr) ||
+          parser_state.result->fix_parser_data(thd);
+
+  if (error == 0) {
+    part_info = parser_state.result;
+  }
+
+  thd->m_digest = parent_digest;
+  thd->m_statement_psi = parent_locker;
+
+  error = error || partition_default_handling(part_handler, part_info, false,
+                                              normalized_path);
+
+  // Extract first_name from the part_info.
+  error = error ||
+          fill_first_partition_name(part_info, normalized_path, first_name);
+end:
+  // Free items from current arena.
+  thd->free_items();
+
+  // Retore the old lex.
+  lex_end(thd->lex);
+  thd->lex = old_lex;
+
+  // Restore old arena.
+  thd->stmt_arena = backup_stmt_arena_ptr;
+  thd->swap_query_arena(backup_arena, &part_func_arena);
+  thd->variables.character_set_client = old_character_set_client;
+
+  return (error);
 }
 
 /*
@@ -4197,14 +4280,14 @@ bool set_part_state(Alter_info *alter_info, partition_info *tab_part_info,
 }
 
 /**
-  @brief Check if partition is exchangable with table by checking table options
+  @brief Check if partition is exchangeable with table by checking table options
 
   @param table_create_info Table options from table.
   @param part_elem         All the info of the partition.
 
   @retval false if they are equal, otherwise true.
 
-  @note Any differens that would cause a change in the frm file is prohibited.
+  @note Any difference that would cause a change in the frm file is prohibited.
   Such options as data_file_name, index_file_name, min_rows, max_rows etc. are
   not allowed to differ. But comment is allowed to differ.
 */
@@ -4369,7 +4452,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
 
         thd->work_part_info = tab_part_info;
         return false;
-      } else if (new_part_no > curr_part_no) {
+      }
+      if (new_part_no > curr_part_no) {
         /*
           We will add more partitions, we use the ADD PARTITION without
           setting the flag for no default number of partitions
@@ -5148,7 +5232,7 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       }
       /*
         Set up partition default_engine_type either from the create_info
-        or from the previus table
+        or from the previous table
       */
       if (create_info->used_fields & HA_CREATE_USED_ENGINE)
         part_info->default_engine_type = create_info->db_type;
@@ -5356,7 +5440,7 @@ bool make_used_partitions_str(partition_info *part_info,
     If both (1) and (3) are applicable, (1) is preferred over (3).
 
     This function sets part_info::get_part_iter_for_interval according to
-    this criteria, and also sets some auxilary fields that the function
+    this criteria, and also sets some auxiliary fields that the function
     uses.
 */
 static void set_up_range_analysis_info(partition_info *part_info) {
@@ -5621,7 +5705,7 @@ static int get_part_iter_for_interval_cols_via_map(
     uchar *min_value, uchar *max_value, uint min_len, uint max_len, uint flags,
     PARTITION_ITERATOR *part_iter) {
   uint32 nparts;
-  get_col_endpoint_func get_col_endpoint;
+  get_col_endpoint_func get_col_endpoint = nullptr;
   DBUG_TRACE;
 
   if (part_info->part_type == partition_type::RANGE) {
@@ -5697,7 +5781,7 @@ static int get_part_iter_for_interval_cols_via_map(
 
   @return Status of iterator
     @retval 0   No matching partitions (iterator not initialized)
-    @retval 1   Ok, iterator intialized for traversal of matching partitions.
+    @retval 1   Ok, iterator initialized for traversal of matching partitions.
     @retval -1  All partitions would match (iterator not initialized)
 */
 
@@ -5887,7 +5971,7 @@ static int get_part_iter_for_interval_via_mapping(
 
   RETURN
     0 - No matching partitions, iterator not initialized
-    1 - Some partitions would match, iterator intialized for traversing them
+    1 - Some partitions would match, iterator initialized for traversing them
    -1 - All partitions would match, iterator not initialized
 */
 
@@ -6102,6 +6186,64 @@ static uint32 get_next_partition_via_walking(PARTITION_ITERATOR *part_iter) {
   }
   part_iter->field_vals.cur = part_iter->field_vals.start;
   return NOT_A_PARTITION_ID;
+}
+
+/*
+  Create partition names
+
+  SYNOPSIS
+    create_partition_name()
+    out:out                   Created partition name string
+    in1                       First part
+    in2                       Second part
+
+  RETURN VALUE
+    NONE
+
+  DESCRIPTION
+    This method is used to calculate the partition name, service routine to
+    the del_ren_cre_table method.
+*/
+
+void create_partition_name(char *out, const char *in1, const char *in2,
+                           bool translate) {
+  char transl_part_name[FN_REFLEN];
+  const char *transl_part;
+
+  if (translate) {
+    tablename_to_filename(in2, transl_part_name, FN_REFLEN);
+    transl_part = transl_part_name;
+  } else
+    transl_part = in2;
+  strxmov(out, in1, "#P#", transl_part, NullS);
+}
+
+/*
+  Create subpartition name
+
+  SYNOPSIS
+    create_subpartition_name()
+    out:out                   Created partition name string
+    in1                       First part
+    in2                       Second part
+    in3                       Third part
+
+  RETURN VALUE
+    NONE
+
+  DESCRIPTION
+  This method is used to calculate the subpartition name, service routine to
+  the del_ren_cre_table method.
+*/
+
+void create_subpartition_name(char *out, const char *in1, const char *in2,
+                              const char *in3) {
+  char transl_part_name[FN_REFLEN], transl_subpart_name[FN_REFLEN];
+
+  tablename_to_filename(in2, transl_part_name, FN_REFLEN);
+  tablename_to_filename(in3, transl_subpart_name, FN_REFLEN);
+  strxmov(out, in1, "#P#", transl_part_name, "#SP#", transl_subpart_name,
+          NullS);
 }
 
 /* Same as get_next_partition_via_walking, but for subpartitions */

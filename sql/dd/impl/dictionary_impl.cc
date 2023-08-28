@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -71,6 +71,7 @@
 #include "sql/plugin_table.h"
 #include "sql/sql_base.h"   // close_cached_tables
 #include "sql/sql_class.h"  // THD
+#include "sql/sql_zip_dict.h"
 #include "sql/system_variables.h"
 #include "sql/thd_raii.h"                       // Disable_autocommit_guard
 #include "sql/transaction.h"                    // trans_commit()
@@ -374,12 +375,15 @@ bool Dictionary_impl::is_dd_table_access_allowed(bool is_dd_internal_thread,
 
   /*
     Access allowed for external DD tables, for DML on protected DDSE tables,
-    and for any operation on SYSTEM tables.
+    and for any operation on SYSTEM tables. Compression dictionary tables
+    are created as SYSTEM type but we don't allow direct access to them.
+    User should use I_S views on compression dictionary tables
   */
   return (table_type == nullptr ||
           (*table_type == System_tables::Types::DDSE_PROTECTED &&
            !is_ddl_statement) ||
-          *table_type == System_tables::Types::SYSTEM);
+          (*table_type == System_tables::Types::SYSTEM &&
+           !compression_dict::is_hardcoded(schema_str, table_str)));
 }
 
 ///////////////////////////////////////////////////////////////////////////

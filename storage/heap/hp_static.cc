@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,7 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
-  Static variables for heap library. All definied here for easy making of
+  Static variables for heap library. All defined here for easy making of
   a shared library
 */
 
@@ -38,6 +38,7 @@ PSI_memory_key hp_key_memory_HP_SHARE;
 PSI_memory_key hp_key_memory_HP_INFO;
 PSI_memory_key hp_key_memory_HP_PTRS;
 PSI_memory_key hp_key_memory_HP_KEYDEF;
+PSI_memory_key hp_key_memory_HP_COLUMNDEF;
 
 #ifdef HAVE_PSI_INTERFACE
 
@@ -45,7 +46,8 @@ static PSI_memory_info all_heap_memory[] = {
     {&hp_key_memory_HP_SHARE, "HP_SHARE", 0, 0, PSI_DOCUMENT_ME},
     {&hp_key_memory_HP_INFO, "HP_INFO", 0, 0, PSI_DOCUMENT_ME},
     {&hp_key_memory_HP_PTRS, "HP_PTRS", 0, 0, PSI_DOCUMENT_ME},
-    {&hp_key_memory_HP_KEYDEF, "HP_KEYDEF", 0, 0, PSI_DOCUMENT_ME}};
+    {&hp_key_memory_HP_KEYDEF, "HP_KEYDEF", 0, 0, PSI_DOCUMENT_ME},
+    {&hp_key_memory_HP_COLUMNDEF, "HP_COLUMNDEF", 0, 0, PSI_DOCUMENT_ME}};
 
 void init_heap_psi_keys() {
   const char *category = "memory";

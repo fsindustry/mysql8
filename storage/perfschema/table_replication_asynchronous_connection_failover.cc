@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -53,7 +53,7 @@ Plugin_table table_replication_asynchronous_connection_failover::m_table_def(
     /* Name */
     "replication_asynchronous_connection_failover",
     /* Definition */
-    "  CHANNEL_NAME CHAR(64) CHARACTER SET utf8 COLLATE utf8_general_ci "
+    "  CHANNEL_NAME CHAR(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci "
     "NOT NULL COMMENT 'The replication channel name that connects source and "
     "replica.',\n"
     "  HOST CHAR(255) CHARACTER SET ASCII NOT NULL COMMENT 'The source "
@@ -70,7 +70,7 @@ Plugin_table table_replication_asynchronous_connection_failover::m_table_def(
     "replica shall try to switch the connection over to when there are "
     "failures. Weight can be set to a number between 1 and 100, where 100 is "
     "the highest weight and 1 the lowest.',\n"
-    " MANAGED_NAME CHAR(64) CHARACTER SET utf8 COLLATE utf8_general_ci "
+    " MANAGED_NAME CHAR(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci "
     "NOT NULL DEFAULT '' COMMENT 'The name of the group which this server "
     "belongs to.'\n",
     /* Options */
@@ -108,7 +108,7 @@ table_replication_asynchronous_connection_failover::
 table_replication_asynchronous_connection_failover::
     ~table_replication_asynchronous_connection_failover() = default;
 
-void table_replication_asynchronous_connection_failover::reset_position(void) {
+void table_replication_asynchronous_connection_failover::reset_position() {
   DBUG_TRACE;
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
@@ -138,7 +138,7 @@ int table_replication_asynchronous_connection_failover::rnd_init(bool) {
   return 0;
 }
 
-int table_replication_asynchronous_connection_failover::rnd_next(void) {
+int table_replication_asynchronous_connection_failover::rnd_next() {
   DBUG_TRACE;
 
   m_pos.set_at(&m_next_pos);
@@ -175,42 +175,42 @@ int table_replication_asynchronous_connection_failover::make_row(uint index) {
 
   if (index >= m_source_conn_detail.size()) {
     return HA_ERR_END_OF_FILE;
-  } else {
-    std::string channel{};
-    std::string host{};
-    std::string network_namespace{};
-    uint port;
-    uint weight;
-    std::string managed_name{};
-
-    auto source_tuple = m_source_conn_detail[index];
-    std::tie(channel, host, port, std::ignore, weight, managed_name) =
-        source_tuple;
-
-    channel_map.rdlock();
-    Master_info *mi = channel_map.get_mi(channel.c_str());
-    if (nullptr != mi) {
-      network_namespace.assign(mi->network_namespace_str());
-    }
-    channel_map.unlock();
-
-    m_row.channel_name_length = channel.length();
-    memcpy(m_row.channel_name, channel.c_str(), channel.length());
-
-    m_row.host_length = host.length();
-    memcpy(m_row.host, host.c_str(), host.length());
-
-    m_row.port = port;
-
-    m_row.network_namespace_length = network_namespace.length();
-    memcpy(m_row.network_namespace, network_namespace.c_str(),
-           network_namespace.length());
-
-    m_row.weight = weight;
-
-    m_row.managed_name_length = managed_name.length();
-    memcpy(m_row.managed_name, managed_name.c_str(), managed_name.length());
   }
+
+  std::string channel{};
+  std::string host{};
+  std::string network_namespace{};
+  uint port;
+  uint weight;
+  std::string managed_name{};
+
+  auto source_tuple = m_source_conn_detail[index];
+  std::tie(channel, host, port, std::ignore, weight, managed_name) =
+      source_tuple;
+
+  channel_map.rdlock();
+  Master_info *mi = channel_map.get_mi(channel.c_str());
+  if (nullptr != mi) {
+    network_namespace.assign(mi->network_namespace_str());
+  }
+  channel_map.unlock();
+
+  m_row.channel_name_length = channel.length();
+  memcpy(m_row.channel_name, channel.c_str(), channel.length());
+
+  m_row.host_length = host.length();
+  memcpy(m_row.host, host.c_str(), host.length());
+
+  m_row.port = port;
+
+  m_row.network_namespace_length = network_namespace.length();
+  memcpy(m_row.network_namespace, network_namespace.c_str(),
+         network_namespace.length());
+
+  m_row.weight = weight;
+
+  m_row.managed_name_length = managed_name.length();
+  memcpy(m_row.managed_name, managed_name.c_str(), managed_name.length());
 
   return 0;
 }
@@ -230,23 +230,25 @@ int table_replication_asynchronous_connection_failover::read_row_values(
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /** channel_name */
-          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
+          set_field_char_utf8mb4(f, m_row.channel_name,
+                                 m_row.channel_name_length);
           break;
         case 1: /** host */
-          set_field_char_utf8(f, m_row.host, m_row.host_length);
+          set_field_char_utf8mb4(f, m_row.host, m_row.host_length);
           break;
         case 2: /** port */
           set_field_ulong(f, m_row.port);
           break;
         case 3: /** network_namespace */
-          set_field_char_utf8(f, m_row.network_namespace,
-                              m_row.network_namespace_length);
+          set_field_char_utf8mb4(f, m_row.network_namespace,
+                                 m_row.network_namespace_length);
           break;
         case 4: /** weight */
           set_field_ulong(f, m_row.weight);
           break;
         case 5: /** managed_name */
-          set_field_char_utf8(f, m_row.managed_name, m_row.managed_name_length);
+          set_field_char_utf8mb4(f, m_row.managed_name,
+                                 m_row.managed_name_length);
           break;
         default:
           assert(false);

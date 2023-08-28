@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
 #ifndef BASIC_OSTREAM_INCLUDED
 #define BASIC_OSTREAM_INCLUDED
 #include <my_byteorder.h>
-#include "libbinlogevents/include/compression/base.h"
+#include "libbinlogevents/include/compression/compressor.h"
 #include "my_sys.h"
 #include "sql_string.h"
 
@@ -136,7 +136,7 @@ class IO_CACHE_ostream : public Truncatable_ostream {
 
   /**
      Syncs the file to disk. It doesn't check and flush any remaining data still
-     left in IO_CACHE's bufffer. So a call to flush() is necessary in order to
+     left in IO_CACHE's buffer. So a call to flush() is necessary in order to
      persist all data including the data in buffer.
 
      @retval false  Success

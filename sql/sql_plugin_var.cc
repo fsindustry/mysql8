@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,12 +42,53 @@
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_const.h"
 #include "sql/sql_plugin.h"
-#include "sql/strfunc.h"          // find_type
-#include "sql/sys_vars_shared.h"  // intern_find_sys_var
+#include "sql/strfunc.h"  // find_type
+#include "sql/sys_vars_shared.h"
 #include "sql/system_variables.h"
 #include "sql_string.h"
 #include "template_utils.h"
 #include "typelib.h"
+
+namespace {
+/**
+  Apply system default check to a variable value. This will
+  not take into account custom check method provided for a
+  variable during its definition.
+
+  @param[in]     thd   Thread context.
+  @param[in]     var   Plugin variable.
+  @param[in,out] dest  Destination memory pointer.
+  @param[in]     value New value.
+
+  @return Completion status
+  @retval 0 Success
+  @retval 1 Failure
+*/
+int do_def_check(THD *thd, SYS_VAR *var, void *dest,
+                 struct st_mysql_value *value) {
+  switch (var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      return check_func_bool(thd, var, dest, value);
+    case PLUGIN_VAR_INT:
+      return check_func_int(thd, var, dest, value);
+    case PLUGIN_VAR_LONG:
+      return check_func_long(thd, var, dest, value);
+    case PLUGIN_VAR_LONGLONG:
+      return check_func_longlong(thd, var, dest, value);
+    case PLUGIN_VAR_STR:
+      return check_func_str(thd, var, dest, value);
+    case PLUGIN_VAR_ENUM:
+      return check_func_enum(thd, var, dest, value);
+    case PLUGIN_VAR_SET:
+      return check_func_set(thd, var, dest, value);
+    case PLUGIN_VAR_DOUBLE:
+      return check_func_double(thd, var, dest, value);
+    default:
+      assert(0);
+      return 1;
+  }
+}
+}  // namespace
 
 /**
   Set value for global variable with PLUGIN_VAR_MEMALLOC flag.
@@ -304,7 +345,7 @@ TYPELIB *sys_var_pluginvar::plugin_var_typelib(void) {
 }
 
 uchar *sys_var_pluginvar::do_value_ptr(THD *running_thd, THD *target_thd,
-                                       enum_var_type type, LEX_STRING *) {
+                                       enum_var_type type, std::string_view) {
   uchar *result;
 
   result = real_value_ptr(target_thd, type);
@@ -329,6 +370,9 @@ bool sys_var_pluginvar::do_check(THD *thd, set_var *var) {
   value.is_unsigned = item_is_unsigned;
   value.item = var->value;
 
+  if (var->type == OPT_PERSIST_ONLY) {
+    return do_def_check(thd, plugin_var, &var->save_result, &value);
+  }
   return plugin_var->check(thd, plugin_var, &var->save_result, &value);
 }
 
@@ -419,12 +463,14 @@ bool sys_var_pluginvar::global_update(THD *thd, set_var *var) {
   }
 
   if ((plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR &&
-      plugin_var->flags & PLUGIN_VAR_MEMALLOC)
+      plugin_var->flags & PLUGIN_VAR_MEMALLOC) {
     rc = plugin_var_memalloc_global_update(thd, plugin_var,
                                            static_cast<char **>(tgt),
                                            *static_cast<char *const *>(src));
-  else
+  } else {
     plugin_var->update(thd, plugin_var, tgt, src);
+    return (thd->is_error() ? 1 : 0);
+  }
 
   return rc;
 }
@@ -587,6 +633,74 @@ void sys_var_pluginvar::saved_value_to_string(THD *, set_var *var,
   }
 }
 
+/**
+  Set a PERSIST_ONLY value for a variable. The resulting value should be
+  set to a string representation of the actual value.
+
+  @param[in]     thd   Thread context.
+  @param[in]     var   Plugin variable.
+  @param[in,out] dest  Destination string pointer.
+*/
+void sys_var_pluginvar::persist_only_to_string(THD *thd, set_var *var,
+                                               String *dest) {
+  if (var->value) {
+    const auto *val = static_cast<const void *>(&var->save_result);
+    switch (plugin_var->flags & PLUGIN_VAR_TYPEMASK) {
+      case PLUGIN_VAR_BOOL: {
+        if (*static_cast<const bool *>(val)) {
+          dest->set("ON", 2, system_charset_info);
+        } else {
+          dest->set("OFF", 3, system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_INT:
+        dest->set_int(*static_cast<const int *>(val), false,
+                      system_charset_info);
+        return;
+      case PLUGIN_VAR_LONG:
+        dest->set_int(*static_cast<const long *>(val), false,
+                      system_charset_info);
+        return;
+      case PLUGIN_VAR_LONGLONG:
+        dest->set(*static_cast<const ulonglong *>(val), system_charset_info);
+        return;
+      case PLUGIN_VAR_STR: {
+        const char *str =
+            *(static_cast<const char **>(const_cast<void *>(val)));
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_SET: {
+        const auto *str =
+            set_to_string(thd, nullptr, *static_cast<const ulonglong *>(val),
+                          plugin_var_typelib()->type_names);
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_ENUM: {
+        const auto *str =
+            plugin_var_typelib()->type_names[*static_cast<const long *>(val)];
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_DOUBLE:
+        dest->set_real(*static_cast<const double *>(val), 6,
+                       system_charset_info);
+        return;
+      default:
+        assert(0);
+        return;
+    }
+  }
+}
+
 /****************************************************************************
   default variable data check and update functions
 ****************************************************************************/
@@ -607,7 +721,7 @@ int check_func_bool(THD *, SYS_VAR *, void *save, st_mysql_value *value) {
     if (tmp > 1 || tmp < 0) goto err;
     result = (int)tmp;
   }
-  *(bool *)save = result ? true : false;
+  *(bool *)save = (result != 0);
   return 0;
 err:
   return 1;
@@ -814,10 +928,8 @@ st_bookmark *find_bookmark(const char *plugin, const char *name, int flags) {
   varname[0] = flags & PLUGIN_VAR_TYPEMASK;
 
   const auto it = get_bookmark_hash()->find(std::string(varname, length - 1));
-  if (it == get_bookmark_hash()->end())
-    return nullptr;
-  else
-    return it->second;
+  if (it == get_bookmark_hash()->end()) return nullptr;
+  return it->second;
 }
 
 void plugin_opt_set_limits(struct my_option *options, const SYS_VAR *opt) {
@@ -935,4 +1047,42 @@ void plugin_opt_set_limits(struct my_option *options, const SYS_VAR *opt) {
   options->arg_type = REQUIRED_ARG;
   if (opt->flags & PLUGIN_VAR_NOCMDARG) options->arg_type = NO_ARG;
   if (opt->flags & PLUGIN_VAR_OPCMDARG) options->arg_type = OPT_ARG;
+}
+
+static Item *alloc_and_copy_string(const char *str) {
+  if (str != nullptr) {
+    char *tmp_str = sql_strmake(str, strlen(str));
+    return new Item_string(tmp_str, strlen(tmp_str), system_charset_info);
+  } else {
+    return new Item_null();
+  }
+}
+
+Item *sys_var_pluginvar::copy_value(THD *thd) {
+  const auto *val_ptr = session_value_ptr(thd, thd, {});
+
+  switch (plugin_var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      return new Item_int(*(const bool *)val_ptr);
+    case PLUGIN_VAR_INT:
+      return new Item_int(*(const int *)val_ptr);
+    case PLUGIN_VAR_LONG:
+      return new Item_int((longlong) * (const long *)val_ptr);
+    case PLUGIN_VAR_LONGLONG:
+      return new Item_int(*(const longlong *)val_ptr);
+    case PLUGIN_VAR_SET:
+    case PLUGIN_VAR_ENUM: {
+      const auto *val_str = pointer_cast<const char *>(val_ptr);
+      return (alloc_and_copy_string(val_str));
+    }
+    case PLUGIN_VAR_STR: {
+      const auto *val_str = *pointer_cast<const char *const *>(val_ptr);
+      return (alloc_and_copy_string(val_str));
+    }
+    case PLUGIN_VAR_DOUBLE:
+      return new Item_float(*(const double *)val_ptr, DECIMAL_NOT_SPECIFIED);
+    default:
+      assert(0);
+  }
+  return (nullptr);
 }

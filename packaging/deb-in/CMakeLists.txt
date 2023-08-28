@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -57,7 +57,7 @@ ENDIF()
 # Change uppercase first letter of Ubuntu/Debian
 string(TOLOWER "${DEB_ID}" DEB_ID)
 
-IF (WITH_NDBCLUSTER)
+IF (WITH_NDB)
   SET (DEB_BASE_PRODUCT "cluster-")
   SET (DEB_BASE_PRODUCTC "Cluster ")
   SET (DEB_BASE_VERSION ${MYSQL_CLUSTER_VERSION})
@@ -107,9 +107,18 @@ usr/lib/mysql/plugin/keyring_oci.so
 usr/lib/mysql/plugin/openssl_udf.so
 usr/lib/mysql/plugin/thread_pool.so
 usr/lib/mysql/plugin/firewall.so
-usr/lib/mysql/plugin/component_test_page_track_component.so
 usr/lib/mysql/plugin/authentication_fido.so
 usr/lib/mysql/plugin/component_keyring_encrypted_file.so
+usr/lib/mysql/plugin/component_keyring_oci.so
+usr/lib/mysql/plugin/component_enterprise_encryption.so
+usr/lib/mysql/plugin/component_masking.so
+usr/lib/mysql/plugin/component_masking_functions.so
+")
+
+   SET (DEB_INSTALL_TEST_PLUGINS
+"
+usr/lib/mysql/plugin/component_test_global_priv_registration.so
+usr/lib/mysql/plugin/component_test_page_track_component.so
 ")
 
   IF (DEB_AWS_SDK)
@@ -258,7 +267,7 @@ ENDIF()
 IF (NOT DEFINED DEB_NOROUTER)
   INCLUDE(deb_router.cmake)
 ENDIF()
-IF (WITH_NDBCLUSTER)
+IF (WITH_NDB)
   INCLUDE(deb_ndb.cmake)
 ENDIF()
 if (DEFINED DEB_WITH_DEBUG)

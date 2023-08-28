@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -99,7 +99,7 @@ sockaddr_storage *Vio_wrapper::peer_addr(std::string *address, uint16_t *port) {
 
 int Vio_wrapper::shutdown() {
   MUTEX_LOCK(lock, m_shutdown_mutex);
-  return vio_shutdown(m_vio);
+  return vio_shutdown(m_vio, SHUT_RDWR);
 }
 
 Vio_wrapper::~Vio_wrapper() {

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -99,18 +99,22 @@ class NotifyTest : public RestApiComponentTest {
     UNREFERENCED_PARAMETER(router);
     return true;
 #else
-    return wait_log_contains(router, " ready 'signal_handler'", 5s);
+    // log_reopen service reports readiness after the signal handler is
+    // initialized in the current implementation
+    return wait_log_contains(router, "ready 'log_reopen'", 5s);
 #endif
   }
 
   std::string create_config_file(
-      const std::vector<std::string> &config_file_sections) {
+      const std::vector<std::string> &config_file_sections,
+      const std::optional<std::string> &state_file = std::nullopt) {
     auto default_section = prepare_config_defaults();
-
-    std::string config_file_content;
-    for (const auto &section : config_file_sections) {
-      config_file_content += section + "\n";
+    if (state_file) {
+      default_section["dynamic_state"] = *state_file;
     }
+
+    const std::string config_file_content =
+        mysql_harness::join(config_file_sections, "");
 
     return ProcessManager::create_config_file(
         get_test_temp_dir_name(), config_file_content, &default_section);
@@ -178,11 +182,13 @@ class NotifyTest : public RestApiComponentTest {
   ProcessWrapper &launch_router(
       const std::vector<std::string> &params,
       const std::vector<std::pair<std::string, std::string>> &env_vars,
-      int expected_exit_code) {
+      int expected_exit_code,
+      ProcessWrapper::OutputResponder output_responder =
+          RouterComponentBootstrapTest::kBootstrapOutputResponder) {
     // wait_for_notify_ready is false as we do it manually in those tests
     auto &router =
         launch_command(get_mysqlrouter_exec().str(), params, expected_exit_code,
-                       /*catch_stderr*/ true, env_vars);
+                       /*catch_stderr*/ true, env_vars, output_responder);
     router.set_logging_path(get_logging_dir().str(), "mysqlrouter.log");
 
     return router;
@@ -299,15 +305,19 @@ TEST_F(NotifyTest, NotifyReadyMetadataCache) {
                                    {
                                        {"cluster_type", "gr"},
                                        {"router_id", "1"},
-                                       {"bootstrap_server_addresses", nodes},
                                        {"user", "mysql_router1_user"},
                                        {"connect_timeout", "1"},
                                        {"metadata_cluster", "test"},
                                    }),
   };
 
-  /*auto &router =*/launch_router(create_config_file(config_sections),
-                                  /*wait_for_ready_expected_result*/ true);
+  const std::string state_file = create_state_file(
+      get_test_temp_dir_name(),
+      create_state_file_content("uuid", "", {md_server_port}, 0));
+
+  /*auto &router =*/launch_router(
+      create_config_file(config_sections, state_file),
+      /*wait_for_ready_expected_result*/ true);
 }
 
 /**
@@ -373,7 +383,6 @@ TEST_F(NotifyTest, NotifyReadyManyPlugins) {
                                    {
                                        {"cluster_type", "gr"},
                                        {"router_id", "1"},
-                                       {"bootstrap_server_addresses", nodes},
                                        {"user", "mysql_router1_user"},
                                        {"connect_timeout", "1"},
                                        {"metadata_cluster", "test"},
@@ -409,8 +418,13 @@ TEST_F(NotifyTest, NotifyReadyManyPlugins) {
                                    {{"require_realm", "somerealm"}}),
   };
 
-  /*auto &router =*/launch_router(create_config_file(config_sections),
-                                  /*wait_for_ready_expected_result*/ true);
+  const std::string state_file = create_state_file(
+      get_test_temp_dir_name(),
+      create_state_file_content("uuid", "", {md_server_port}, 0));
+
+  /*auto &router =*/launch_router(
+      create_config_file(config_sections, state_file),
+      /*wait_for_ready_expected_result*/ true);
 }
 
 /**
@@ -570,7 +584,7 @@ TEST_P(NotifyTestInvalidSocketNameTest, NotifyTestInvalidSocketName) {
                         2s));
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     NotifyTestInvalidSocketName, NotifyTestInvalidSocketNameTest,
     ::testing::Values(
         "CON", "PRN",
@@ -924,12 +938,11 @@ TEST_P(NotifyBootstrapNotAffectedTest, NotifyBootstrapNotAffected) {
   auto &router = launch_router(
       {"--bootstrap=localhost:" + std::to_string(metadata_server_port),
        "-d=" + temp_test_dir.name()},
-      env_vars, EXIT_SUCCESS);
-  router.register_response("Please enter MySQL password for root: ",
-                           "fake-pass\n");
+      env_vars, EXIT_SUCCESS,
+      RouterComponentBootstrapTest::kBootstrapOutputResponder);
 
   SCOPED_TRACE("// Bootstrap should be successful");
-  check_exit_code(router, EXIT_SUCCESS, 10s);
+  check_exit_code(router, EXIT_SUCCESS);
 
   SCOPED_TRACE("// No notification should be sent by the Router");
   wait_for_stopped.join();
@@ -937,7 +950,7 @@ TEST_P(NotifyBootstrapNotAffectedTest, NotifyBootstrapNotAffected) {
             stdx::make_unexpected(make_error_code(std::errc::timed_out)));
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     NotifyBootstrapNotAffected, NotifyBootstrapNotAffectedTest,
     ::testing::Values("READY=1",
                       "STOPPING=1\nSTATUS=Router shutdown in progress\n"));

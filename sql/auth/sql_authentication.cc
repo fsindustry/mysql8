@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,7 @@
 #include <utility>
 #include <vector> /* std::vector */
 
+#include "boost/algorithm/string.hpp"
 #include "crypt_genhash_impl.h"  // generate_user_salt
 #include "include/compression.h"
 #include "m_string.h"
@@ -75,6 +76,7 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
 #include "sql/current_thd.h"                              // current_thd
+#include "sql/debug_sync.h"                               // DEBUG_SYNC
 #include "sql/derror.h"                                   // ER_THD
 #include "sql/hostname_cache.h"  // Host_errors, inc_host_errors
 #include "sql/log.h"             // query_logger
@@ -104,6 +106,8 @@ struct MEM_ROOT;
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
+
+constexpr const std::array rsa_key_sizes{2048, 2048, 2048, 3072, 7680, 15360};
 
 /**
    @file sql_authentication.cc
@@ -154,20 +158,19 @@ struct MEM_ROOT;
   "Authentication method switch" --> [ Client does not know requested auth method ] DISCONNECT
   "Authentication method switch" --> "Authentication exchange continuation"
 
+  "Authentication exchange continuation" --> "Server Response"
   "Authentication exchange continuation" --> [ No more factors to authenticate] OK
   "Authentication exchange continuation" --> ERR
 
   "Server Response" --> "Authenticate 2nd Factor"
-  "Client Response" --> "Authentication exchange continuation"
-
-  "Authentication exchange continuation" --> [ No more factors to authenticate] OK
-  "Authentication exchange continuation" --> ERR
-
   "Server Response" --> "Authenticate 3rd Factor"
-  "Client Response" --> "Authentication exchange continuation"
 
-  "Authentication exchange continuation" --> OK
-  "Authentication exchange continuation" --> ERR
+  "Authenticate 2nd Factor" --> "MFA Authentication Client Response"
+
+  "Authenticate 3rd Factor" --> "MFA Authentication Client Response"
+
+  "MFA Authentication Client Response" --> "Authentication exchange continuation"
+  "MFA Authentication Client Response" --> [ Client does not know requested auth method ] DISCONNECT
 
   @enduml
 
@@ -294,7 +297,7 @@ struct MEM_ROOT;
   </ul>
 
   In that case the first round of authentication has been already commenced
-  during the hanshake. Now, depending on the authentication method
+  during the handshake. Now, depending on the authentication method
   `server_method`, further authentication can be exchanged until the server
   either accepts or refuses the authentication.
 
@@ -304,7 +307,7 @@ struct MEM_ROOT;
 
   1. The client connects to the server
   2. The server sends @ref page_protocol_connection_phase_packets_protocol_handshake
-  3. The client respons with
+  3. The client responds with
      @ref page_protocol_connection_phase_packets_protocol_handshake_response
   4. Client and server possibly exchange further packets as required by the server
      authentication method for the user account the client is trying to authenticate
@@ -337,14 +340,14 @@ struct MEM_ROOT;
 
   @subsection sect_protocol_connection_phase_fast_path_fails Authentication Fails
 
-  It goes exactly like @ref sect_protocol_connection_phase_fast_path_success
-  , but if the server decides that it won't authenticate the user it replies
+  It goes exactly like @ref sect_protocol_connection_phase_fast_path_success,
+  but if the server decides that it won't authenticate the user, it replies
   with an @ref page_protocol_basic_err_packet instead of
   @ref page_protocol_basic_ok_packet.
 
   1. The client connects to the server
   2. The server sends @ref page_protocol_connection_phase_packets_protocol_handshake
-  3. The client respons with
+  3. The client responds with
   @ref page_protocol_connection_phase_packets_protocol_handshake_response
   4. Client and server possibly exchange further packets as required by the server
   authentication method for the user account the client is trying to authenticate
@@ -356,7 +359,7 @@ struct MEM_ROOT;
   Server -> Client: Initial Handshake Packet
   Client -> Server: Handshake Response Packet
 
-  == Client and server possibly exchange furhter authentication method packets ==
+  == Client and server possibly exchange further authentication method packets ==
 
   Server -> Client: ERR packet
 
@@ -378,13 +381,12 @@ struct MEM_ROOT;
   2. Method used by the client to generate authentication reply in
   @ref page_protocol_connection_phase_packets_protocol_handshake_response
   was not compatible with M
-
   then there is an authentication method mismatch and authentication exchange
   must be restarted using the correct authentication method.
 
   @note
   1. The mismatch can happen even if client and server used compatible
-  authentication methods in the intial handshake, but the method the server
+  authentication methods in the initial handshake, but the method the server
   used was different from the method required by the user account.
   2. In the 4.1-5.7 server and client the default authentication method is
   @ref page_protocol_connection_phase_authentication_methods_native_password_authentication.
@@ -402,7 +404,7 @@ struct MEM_ROOT;
   generally do not know the mapping from server authentication methods to client
   authentication methods this is not implemented in the client mysql library.
 
-  If authentication method missmatch happens, server sends to client the
+  If authentication method mismatch happens, server sends to client the
   @ref page_protocol_connection_phase_packets_protocol_auth_switch_request
   which contains the name of the client authentication method to be used and
   the first authentication payload generated by the new method. Client should
@@ -415,7 +417,7 @@ struct MEM_ROOT;
 
   1. The client connects to the server
   2. The server sends @ref page_protocol_connection_phase_packets_protocol_handshake
-  3. The client respons with
+  3. The client responds with
   @ref page_protocol_connection_phase_packets_protocol_handshake_response
   4. The server sends the
   @ref page_protocol_connection_phase_packets_protocol_auth_switch_request to tell
@@ -432,7 +434,7 @@ struct MEM_ROOT;
   Client -> Server: Handshake Response Packet
   Server -> Client: Authentication Switch Request Packet
 
-  == Client and server possibly exchange furhter authentication method packets ==
+  == Client and server possibly exchange further authentication method packets ==
 
   Server -> Client: ERR packet or OK packet
   @enduml
@@ -456,7 +458,7 @@ struct MEM_ROOT;
   </li>
   <li>Server's default authentication method used to generate authentication
   data in @ref page_protocol_connection_phase_packets_protocol_handshake is
-  incomaptible with
+  incompatible with
   @ref page_protocol_connection_phase_authentication_methods_native_password_authentication
   and client does not support pluggable authentication (@ref CLIENT_PLUGIN_AUTH
   flag is not set).
@@ -467,7 +469,7 @@ struct MEM_ROOT;
 
   1. The client connects to the server
   2. The server sends @ref page_protocol_connection_phase_packets_protocol_handshake
-  3. The client respons with
+  3. The client response with
   @ref page_protocol_connection_phase_packets_protocol_handshake_response
   4. The server recognizes that the client does not have enough capabilities
   to handle the required authentication method, sends
@@ -491,7 +493,7 @@ struct MEM_ROOT;
 
   1. The client connects to the server
   2. The server sends @ref page_protocol_connection_phase_packets_protocol_handshake
-  3. The client respons with
+  3. The client response with
   @ref page_protocol_connection_phase_packets_protocol_handshake_response
   4. The server sends the
   @ref page_protocol_connection_phase_packets_protocol_auth_switch_request to tell
@@ -815,7 +817,7 @@ struct MEM_ROOT;
   Account - user account (user-host combination)
   </li>
   <li>
-  authentication_string - Transformation of key handle stored in mysql.user table
+  authentication_string - Transformation of Credential ID stored in mysql.user table
   </li>
   <li>
   relying party ID - Unique name assigned to server by authentication_fido plugin
@@ -824,7 +826,7 @@ struct MEM_ROOT;
   FIDO authenticator - A hardware token device
   </li>
   <li>
-  Nonce - 32 byte long random data
+  Salt - 32 byte long random data
   </li>
   <li>
   Registration mode - Refers to state of connection where only ALTER USER is allowed
@@ -856,28 +858,25 @@ struct MEM_ROOT;
   </ul>
 
   Initiate registration:
-  User account created with authentication_fido method should first connect to
-  server and initiate the registration step.
+  --fido-register-factor mysql client option initiates registration step.
 
   <ol>
    <li>
-    Client executes ALTER USER .. INITIATE REGISTRATION;
+    Client executes ALTER USER user() nth FACTOR INITIATE REGISTRATION;
    </li>
    <li>
-   Server sends a random challenge, user id, relying party ID to client.
+   Server sends a challenge comprising of 32 bytes random salt, user id, relying party ID
+   Format of challenge is:
+   |length encoded 32 bytes random salt|length encoded user id (user name + host name)|length encoded relying party ID|
    </li>
    <li>
-   Client receives it and saves in MySQL struct.
-   </li>
-  </ol>
-
-  Finish registration:
-  <ol>
-   <li>
-    Client executes ALTER USER .. FINISH REGISTRATION;
+   Client receives challenge and passes to authentication_fido_client plugin
+   with option "registration_challenge" using mysql_plugin_options()
    </li>
    <li>
-    Client sends random challenge, user id, relying party ID to FIDO authenticator.
+    FIDO authenticator prompts physical human user to perform gesture action.
+    This message can be accessed via callback. Register a callback with option
+    "fido_messages_callback" using mysql_plugin_options()
    </li>
    <li>
     Once physical human user gesture action (touching the token) is performed,
@@ -885,12 +884,22 @@ struct MEM_ROOT;
     X.509 certificate, signature) and authenticator data.
    </li>
    <li>
-    Client sends public key and credential ID to server.
+   Client extracts credential ID(aka challenge response) from authentication_fido_client
+   plugin with option "registration_response" using mysql_plugin_get_option()
+   Format of challenge response is:
+   |length encoded authenticator data|length encoded credential ID|
+   </li>
+  </ol>
+
+  Finish registration:
+  <ol>
+   <li>
+    Client executes ALTER USER user() nth FACTOR FINISH REGISTRATION SET CHALLENGE_RESPONSE AS '?';
+    parameter is binded to challenge response received during initiate registration step.
    </li>
    <li>
-    Server side fido authentication plugin verifies the signature and responds
-    with an @ref page_protocol_basic_ok_packet or rejects with
-    @ref page_protocol_basic_err_packet
+    authentication_fido plugin verifies the challenge response and responds with an
+    @ref page_protocol_basic_ok_packet or rejects with @ref page_protocol_basic_err_packet
    </li>
   </ol>
        @startuml
@@ -905,15 +914,14 @@ struct MEM_ROOT;
          client -> server : connect
          server -> client : OK packet. Connection is in registration mode where only ALTER USER command is allowed
          client -> server : ALTER USER USER() nth FACTOR INITIATE REGISTRATION
-         server -> client : random challenge, user id, relying party ID
+         server -> client : random challenge (32 byte random salt, user id, relying party ID)
+         client -> authenticator : random challenge
+         authenticator -> client : credential ID (X.509 certificate, signature), authenticator data
 
          == Finish registration ==
 
-         client -> server : ALTER USER USER() nth FACTOR FINISH REGISTRATION SET CHALLENGE_RESPONSE = '?'
-         client -> authenticator : random challenge, user id, relying party ID
-         authenticator -> client : public key, credential ID (X.509 certificate, signature), authenticator data
-         client -> server : public key, credential ID, authenticator data
-         server -> client : Ok packet upon successfull verification of signature
+         client -> server : ALTER USER USER() nth FACTOR FINISH REGISTRATION SET CHALLENGE_RESPONSE = 'credential ID, authenticator data'
+         server -> client : Ok packet upon successful verification of credential ID
        @enduml
 
   Authentication process:
@@ -921,7 +929,7 @@ struct MEM_ROOT;
   server initiates fido authentication process. This includes following steps:
    <ol>
     <li>
-     Server sends a random challenge, relying party ID, credential ID to client.
+     Server sends a 32 byte random salt, relying party ID, credential ID to client.
     </li>
     <li>
      Client receives it and sends to FIDO authenticator.
@@ -954,8 +962,8 @@ struct MEM_ROOT;
          client -> server : connect
          server -> client : OK packet
          server -> client : send client side fido authentication plugin name in OK packet
-         server -> client : sends random challenge, relying party ID, credential ID
-         client -> authenticator : sends random challenge, relying party ID, credential ID
+         server -> client : sends 32 byte random salt, relying party ID, credential ID
+         client -> authenticator : sends 32 byte random salt, relying party ID, credential ID
          authenticator -> client : signed challenge
          client -> server : signed challenge
          server -> client : verify signed challenge and send OK or ERR packet
@@ -975,7 +983,7 @@ const uint MAX_UNKNOWN_ACCOUNTS = 1000;
   at random. Thus, a request to switch authentication plugin is not and
   indicator of a valid user account.
 
-  For same unknown account, if different plugin is chosen everytime,
+  For same unknown account, if different plugin is chosen every time,
   that again is an indicator. To resolve this, a hashmap is  used to
   store information about unknown account => authentication plugin.
   This way, if same unknown account appears again, same authentication
@@ -1075,6 +1083,38 @@ plugin_ref Cached_authentication_plugins::get_cached_plugin_ref(
   return cached_plugin;
 }
 
+/*
+  Fetch the SSL security level
+*/
+int security_level(void) {
+  int current_sec_level = 2;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  /*
+    create a temporary SSL_CTX, we're going to use it to fetch
+    the current OpenSSL security level. So that we can generate
+    keys accordingly.
+  */
+  SSL_CTX *temp_ssl_ctx = SSL_CTX_new(TLS_server_method());
+
+  /* get the current security level */
+  current_sec_level = SSL_CTX_get_security_level(temp_ssl_ctx);
+
+  assert(current_sec_level <= 5);
+
+  /* current range for security level is [1,5] */
+  if (current_sec_level > 5)
+    current_sec_level = 5;
+  else if (current_sec_level <= 1)
+    current_sec_level = 2;
+
+  /* get rid of temp_ssl_ctx, we're done with it */
+  SSL_CTX_free(temp_ssl_ctx);
+#endif
+  DBUG_EXECUTE_IF("crypto_policy_3", current_sec_level = 3;);
+  return current_sec_level;
+}
+
+external_roles_t g_external_roles;
 Cached_authentication_plugins *g_cached_authentication_plugins = nullptr;
 
 bool disconnect_on_expired_password = true;
@@ -1154,8 +1194,14 @@ void Rsa_authentication_keys::get_key_file_path(char *key,
                                are.
     @retval true               Failure : An appropriate error is raised.
 */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+bool Rsa_authentication_keys::read_key_file(EVP_PKEY **key_ptr,
+                                            bool is_priv_key,
+                                            char **key_text_buffer) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 bool Rsa_authentication_keys::read_key_file(RSA **key_ptr, bool is_priv_key,
                                             char **key_text_buffer) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   String key_file_path;
   char *key;
   const char *key_type;
@@ -1168,15 +1214,20 @@ bool Rsa_authentication_keys::read_key_file(RSA **key_ptr, bool is_priv_key,
   get_key_file_path(key, &key_file_path);
 
   /*
-     Check for existance of private key/public key file.
+     Check for existence of private key/public key file.
   */
   if ((key_file = fopen(key_file_path.c_ptr(), "rb")) == nullptr) {
     LogErr(WARNING_LEVEL, ER_AUTH_RSA_CANT_FIND, key_type,
            key_file_path.c_ptr());
   } else {
     *key_ptr = is_priv_key
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+                   ? PEM_read_PrivateKey(key_file, nullptr, nullptr, nullptr)
+                   : PEM_read_PUBKEY(key_file, nullptr, nullptr, nullptr);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
                    ? PEM_read_RSAPrivateKey(key_file, nullptr, nullptr, nullptr)
                    : PEM_read_RSA_PUBKEY(key_file, nullptr, nullptr, nullptr);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
     if (!(*key_ptr)) {
       char error_buf[MYSQL_ERRMSG_SIZE];
@@ -1189,7 +1240,7 @@ bool Rsa_authentication_keys::read_key_file(RSA **key_ptr, bool is_priv_key,
         OpenSSL thread's error queue.
       */
       ERR_clear_error();
-
+      fclose(key_file);
       return true;
     }
 
@@ -1217,10 +1268,19 @@ bool Rsa_authentication_keys::read_key_file(RSA **key_ptr, bool is_priv_key,
 }
 
 void Rsa_authentication_keys::free_memory() {
-  if (m_private_key) RSA_free(m_private_key);
+  if (m_private_key)
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_PKEY_free(m_private_key);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+    RSA_free(m_private_key);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   if (m_public_key) {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_PKEY_free(m_public_key);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     RSA_free(m_public_key);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     m_cipher_len = 0;
   }
 
@@ -1233,7 +1293,11 @@ void *Rsa_authentication_keys::allocate_pem_buffer(size_t buffer_len) {
 }
 
 int Rsa_authentication_keys::get_cipher_length() {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return (m_cipher_len = EVP_PKEY_get_size(m_public_key));
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   return (m_cipher_len = RSA_size(m_public_key));
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 }
 
 /**
@@ -1246,8 +1310,13 @@ int Rsa_authentication_keys::get_cipher_length() {
     @retval true         Failure : An appropriate error is raised.
 */
 bool Rsa_authentication_keys::read_rsa_keys() {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  EVP_PKEY *rsa_private_key_ptr = nullptr;
+  EVP_PKEY *rsa_public_key_ptr = nullptr;
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *rsa_private_key_ptr = nullptr;
   RSA *rsa_public_key_ptr = nullptr;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   char *pub_key_buff = nullptr;
 
   if ((strlen(*m_private_key_path) == 0) && (strlen(*m_public_key_path) == 0)) {
@@ -1264,7 +1333,12 @@ bool Rsa_authentication_keys::read_rsa_keys() {
     Read public key in RSA format.
   */
   if (read_key_file(&rsa_public_key_ptr, false, &pub_key_buff)) {
-    if (rsa_private_key_ptr) RSA_free(rsa_private_key_ptr);
+    if (rsa_private_key_ptr)
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+      EVP_PKEY_free(rsa_private_key_ptr);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+      RSA_free(rsa_private_key_ptr);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     return true;
   }
 
@@ -1288,11 +1362,19 @@ bool Rsa_authentication_keys::read_rsa_keys() {
 
     delete[] pub_key_buff;
   } else {
-    if (rsa_private_key_ptr) RSA_free(rsa_private_key_ptr);
-
+    if (rsa_private_key_ptr)
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+      EVP_PKEY_free(rsa_private_key_ptr);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+      RSA_free(rsa_private_key_ptr);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     if (rsa_public_key_ptr) {
       delete[] pub_key_buff;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+      EVP_PKEY_free(rsa_public_key_ptr);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
       RSA_free(rsa_public_key_ptr);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     }
   }
   return false;
@@ -1368,15 +1450,18 @@ bool auth_plugin_supports_expiration(const char *plugin_name) {
   a helper function to report an access denied error in all the proper places
 */
 static void login_failed_error(THD *thd, MPVIO_EXT *mpvio, int passwd_used) {
+  thd->diff_denied_connections++;
+  update_global_user_stats(thd, false, time(nullptr),
+                           mpvio->auth_info.user_name,
+                           mpvio->auth_info.host_or_ip);
+
   if (thd->is_error()) {
     LogEvent()
         .prio(INFORMATION_LEVEL)
         .errcode(ER_ABORTING_USER_CONNECTION)
         .subsys(LOG_SUBSYSTEM_TAG)
         .verbatim(thd->get_stmt_da()->message_text());
-  }
-
-  else if (passwd_used == 2) {
+  } else if (passwd_used == 2) {
     my_error(ER_ACCESS_DENIED_NO_PASSWORD_ERROR, MYF(0),
              mpvio->auth_info.user_name, mpvio->auth_info.host_or_ip);
     query_logger.general_log_print(
@@ -1965,7 +2050,7 @@ bool acl_check_host(THD *thd, const char *host, const char *ip) {
 
 /**
   When authentication is attempted using an unknown username a dummy user
-  account with no authentication capabilites is assigned to the connection.
+  account with no authentication capabilities is assigned to the connection.
   When server is started with -skip-grant-tables, a dummy user account
   with authentication capabilities is assigned to the connection.
   Dummy user authenticates with the empty authentication string.
@@ -2019,7 +2104,7 @@ ACL_USER *decoy_user(const LEX_CSTRING &username, const LEX_CSTRING &hostname,
 
       /*
         If we fail to insert, someone already did it.
-        So try to retrive it. If we fail (e.g. map was cleared),
+        So try to retrieve it. If we fail (e.g. map was cleared),
         just use the default and move on.
       */
       if (!unknown_accounts->insert(key, plugin_num)) {
@@ -2800,9 +2885,7 @@ skip_to_ssl:
   */
   if (protocol->has_client_capability(CLIENT_SSL)) {
     unsigned long errptr;
-#if !defined(NDEBUG)
     uint ssl_charset_code = 0;
-#endif
 
     /*
       We need to make sure that reference count for
@@ -2823,6 +2906,8 @@ skip_to_ssl:
       DBUG_PRINT("error", ("Failed to accept new SSL connection"));
       return packet_error;
     }
+
+    context.reset();
 
     DBUG_PRINT("info", ("Reading user information over SSL layer"));
     int rc = protocol->read_packet();
@@ -2849,11 +2934,9 @@ skip_to_ssl:
     if (protocol->has_client_capability(CLIENT_PROTOCOL_41)) {
       packet_has_required_size =
           bytes_remaining_in_packet >= AUTH_PACKET_HEADER_SIZE_PROTO_41;
-#if !defined(NDEBUG)
       ssl_charset_code =
           (uint)(uchar) * ((char *)protocol->get_net()->read_pos + 8);
       DBUG_PRINT("info", ("client_character_set: %u", ssl_charset_code));
-#endif
       end = (char *)protocol->get_net()->read_pos +
             AUTH_PACKET_HEADER_SIZE_PROTO_41;
       bytes_remaining_in_packet -= AUTH_PACKET_HEADER_SIZE_PROTO_41;
@@ -2863,16 +2946,15 @@ skip_to_ssl:
       end = (char *)protocol->get_net()->read_pos +
             AUTH_PACKET_HEADER_SIZE_PROTO_40;
       bytes_remaining_in_packet -= AUTH_PACKET_HEADER_SIZE_PROTO_40;
-#if !defined(NDEBUG)
       /**
         Old clients didn't have their own charset. Instead the assumption
         was that they used what ever the server used.
       */
       ssl_charset_code = global_system_variables.character_set_client->number;
-#endif
     }
-    assert(charset_code == ssl_charset_code);
-    if (!packet_has_required_size) return packet_error;
+
+    if (charset_code != ssl_charset_code || !packet_has_required_size)
+      return packet_error;
   }
 
   DBUG_PRINT("info", ("client_character_set: %u", charset_code));
@@ -3377,6 +3459,8 @@ static int do_auth_once(THD *thd, const LEX_CSTRING &auth_plugin_name,
   10.Z authentication method packets are exchanged
   11.The server responds with an @ref page_protocol_basic_ok_packet
 
+  @note At any point, if the Nth Authentication Method fails, the server can return ERR and disconnect.
+    And the client can just disconnect.
 
   @startuml
   Client -> Server: Connect
@@ -3435,6 +3519,8 @@ static int do_multi_factor_auth(THD *thd, MPVIO_EXT *mpvio) {
       mpvio->auth_info.current_auth_factor = 1;
     else if (af->get_factor() == nthfactor::THIRD_FACTOR)
       mpvio->auth_info.current_auth_factor = 2;
+    /* reset cached_client_reply for 2nd and 3rd factors */
+    mpvio->cached_client_reply.pkt = nullptr;
     plugin_ref plugin = my_plugin_lock_by_name(thd, af->plugin_name(),
                                                MYSQL_AUTHENTICATION_PLUGIN);
     if (plugin) {
@@ -3675,6 +3761,7 @@ static inline bool check_restrictions_for_com_connect_command(THD *thd) {
             .first)) {
     if (!Connection_handler_manager::get_instance()
              ->valid_connection_count()) {  // too many connections
+      sql_print_warning("%s", ER_DEFAULT(ER_CON_COUNT_ERROR));
       my_error(ER_CON_COUNT_ERROR, MYF(0));
       return true;
     }
@@ -3754,6 +3841,12 @@ int acl_authenticate(THD *thd, enum_server_command command) {
   static_assert(MYSQL_USERNAME_LENGTH == USERNAME_LENGTH, "");
   assert(command == COM_CONNECT || command == COM_CHANGE_USER);
 
+  DBUG_EXECUTE_IF("acl_authenticate_begin", {
+    const char act[] =
+        "now SIGNAL conn2_in_acl_auth WAIT_FOR conn1_reached_kill";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  });
+
   server_mpvio_initialize(thd, &mpvio, &charset_adapter);
   /*
     Clear thd->db as it points to something, that will be freed when
@@ -3822,6 +3915,7 @@ int acl_authenticate(THD *thd, enum_server_command command) {
 #ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_THREAD_CALL(set_connection_type)(thd->get_vio_type());
 #endif /* HAVE_PSI_THREAD_INTERFACE */
+
   {
     Security_context *sctx = thd->security_context();
     const ACL_USER *acl_user = mpvio.acl_user;
@@ -3950,6 +4044,13 @@ int acl_authenticate(THD *thd, enum_server_command command) {
           login_failed_error(thd, &mpvio, mpvio.auth_info.password_used);
           goto end;
         }
+        if (acl_is_utility_user(acl_proxy_user->user,
+                                acl_proxy_user->host.get_host(), nullptr)) {
+          if (!thd->is_error())
+            login_failed_error(thd, &mpvio, mpvio.auth_info.password_used);
+          goto end;
+        }
+
         acl_user = acl_proxy_user->copy(thd->mem_root);
         *(mpvio.restrictions) = acl_restrictions->find_restrictions(acl_user);
 
@@ -3961,6 +4062,31 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       assert(mpvio.restrictions);
       sctx->set_master_access(acl_user->access, *(mpvio.restrictions));
       assign_priv_user_host(sctx, const_cast<ACL_USER *>(acl_user));
+
+      std::vector<std::string> external_roles;
+      if (strlen(mpvio.auth_info.external_roles) > 0) {
+        boost::algorithm::split(external_roles, mpvio.auth_info.external_roles,
+                                boost::is_any_of(","));
+      }
+
+      if (acl_user->user != nullptr && !external_roles.empty()) {
+        // Adding external roles
+        Acl_cache_lock_guard acl_cache_lock2(thd,
+                                             Acl_cache_lock_mode::WRITE_MODE);
+        acl_cache_lock2.lock();
+        const name_and_host_t u(std::string(acl_user->user),
+                                std::string(acl_user->host.get_host()));
+        if (g_external_roles.find(u) != g_external_roles.end())
+          g_external_roles[u].clear();
+        for (const auto &role : external_roles) {
+          ACL_USER *acl_role = find_acl_user("", role.c_str(), false);
+          if (acl_role != nullptr && acl_role->user != nullptr) {
+            grant_role(acl_role, acl_user, false);
+            const name_and_host_t r(std::string(acl_role->user), "");
+            g_external_roles[u].push_back(r);
+          }
+        }
+      }
       /* Assign default role */
       {
         List_of_auth_id_refs default_roles;
@@ -3988,8 +4114,9 @@ int acl_authenticate(THD *thd, enum_server_command command) {
 
       if (!thd->is_error() &&
           !(sctx->check_access(SUPER_ACL) ||
-            sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN"))
-                .first)) {
+            sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first ||
+            acl_is_utility_user(sctx->user().str, sctx->host().str,
+                                sctx->ip().str))) {
         if (mysqld_offline_mode()) {
           my_error(ER_SERVER_OFFLINE_MODE, MYF(0));
           goto end;
@@ -4022,8 +4149,19 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         goto end;
       }
 
-      if (opt_require_secure_transport &&
-          !is_secure_transport(thd->active_vio->type)) {
+      DBUG_EXECUTE_IF("before_secure_transport_check", {
+        const char act[] = "now SIGNAL kill_now WAIT_FOR killed";
+        assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+      });
+
+      /*
+        The assumption here is that thd->active_vio and thd->net.vio are both
+        the same at this point. We should not use thd->active_vio at any cost,
+        as a KILL command can shutdown the active_vio i.e., making it a nullptr
+        which would cause issues. Instead we check the net.vio type.
+      */
+      if (opt_require_secure_transport && thd->get_net()->vio != nullptr &&
+          !is_secure_transport(thd->get_net()->vio->type)) {
         my_error(ER_SECURE_TRANSPORT_REQUIRED, MYF(0));
         goto end;
       }
@@ -4046,7 +4184,8 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         my_error(ER_MUST_CHANGE_PASSWORD_LOGIN, MYF(0));
         query_logger.general_log_print(
             thd, COM_CONNECT, "%s", ER_DEFAULT(ER_MUST_CHANGE_PASSWORD_LOGIN));
-        LogErr(INFORMATION_LEVEL, ER_MUST_CHANGE_EXPIRED_PASSWORD);
+        LogErr(INFORMATION_LEVEL, ER_ACCOUNT_WITH_EXPIRED_PASSWORD,
+               mpvio.acl_user->user, mpvio.auth_info.host_or_ip);
 
         errors.m_authentication = 1;
         inc_host_errors(mpvio.ip, &errors);
@@ -4149,6 +4288,9 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       We must set the flag after all required roles are activated.
     */
     set_system_user_flag(thd);
+    // Update the flag in THD based on if the user is granted CONNECTION_ADMIN
+    // privilege
+    set_connection_admin_flag(thd);
   }
   ret = 0;
 end:
@@ -4325,7 +4467,7 @@ static int compare_native_password_with_hash(const char *hash,
   The server name is *mysql_native_password*
   </li>
   <li>
-  The client name is *mysql_native_password"
+  The client name is *mysql_native_password*
   </li>
   <li>
   Client side requires an 20-byte random challenge from server
@@ -4347,7 +4489,7 @@ static int compare_native_password_with_hash(const char *hash,
   @ref page_protocol_connection_phase_authentication_methods_old_password_authentication
 
   1. using a tested, crypto-graphic hashing function (SHA1)
-  2. knowning the content of the hash in the mysql.user table isn't enough
+  2. knowing the content of the hash in the mysql.user table isn't enough
      to authenticate against the MySQL Server.
 
   The network packet content for the password is calculated by:
@@ -4534,6 +4676,30 @@ class FileCloser {
 */
 
 bool init_rsa_keys(void) {
+  if ((strcmp(auth_rsa_private_key_path, AUTH_DEFAULT_RSA_PRIVATE_KEY) == 0 &&
+       strcmp(auth_rsa_public_key_path, AUTH_DEFAULT_RSA_PUBLIC_KEY) == 0) ||
+      (strcmp(caching_sha2_rsa_private_key_path,
+              AUTH_DEFAULT_RSA_PRIVATE_KEY) == 0 &&
+       strcmp(caching_sha2_rsa_public_key_path, AUTH_DEFAULT_RSA_PUBLIC_KEY) ==
+           0)) {
+    /**
+      Presence of only a private key file and a public temp file implies that
+      server crashed after creating the private key file and could not create a
+      public key file. Hence removing the private key file.
+    */
+    if (access(AUTH_DEFAULT_RSA_PRIVATE_KEY, F_OK) == 0 &&
+        access(AUTH_DEFAULT_RSA_PUBLIC_KEY, F_OK) == -1) {
+      if (access((std::string{AUTH_DEFAULT_RSA_PUBLIC_KEY} + ".temp").c_str(),
+                 F_OK) == 0 &&
+          access((std::string{AUTH_DEFAULT_RSA_PRIVATE_KEY} + ".temp").c_str(),
+                 F_OK) == -1)
+        remove(AUTH_DEFAULT_RSA_PRIVATE_KEY);
+    }
+    // Removing temp files
+    remove((std::string{AUTH_DEFAULT_RSA_PRIVATE_KEY} + ".temp").c_str());
+    remove((std::string{AUTH_DEFAULT_RSA_PUBLIC_KEY} + ".temp").c_str());
+  }
+
   if (!do_auto_rsa_keys_generation()) return true;
 
   if (!(g_sha256_rsa_keys = new Rsa_authentication_keys(
@@ -4656,9 +4822,14 @@ static int sha256_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   int pkt_len;
   String scramble_response_packet;
   int cipher_length = 0;
-  unsigned char plain_text[MAX_CIPHER_LENGTH + 1];
+  unsigned char plain_text[MAX_CIPHER_LENGTH + 1] = "";
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  EVP_PKEY *private_key = nullptr;
+  EVP_PKEY *public_key = nullptr;
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *private_key = nullptr;
   RSA *public_key = nullptr;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   DBUG_TRACE;
 
@@ -4767,8 +4938,9 @@ http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Proto
     if (pkt_len != cipher_length) return CR_ERROR;
 
     /* Decrypt password */
-    RSA_private_decrypt(cipher_length, pkt, plain_text, private_key,
-                        RSA_PKCS1_OAEP_PADDING);
+    if (decrypt_RSA_private_key(pkt, cipher_length, plain_text,
+                                sizeof(plain_text) - 1, private_key))
+      return CR_ERROR;
 
     plain_text[cipher_length] = '\0';  // safety
     xor_string((char *)plain_text, cipher_length, (char *)scramble,
@@ -5019,6 +5191,8 @@ File_IO &File_IO::operator<<(const Sql_string_t &output_string) {
                    reinterpret_cast<const uchar *>(output_string.data()),
                    output_string.length(), MYF(MY_NABP | MY_WME)))
     set_error();
+  else
+    my_sync(m_file, MYF(MY_WME));
 
   close();
   return *this;
@@ -5072,7 +5246,7 @@ class File_creator {
 */
 class RSA_gen {
  public:
-  RSA_gen(uint32_t key_size = 2048, uint32_t exponent = RSA_F4)
+  RSA_gen(uint32_t key_size, uint32_t exponent = RSA_F4)
       : m_key_size(key_size), m_exponent(exponent) {}
 
   ~RSA_gen() = default;
@@ -5083,8 +5257,30 @@ class RSA_gen {
     but it at the same time increases usefulness of this class when used
     stand alone.
    */
+  /* generate RSA keys */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  EVP_PKEY *operator()(void) {
+    EVP_PKEY *rsa = nullptr;
+    BIGNUM *exponent = BN_new();
+    if (!exponent) return nullptr;
+    EVP_PKEY_CTX *rsa_ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    if (!rsa_ctx) {
+      BN_free(exponent);
+      return nullptr;
+    }
+    if (BN_set_word(exponent, m_exponent) != 1 ||
+        EVP_PKEY_keygen_init(rsa_ctx) <= 0 ||
+        EVP_PKEY_CTX_set_rsa_keygen_bits(rsa_ctx, m_key_size) <= 0 ||
+        EVP_PKEY_CTX_set1_rsa_keygen_pubexp(rsa_ctx, exponent) <= 0 ||
+        EVP_PKEY_keygen(rsa_ctx, &rsa) <= 0) {
+      BN_free(exponent);
+      EVP_PKEY_CTX_free(rsa_ctx);
+      return nullptr;
+    }
+    BN_free(exponent);
+    EVP_PKEY_CTX_free(rsa_ctx);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *operator()(void) {
-    /* generate RSA keys */
     RSA *rsa = RSA_new();
     if (!rsa) return nullptr;
     BIGNUM *e = BN_new();
@@ -5099,6 +5295,7 @@ class RSA_gen {
       return nullptr;
     }
     BN_free(e);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
     return rsa;  // pass ownership
   }
@@ -5108,6 +5305,7 @@ class RSA_gen {
   uint32_t m_exponent;
 };
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 static EVP_PKEY *evp_pkey_generate(RSA *rsa) {
   if (rsa) {
     EVP_PKEY *pkey = EVP_PKEY_new();
@@ -5116,6 +5314,7 @@ static EVP_PKEY *evp_pkey_generate(RSA *rsa) {
   }
   return nullptr;
 }
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
 /**
   Write private key in a string buffer
@@ -5124,12 +5323,22 @@ static EVP_PKEY *evp_pkey_generate(RSA *rsa) {
 
   @returns Sql_string_t object with private key stored in it.
 */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static Sql_string_t rsa_priv_key_write(EVP_PKEY *rsa) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 static Sql_string_t rsa_priv_key_write(RSA *rsa) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   assert(rsa);
   BIO *buf = BIO_new(BIO_s_mem());
   Sql_string_t read_buffer;
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  if (PEM_write_bio_PrivateKey(buf, rsa, nullptr, nullptr, 0, nullptr,
+                               nullptr)) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   if (PEM_write_bio_RSAPrivateKey(buf, rsa, nullptr, nullptr, 0, nullptr,
                                   nullptr)) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     size_t len = BIO_pending(buf);
     if (resize_no_exception(read_buffer, len + 1) == true) {
       BIO_read(buf, const_cast<char *>(read_buffer.c_str()), len);
@@ -5147,11 +5356,19 @@ static Sql_string_t rsa_priv_key_write(RSA *rsa) {
 
   @returns Sql_string_t object with public key stored in it.
 */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static Sql_string_t rsa_pub_key_write(EVP_PKEY *rsa) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 static Sql_string_t rsa_pub_key_write(RSA *rsa) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   assert(rsa);
   BIO *buf = BIO_new(BIO_s_mem());
   Sql_string_t read_buffer;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  if (PEM_write_bio_PUBKEY(buf, rsa)) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   if (PEM_write_bio_RSA_PUBKEY(buf, rsa)) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     size_t len = BIO_pending(buf);
     if (resize_no_exception(read_buffer, len + 1) == true) {
       BIO_read(buf, const_cast<char *>(read_buffer.c_str()), len);
@@ -5291,14 +5508,17 @@ static Sql_string_t x509_cert_write(X509 *cert) {
 */
 static EVP_PKEY *x509_key_read(const Sql_string_t &input_string) {
   EVP_PKEY *pkey = nullptr;
-  RSA *rsa = nullptr;
 
   if (!input_string.size()) return pkey;
 
   BIO *buf = BIO_new(BIO_s_mem());
   BIO_write(buf, input_string.c_str(), input_string.size());
-  rsa = PEM_read_bio_RSAPrivateKey(buf, nullptr, nullptr, nullptr);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  pkey = PEM_read_bio_PrivateKey(buf, nullptr, nullptr, nullptr);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+  RSA *rsa = PEM_read_bio_RSAPrivateKey(buf, nullptr, nullptr, nullptr);
   pkey = evp_pkey_generate(rsa);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   BIO_free(buf);
   return pkey;
 }
@@ -5313,10 +5533,16 @@ static EVP_PKEY *x509_key_read(const Sql_string_t &input_string) {
 static Sql_string_t x509_key_write(EVP_PKEY *pkey) {
   assert(pkey);
   BIO *buf = BIO_new(BIO_s_mem());
-  RSA *rsa = EVP_PKEY_get1_RSA(pkey);
   Sql_string_t read_buffer;
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  if (PEM_write_bio_PrivateKey(buf, pkey, nullptr, nullptr, 10, nullptr,
+                               nullptr)) {
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+  RSA *rsa = EVP_PKEY_get1_RSA(pkey);
   if (PEM_write_bio_RSAPrivateKey(buf, rsa, nullptr, nullptr, 10, nullptr,
                                   nullptr)) {
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     size_t len = BIO_pending(buf);
     if (resize_no_exception(read_buffer, len + 1) == true) {
       BIO_read(buf, const_cast<char *>(read_buffer.c_str()), len);
@@ -5324,7 +5550,9 @@ static Sql_string_t x509_key_write(EVP_PKEY *pkey) {
     }
   }
   BIO_free(buf);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
   RSA_free(rsa);
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
   return read_buffer;
 }
 
@@ -5362,7 +5590,11 @@ bool create_x509_certificate(RSA_generator_func &rsa_gen, const Sql_string_t cn,
   bool self_sign = true;
   Sql_string_t ca_key_str;
   Sql_string_t ca_cert_str;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  EVP_PKEY *rsa = nullptr;
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   RSA *rsa = nullptr;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   EVP_PKEY *pkey = nullptr;
   EVP_PKEY *ca_key = nullptr;
   X509 *x509 = nullptr;
@@ -5378,10 +5610,17 @@ bool create_x509_certificate(RSA_generator_func &rsa_gen, const Sql_string_t cn,
 
   /* Generate private key for X509 certificate */
   rsa = rsa_gen();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  DBUG_EXECUTE_IF("null_rsa_error", {
+    EVP_PKEY_free(rsa);
+    rsa = nullptr;
+  });
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   DBUG_EXECUTE_IF("null_rsa_error", {
     RSA_free(rsa);
     rsa = nullptr;
   });
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   if (!rsa) {
     LogErr(ERROR_LEVEL, ER_X509_NEEDS_RSA_PRIVKEY);
@@ -5390,7 +5629,11 @@ bool create_x509_certificate(RSA_generator_func &rsa_gen, const Sql_string_t cn,
   }
 
   /* Obtain EVP_PKEY */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  pkey = rsa;
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   pkey = evp_pkey_generate(rsa);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   /* Write private key information to file and set file permission */
   (*x509_key_file_ostream) << x509_key_write(pkey);
@@ -5499,29 +5742,46 @@ bool create_RSA_key_pair(RSA_generator_func &rsa_gen,
                          const Sql_string_t priv_key_filename,
                          const Sql_string_t pub_key_filename,
                          File_creation_func &filecr) {
+  std::string temp_priv_key_filename = priv_key_filename + ".temp";
+  std::string temp_pub_key_filename = pub_key_filename + ".temp";
   bool ret_val = true;
   File_IO *priv_key_file_ostream = nullptr;
   File_IO *pub_key_file_ostream = nullptr;
   MY_MODE file_creation_mode = get_file_perm(USER_READ | USER_WRITE);
   MY_MODE saved_umask = umask(~(file_creation_mode));
 
-  assert(priv_key_filename.size() && pub_key_filename.size());
+  assert(temp_priv_key_filename.size() && temp_pub_key_filename.size());
 
-  RSA *rsa = rsa_gen();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  EVP_PKEY *rsa;
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+  RSA *rsa;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+  rsa = rsa_gen();
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  DBUG_EXECUTE_IF("null_rsa_error", {
+    EVP_PKEY_free(rsa);
+    rsa = nullptr;
+  });
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
   DBUG_EXECUTE_IF("null_rsa_error", {
     RSA_free(rsa);
     rsa = nullptr;
   });
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   if (!rsa) {
     LogErr(ERROR_LEVEL, ER_AUTH_CANT_CREATE_RSA_PAIR);
     ret_val = false;
     goto end;
   }
+  DBUG_EXECUTE_IF("no_key_files", DBUG_SUICIDE(););
 
-  priv_key_file_ostream = filecr(priv_key_filename, file_creation_mode);
+  priv_key_file_ostream = filecr(temp_priv_key_filename, file_creation_mode);
+  DBUG_EXECUTE_IF("empty_priv_key_temp_file", DBUG_SUICIDE(););
+
   (*priv_key_file_ostream) << rsa_priv_key_write(rsa);
-
   DBUG_EXECUTE_IF("key_file_write_error",
                   { priv_key_file_ostream->set_error(); });
   if (priv_key_file_ostream->get_error()) {
@@ -5529,15 +5789,20 @@ bool create_RSA_key_pair(RSA_generator_func &rsa_gen,
     ret_val = false;
     goto end;
   }
-  if (my_chmod(priv_key_filename.c_str(), USER_READ | USER_WRITE,
+  if (my_chmod(temp_priv_key_filename.c_str(), USER_READ | USER_WRITE,
                MYF(MY_FAE + MY_WME))) {
     LogErr(ERROR_LEVEL, ER_X509_CANT_CHMOD_KEY, priv_key_filename.c_str());
     ret_val = false;
     goto end;
   }
+  DBUG_EXECUTE_IF("valid_priv_key_temp_file", DBUG_SUICIDE(););
 
-  pub_key_file_ostream = filecr(pub_key_filename);
+  pub_key_file_ostream = filecr(temp_pub_key_filename);
+  DBUG_EXECUTE_IF("valid_priv_key_temp_file_empty_pub_key_temp_file",
+                  DBUG_SUICIDE(););
+
   (*pub_key_file_ostream) << rsa_pub_key_write(rsa);
+
   DBUG_EXECUTE_IF("cert_pub_key_write_error",
                   { pub_key_file_ostream->set_error(); });
 
@@ -5546,16 +5811,28 @@ bool create_RSA_key_pair(RSA_generator_func &rsa_gen,
     ret_val = false;
     goto end;
   }
-  if (my_chmod(pub_key_filename.c_str(),
+  if (my_chmod(temp_pub_key_filename.c_str(),
                USER_READ | USER_WRITE | GROUP_READ | OTHERS_READ,
                MYF(MY_FAE + MY_WME))) {
     LogErr(ERROR_LEVEL, ER_X509_CANT_CHMOD_KEY, pub_key_filename.c_str());
     ret_val = false;
     goto end;
   }
+  DBUG_EXECUTE_IF("valid_key_temp_files", DBUG_SUICIDE(););
+
+  rename(temp_priv_key_filename.c_str(), priv_key_filename.c_str());
+  DBUG_EXECUTE_IF("valid_pub_key_temp_file_valid_priv_key_file",
+                  DBUG_SUICIDE(););
+  rename(temp_pub_key_filename.c_str(), pub_key_filename.c_str());
+  DBUG_EXECUTE_IF("valid_key_files", DBUG_SUICIDE(););
 
 end:
-  if (rsa) RSA_free(rsa);
+  if (rsa)
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_PKEY_free(rsa);
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+    RSA_free(rsa);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
   umask(saved_umask);
   return ret_val;
@@ -5584,7 +5861,7 @@ end:
      f> client_key.pem
 
      ca.pem is self signed auto generated CA certificate. server_cert.pem
-     and client_cert.pem are signed using auto genreated CA.
+     and client_cert.pem are signed using auto generated CA.
 
      ca_key.pem, client_cert.pem and client_key.pem are overwritten if
      they are present in data directory.
@@ -5615,6 +5892,8 @@ bool do_auto_cert_generation(ssl_artifacts_status auto_detection_status,
       If any of the SSL option was specified.
     */
 
+    int sec_level = security_level();
+
     if (auto_detection_status == SSL_ARTIFACTS_VIA_OPTIONS) {
       LogErr(INFORMATION_LEVEL, ER_AUTH_SSL_CONF_PREVENTS_CERT_GENERATION);
       return true;
@@ -5624,8 +5903,10 @@ bool do_auto_cert_generation(ssl_artifacts_status auto_detection_status,
       return true;
     } else {
       assert(auto_detection_status == SSL_ARTIFACTS_NOT_FOUND);
+
       /* Initialize the key pair generator. It can also be used stand alone */
-      RSA_gen rsa_gen;
+      RSA_gen rsa_gen(rsa_key_sizes[sec_level]);
+
       /*
          Initialize the file creator.
        */
@@ -5700,6 +5981,7 @@ static bool generate_rsa_keys(bool auto_generate, const char *priv_key_path,
   DBUG_TRACE;
   if (auto_generate) {
     MY_STAT priv_stat, pub_stat;
+    int sec_level = security_level();
     if (strcmp(priv_key_path, AUTH_DEFAULT_RSA_PRIVATE_KEY) ||
         strcmp(pub_key_path, AUTH_DEFAULT_RSA_PUBLIC_KEY)) {
       LogErr(INFORMATION_LEVEL, ER_AUTH_RSA_CONF_PREVENTS_KEY_GENERATION,
@@ -5712,7 +5994,8 @@ static bool generate_rsa_keys(bool auto_generate, const char *priv_key_path,
       return true;
     } else {
       /* Initialize the key pair generator. */
-      RSA_gen rsa_gen;
+      RSA_gen rsa_gen(rsa_key_sizes[sec_level]);
+
       /* Initialize the file creator. */
       File_creator fcr;
 
@@ -5730,7 +6013,7 @@ static bool generate_rsa_keys(bool auto_generate, const char *priv_key_path,
 }
 
 /*
-  Generate RSA keypair.
+  Generate RSA key pair.
 
   @returns Status of key generation
     @retval true Success
@@ -5750,7 +6033,7 @@ static bool generate_rsa_keys(bool auto_generate, const char *priv_key_path,
      a> private_key.pem
      b> public_key.pem
 
-  If above mentioned conditions are satified private_key.pem and
+  If above mentioned conditions are satisfied private_key.pem and
   public_key.pem files are generated and placed in data directory.
 */
 static bool do_auto_rsa_keys_generation() {

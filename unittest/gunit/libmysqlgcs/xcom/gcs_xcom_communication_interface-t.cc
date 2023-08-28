@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -613,8 +613,8 @@ TEST_F(XComCommunicationTest, SuccessfulSynodRecoveryTest) {
 
   /* Receive the last two packets normally. */
   std::vector<Gcs_packet> packets_in;
-  std::array<synode_no, 4> synodes_in_order{synode_1, synode_2, synode_3,
-                                            synode_4};
+  std::array<synode_no, 4> synodes_in_order{
+      {synode_1, synode_2, synode_3, synode_4}};
   Gcs_packet packet_in;
   for (std::size_t i = 2; i < 4; i++) {
     /* Construct the packet from the "incoming" buffer. */

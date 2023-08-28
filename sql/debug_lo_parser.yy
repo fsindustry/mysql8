@@ -1,7 +1,7 @@
 
 %{
 
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -370,4 +370,3 @@ void LOCK_ORDER_error(YYLTYPE * yylloc_param, LO_parser_param * p, const char* m
     yylloc_param->last_column,
     msg);
 }
-

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,7 @@
   Note that we can't have assertion on file descriptors;  The reason for
   this is that during mysql shutdown, another thread can close a file
   we are working on.  In this case we should just return read errors from
-  the file descriptior.
+  the file descriptor.
 */
 
 #include <sys/types.h>
@@ -50,12 +50,14 @@
 PSI_memory_key key_memory_vio_ssl_fd;
 PSI_memory_key key_memory_vio;
 PSI_memory_key key_memory_vio_read_buffer;
+PSI_memory_key key_memory_vio_proxy_networks;
 
 #ifdef HAVE_PSI_INTERFACE
 static PSI_memory_info all_vio_memory[] = {
     {&key_memory_vio_ssl_fd, "ssl_fd", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_vio, "vio", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_vio_read_buffer, "read_buffer", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_vio_proxy_networks, "proxy_networks", 0, 0, PSI_DOCUMENT_ME},
 };
 
 void init_vio_psi_keys() {
@@ -110,6 +112,12 @@ Vio::Vio(uint flags) {
     read_buffer = (char *)my_malloc(key_memory_vio_read_buffer,
                                     VIO_READ_BUFFER_SIZE, MYF(MY_WME));
 }
+
+#ifdef _WIN32
+bool vio_shared_memory_has_data(Vio *vio) {
+  return (vio->shared_memory_remain > 0);
+}
+#endif
 
 Vio::~Vio() {
   my_free(read_buffer);
@@ -232,6 +240,7 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_shutdown_pipe;
+      vio->viocancel = vio_cancel_pipe;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = no_io_wait;
       vio->is_connected = vio_is_connected_pipe;
@@ -252,17 +261,17 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_shutdown_shared_memory;
+      vio->viocancel = vio_cancel_shared_memory;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = no_io_wait;
       vio->is_connected = vio_is_connected_shared_memory;
-      vio->has_data = has_no_data;
+      vio->has_data = vio_shared_memory_has_data;
       vio->is_blocking = vio_is_blocking;
       vio->set_blocking = vio_set_blocking;
       vio->set_blocking_flag = vio_set_blocking_flag;
       vio->is_blocking_flag = true;
       break;
 #endif /* _WIN32 */
-
     case VIO_TYPE_SSL:
       vio->viodelete = vio_ssl_delete;
       vio->vioerrno = vio_errno;
@@ -273,6 +282,7 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_ssl_shutdown;
+      vio->viocancel = vio_cancel;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = vio_io_wait;
       vio->is_connected = vio_is_connected;
@@ -294,6 +304,7 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_shutdown;
+      vio->viocancel = vio_cancel;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = vio_io_wait;
       vio->is_connected = vio_is_connected;
@@ -358,6 +369,12 @@ bool vio_reset(Vio *vio, enum enum_vio_type type, my_socket sd,
 
   if (vio_init(&new_vio, type, sd, flags)) return true;
 
+#ifdef USE_PPOLL_IN_VIO
+  /* Preserve thread_id & signal_mask for this connection */
+  new_vio.thread_id = vio->thread_id;
+  new_vio.signal_mask = vio->signal_mask;
+#endif /* USE_PPOLL_IN_VIO */
+
   /* Preserve perfschema info for this connection */
   new_vio.mysql_socket.m_psi = vio->mysql_socket.m_psi;
 
@@ -384,7 +401,7 @@ bool vio_reset(Vio *vio, enum enum_vio_type type, my_socket sd,
       Close socket only when it is not equal to the new one.
     */
     if (sd != mysql_socket_getfd(vio->mysql_socket)) {
-      if (vio->inactive == false) vio->vioshutdown(vio);
+      if (vio->inactive == false) vio->vioshutdown(vio, SHUT_RDWR);
     }
 #ifdef HAVE_KQUEUE
     else {
@@ -537,7 +554,7 @@ int vio_timeout(Vio *vio, uint which, int timeout_sec) {
 
 void internal_vio_delete(Vio *vio) {
   if (!vio) return; /* It must be safe to delete null pointers. */
-  if (vio->inactive == false) vio->vioshutdown(vio);
+  if (vio->inactive == false) vio->vioshutdown(vio, SHUT_RDWR);
   vio->~Vio();
   my_free(vio);
 }
@@ -549,7 +566,10 @@ void vio_delete(Vio *vio) { internal_vio_delete(vio); }
   components below it when application finish
 
 */
-void vio_end(void) { vio_ssl_end(); }
+void vio_end() {
+  vio_ssl_end();
+  vio_proxy_cleanup();
+}
 
 struct vio_string {
   const char *m_str;
@@ -581,5 +601,4 @@ void get_vio_type_name(enum enum_vio_type vio_type, const char **str,
   }
   *str = vio_type_names[index].m_str;
   *len = vio_type_names[index].m_len;
-  return;
 }

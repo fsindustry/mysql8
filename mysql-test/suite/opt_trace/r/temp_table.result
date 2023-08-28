@@ -144,6 +144,7 @@ SELECT uniq, col1 FROM t1 GROUP BY col2,uniq LIMIT 3	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
+                "table": "<temporary>",
                 "in_plan_at_position": 1,
                 "columns": 4,
                 "row_length": 4190,
@@ -304,6 +305,7 @@ SELECT uniq, col1, col2 FROM t1 GROUP BY uniq	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
+                "table": "<temporary>",
                 "in_plan_at_position": 1,
                 "columns": 3,
                 "row_length": 4182,
@@ -332,6 +334,8 @@ select @@tmp_table_size;
 16777216
 SET @old_size= @@tmp_table_size;
 SET SESSION tmp_table_size= 1024;
+Warnings:
+Warning	48040	Tmp_table_size is set below 1MiB. The TEMPTABLE engine requires at least 1MiB table size, and will use that value instead. Please increase the limit to silence this warning.
 SET SESSION internal_tmp_mem_storage_engine='memory';
 INSERT INTO t1 SELECT pk+8, col1, col1 FROM tmp;
 SELECT uniq, col1, col2 FROM t1 GROUP BY uniq;
@@ -479,6 +483,7 @@ SELECT uniq, col1, col2 FROM t1 GROUP BY uniq	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
+                "table": "<temporary>",
                 "in_plan_at_position": 1,
                 "columns": 3,
                 "row_length": 4182,
@@ -499,6 +504,7 @@ SELECT uniq, col1, col2 FROM t1 GROUP BY uniq	{
                   "converting_tmp_table_to_ondisk": {
                     "cause": "memory_table_size_exceeded",
                     "tmp_table_info": {
+                      "table": "<temporary>",
                       "in_plan_at_position": 1,
                       "columns": 3,
                       "row_length": 4182,
@@ -531,6 +537,7 @@ SELECT pool_id FROM information_schema.INNODB_BUFFER_PAGE LIMIT 1	{
     {
       "creating_tmp_table": {
         "tmp_table_info": {
+          "table": "INNODB_BUFFER_PAGE",
           "columns": 21,
           "row_length": 6863,
           "key_length": 0,
@@ -668,6 +675,9 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 INSERT INTO t1(c2) VALUES ('b'),('b');
 INSERT INTO t1(c2) SELECT t1.c2 FROM t1, t1 t2, t1 t3, t1 t4, t1 t5, t1 t6;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 SET @@max_heap_table_size=1;
 Warnings:
 Warning	1292	Truncated incorrect max_heap_table_size value: '1'
@@ -778,7 +788,7 @@ ORDER BY cc	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
-                "table": "intermediate_tmp_table",
+                "table": "<union temporary>",
                 "columns": 2,
                 "row_length": 757,
                 "key_length": 757,
@@ -792,10 +802,10 @@ ORDER BY cc	{
           },
           {
             "join_preparation": {
-              "select#": "fake",
+              "select#": 4,
               "steps": [
                 {
-                  "expanded_query": "/* select#fake */ select `c1` AS `c1`,`c2` AS `c2` from dual"
+                  "expanded_query": "/* select#4 */ select `c1` AS `c1`,`c2` AS `c2` from dual"
                 }
               ] /* steps */
             } /* join_preparation */
@@ -973,7 +983,7 @@ ORDER BY cc	{
           },
           {
             "join_optimization": {
-              "select#": "fake",
+              "select#": 4,
               "steps": [
                 {
                   "table_dependencies": [
@@ -1185,7 +1195,7 @@ ORDER BY cc	{
           {
             "creating_tmp_table": {
               "tmp_table_info": {
-                "table": " `tt`",
+                "table": "tt",
                 "in_plan_at_position": 0,
                 "columns": 2,
                 "row_length": 757,
@@ -1206,7 +1216,7 @@ ORDER BY cc	{
                   "converting_tmp_table_to_ondisk": {
                     "cause": "memory_table_size_exceeded",
                     "tmp_table_info": {
-                      "table": " `tt`",
+                      "table": "tt",
                       "in_plan_at_position": 0,
                       "columns": 2,
                       "row_length": 757,
@@ -1274,8 +1284,8 @@ ORDER BY cc	{
               "memory_available": 262144,
               "key_size": 1001,
               "row_size": 2512,
-              "max_rows_per_buffer": 104,
-              "num_rows_estimate": 132,
+              "max_rows_per_buffer": 15,
+              "num_rows_estimate": 15,
               "num_rows_found": 66,
               "num_initial_chunks_spilled_to_disk": 0,
               "peak_memory_used": "NNN",
@@ -1320,6 +1330,8 @@ INSERT INTO t2(name, data) VALUES
 SET SESSION internal_tmp_mem_storage_engine=MEMORY;
 SET @@session.optimizer_trace='enabled=on';
 SET @@session.tmp_table_size = 1024;
+Warnings:
+Warning	48040	Tmp_table_size is set below 1MiB. The TEMPTABLE engine requires at least 1MiB table size, and will use that value instead. Please increase the limit to silence this warning.
 SET @@optimizer_switch='semijoin=off';
 SELECT name, data FROM t2 WHERE name IN
 ( SELECT name FROM t1 WHERE type='table');

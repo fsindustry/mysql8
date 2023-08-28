@@ -1,4 +1,4 @@
-/* Copyright (c) 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2021, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,8 @@
 #define RAPIDJSON_HAS_STDSTRING 1
 
 #include "my_rapidjson_size_t.h"
-#include "rapidjson/document.h"
+
+#include <rapidjson/document.h>
 
 namespace keyring_common {
 namespace config {
@@ -42,7 +43,7 @@ class Config_reader {
 
     @param [in] config_file_path Full path to configuration file
   */
-  explicit Config_reader(const std::string config_file_path);
+  inline explicit Config_reader(const std::string config_file_path);
 
   /**
     Get an element value from JSON document.
@@ -76,3 +77,5 @@ class Config_reader {
 }  // namespace keyring_common
 
 #endif  // !CONFIG_READER_INCLUDED
+
+#include "config_reader.cc"

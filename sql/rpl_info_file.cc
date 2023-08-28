@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -117,9 +117,13 @@ int Rpl_info_file::do_init_info() {
   }
   /* file exists */
   else if (ret_check == REPOSITORY_EXISTS) {
-    if (info_fd >= 0)
-      reinit_io_cache(&info_file, READ_CACHE, 0L, false, false);
-    else {
+    if (info_fd >= 0) {
+      if (reinit_io_cache(&info_file, READ_CACHE, 0L, false, false)) {
+        LogErr(ERROR_LEVEL, ER_RPL_FAILED_TO_RECREATE_CACHE_FOR_INFO_FILE,
+               info_fname);
+        error = 1;
+      }
+    } else {
       if ((info_fd = my_open(info_fname, O_RDWR, MYF(MY_WME))) < 0) {
         LogErr(ERROR_LEVEL, ER_RPL_FAILED_TO_OPEN_INFO_FILE, info_fname,
                my_errno());
@@ -130,10 +134,10 @@ int Rpl_info_file::do_init_info() {
                info_fname);
         error = 1;
       }
-      if (error) {
-        if (info_fd >= 0) my_close(info_fd, MYF(0));
-        info_fd = -1;
-      }
+    }
+    if (error) {
+      if (info_fd >= 0) my_close(info_fd, MYF(0));
+      info_fd = -1;
     }
   } else
     error = 1;
@@ -285,7 +289,7 @@ int Rpl_info_file::do_remove_info() {
 int Rpl_info_file::do_clean_info() {
   /*
     There is nothing to do here. Maybe we can truncate the
-    file in the future. Howerver, for now, there is no need.
+    file in the future. However, for now, there is no need.
   */
   return 0;
 }
@@ -349,7 +353,7 @@ bool Rpl_info_file::do_set_info(const int, const int value) {
 bool Rpl_info_file::do_set_info(const int, const float value) {
   /*
     64 bytes provide enough space considering that the precision is 3
-    bytes (See the appropriate set funciton):
+    bytes (See the appropriate set function):
 
     FLT_MAX  The value of this macro is the maximum number representable
              in type float. It is supposed to be at least 1E+37.
@@ -583,7 +587,7 @@ long init_ulongvar_from_file(ulong *var, IO_CACHE *f, ulong default_val) {
 long init_floatvar_from_file(float *var, IO_CACHE *f, float default_val) {
   /*
     64 bytes provide enough space considering that the precision is 3
-    bytes (See the appropriate set funciton):
+    bytes (See the appropriate set function):
 
     FLT_MAX  The value of this macro is the maximum number representable
              in type float. It is supposed to be at least 1E+37.
@@ -643,7 +647,7 @@ long init_dynarray_intvar_from_file(char *buffer, size_t size,
   }
   if (read_size + 1 == size && buf[size - 2] != '\n') {
     /*
-      short read happend; allocate sufficient memory and make the 2nd read
+      short read happened; allocate sufficient memory and make the 2nd read
     */
     char buf_work[(sizeof(long) * 3 + 1) * 16];
     memcpy(buf_work, buf, sizeof(buf_work));

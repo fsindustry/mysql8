@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -99,7 +99,6 @@ read_and_execute(Ndb_mgmclient* com, const char * prompt, int _try_reconnect)
 /* Global variables */
 bool g_StopServer= false;
 bool g_RestartServer= false;
-bool g_StopLogging= false;
 static MgmtSrvr* mgm;
 static MgmtSrvr::MgmtOpts opts;
 static const char* opt_logname = "MgmtSrvr";
@@ -107,80 +106,82 @@ static const char* opt_nowait_nodes = 0;
 
 static struct my_option my_long_options[] =
 {
-  NDB_STD_OPTS("ndb_mgmd"),
+  NdbStdOpt::usage,
+  NdbStdOpt::help,
+  NdbStdOpt::version,
+  NdbStdOpt::ndb_connectstring,
+  NdbStdOpt::ndb_nodeid,
+  NdbStdOpt::mgmd_host,
+  NdbStdOpt::connectstring,
+  NDB_STD_OPT_DEBUG
   { "config-file", 'f', "Specify cluster configuration file",
-    (uchar**) &opts.config_filename, (uchar**) &opts.config_filename, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.config_filename, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "print-full-config", 'P', "Print full config and exit",
-    (uchar**) &opts.print_full_config, (uchar**) &opts.print_full_config, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.print_full_config, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "daemon", 'd', "Run ndb_mgmd in daemon mode (default)",
-    (uchar**) &opts.daemon, (uchar**) &opts.daemon, 0,
-    GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0 },
+    &opts.daemon, nullptr, nullptr, GET_BOOL, NO_ARG,
+    1, 0, 0, 0, 0, 0 },
   { "interactive", NDB_OPT_NOSHORT,
     "Run interactive. Not supported but provided for testing purposes",
-    (uchar**) &opts.interactive, (uchar**) &opts.interactive, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "no-nodeid-checks", NDB_OPT_NOSHORT,
-    "Do not provide any node id checks",
-    (uchar**) &opts.no_nodeid_checks, (uchar**) &opts.no_nodeid_checks, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.interactive,nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, 0, 0, 0 },
+  { "no-nodeid-checks", NDB_OPT_NOSHORT, "Do not provide any node id checks",
+    &opts.no_nodeid_checks, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "nodaemon", NDB_OPT_NOSHORT,
     "Don't run as daemon, but don't read from stdin",
-    (uchar**) &opts.non_interactive, (uchar**) &opts.non_interactive, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "mycnf", NDB_OPT_NOSHORT,
-    "Read cluster config from my.cnf",
-    (uchar**) &opts.mycnf, (uchar**) &opts.mycnf, 0,
-    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "bind-address", NDB_OPT_NOSHORT,
-    "Local bind address",
-    (uchar**) &opts.bind_address, (uchar**) &opts.bind_address, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-  { "cluster-config-suffix", NDB_OPT_NOSHORT,
-    "Override defaults-group-suffix when reading cluster_config sections in "
-    "my.cnf.",
-    &opts.cluster_config_suffix, &opts.cluster_config_suffix, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.non_interactive, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, 0, 0, 0 },
+  { "mycnf", NDB_OPT_NOSHORT, "Read cluster config from my.cnf",
+    &opts.mycnf, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 0, 0, 0, 0 },
+  { "bind-address", NDB_OPT_NOSHORT, "Local bind address",
+    &opts.bind_address, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
+  { "cluster-config-suffix", NDB_OPT_NOSHORT, "Override defaults-group-suffix "
+    "when reading cluster_config sections in my.cnf.",
+    &opts.cluster_config_suffix, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "configdir", NDB_OPT_NOSHORT,
     "Directory for the binary configuration files (alias for --config-dir)",
-    (uchar**) &opts.configdir, (uchar**) &opts.configdir, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.configdir, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "config-dir", NDB_OPT_NOSHORT,
     "Directory for the binary configuration files",
-    (uchar**) &opts.configdir, (uchar**) &opts.configdir, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opts.configdir, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "config-cache", NDB_OPT_NOSHORT,
     "Enable configuration cache and change management",
-    (uchar**) &opts.config_cache, (uchar**) &opts.config_cache, 0,
-    GET_BOOL, NO_ARG, 1, 0, 1, 0, 0, 0 },
-  { "verbose", 'v',
-    "Write more log messages",
-    (uchar**) &opts.verbose, (uchar**) &opts.verbose, 0,
-    GET_BOOL, NO_ARG, 0, 0, 1, 0, 0, 0 },
+    &opts.config_cache, nullptr, nullptr, GET_BOOL, NO_ARG,
+    1, 0, 1, 0, 0, 0 },
+  { "verbose", 'v', "Write more log messages",
+    &opts.verbose,nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 1, 0, 0, 0 },
   { "reload", NDB_OPT_NOSHORT,
     "Reload config from config.ini or my.cnf if it has changed on startup",
-    (uchar**) &opts.reload, (uchar**) &opts.reload, 0,
-    GET_BOOL, NO_ARG, 0, 0, 1, 0, 0, 0 },
+    &opts.reload, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 1, 0, 0, 0 },
   { "initial", NDB_OPT_NOSHORT,
     "Delete all binary config files and start from config.ini or my.cnf",
-    (uchar**) &opts.initial, (uchar**) &opts.initial, 0,
-    GET_BOOL, NO_ARG, 0, 0, 1, 0, 0, 0 },
+    &opts.initial, nullptr, nullptr, GET_BOOL, NO_ARG,
+    0, 0, 1, 0, 0, 0 },
   { "log-name", NDB_OPT_NOSHORT,
     "Name to use when logging messages for this node",
-    (uchar**) &opt_logname, (uchar**) &opt_logname, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opt_logname, nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
   { "nowait-nodes", NDB_OPT_NOSHORT,
     "Nodes that will not be waited for during start",
-    (uchar**) &opt_nowait_nodes, (uchar**) &opt_nowait_nodes, 0,
-    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &opt_nowait_nodes,nullptr, nullptr, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
 #if defined VM_TRACE || defined ERROR_INSERT
   { "error-insert", NDB_OPT_NOSHORT,
     "Start with error insert variable set",
-    (uchar**) &g_errorInsert, (uchar**) &g_errorInsert, 0,
-    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    &g_errorInsert, nullptr, nullptr, GET_INT, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0 },
 #endif
-  { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
+  NdbStdOpt::end_of_options
 };
 
 static void short_usage_sub(void)
@@ -202,11 +203,16 @@ static void mgmd_exit(int result)
 static void mgmd_sigterm_handler(int signum)
 {
   g_eventLogger->info("Received SIGTERM. Performing stop.");
-  mgmd_exit(0);
+  fprintf(stderr, "\n*** Received SIGTERM. Performing stop. ***\n");
+  if (opts.interactive) {
+    // Force read_and_execute call to return without delay
+    fclose(stdin);
+  }
+  g_StopServer = 1;
 }
 #endif
 
-struct ThreadData
+struct ThdData
 {
   FILE* f;
   LogBuffer* logBuf;
@@ -220,7 +226,7 @@ struct ThreadData
 
 void* async_local_log_func(void* args)
 {
-  ThreadData* data = (ThreadData*)args;
+  ThdData* data = (ThdData*)args;
   FILE* f = data->f;
   LogBuffer* logBuf = data->logBuf;
   const size_t get_bytes = 512;
@@ -228,7 +234,7 @@ void* async_local_log_func(void* args)
   size_t bytes;
   int part_bytes = 0, bytes_printed = 0;
 
-  while(!g_StopLogging)
+  while (!logBuf->is_stopped())
   {
     part_bytes = 0;
     bytes_printed = 0;
@@ -250,7 +256,7 @@ void* async_local_log_func(void* args)
   size_t lost_count = logBuf->getLostCount();
   if(lost_count)
   {
-    fprintf(f, "\n*** %lu BYTES LOST ***\n", (unsigned long)lost_count);
+    fprintf(f, LostMsgHandler::LOST_BYTES_FMT, lost_count);
     fflush(f);
   }
 
@@ -262,7 +268,7 @@ static void mgmd_run()
   LogBuffer* logBufLocalLog = new LogBuffer(32768); // 32kB
 
   struct NdbThread* locallog_threadvar= NULL;
-  ThreadData thread_args=
+  ThdData thread_args=
   {
     stdout,
     logBufLocalLog,
@@ -270,10 +276,10 @@ static void mgmd_run()
 
   // Create log thread which logs data to the mgmd local log.
   locallog_threadvar = NdbThread_Create(async_local_log_func,
-                       (void**)&thread_args,
-                       0,
-                       (char*)"async_local_log_thread",
-                       NDB_THREAD_PRIO_MEAN);
+                                        (void**)&thread_args,
+                                        0,
+                                        "async_local_log_thread",
+                                        NDB_THREAD_PRIO_MEAN);
 
   BufferedOutputStream* ndbouts_bufferedoutputstream = new BufferedOutputStream(logBufLocalLog);
 
@@ -322,7 +328,7 @@ static void mgmd_run()
    * node logs should be available until complete shutdown.
    */
   void* dummy_return_status;
-  g_StopLogging = true;
+  logBufLocalLog->stop();
   NdbThread_WaitFor(locallog_threadvar, &dummy_return_status);
   delete ndbouts_bufferedoutputstream;
   NdbThread_Destroy(&locallog_threadvar);

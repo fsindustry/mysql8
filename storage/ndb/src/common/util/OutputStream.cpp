@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,17 +22,15 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-
 #include <ndb_global.h>
 
 #include <OutputStream.hpp>
-#include <socket_io.h>
 #include <LogBuffer.hpp>
 #include <BaseString.hpp>
 
 BufferedOutputStream::BufferedOutputStream(LogBuffer* plogBuf){
   logBuf = plogBuf;
-  assert(logBuf != NULL);
+  assert(logBuf != nullptr);
 }
 
 int
@@ -74,7 +72,7 @@ BufferedOutputStream::println(const char * fmt, ...){
 int
 BufferedOutputStream::write(const void * buf, size_t len)
 {
-  return (int)(logBuf->append((void*)buf, len));
+  return (int)(logBuf->append(buf, len));
 }
 
 FileOutputStream::FileOutputStream(FILE * file){
@@ -105,8 +103,8 @@ FileOutputStream::write(const void * buf, size_t len)
   return (int)fwrite(buf, len, 1, f);
 }
 
-SocketOutputStream::SocketOutputStream(NDB_SOCKET_TYPE socket,
-				       unsigned write_timeout_ms) :
+SecureSocketOutputStream::SecureSocketOutputStream(const NdbSocket & socket,
+                                                   unsigned write_timeout_ms) :
   m_socket(socket),
   m_timeout_ms(write_timeout_ms),
   m_timedout(false),
@@ -115,13 +113,13 @@ SocketOutputStream::SocketOutputStream(NDB_SOCKET_TYPE socket,
 }
 
 int
-SocketOutputStream::print(const char * fmt, ...){
+SecureSocketOutputStream::print(const char * fmt, ...){
   va_list ap;
   char buf[1000];
   char *buf2 = buf;
   size_t size;
 
-  if (fmt != 0 && fmt[0] != 0) {
+  if (fmt != nullptr && fmt[0] != 0) {
     va_start(ap, fmt);
     size = BaseString::vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
@@ -149,13 +147,13 @@ SocketOutputStream::print(const char * fmt, ...){
 }
 
 int
-SocketOutputStream::println(const char * fmt, ...){
+SecureSocketOutputStream::println(const char * fmt, ...){
   va_list ap;
   char buf[1000];
   char *buf2 = buf;
   size_t size;
 
-  if (fmt != 0 && fmt[0] != 0) {
+  if (fmt != nullptr && fmt[0] != 0) {
     va_start(ap, fmt);
     size = BaseString::vsnprintf(buf, sizeof(buf), fmt, ap)+1;// extra byte for '/n'
     va_end(ap);
@@ -181,14 +179,13 @@ SocketOutputStream::println(const char * fmt, ...){
 }
 
 int
-SocketOutputStream::write(const void * buf, size_t len)
+SecureSocketOutputStream::write(const void * buf, size_t len)
 {
   if (timedout())
     return -1;
 
   int time = 0;
-  int ret = write_socket(m_socket, m_timeout_ms, &time,
-                         (const char*)buf, (int)len);
+  int ret = m_socket.write(m_timeout_ms, &time, (const char*)buf, (int)len);
   if (ret >= 0)
   {
     m_timeout_remain -= time;
@@ -204,20 +201,20 @@ SocketOutputStream::write(const void * buf, size_t len)
 
 #include <UtilBuffer.hpp>
 
-BufferedSockOutputStream::BufferedSockOutputStream(NDB_SOCKET_TYPE socket,
-                                                   unsigned write_timeout_ms) :
-  SocketOutputStream(socket, write_timeout_ms),
+BufferedSecureOutputStream::BufferedSecureOutputStream
+    (const NdbSocket & socket, unsigned write_timeout_ms) :
+  SecureSocketOutputStream(socket, write_timeout_ms),
   m_buffer(*new UtilBuffer)
 {
 }
 
-BufferedSockOutputStream::~BufferedSockOutputStream()
+BufferedSecureOutputStream::~BufferedSecureOutputStream()
 {
   delete &m_buffer;
 }
 
 int
-BufferedSockOutputStream::print(const char * fmt, ...){
+BufferedSecureOutputStream::print(const char * fmt, ...){
   char buf[1];
   va_list ap;
   int len;
@@ -230,7 +227,7 @@ BufferedSockOutputStream::print(const char * fmt, ...){
 
   // Allocate a temp buffer for the string
   UtilBuffer tmp;
-  if (tmp.append(len+1) == 0)
+  if (tmp.append(len+1) == nullptr)
     return -1;
 
   // Print to temp buffer
@@ -239,7 +236,7 @@ BufferedSockOutputStream::print(const char * fmt, ...){
   va_end(ap);
 
   // Grow real buffer so it can hold the string
-  if ((pos= (char*)m_buffer.append(len)) == 0)
+  if ((pos= (char*)m_buffer.append(len)) == nullptr)
     return -1;
 
   // Move everything except ending 0 to real buffer
@@ -249,7 +246,7 @@ BufferedSockOutputStream::print(const char * fmt, ...){
 }
 
 int
-BufferedSockOutputStream::println(const char * fmt, ...){
+BufferedSecureOutputStream::println(const char * fmt, ...){
   char buf[1];
   va_list ap;
   int len;
@@ -261,7 +258,7 @@ BufferedSockOutputStream::println(const char * fmt, ...){
   va_end(ap);
 
   // Grow buffer so it can hold the string and the new line
-  if ((pos= (char*)m_buffer.append(len+1)) == 0)
+  if ((pos= (char*)m_buffer.append(len+1)) == nullptr)
     return -1;
 
   // Print string to buffer
@@ -277,15 +274,16 @@ BufferedSockOutputStream::println(const char * fmt, ...){
 }
 
 int
-BufferedSockOutputStream::write(const void * buf, size_t len)
+BufferedSecureOutputStream::write(const void * buf, size_t len)
 {
   return m_buffer.append(buf, len);
 }
 
-void BufferedSockOutputStream::flush(){
+void BufferedSecureOutputStream::flush(){
+  if(m_buffer.length() == 0) return;
   int elapsed = 0;
-  if (write_socket(m_socket, m_timeout_ms, &elapsed,
-                   (const char*)m_buffer.get_data(), m_buffer.length()) != 0)
+  if (m_socket.write(m_timeout_ms, &elapsed, (const char*)m_buffer.get_data(),
+                     m_buffer.length()) != 0)
   {
     fprintf(stderr, "Failed to flush buffer to socket, errno: %d\n", errno);
   }
@@ -293,3 +291,82 @@ void BufferedSockOutputStream::flush(){
   m_buffer.clear();
 }
 
+StaticBuffOutputStream::StaticBuffOutputStream(char* buff, size_t size):
+  m_buff(buff), m_size(size), m_offset(0)
+{
+  reset();
+}
+
+StaticBuffOutputStream::~StaticBuffOutputStream() {}
+
+int
+StaticBuffOutputStream::print(const char * fmt, ...)
+{
+  va_list ap;
+  size_t remain = m_size - m_offset;
+  assert(m_offset < m_size);
+
+  // Print to buffer
+  va_start(ap, fmt);
+  int idealLen = BaseString::vsnprintf(m_buff + m_offset,
+                                       remain,
+                                       fmt,
+                                       ap);
+  va_end(ap);
+
+  if (idealLen >= 0)
+  {
+    m_offset = MIN(m_offset + idealLen, m_size - 1);
+    assert(m_buff[m_offset] == '\0');
+    return 0;
+  }
+  assert(m_buff[m_offset] == '\0');
+  return -1;
+}
+
+int
+StaticBuffOutputStream::println(const char * fmt, ...)
+{
+  va_list ap;
+  size_t remain = m_size - m_offset;
+  assert(m_offset < m_size);
+
+  // Print to buffer
+  va_start(ap, fmt);
+  int idealLen = BaseString::vsnprintf(m_buff + m_offset,
+                                       remain,
+                                       fmt,
+                                       ap);
+  va_end(ap);
+
+  if (idealLen >= 0)
+  {
+    m_offset = MIN(m_offset + idealLen, m_size - 1);
+
+    return print("\n");
+  }
+  assert(m_buff[m_offset] == '\0');
+  return -1;
+}
+
+int
+StaticBuffOutputStream::write(const void * buf, size_t len)
+{
+  /* Will write as much as we can, ensuring space for
+   * terminating null
+   */
+  assert(m_offset < m_size);
+  size_t remain = m_size - m_offset;
+
+  if (remain > 1)
+  {
+    size_t copySz = MIN(len, remain -1);
+    memcpy(m_buff, buf, copySz);
+    m_offset+= copySz;
+    m_buff[m_offset]='\0';
+    return copySz;
+  }
+
+  assert(m_buff[m_offset] == '\0');
+  return 0;
+}

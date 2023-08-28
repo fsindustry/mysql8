@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@ Clone Plugin: Client implementation
 */
 #include <inttypes.h>
 
+#include "plugin/clone/include/clone.h"
 #include "plugin/clone/include/clone_client.h"
 #include "plugin/clone/include/clone_os.h"
 
@@ -464,10 +465,7 @@ Client::Client(THD *thd, Client_Share *share, uint32_t index, bool is_master)
   m_conn_aux.m_conn = nullptr;
   m_conn_aux.reset();
 
-  m_conn_server_extn.m_user_data = nullptr;
-  m_conn_server_extn.m_before_header = nullptr;
-  m_conn_server_extn.m_after_header = nullptr;
-  m_conn_server_extn.compress_ctx.algorithm = MYSQL_UNCOMPRESSED;
+  net_server_ext_init(&m_conn_server_extn);
 }
 
 Client::~Client() {
@@ -727,7 +725,7 @@ int Client::clone() {
     err = connect_remote(restart, true);
 
     if (is_master()) {
-      log_error(get_thd(), true, err, "Master ACK Connect");
+      log_error(get_thd(), true, err, "Source ACK Connect");
     }
 
     if (err != 0) {
@@ -751,6 +749,12 @@ int Client::clone() {
     /* Negotiate clone protocol and SE versions */
     err = remote_command(rpc_com, false);
 
+    /* Delay clone after dropping database if requested */
+
+    if (err == 0 && rpc_com == COM_INIT) {
+      assert(is_master());
+      err = delay_if_needed();
+    }
     snprintf(
         info_mesg, 128, "Command %s",
         is_master() ? (restart ? "COM_REINIT" : "COM_INIT") : "COM_ATTACH");
@@ -773,14 +777,14 @@ int Client::clone() {
       /* For network error master would attempt
       to restart clone. */
       if (is_master() && is_network_error(err, false)) {
-        log_error(get_thd(), true, err, "Master Network issue");
+        log_error(get_thd(), true, err, "Source Network issue");
         restart = true;
       }
     }
 
     /* Break from restart loop if not network error */
     if (restart && !is_network_error(err, false)) {
-      log_error(get_thd(), true, err, "Master break restart loop");
+      log_error(get_thd(), true, err, "Source break restart loop");
       restart = false;
     }
 
@@ -788,13 +792,13 @@ int Client::clone() {
     if (is_master()) {
       /* Ask other end to exit clone protocol */
       auto err2 = remote_command(COM_EXIT, true);
-      log_error(get_thd(), true, err2, "Master ACK COM_EXIT");
+      log_error(get_thd(), true, err2, "Source ACK COM_EXIT");
 
       /* If clone is interrupted, ask the remote to exit. */
       if (err2 == 0 && err == ER_QUERY_INTERRUPTED) {
         err2 = mysql_service_clone_protocol->mysql_clone_kill(m_conn_aux.m_conn,
                                                               m_conn);
-        log_error(get_thd(), true, err2, "Master Interrupt");
+        log_error(get_thd(), true, err2, "Source Interrupt");
       }
 
       /* if COM_EXIT is unsuccessful, abort the connection */
@@ -804,7 +808,7 @@ int Client::clone() {
           nullptr, m_conn_aux.m_conn, abort_net_aux, false);
       m_conn_aux.m_conn = nullptr;
 
-      snprintf(info_mesg, 128, "Master ACK Disconnect : abort: %s",
+      snprintf(info_mesg, 128, "Source ACK Disconnect : abort: %s",
                abort_net_aux ? "true" : "false");
       LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, info_mesg);
     }
@@ -932,12 +936,12 @@ int Client::connect_remote(bool is_restart, bool use_aux) {
     if (m_conn_aux.m_conn == nullptr) {
       /* Disconnect from remote and return */
       err = remote_command(COM_EXIT, false);
-      log_error(get_thd(), true, err, "Master Task COM_EXIT");
+      log_error(get_thd(), true, err, "Source Task COM_EXIT");
 
       bool abort_net = (err != 0);
       mysql_service_clone_protocol->mysql_clone_disconnect(get_thd(), m_conn,
                                                            abort_net, false);
-      snprintf(info_mesg, 128, "Master Task Disconnect: abort: %s",
+      snprintf(info_mesg, 128, "Source Task Disconnect: abort: %s",
                abort_net ? "true" : "false");
       LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, info_mesg);
 
@@ -969,7 +973,7 @@ int Client::connect_remote(bool is_restart, bool use_aux) {
     }
 
     ++loop_count;
-    snprintf(info_mesg, 128, "Master re-connect failed: count: %u", loop_count);
+    snprintf(info_mesg, 128, "Source re-connect failed: count: %u", loop_count);
     LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, info_mesg);
 
     if (is_master() && thd_killed(get_thd())) {
@@ -1040,6 +1044,26 @@ int Client::validate_remote_params() {
     last_error = ER_CLONE_PLUGIN_MATCH;
   }
 
+  /* Build list of plugins from comma separated value of the variable
+  clone_exclude_plugins_list */
+  std::vector<std::string> excl_plugins_vec;
+  if (clone_exclude_plugins_list != nullptr) {
+    std::string excl_plugins_str(clone_exclude_plugins_list);
+    std::transform(excl_plugins_str.begin(), excl_plugins_str.end(),
+                   excl_plugins_str.begin(), ::tolower);
+
+    std::stringstream exclude_stream(excl_plugins_str);
+
+    while (exclude_stream.good()) {
+      std::string substr;
+      getline(exclude_stream, substr, ',');
+      substr.erase(remove(substr.begin(), substr.end(), ' '), substr.end());
+      if (!substr.empty()) {
+        excl_plugins_vec.push_back(substr);
+      }
+    }
+  }
+
   /* Validate plugins and check if shared objects can be loaded. */
   for (auto &plugin : m_parameters.m_plugins_with_so) {
     assert(m_share->m_protocol_version > CLONE_PROTOCOL_VERSION_V1);
@@ -1056,6 +1080,26 @@ int Client::validate_remote_params() {
 
     if (so_name.empty() || plugin_is_loadable(so_name)) {
       continue;
+    }
+
+    /* Plugin is not installed in recipient but active on donor. Check if this
+    plugin can be exempted from matching with donor */
+    if (clone_exclude_plugins_list != nullptr) {
+      std::string plugin_str(plugin_name);
+      std::transform(plugin_str.begin(), plugin_str.end(), plugin_str.begin(),
+                     ::tolower);
+
+      if (std::find(excl_plugins_vec.begin(), excl_plugins_vec.end(),
+                    plugin_str) != excl_plugins_vec.end()) {
+        char info_mesg[256];
+        snprintf(info_mesg, 256,
+                 "Ignoring plugin %s installed on the source server but not on "
+                 "the recepient. The mismatch is ignored due to "
+                 "'clone_exclude_plugins_list'.",
+                 plugin_name.c_str());
+        LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, info_mesg);
+        continue;
+      }
     }
 
     /* Donor plugin is not there in recipient. */
@@ -1732,6 +1776,78 @@ int Client::set_error(const uchar *buffer, size_t length) {
   }
 
   return (err);
+}
+
+int Client::wait(Time_Sec wait_time) {
+  int ret_error = 0;
+  auto start_time = Clock::now();
+  auto print_time = start_time;
+  auto sec = wait_time;
+  auto min = std::chrono::duration_cast<Time_Min>(wait_time);
+  std::ostringstream log_strm;
+
+  LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE,
+               "Begin Delay after data drop");
+
+  sec -= std::chrono::duration_cast<Time_Sec>(min);
+  log_strm << "Wait time remaining is " << min.count() << " minutes and "
+           << sec.count() << " seconds.";
+  std::string log_str(log_strm.str());
+  LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, log_str.c_str());
+  log_strm.str("");
+
+  for (;;) {
+    Time_Msec sleep_time(100);
+    std::this_thread::sleep_for(sleep_time);
+    auto cur_time = Clock::now();
+
+    auto duration_sec =
+        std::chrono::duration_cast<Time_Sec>(cur_time - start_time);
+
+    /* Check for total time elapsed. */
+    if (duration_sec >= wait_time) {
+      break;
+    }
+
+    auto duration_print =
+        std::chrono::duration_cast<Time_Min>(cur_time - print_time);
+
+    if (duration_print.count() >= 1) {
+      print_time = Clock::now();
+      auto remaining_time = wait_time - duration_sec;
+      min = std::chrono::duration_cast<Time_Min>(remaining_time);
+      log_strm << "Wait time remaining is " << min.count() << " minutes.";
+      std::string log_str(log_strm.str());
+      LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, log_str.c_str());
+      log_strm.str("");
+    }
+
+    /* Check for interrupt */
+    if (thd_killed(get_thd())) {
+      my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      ret_error = ER_QUERY_INTERRUPTED;
+      break;
+    }
+  }
+
+  LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE,
+               "End Delay after data drop");
+  return ret_error;
+}
+
+int Client::delay_if_needed() {
+  /* Delay only if replacing current data directory. */
+  if (get_data_dir() != nullptr) {
+    return 0;
+  }
+
+  if (clone_delay_after_data_drop == 0) {
+    return 0;
+  }
+
+  auto err = wait(Time_Sec(clone_delay_after_data_drop));
+
+  return err;
 }
 
 int Client_Cbk::file_cbk(Ha_clone_file from_file [[maybe_unused]],

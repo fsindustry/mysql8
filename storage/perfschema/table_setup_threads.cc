@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -86,17 +86,17 @@ PFS_engine_table *table_setup_threads::create(PFS_engine_table_share *) {
   return new table_setup_threads();
 }
 
-ha_rows table_setup_threads::get_row_count(void) { return thread_class_max; }
+ha_rows table_setup_threads::get_row_count() { return thread_class_max; }
 
 table_setup_threads::table_setup_threads()
     : PFS_engine_table(&m_share, &m_pos), m_pos(1), m_next_pos(1) {}
 
-void table_setup_threads::reset_position(void) {
+void table_setup_threads::reset_position() {
   m_pos.m_index = 1;
   m_next_pos.m_index = 1;
 }
 
-int table_setup_threads::rnd_next(void) {
+int table_setup_threads::rnd_next() {
   PFS_thread_class *instr_class = nullptr;
 
   /* Do not advertise threads when disabled. */
@@ -148,7 +148,7 @@ int table_setup_threads::index_init(uint idx [[maybe_unused]], bool) {
   return 0;
 }
 
-int table_setup_threads::index_next(void) {
+int table_setup_threads::index_next() {
   PFS_thread_class *instr_class = nullptr;
 
   /* Do not advertise threads when disabled. */
@@ -199,8 +199,8 @@ int table_setup_threads::read_row_values(TABLE *table, unsigned char *buf,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* NAME */
-          set_field_varchar_utf8(f, m_row.m_instr_class->m_name.str(),
-                                 m_row.m_instr_class->m_name.length());
+          set_field_varchar_utf8mb4(f, m_row.m_instr_class->m_name.str(),
+                                    m_row.m_instr_class->m_name.length());
           break;
         case 1: /* ENABLED */
           set_field_enum(f,
@@ -248,22 +248,16 @@ int table_setup_threads::update_row_values(TABLE *table, const unsigned char *,
   for (; (f = *fields); fields++) {
     if (bitmap_is_set(table->write_set, f->field_index())) {
       switch (f->field_index()) {
-        case 0: /* NAME */
-          return HA_ERR_WRONG_COMMAND;
         case 1: /* ENABLED */
           value = (enum_yes_no)get_field_enum(f);
-          m_row.m_instr_class->m_enabled = (value == ENUM_YES) ? true : false;
+          m_row.m_instr_class->m_enabled = (value == ENUM_YES);
           break;
         case 2: /* HISTORY */
           value = (enum_yes_no)get_field_enum(f);
-          m_row.m_instr_class->m_history = (value == ENUM_YES) ? true : false;
+          m_row.m_instr_class->m_history = (value == ENUM_YES);
           break;
-        case 3: /* PROPERTIES */
-        case 4: /* VOLATILITY */
-        case 5: /* DOCUMENTATION */
-          return HA_ERR_WRONG_COMMAND;
         default:
-          assert(false);
+          return HA_ERR_WRONG_COMMAND;
       }
     }
   }

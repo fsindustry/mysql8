@@ -1,4 +1,4 @@
-/* Copyright (c) 2005, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -23,22 +23,34 @@
 #define MYSQL_SERVER 1
 #include "storage/blackhole/ha_blackhole.h"
 
+#include "ft_global.h"
 #include "map_helpers.h"
+#include "my_alloc.h"
+#include "my_base.h"
 #include "my_dbug.h"
 #include "my_psi_config.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_memory.h"
+#include "sql/field.h"
+#include "sql/rpl_rli.h"    // THD::rli_slave::rows_query_ev
 #include "sql/sql_class.h"  // THD, SYSTEM_THREAD_SLAVE_*
 #include "template_utils.h"
+
+class String;
 
 using std::string;
 using std::unique_ptr;
 
 static PSI_memory_key bh_key_memory_blackhole_share;
 
-static bool is_slave_applier(THD *thd) {
-  return thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
-         thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER;
+static inline bool is_slave_applier(const THD &thd) {
+  return thd.system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+         thd.system_thread == SYSTEM_THREAD_SLAVE_WORKER;
+}
+
+static inline bool pretend_for_slave(const THD &thd) {
+  return is_slave_applier(thd) &&
+         (thd.rli_slave->rows_query_ev || thd.query().str == nullptr);
 }
 
 /* Static declarations for handlerton */
@@ -102,14 +114,14 @@ int ha_blackhole::write_row(uchar *) {
 int ha_blackhole::update_row(const uchar *, uchar *) {
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr) return 0;
+  if (pretend_for_slave(*thd)) return 0;
   return HA_ERR_WRONG_COMMAND;
 }
 
 int ha_blackhole::delete_row(const uchar *) {
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr) return 0;
+  if (pretend_for_slave(*thd)) return 0;
   return HA_ERR_WRONG_COMMAND;
 }
 
@@ -122,9 +134,50 @@ int ha_blackhole::rnd_next(uchar *) {
   int rc;
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr)
+  if (pretend_for_slave(*thd)) {
+    /*
+      Unlike a normal storage engine (e.g. 'InnoDB') in which
+      'rnd_next()' overload actually reads all data in BLOB fields
+      from real storage into internal SE memory (like 'mem_heap' in InnoDB)
+      and updates packed representation ('table->record[0]') of the BLOB
+      field values with pointers to this internal SE memory, 'Blackhole'
+      engine does not do this.
+
+      In case when a database with Blackhole tables serves just as an
+      intermediate binlog server in a replication chain, this may cause
+      data corruption.
+
+      In particular, when 'Update_rows_log_event' is processed on a
+      Blackhole table, calling 'Update_rows_log_event::do_exec_row()' will
+      first copy Before Image (BI) found in 'record[0]' into 'record[1]' and
+      then unpack After Image (AI) into 'record[0]'. The problem is that this
+      record copying is shallow (just 'memcpy()') and for packed BLOB fields
+      it just copies pointer values. In other words, before calling
+      'unpack_current_row()' we end up in a situation when packed BLOB field
+      values in 'record[0]' (AI) and 'record[1]' (BI) point to exactly the
+      same memory location and calling 'unpack_current_row()' for AI
+      overwrites BLOB data in BI.
+
+      To prevent this we do the same trick as for virtual generated columns
+      in 5.7 - keeping old BLOB value inside 'old_value' field in
+      'Field_blob' class by calling 'keep_old_value()' for all BLOB fields
+      currently marked for update in 'table->write_set'..
+    */
+
+    if (table_share->blob_fields != 0)
+      for (Field **field_ptr = table->field; *field_ptr != nullptr;
+           ++field_ptr) {
+        auto current_field = *field_ptr;
+        if ((current_field->is_flag_set(BLOB_FLAG)) != 0 &&
+            bitmap_is_set(table->write_set, current_field->field_index())) {
+          auto bfield = down_cast<Field_blob *>(current_field);
+          bfield->set_keep_old_value(true);
+          bfield->keep_old_value();
+        }
+      }
+
     rc = 0;
-  else
+  } else
     rc = HA_ERR_END_OF_FILE;
   return rc;
 }
@@ -190,7 +243,7 @@ int ha_blackhole::index_read_map(uchar *, const uchar *, key_part_map,
   int rc;
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr)
+  if (pretend_for_slave(*thd))
     rc = 0;
   else
     rc = HA_ERR_END_OF_FILE;
@@ -202,7 +255,7 @@ int ha_blackhole::index_read_idx_map(uchar *, uint, const uchar *, key_part_map,
   int rc;
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr)
+  if (pretend_for_slave(*thd))
     rc = 0;
   else
     rc = HA_ERR_END_OF_FILE;
@@ -213,7 +266,7 @@ int ha_blackhole::index_read_last_map(uchar *, const uchar *, key_part_map) {
   int rc;
   DBUG_TRACE;
   THD *thd = ha_thd();
-  if (is_slave_applier(thd) && thd->query().str == nullptr)
+  if (pretend_for_slave(*thd))
     rc = 0;
   else
     rc = HA_ERR_END_OF_FILE;
@@ -247,6 +300,26 @@ int ha_blackhole::index_last(uchar *) {
   rc = HA_ERR_END_OF_FILE;
   return rc;
 }
+
+FT_INFO *ha_blackhole::ft_init_ext(uint, uint, String *) {
+  MEM_ROOT *mem_root = ha_thd()->mem_root;
+
+  _ft_vft *vft = new (mem_root) _ft_vft{
+      /*read_next=*/nullptr,
+      /*find_relevance=*/nullptr,
+      /*close_search=*/[](FT_INFO *) { /*no-op*/ },
+      /*get_relevance=*/nullptr,
+      /*reinit_search=*/nullptr,
+  };
+
+  if (vft == nullptr) return nullptr;  // OOM
+
+  return new (mem_root) FT_INFO{vft};
+}
+
+int ha_blackhole::ft_init() { return 0; }
+
+int ha_blackhole::ft_read(uchar *) { return HA_ERR_END_OF_FILE; }
 
 static st_blackhole_share *get_share(const char *table_name) {
   st_blackhole_share *share;
@@ -318,7 +391,7 @@ static int blackhole_init(void *p) {
   blackhole_hton->state = SHOW_OPTION_YES;
   blackhole_hton->db_type = DB_TYPE_BLACKHOLE_DB;
   blackhole_hton->create = blackhole_create_handler;
-  blackhole_hton->flags = HTON_CAN_RECREATE;
+  blackhole_hton->flags = HTON_CAN_RECREATE | HTON_SUPPORTS_ONLINE_BACKUPS;
 
   mysql_mutex_init(bh_key_mutex_blackhole, &blackhole_mutex,
                    MY_MUTEX_INIT_FAST);

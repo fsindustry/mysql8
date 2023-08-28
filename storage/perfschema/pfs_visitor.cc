@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -81,13 +81,13 @@ static PFS_thread *get_pfs_from_THD(THD *thd) {
   /*
     And now, finally dive into the performance schema itself.
   */
-  PFS_thread *pfs = reinterpret_cast<PFS_thread *>(psi);
+  auto *pfs = reinterpret_cast<PFS_thread *>(psi);
   return pfs;
 }
 
 class All_THD_visitor_adapter : public Do_THD_Impl {
  public:
-  All_THD_visitor_adapter(PFS_connection_visitor *visitor)
+  explicit All_THD_visitor_adapter(PFS_connection_visitor *visitor)
       : m_visitor(visitor) {}
 
   void operator()(THD *thd) override { m_visitor->visit_THD(thd); }
@@ -638,8 +638,7 @@ void PFS_instance_iterator::visit_instances(PFS_instr_class *klass,
 
   switch (klass->m_type) {
     case PFS_CLASS_SOCKET: {
-      PFS_socket_class *socket_class =
-          reinterpret_cast<PFS_socket_class *>(klass);
+      auto *socket_class = reinterpret_cast<PFS_socket_class *>(klass);
       PFS_instance_iterator::visit_socket_instances(socket_class, visitor,
                                                     thread, visit_class);
     } break;
@@ -655,7 +654,8 @@ void PFS_object_iterator::visit_all(PFS_object_visitor *visitor) {
 
 class Proc_all_table_shares : public PFS_buffer_processor<PFS_table_share> {
  public:
-  Proc_all_table_shares(PFS_object_visitor *visitor) : m_visitor(visitor) {}
+  explicit Proc_all_table_shares(PFS_object_visitor *visitor)
+      : m_visitor(visitor) {}
 
   void operator()(PFS_table_share *pfs) override {
     m_visitor->visit_table_share(pfs);
@@ -667,7 +667,8 @@ class Proc_all_table_shares : public PFS_buffer_processor<PFS_table_share> {
 
 class Proc_all_table_handles : public PFS_buffer_processor<PFS_table> {
  public:
-  Proc_all_table_handles(PFS_object_visitor *visitor) : m_visitor(visitor) {}
+  explicit Proc_all_table_handles(PFS_object_visitor *visitor)
+      : m_visitor(visitor) {}
 
   void operator()(PFS_table *pfs) override {
     PFS_table_share *safe_share = sanitize_table_share(pfs->m_share);
@@ -1094,19 +1095,34 @@ PFS_connection_stat_visitor::~PFS_connection_stat_visitor() = default;
 void PFS_connection_stat_visitor::visit_global() {}
 
 void PFS_connection_stat_visitor::visit_host(PFS_host *pfs) {
-  m_stat.aggregate_disconnected(pfs->m_disconnected_count);
+  m_stat.aggregate_disconnected(pfs->m_disconnected_count,
+                                pfs->m_max_controlled_memory,
+                                pfs->m_max_total_memory);
 }
 
 void PFS_connection_stat_visitor::visit_user(PFS_user *pfs) {
-  m_stat.aggregate_disconnected(pfs->m_disconnected_count);
+  m_stat.aggregate_disconnected(pfs->m_disconnected_count,
+                                pfs->m_max_controlled_memory,
+                                pfs->m_max_total_memory);
 }
 
 void PFS_connection_stat_visitor::visit_account(PFS_account *pfs) {
-  m_stat.aggregate_disconnected(pfs->m_disconnected_count);
+  m_stat.aggregate_disconnected(pfs->m_disconnected_count,
+                                pfs->m_max_controlled_memory,
+                                pfs->m_max_total_memory);
 }
 
-void PFS_connection_stat_visitor::visit_thread(PFS_thread *) {
-  m_stat.aggregate_active(1);
+void PFS_connection_stat_visitor::visit_thread(PFS_thread *pfs) {
+  /*
+    PFS_connection_stat_visitor is used in tables accounts,
+    users and hosts. It should take into account only
+    FOREGROUND threads.
+  */
+  if (pfs->m_processlist_id != 0) {
+    m_stat.aggregate_active(
+        1, pfs->m_session_all_memory_stat.m_controlled.get_session_max(),
+        pfs->m_session_all_memory_stat.m_total.get_session_max());
+  }
 }
 
 PFS_connection_memory_visitor::PFS_connection_memory_visitor(
@@ -1193,7 +1209,9 @@ void PFS_connection_status_visitor::visit_account(PFS_account *pfs) {
 void PFS_connection_status_visitor::visit_thread(PFS_thread *) {}
 
 void PFS_connection_status_visitor::visit_THD(THD *thd) {
-  add_to_status(m_status_vars, &thd->status_var);
+  if (!thd->status_var_aggregated) {
+    add_to_status(m_status_vars, &thd->status_var);
+  }
 }
 
 PFS_instance_wait_visitor::PFS_instance_wait_visitor() = default;
@@ -1258,14 +1276,14 @@ void PFS_object_wait_visitor::visit_global() {
 }
 
 void PFS_object_wait_visitor::visit_table_share(PFS_table_share *pfs) {
-  uint safe_key_count = sanitize_index_count(pfs->m_key_count);
+  const uint safe_key_count = sanitize_index_count(pfs->m_key_count);
   pfs->sum(&m_stat, safe_key_count);
 }
 
 void PFS_object_wait_visitor::visit_table(PFS_table *pfs) {
   PFS_table_share *table_share = sanitize_table_share(pfs->m_share);
   if (table_share != nullptr) {
-    uint safe_key_count = sanitize_index_count(table_share->m_key_count);
+    const uint safe_key_count = sanitize_index_count(table_share->m_key_count);
     pfs->m_table_stat.sum(&m_stat, safe_key_count);
   }
 }
@@ -1280,7 +1298,7 @@ void PFS_table_io_wait_visitor::visit_global() {
 
 void PFS_table_io_wait_visitor::visit_table_share(PFS_table_share *pfs) {
   PFS_table_io_stat io_stat;
-  uint safe_key_count = sanitize_index_count(pfs->m_key_count);
+  const uint safe_key_count = sanitize_index_count(pfs->m_key_count);
   uint index;
   PFS_table_share_index *index_stat;
 
@@ -1306,7 +1324,7 @@ void PFS_table_io_wait_visitor::visit_table(PFS_table *pfs) {
 
   if (likely(safe_share != nullptr)) {
     PFS_table_io_stat io_stat;
-    uint safe_key_count = sanitize_index_count(safe_share->m_key_count);
+    const uint safe_key_count = sanitize_index_count(safe_share->m_key_count);
     uint index;
 
     /* Aggregate index stats */
@@ -1328,7 +1346,7 @@ PFS_table_io_stat_visitor::PFS_table_io_stat_visitor() = default;
 PFS_table_io_stat_visitor::~PFS_table_io_stat_visitor() = default;
 
 void PFS_table_io_stat_visitor::visit_table_share(PFS_table_share *pfs) {
-  uint safe_key_count = sanitize_index_count(pfs->m_key_count);
+  const uint safe_key_count = sanitize_index_count(pfs->m_key_count);
   uint index;
   PFS_table_share_index *index_stat;
 
@@ -1351,7 +1369,7 @@ void PFS_table_io_stat_visitor::visit_table(PFS_table *pfs) {
   PFS_table_share *safe_share = sanitize_table_share(pfs->m_share);
 
   if (likely(safe_share != nullptr)) {
-    uint safe_key_count = sanitize_index_count(safe_share->m_key_count);
+    const uint safe_key_count = sanitize_index_count(safe_share->m_key_count);
     uint index;
 
     /* Aggregate index stats */

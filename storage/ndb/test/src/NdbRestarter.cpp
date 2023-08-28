@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include "util/require.h"
 #include <ndb_global.h>
 #include <NdbRestarter.hpp>
 #include <NdbOut.hpp>
@@ -661,7 +662,7 @@ NdbRestarter::connect(){
     g_err << "handle == NULL" << endl;
     return -1;
   }
-  g_info << "Connecting to mgmsrv at " << addr.c_str() << endl;
+  g_info << "Connecting to management server at " << addr.c_str() << endl;
   if (ndb_mgm_set_connectstring(handle,addr.c_str()))
   {
     MGMERR(handle);

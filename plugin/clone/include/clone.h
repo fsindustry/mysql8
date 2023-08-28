@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -99,6 +99,9 @@ extern char *clone_client_ssl_certificate;
 /** Clone system variable: SSL Certificate authority */
 extern char *clone_client_ssl_certficate_authority;
 
+/** Clone system variable: time delay after removing data */
+extern uint clone_delay_after_data_drop;
+
 /** Number of storage engines supporting clone. */
 const uint MAX_CLONE_STORAGE_ENGINE = 16;
 
@@ -110,6 +113,8 @@ const uint CLONE_MIN_BLOCK = 1024 * 1024;
 
 /** Minimum network packet. Safe margin for meta information */
 const uint CLONE_MIN_NET_BLOCK = 2 * CLONE_MIN_BLOCK;
+
+extern char *clone_exclude_plugins_list;
 
 /* Namespace for all clone data types */
 namespace myclone {

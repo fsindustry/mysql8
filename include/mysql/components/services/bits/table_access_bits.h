@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -110,7 +110,8 @@ DEFINE_SERVICE_HANDLE(TA_key);
   Create a table access object.
   @sa destroy_table_access_v1_t
 
-  @param thd The current session.
+  @param thd The current session. Pass a null ptr if running from a non-MySQLd
+  thread
   @param count The maximum number of tables to access.
 
   @note The table access service will create a child session
@@ -120,6 +121,13 @@ DEFINE_SERVICE_HANDLE(TA_key);
   - @c log_bin
   - @c transaction_isolation
   - @c skip_readonly_check
+
+  @warning The table access service will set the current THD thread attribute
+  to the temporary child THD it creates. The current THD will be reset back by
+  @ref destroy_table_access_v1_t. This means that the whole table access
+  routine should happen as fast as possible and without thread switching until
+  its completion and disposal of the thread access attribute.
+  The @ref Table_access handle should not be cached and reused.
 */
 typedef Table_access (*create_table_access_v1_t)(MYSQL_THD thd, size_t count);
 
@@ -205,6 +213,11 @@ typedef int (*check_table_fields_v1_t)(Table_access ta, TA_table table,
   If the index DDL matches the expected columns and count,
   the index is opened.
   Otherwise, an error is returned, and the index is not opened.
+
+  @note The list of columns must contain the ACTUAL columns in the index
+  rather than USER defined (used on SQL level). The actual list depends on
+  engine and current implementation. E.g. InnoDB may add columns to the user
+  defined set.
 
   @param ta Table access
   @param table Opened table

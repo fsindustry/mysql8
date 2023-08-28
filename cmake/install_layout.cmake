@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -239,6 +239,7 @@ SET(INSTALL_BINDIR_DEB                  "bin")
 SET(INSTALL_SBINDIR_DEB                 "sbin")
 #
 SET(INSTALL_LIBDIR_DEB                  "lib")
+SET(INSTALL_PLUGINDIR_DEB               "lib/mysql/plugin")
 SET(INSTALL_PRIV_LIBDIR_DEB             "lib/mysql/private")
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
   SET(INSTALL_PLUGINDIR_DEB             "lib/mysql/plugin/debug")
@@ -418,7 +419,7 @@ ENDFOREACH()
 SET(ROUTER_INSTALL_CONFIGDIR_RPM    "/etc/mysqlrouter")
 SET(ROUTER_INSTALL_DATADIR_RPM      "/var/lib/mysqlrouter")
 SET(ROUTER_INSTALL_LOGDIR_RPM       "/var/log/mysqlrouter")
-IF (LINUX_FEDORA)
+IF (WITH_SYSTEMD)
   SET(ROUTER_INSTALL_RUNTIMEDIR_RPM "/run/mysqlrouter")
 ELSE()
   SET(ROUTER_INSTALL_RUNTIMEDIR_RPM "/var/run/mysqlrouter")

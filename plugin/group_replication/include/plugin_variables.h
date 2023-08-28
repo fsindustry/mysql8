@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,16 +39,16 @@ struct plugin_local_variables {
   rpl_sidno view_change_sidno;
 
   mysql_mutex_t force_members_running_mutex;
-  mysql_mutex_t plugin_running_mutex;
   mysql_mutex_t plugin_online_mutex;
   mysql_mutex_t plugin_modules_termination_mutex;
+  mysql_mutex_t plugin_applier_module_initialize_terminate_mutex;
   mysql_cond_t plugin_online_condition;
   Plugin_waitlock *online_wait_mutex;
+  Checkable_rwlock *plugin_running_lock;
   Checkable_rwlock *plugin_stop_lock;
   std::atomic<bool> plugin_is_stopping;
   std::atomic<bool> group_replication_running;
   std::atomic<bool> group_replication_cloning;
-  std::atomic<bool> error_state_due_to_error_during_autorejoin;
 
   bool force_members_running;
   uint gr_lower_case_table_names;
@@ -87,11 +87,11 @@ struct plugin_local_variables {
     view_change_sidno = 0;
 
     online_wait_mutex = nullptr;
+    plugin_running_lock = nullptr;
     plugin_stop_lock = nullptr;
     plugin_is_stopping = false;
     group_replication_running = false;
     group_replication_cloning = false;
-    error_state_due_to_error_during_autorejoin = false;
 
     force_members_running = false;
     gr_lower_case_table_names = 0;
@@ -190,7 +190,7 @@ struct plugin_options_variables {
   bool allow_local_lower_version_join_var;
 
   /*
-    The default value for auto_increment_increment is choosen taking into
+    The default value for auto_increment_increment is chosen taking into
     account the maximum usable values for each possible auto_increment_increment
     and what is a normal group expected size.
   */
@@ -203,6 +203,16 @@ struct plugin_options_variables {
 #define MAX_COMPRESSION_THRESHOLD UINT_MAX32
 #define MIN_COMPRESSION_THRESHOLD 0
   ulong compression_threshold_var;
+
+#define DEFAULT_CERTIFICATION_LOOP_SLEEP_TIME 0
+#define MAX_CERTIFICATION_LOOP_SLEEP_TIME 1000000
+#define MIN_CERTIFICATION_LOOP_SLEEP_TIME 0
+  ulong certification_loop_sleep_time_var;
+
+#define DEFAULT_CERTIFICATION_LOOP_CHUNK_SIZE 0
+#define MAX_CERTIFICATION_LOOP_CHUNK_SIZE UINT_MAX32
+#define MIN_CERTIFICATION_LOOP_CHUNK_SIZE 0
+  ulong certification_loop_chunk_size_var;
 
 #define DEFAULT_GTID_ASSIGNMENT_BLOCK_SIZE 1000000
 #define MIN_GTID_ASSIGNMENT_BLOCK_SIZE 1
@@ -232,9 +242,9 @@ struct plugin_options_variables {
   bool single_primary_mode_var;
   bool enforce_update_everywhere_checks_var;
 
-  const char *flow_control_mode_values[3] = {"DISABLED", "QUOTA",
+  const char *flow_control_mode_values[4] = {"DISABLED", "QUOTA", "MAJORITY",
                                              (const char *)nullptr};
-  TYPELIB flow_control_mode_typelib_t = {2, "flow_control_mode_typelib_t",
+  TYPELIB flow_control_mode_typelib_t = {3, "flow_control_mode_typelib_t",
                                          flow_control_mode_values, nullptr};
   ulong flow_control_mode_var;
 #define DEFAULT_FLOW_CONTROL_THRESHOLD 25000
@@ -295,6 +305,8 @@ struct plugin_options_variables {
   ulong communication_stack_var;
 
   bool allow_single_leader_var{false};
+
+  uint auto_evict_timeout;
 };
 
 #endif /* PLUGIN_VARIABLES_INCLUDE */

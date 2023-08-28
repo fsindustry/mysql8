@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2021, Oracle and/or its affiliates.
+Copyright (c) 1997, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include "dict0mem.h"
 
+#include "mem0mem.h"
 #include "trx0types.h"
 
 // Friend declaration
@@ -60,12 +61,12 @@ class ReadView {
 
     /** Try and increase the size of the array. Old elements are copied across.
     It is a no-op if n is < current size.
-    @param n 		Make space for n elements */
+    @param n            Make space for n elements */
     void reserve(ulint n);
 
     /**
     Resize the array, sets the current element count.
-    @param n		new size of the array, in elements */
+    @param n            new size of the array, in elements */
     void resize(ulint n) {
       ut_ad(n <= capacity());
 
@@ -83,8 +84,8 @@ class ReadView {
     /**
     Copy and overwrite the current array contents
 
-    @param start		Source array
-    @param end		Pointer to end of array */
+    @param start                Source array
+    @param end          Pointer to end of array */
     void assign(const value_type *start, const value_type *end);
 
     /**
@@ -110,7 +111,7 @@ class ReadView {
 
     /**
     Append a value to the array.
-    @param value		the value to append */
+    @param value                the value to append */
     void push_back(value_type value);
 
     /**
@@ -151,13 +152,13 @@ class ReadView {
   ReadView();
   ~ReadView();
   /** Check whether transaction id is valid.
-  @param[in]	id		transaction id to check
-  @param[in]	name		table name */
+  @param[in]    id              transaction id to check
+  @param[in]    name            table name */
   static void check_trx_id_sanity(trx_id_t id, const table_name_t &name);
 
   /** Check whether the changes by id are visible.
-  @param[in]	id	transaction id to check against the view
-  @param[in]	name	table name
+  @param[in]    id      transaction id to check against the view
+  @param[in]    name    table name
   @return whether the view sees the modifications of id. */
   [[nodiscard]] bool changes_visible(trx_id_t id,
                                      const table_name_t &name) const {
@@ -182,7 +183,7 @@ class ReadView {
   }
 
   /**
-  @param id		transaction to check
+  @param id             transaction to check
   @return true if view sees transaction id */
   bool sees(trx_id_t id) const { return (id < m_up_limit_id); }
 
@@ -191,6 +192,7 @@ class ReadView {
   void close() {
     ut_ad(m_creator_trx_id != TRX_ID_MAX);
     m_creator_trx_id = TRX_ID_MAX;
+    m_cloned = false;
   }
 
   /**
@@ -199,7 +201,7 @@ class ReadView {
 
   /**
   Write the limits to the file.
-  @param file		file to write to */
+  @param file           file to write to */
   void print_limits(FILE *file) const {
     fprintf(file,
             "Trx read view will not see trx with"
@@ -209,7 +211,7 @@ class ReadView {
 
   /** Check and reduce low limit number for read view. Used to
   block purge till GTID is persisted on disk table.
-  @param[in]	trx_no	transaction number to check with */
+  @param[in]    trx_no  transaction number to check with */
   void reduce_low_limit(trx_id_t trx_no) {
     if (trx_no < m_low_limit_no) {
       /* Save low limit number set for Read View for MVCC. */
@@ -227,8 +229,22 @@ class ReadView {
   trx_id_t low_limit_id() const { return (m_low_limit_id); }
 
   /**
+  @return the up limit id */
+  trx_id_t up_limit_id() const noexcept { return (m_up_limit_id); }
+
+  /**
   @return true if there are no transaction ids in the snapshot */
   bool empty() const { return (m_ids.empty()); }
+
+  /**
+  Clones a read view object. The resulting read view has identical change
+  visibility as the donor read view
+  @param	result	pointer to resulting read view. If NULL, a view will be
+  allocated. If non-NULL, a view will overwrite a previously-existing
+  in-use or released view.
+  @param	from_trx	transation owning the donor read view. */
+
+  void clone(ReadView *&result, trx_t *from_trx) const;
 
 #ifdef UNIV_DEBUG
   /**
@@ -236,12 +252,24 @@ class ReadView {
   trx_id_t view_low_limit_no() const { return (m_view_low_limit_no); }
 
   /**
-  @param rhs		view to compare with
+  @param rhs            view to compare with
   @return truen if this view is less than or equal rhs */
   bool le(const ReadView *rhs) const {
     return (m_low_limit_no <= rhs->m_low_limit_no);
   }
 #endif /* UNIV_DEBUG */
+
+  void print(FILE *file) const noexcept {
+    fprintf(file, "Read view low limit trx n:o " TRX_ID_FMT "\n",
+            low_limit_no());
+    print_limits(file);
+    fprintf(file, "Read view individually stored trx ids:\n");
+    for (ulint i = 0; i < m_ids.size(); i++)
+      fprintf(file, "Read view trx id " TRX_ID_FMT "\n", m_ids.data()[i]);
+  }
+
+  bool is_cloned() const noexcept { return (m_cloned); }
+
  private:
   /**
   Copy the transaction ids from the source vector */
@@ -250,12 +278,12 @@ class ReadView {
   /**
   Opens a read view where exactly the transactions serialized before this
   point in time are seen in the view.
-  @param id		Creator transaction id */
+  @param id             Creator transaction id */
   inline void prepare(trx_id_t id);
 
   /**
   Copy state from another view. Must call copy_complete() to finish.
-  @param other		view to copy from */
+  @param other          view to copy from */
   inline void copy_prepare(const ReadView &other);
 
   /**
@@ -310,6 +338,11 @@ class ReadView {
 
   /** AC-NL-RO transaction view that has been "closed". */
   bool m_closed;
+
+  /** This is a view cloned by clone but not by
+  MVCC::clone_oldest_view. Used to make sure the cloned transaction does
+  not see its own changes. */
+  bool m_cloned;
 
   typedef UT_LIST_NODE_T(ReadView) node_t;
 

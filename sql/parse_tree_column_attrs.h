@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,7 +63,7 @@
 class String;
 
 /**
-  Parse context for column type attribyte specific parse tree nodes.
+  Parse context for column type attribute specific parse tree nodes.
 
   For internal use in the contextualization code.
 
@@ -135,6 +135,8 @@ class PT_column_attr_base : public Parse_tree_node_tmpl<Column_parse_context> {
   virtual bool set_constraint_enforcement(bool enforced [[maybe_unused]]) {
     return true;  // error
   }
+
+  virtual void apply_zip_dict(LEX_CSTRING *) const noexcept {}
 };
 
 /**
@@ -178,15 +180,22 @@ class PT_secondary_column_attr : public PT_column_attr_base {
 
   @ingroup ptn_column_attrs
 */
-class PT_unique_key_column_attr : public PT_column_attr_base {
+class PT_unique_combo_clustering_key_column_attr : public PT_column_attr_base {
  public:
-  void apply_type_flags(ulong *type_flags) const override {
-    *type_flags |= UNIQUE_FLAG;
+  PT_unique_combo_clustering_key_column_attr(enum keytype key_type) noexcept
+      : m_key_type(key_type) {}
+
+  void apply_type_flags(ulong *type_flags) const noexcept override {
+    if (m_key_type & KEYTYPE_UNIQUE) *type_flags |= UNIQUE_FLAG;
+    if (m_key_type & KEYTYPE_CLUSTERING) *type_flags |= CLUSTERING_FLAG;
   }
 
   void apply_alter_info_flags(ulonglong *flags) const override {
     *flags |= Alter_info::ALTER_ADD_INDEX;
   }
+
+ private:
+  const enum keytype m_key_type;
 };
 
 /**
@@ -413,20 +422,23 @@ class PT_column_format_column_attr : public PT_column_attr_base {
   column_format_type format;
 
  public:
-  explicit PT_column_format_column_attr(column_format_type format)
-      : format(format) {}
+  explicit PT_column_format_column_attr(
+      column_format_type format, const LEX_CSTRING &zip_dict_name) noexcept
+      : format(format), m_zip_dict_name(zip_dict_name) {}
 
   void apply_type_flags(ulong *type_flags) const override {
     *type_flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
     *type_flags |= format << FIELD_FLAGS_COLUMN_FORMAT;
   }
   bool contextualize(Column_parse_context *pc) override {
-    if (pc->is_generated) {
-      my_error(ER_WRONG_USAGE, MYF(0), "COLUMN_FORMAT", "generated column");
-      return true;
-    }
     return super::contextualize(pc);
   }
+  void apply_zip_dict(LEX_CSTRING *to) const noexcept override {
+    *to = m_zip_dict_name;
+  }
+
+ private:
+  const LEX_CSTRING m_zip_dict_name;
 };
 
 /**
@@ -541,6 +553,7 @@ class PT_type : public Parse_tree_node {
   virtual const CHARSET_INFO *get_charset() const { return nullptr; }
   virtual uint get_uint_geom_type() const { return 0; }
   virtual List<String> *get_interval_list() const { return nullptr; }
+  virtual bool is_serial_type() const { return false; }
 };
 
 /**
@@ -852,6 +865,7 @@ class PT_serial_type : public PT_type {
   ulong get_type_flags() const override {
     return AUTO_INCREMENT_FLAG | NOT_NULL_FLAG | UNSIGNED_FLAG | UNIQUE_FLAG;
   }
+  bool is_serial_type() const override { return true; }
 };
 
 /**
@@ -893,6 +907,16 @@ class PT_field_def_base : public Parse_tree_node {
   std::optional<gis::srid_t> m_srid;
   // List of column check constraint's specification.
   Sql_check_constraint_spec_list *check_const_spec_list{nullptr};
+  /**
+    Compression dictionary name (in column definition)
+    CREATE TABLE t1(
+    ...
+    <column_name> BLOB COLUMN_FORMAT COMPRESSED
+    WITH COMPRESSION_DICTIONARY <dict>
+    ...
+    );
+  */
+  LEX_CSTRING m_zip_dict;
 
  protected:
   PT_type *type_node;
@@ -938,6 +962,7 @@ class PT_field_def_base : public Parse_tree_node {
         attr->apply_gen_default_value(&default_val_info);
         attr->apply_on_update_value(&on_update_value);
         attr->apply_srid_modifier(&m_srid);
+        attr->apply_zip_dict(&m_zip_dict);
         if (attr->apply_collation(pc, &charset, &has_explicit_collation))
           return true;
         if (attr->add_check_constraints(check_const_spec_list)) return true;
@@ -998,6 +1023,12 @@ class PT_generated_field_def : public PT_field_def_base {
     if (super::contextualize(&pc) || contextualize_attrs(&pc, opt_attrs) ||
         expr->itemize(&pc, &expr))
       return true;
+
+    // column of type serial cannot be generated
+    if (type_node->is_serial_type()) {
+      my_error(ER_WRONG_USAGE, MYF(0), "SERIAL", "generated column");
+      return true;
+    }
 
     gcol_info = new (pc.mem_root) Value_generator;
     if (gcol_info == nullptr) return true;  // OOM

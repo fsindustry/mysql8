@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2021, Oracle and/or its affiliates.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -104,6 +104,7 @@ fts_ast_node_t *fts_ast_create_node_term(
   fts_ast_node_t *node = nullptr;
   fts_ast_node_t *node_list = nullptr;
   fts_ast_node_t *first_node = nullptr;
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   /* Scan the incoming string and filter out any "non-word" characters */
   while (cur_pos < len) {
@@ -112,7 +113,7 @@ fts_ast_node_t *fts_ast_create_node_term(
 
     cur_len = innobase_mysql_fts_get_token(
         state->charset, reinterpret_cast<const byte *>(ptr->str) + cur_pos,
-        reinterpret_cast<const byte *>(ptr->str) + len, &str);
+        reinterpret_cast<const byte *>(ptr->str) + len, extra_word_chars, &str);
 
     if (cur_len == 0) {
       break;
@@ -374,7 +375,7 @@ void fts_ast_term_set_wildcard(fts_ast_node_t *node) /*!< in/out: set attribute
   ut_a(node->type == FTS_AST_TERM);
   ut_a(!node->term.wildcard);
 
-  node->term.wildcard = TRUE;
+  node->term.wildcard = true;
 }
 
 /** Set the proximity attribute of a text node. */
@@ -417,7 +418,7 @@ void fts_ast_state_free(fts_ast_state_t *state) /*!< in: ast state to free */
 }
 
 /** Print the ast string
-@param[in]	ast_str	string to print */
+@param[in]      ast_str string to print */
 static void fts_ast_string_print(const fts_ast_string_t *ast_str) {
   for (ulint i = 0; i < ast_str->len; ++i) {
     printf("%c", ast_str->str[i]);
@@ -487,7 +488,7 @@ void fts_ast_node_print(fts_ast_node_t *node) /*!< in: ast node to print */
 }
 
 /** Check only union operation involved in the node
-@param[in]	node	ast node to check
+@param[in]      node    ast node to check
 @return true if the node contains only union else false. */
 bool fts_ast_node_check_union(fts_ast_node_t *node) {
   if (node->type == FTS_AST_LIST || node->type == FTS_AST_SUBEXP_LIST) {
@@ -503,7 +504,8 @@ bool fts_ast_node_check_union(fts_ast_node_t *node) {
   } else if (node->type == FTS_AST_OPER &&
              (node->oper == FTS_IGNORE || node->oper == FTS_EXIST)) {
     return (false);
-  } else if (node->type == FTS_AST_TEXT) {
+  } else if (node->type == FTS_AST_TEXT ||
+             node->type == FTS_AST_PARSER_PHRASE_LIST) {
     /* Distance or phrase search query. */
     return (false);
   }
@@ -608,7 +610,7 @@ dberr_t fts_ast_visit(fts_ast_oper_t oper,      /*!< in: current operator */
           continue;
         }
 
-        /* Process leaf node accroding to its pass.*/
+        /* Process leaf node according to its pass.*/
         if (oper == FTS_EXIST_SKIP && visit_pass == FTS_PASS_EXIST) {
           error = visitor(FTS_EXIST, node, arg);
           node->visited = true;
@@ -649,8 +651,8 @@ dberr_t fts_ast_visit(fts_ast_oper_t oper,      /*!< in: current operator */
 /**
 Create an ast string object, with NUL-terminator, so the string
 has one more byte than len
-@param[in] str		pointer to string
-@param[in] len		length of the string
+@param[in] str          pointer to string
+@param[in] len          length of the string
 @return ast string with NUL-terminator */
 fts_ast_string_t *fts_ast_string_create(const byte *str, ulint len) {
   fts_ast_string_t *ast_str;
@@ -672,7 +674,7 @@ fts_ast_string_t *fts_ast_string_create(const byte *str, ulint len) {
 
 /**
 Free an ast string instance
-@param[in,out] ast_str		string to free */
+@param[in,out] ast_str          string to free */
 void fts_ast_string_free(fts_ast_string_t *ast_str) {
   if (ast_str != nullptr) {
     ut::free(ast_str->str);
@@ -682,8 +684,8 @@ void fts_ast_string_free(fts_ast_string_t *ast_str) {
 
 /**
 Translate ast string of type FTS_AST_NUMB to unsigned long by strtoul
-@param[in]	ast_str	string to translate
-@param[in]	base	the base
+@param[in]      ast_str string to translate
+@param[in]      base    the base
 @return translated number */
 ulint fts_ast_string_to_ul(const fts_ast_string_t *ast_str, int base) {
   return (strtoul(reinterpret_cast<const char *>(ast_str->str), nullptr, base));
@@ -707,7 +709,7 @@ const char *fts_ast_node_type_get(fts_ast_type_t type) {
     case FTS_AST_PARSER_PHRASE_LIST:
       return ("FTS_AST_PARSER_PHRASE_LIST");
   }
-  ut_ad(0);
-  return ("FTS_UNKNOWN");
+  ut_d(ut_error);
+  ut_o(return ("FTS_UNKNOWN"));
 }
 #endif /* UNIV_DEBUG */

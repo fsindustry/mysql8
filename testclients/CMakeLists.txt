@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -23,9 +23,9 @@
 ADD_WSHADOW_WARNING()
 
 MYSQL_ADD_EXECUTABLE(mysql_client_test mysql_client_test.cc COMPONENT Test)
-TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient)
+TARGET_LINK_LIBRARIES(mysql_client_test perconaserverclient extra::rapidjson)
 
 IF(WITH_UNIT_TESTS)
   MYSQL_ADD_EXECUTABLE(bug25714 bug25714.cc SKIP_INSTALL)
-  TARGET_LINK_LIBRARIES(bug25714 mysqlclient)
+  TARGET_LINK_LIBRARIES(bug25714 perconaserverclient)
 ENDIF()

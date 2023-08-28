@@ -37,7 +37,7 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_select_members_count",
       "router_select_replication_group_name",
       "router_show_cipher_status",
-      "router_select_cluster_instances_v2",
+      "router_select_cluster_instances_v2_gr",
       "router_commit",
       "router_router_options",
       "router_rollback",
@@ -49,7 +49,6 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_clusterset_all_nodes_by_clusterset_id",
       "router_clusterset_present",
       "router_bootstrap_target_type",
-      "router_clusterset_select_cluster_instances",
       "router_clusterset_select_cluster_info_by_primary_role",
       "router_clusterset_select_cluster_info_by_gr_uuid",
       "router_clusterset_select_gr_primary_member",
@@ -94,6 +93,14 @@ var router_update_last_check_in =
     } else if (stmt.match(router_update_attributes.stmt_regex)) {
       mysqld.global.update_attributes_count++;
       return router_update_attributes;
+    } else if (stmt === "set @@mysqlx_wait_timeout = 28800") {
+      return {
+        ok: {}
+      }
+    } else if (stmt === "enable_notices") {
+      return {
+        ok: {}
+      }
     } else {
       return common_stmts.unknown_statement_response(stmt);
     }

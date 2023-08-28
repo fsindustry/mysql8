@@ -9,13 +9,13 @@
 #    Outcome: group will work.
 # 2. 2 members group with OpenSSL 1.1.1
 #    No --tls-ciphersuites
-#    server1: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
-#    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2'
+#    server1: --tls-version='TLSv1.2,TLSv1.3'
+#    server2: --tls-version='TLSv1.2'
 #    Outcome: group will work.
 # 3. 2 members group with OpenSSL 1.1.1
 #    No --tls-ciphersuites
 #    server1: --tls-version='TLSv1.3'
-#    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2'
+#    server2: --tls-version='TLSv1.2'
 #    Outcome: group will not work.
 # 4. 2 members group with OpenSSL 1.1.1
 #    No --tls-ciphersuites
@@ -24,8 +24,8 @@
 #    Outcome: group will work.
 # 5. 2 members group with OpenSSL 1.1.1
 #    --tls-ciphersuites='TLS_AES_256_GCM_SHA384'
-#    server1: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
-#    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
+#    server1: --tls-version='TLSv1.2,TLSv1.3'
+#    server2: --tls-version='TLSv1.2,TLSv1.3'
 #    Outcome: group will work.
 # 6. 2 members group with OpenSSL 1.1.1
 #    --tls-ciphersuites= '', which will disable all ciphers.
@@ -53,11 +53,9 @@ SET @tls_version_save= @@GLOBAL.tls_version;
 SET @tls_ciphersuites_save= @@GLOBAL.tls_ciphersuites;
 SET @group_replication_ssl_mode_save= @@GLOBAL.group_replication_ssl_mode;
 
---let $tls_version_recovery_save_s1=
---let $tls_ciphersuites_recovery_save_s1=
 if($have_mysql_stack) {
-  --let $tls_version_recovery_save_s1= @@GLOBAL.group_replication_recovery_tls_version;
-  --let $tls_ciphersuites_recovery_save_s1= @@GLOBAL.group_replication_recovery_tls_ciphersuites;
+  SET @tls_version_recovery_save= @@GLOBAL.group_replication_recovery_tls_version;
+  SET @tls_ciphersuites_recovery_save= @@GLOBAL.group_replication_recovery_tls_ciphersuites;
 }
 
 SET @@GLOBAL.group_replication_ssl_mode= REQUIRED;
@@ -69,11 +67,9 @@ SET @tls_ciphersuites_save= @@GLOBAL.tls_ciphersuites;
 SET @group_replication_ssl_mode_save= @@GLOBAL.group_replication_ssl_mode;
 SET @@GLOBAL.group_replication_ssl_mode= REQUIRED;
 
---let $tls_version_recovery_save_s2=
---let $tls_ciphersuites_recovery_save_s2=
 if($have_mysql_stack) {
-  --let $tls_version_recovery_save_s2= @@GLOBAL.group_replication_recovery_tls_version;
-  --let $tls_ciphersuites_recovery_save_s2= @@GLOBAL.group_replication_recovery_tls_ciphersuites;
+  SET @tls_version_recovery_save= @@GLOBAL.group_replication_recovery_tls_version;
+  SET @tls_ciphersuites_recovery_save= @@GLOBAL.group_replication_recovery_tls_ciphersuites;
 }
 
 SET SESSION sql_log_bin= 0;
@@ -113,15 +109,15 @@ SET SESSION sql_log_bin= 1;
 --echo ############################################################
 --echo # 2. 2 members group with OpenSSL 1.1.1
 --echo #    No --tls-ciphersuites
---echo #    server1: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
---echo #    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2'
+--echo #    server1: --tls-version='TLSv1.2,TLSv1.3'
+--echo #    server2: --tls-version='TLSv1.2'
 --echo #    Outcome: group will work.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 
-SET @@GLOBAL.tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+SET @@GLOBAL.tls_version= 'TLSv1.2,TLSv1.3';
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1.2,TLSv1.3';
 }
 ALTER INSTANCE RELOAD TLS;
 --source include/start_and_bootstrap_group_replication.inc
@@ -129,9 +125,9 @@ ALTER INSTANCE RELOAD TLS;
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
 
-SET @@GLOBAL.tls_version= 'TLSv1,TLSv1.1,TLSv1.2';
+SET @@GLOBAL.tls_version= 'TLSv1.2';
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1,TLSv1.1,TLSv1.2';
+  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1.2';
 }
 ALTER INSTANCE RELOAD TLS;
 --source include/start_group_replication.inc
@@ -153,7 +149,7 @@ ALTER INSTANCE RELOAD TLS;
 --echo # 3. 2 members group with OpenSSL 1.1.1
 --echo #    No --tls-ciphersuites
 --echo #    server1: --tls-version='TLSv1.3'
---echo #    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2'
+--echo #    server2: --tls-version='TLSv1.2'
 --echo #    Outcome: group will not work.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
@@ -168,9 +164,9 @@ ALTER INSTANCE RELOAD TLS;
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
 
-SET @@GLOBAL.tls_version= 'TLSv1,TLSv1.1,TLSv1.2';
+SET @@GLOBAL.tls_version= 'TLSv1.2';
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1,TLSv1.1,TLSv1.2';
+  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1.2';
 }
 ALTER INSTANCE RELOAD TLS;
 
@@ -225,16 +221,16 @@ ALTER INSTANCE RELOAD TLS;
 --echo ############################################################
 --echo # 5. 2 members group with OpenSSL 1.1.1
 --echo #    --tls-ciphersuites='TLS_AES_256_GCM_SHA384'
---echo #    server1: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
---echo #    server2: --tls-version='TLSv1,TLSv1.1,TLSv1.2,TLSv1.3'
+--echo #    server1: --tls-version='TLSv1.2,TLSv1.3'
+--echo #    server2: --tls-version='TLSv1.2,TLSv1.3'
 --echo #    Outcome: group will work.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 
-SET @@GLOBAL.tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+SET @@GLOBAL.tls_version= 'TLSv1.2,TLSv1.3';
 SET @@GLOBAL.tls_ciphersuites= 'TLS_AES_256_GCM_SHA384';
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1.2,TLSv1.3';
   SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= 'TLS_AES_256_GCM_SHA384';
 }
 ALTER INSTANCE RELOAD TLS;
@@ -243,10 +239,10 @@ ALTER INSTANCE RELOAD TLS;
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
 
-SET @@GLOBAL.tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+SET @@GLOBAL.tls_version= 'TLSv1.2,TLSv1.3';
 SET @@GLOBAL.tls_ciphersuites= 'TLS_AES_256_GCM_SHA384';
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1,TLSv1.1,TLSv1.2,TLSv1.3';
+  SET @@GLOBAL.group_replication_recovery_tls_version= 'TLSv1.2,TLSv1.3';
   SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= 'TLS_AES_256_GCM_SHA384';
 }
 ALTER INSTANCE RELOAD TLS;
@@ -301,8 +297,8 @@ SET @@GLOBAL.group_replication_ssl_mode= @group_replication_ssl_mode_save;
 SET @@GLOBAL.tls_version= @tls_version_save;
 SET @@GLOBAL.tls_ciphersuites= @tls_ciphersuites_save;
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= $tls_version_recovery_save_s1;
-  SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= $tls_ciphersuites_recovery_save_s1;
+  SET @@GLOBAL.group_replication_recovery_tls_version= @tls_version_recovery_save;
+  SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= @tls_ciphersuites_recovery_save;
 }
 ALTER INSTANCE RELOAD TLS;
 
@@ -312,8 +308,8 @@ SET @@GLOBAL.group_replication_ssl_mode= @group_replication_ssl_mode_save;
 SET @@GLOBAL.tls_version= @tls_version_save;
 SET @@GLOBAL.tls_ciphersuites= @tls_ciphersuites_save;
 if($have_mysql_stack) {
-  SET @@GLOBAL.group_replication_recovery_tls_version= $tls_version_recovery_save_s2;
-  SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= $tls_ciphersuites_recovery_save_s2;
+  SET @@GLOBAL.group_replication_recovery_tls_version= @tls_version_recovery_save;
+  SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= @tls_ciphersuites_recovery_save;
 }
 ALTER INSTANCE RELOAD TLS;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,16 +37,11 @@ void heap_clear(HP_INFO *info) { hp_clear(info->s); }
 void hp_clear(HP_SHARE *info) {
   DBUG_TRACE;
 
-  if (info->block.levels)
-    (void)hp_free_level(&info->block, info->block.levels, info->block.root,
-                        (uchar *)nullptr);
-  info->block.levels = 0;
+  hp_clear_dataspace(&info->recordspace);
   hp_clear_keys(info);
-  info->records = info->deleted = 0;
-  info->data_length = 0;
+  info->records = 0;
   info->blength = 1;
   info->changed = 0;
-  info->del_link = nullptr;
 }
 
 /*
@@ -148,7 +143,7 @@ int heap_enable_indexes(HP_INFO *info) {
   int error = 0;
   HP_SHARE *share = info->s;
 
-  if (share->data_length || share->index_length)
+  if (share->recordspace.total_data_length || share->index_length)
     error = HA_ERR_CRASHED;
   else if (share->currently_disabled_keys) {
     share->keys = share->currently_disabled_keys;

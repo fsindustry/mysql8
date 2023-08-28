@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,16 +25,19 @@
 #ifndef METADATA_CACHE_CLUSTER_METADATA_INCLUDED
 #define METADATA_CACHE_CLUSTER_METADATA_INCLUDED
 
-#include "metadata.h"
+#include "mysqlrouter/metadata_cache_export.h"
+
 #include "mysqlrouter/cluster_metadata.h"
+#include "mysqlrouter/metadata.h"
 #include "mysqlrouter/metadata_cache.h"
 #include "mysqlrouter/mysql_session.h"
 #include "tcp_address.h"
 
-#include <string.h>
 #include <chrono>
+#include <cstring>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -57,7 +60,7 @@ using ConnectCallback =
  * It uses the mysqlrouter::MySQLSession to setup, manage and retrieve results.
  *
  */
-class METADATA_API ClusterMetadata : public MetaData {
+class METADATA_CACHE_EXPORT ClusterMetadata : public MetaData {
  public:
   /** @brief Constructor
    *
@@ -115,11 +118,18 @@ class METADATA_API ClusterMetadata : public MetaData {
       const unsigned router_id) override;
 
   auth_credentials_t fetch_auth_credentials(
-      const mysqlrouter::TargetCluster &target_cluster,
-      const std::string &cluster_type_specific_id) override;
+      const mysqlrouter::TargetCluster &target_cluster) override;
 
-  stdx::expected<metadata_cache::metadata_server_t, std::error_code>
-  find_rw_server(const std::vector<metadata_cache::ManagedInstance> &instances);
+  std::optional<metadata_cache::metadata_server_t> find_rw_server(
+      const std::vector<metadata_cache::ManagedInstance> &instances);
+
+  std::optional<metadata_cache::metadata_server_t> find_rw_server(
+      const std::vector<metadata_cache::ManagedCluster> &clusters);
+
+  std::optional<std::chrono::seconds>
+  get_periodic_stats_update_frequency() noexcept override {
+    return {};
+  }
 
  protected:
   /** Connects a MYSQL connection to the given instance
@@ -149,7 +159,7 @@ class METADATA_API ClusterMetadata : public MetaData {
   std::shared_ptr<mysqlrouter::MySQLSession> metadata_connection_;
 };
 
-std::string get_string(const char *input_str);
+std::string as_string(const char *input_str);
 
 bool set_instance_ports(metadata_cache::ManagedInstance &instance,
                         const mysqlrouter::MySQLSession::Row &row,

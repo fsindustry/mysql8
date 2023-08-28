@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +47,7 @@
 */
 #ifndef my_socket_defined
 #include "my_io.h"
-#include "mysql/components/services/my_io_bits.h"
+#include "mysql/components/services/bits/my_io_bits.h"
 #endif
 
 #ifndef MYSQL_ABI_CHECK
@@ -72,6 +72,7 @@
 
 #define SERVER_VERSION_LENGTH 60
 #define SQLSTATE_LENGTH 5
+#define LIST_PROCESS_HOST_LEN 64
 
 /*
   In FIDO terminology, relying party is the server where required services are
@@ -126,7 +127,7 @@
 */
 #define SCRAMBLE_LENGTH 20
 #define AUTH_PLUGIN_DATA_PART_1_LENGTH 8
-/** length of password stored in the db: new passwords are preceeded with '*'*/
+/** length of password stored in the db: new passwords are preceded with '*'*/
 #define SCRAMBLED_PASSWORD_CHAR_LENGTH (SCRAMBLE_LENGTH * 2 + 1)
 
 /**
@@ -196,6 +197,8 @@
 /** Field is explicitly marked as invisible by the user. */
 #define FIELD_IS_INVISIBLE (1 << 30)
 
+#define CLUSTERING_FLAG (1 << 31)
+
 /** @}*/
 
 /**
@@ -231,7 +234,7 @@
 #define REFRESH_MASTER                                                 \
   128                            /**< Remove all bin logs in the index \
                                     and truncate the index, RESET MASTER */
-#define REFRESH_ERROR_LOG 256    /**< Rotate only the erorr log */
+#define REFRESH_ERROR_LOG 256    /**< Rotate only the error log */
 #define REFRESH_ENGINE_LOG 512   /**< Flush all storage engine logs */
 #define REFRESH_BINARY_LOG 1024  /**< Flush the binary log */
 #define REFRESH_RELAY_LOG 2048   /**< Flush the relay log */
@@ -244,10 +247,20 @@
   @sa REFRESH_READ_LOCK, handle_reload_request, close_cached_tables
 */
 #define REFRESH_FAST 32768
-#define REFRESH_USER_RESOURCES 0x80000L   /** FLISH RESOUCES. @sa ::reset_mqh */
+#define REFRESH_USER_RESOURCES                                                 \
+  0x80000L                                /** FLUSH RESOURCES. @sa ::reset_mqh \
+                                           */
 #define REFRESH_FOR_EXPORT 0x100000L      /** FLUSH TABLES ... FOR EXPORT */
 #define REFRESH_OPTIMIZER_COSTS 0x200000L /** FLUSH OPTIMIZER_COSTS */
 #define REFRESH_PERSIST 0x400000L         /** RESET PERSIST */
+#define REFRESH_TABLE_STATS 0x800000L     /** Refresh table stats */
+#define REFRESH_INDEX_STATS 0x1000000L    /** Refresh index stats */
+#define REFRESH_USER_STATS 0x2000000L     /** Refresh user stats */
+#define REFRESH_CLIENT_STATS 0x4000000L   /** Refresh client stats */
+#define REFRESH_THREAD_STATS 0x8000000L   /** Refresh thread stats */
+#define DUMP_MEMORY_PROFILE 0x10000000L
+
+static const int PURGE_BITMAPS_TO_LSN = 1;
 
 /** @}*/
 
@@ -322,7 +335,8 @@
   @sa send_client_reply_packet()
 */
 #define CLIENT_CONNECT_WITH_DB 8
-#define CLIENT_NO_SCHEMA 16 /**< Don't allow database.table.column */
+#define CLIENT_NO_SCHEMA \
+  16 /**< DEPRECATED: Don't allow database.table.column */
 /**
   Compression protocol supported.
 
@@ -773,7 +787,7 @@
 /** a compatibility alias for CLIENT_COMPRESS */
 #define CAN_CLIENT_COMPRESS CLIENT_COMPRESS
 
-/** Gather all possible capabilites (flags) supported by the server */
+/** Gather all possible capabilities (flags) supported by the server */
 #define CLIENT_ALL_FLAGS                                                       \
   (CLIENT_LONG_PASSWORD | CLIENT_FOUND_ROWS | CLIENT_LONG_FLAG |               \
    CLIENT_CONNECT_WITH_DB | CLIENT_NO_SCHEMA | CLIENT_COMPRESS | CLIENT_ODBC | \
@@ -1098,6 +1112,8 @@ bool net_write_command(struct NET *net, unsigned char command,
 bool net_write_packet(struct NET *net, const unsigned char *packet,
                       size_t length);
 unsigned long my_net_read(struct NET *net);
+bool my_net_shrink_buffer(NET *net, unsigned long min_buf_size,
+                          unsigned long *max_interval_packet);
 void my_net_set_write_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_read_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_retry_count(struct NET *net, unsigned int retry_count);

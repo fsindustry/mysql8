@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,6 +63,7 @@ TEST(MString, HumanReadableSize) {
   data_size *= 1000;
   EXPECT_EQ("1025000Y", HumanReadable(data_size));
   data_size *= 1000;
+
   EXPECT_EQ("1025000000Y", HumanReadable(data_size));
   data_size *=
       static_cast<double>(std::numeric_limits<unsigned long long>::max());

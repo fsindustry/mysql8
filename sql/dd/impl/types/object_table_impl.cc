@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,16 +39,44 @@ Object_table_impl::Object_table_impl()
   m_target_def.add_option(static_cast<int>(Common_option::ENGINE), "ENGINE",
                           "ENGINE=INNODB");
   m_target_def.add_option(static_cast<int>(Common_option::CHARSET), "CHARSET",
-                          "DEFAULT CHARSET=utf8");
+                          "DEFAULT CHARSET=utf8mb3");
   m_target_def.add_option(static_cast<int>(Common_option::COLLATION),
-                          "COLLATION", "COLLATE=utf8_bin");
+                          "COLLATION", "COLLATE=utf8mb3_bin");
   m_target_def.add_option(static_cast<int>(Common_option::ROW_FORMAT),
                           "ROW_FORMAT", "ROW_FORMAT=DYNAMIC");
   m_target_def.add_option(static_cast<int>(Common_option::STATS_PERSISTENT),
                           "STATS_PERSISTENT", "STATS_PERSISTENT=0");
+
+  if (bootstrap::DD_bootstrap_ctx::instance().is_dd_encrypted()) {
+    m_target_def.add_option(static_cast<int>(Common_option::ENCRYPTION),
+                            "ENCRYPTION", "ENCRYPTION='Y'");
+  }
+
   m_target_def.add_option(
       static_cast<int>(Common_option::TABLESPACE), "TABLESPACE",
       String_type("TABLESPACE=") + String_type(MYSQL_TABLESPACE_NAME.str));
+}
+
+bool Object_table_impl::is_target_encrypted() const {
+  return m_target_def.has_option(static_cast<int>(Common_option::ENCRYPTION));
+}
+
+void Object_table_impl::unset_target_encrypted() const {
+  m_target_def.remove_option("ENCRYPTION");
+}
+
+void Object_table_impl::set_target_encrypted() const {
+  if (!m_target_def.has_option(static_cast<int>(Common_option::ENCRYPTION))) {
+    m_target_def.add_option(static_cast<int>(Common_option::ENCRYPTION),
+                            "ENCRYPTION", "ENCRYPTION='Y'");
+  }
+}
+
+void Object_table_impl::set_actual_encrypted() const {
+  if (!m_actual_def.has_option(static_cast<int>(Common_option::ENCRYPTION))) {
+    m_actual_def.add_option(static_cast<int>(Common_option::ENCRYPTION),
+                            "ENCRYPTION", "ENCRYPTION='Y'");
+  }
 }
 
 bool Object_table_impl::set_actual_table_definition(

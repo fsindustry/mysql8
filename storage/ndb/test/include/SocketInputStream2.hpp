@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,12 +25,13 @@
 #ifndef SOCKETINPUTSTREAM2_HPP
 #define SOCKETINPUTSTREAM2_HPP
 
-#include <NdbTCP.h>
+#include "portlib/ndb_socket.h"
 #include <BaseString.hpp>
 #include <UtilBuffer.hpp>
+#include "util/NdbSocket.h"
 
 class SocketInputStream2 {
-  NDB_SOCKET_TYPE m_socket;
+  NdbSocket m_socket;
   unsigned m_read_timeout;
   UtilBuffer m_buffer;
   size_t m_buffer_read_pos;
@@ -41,12 +42,11 @@ class SocketInputStream2 {
   bool add_buffer(char* buf, ssize_t len);
 
 public:
-  SocketInputStream2(NDB_SOCKET_TYPE socket,
+  SocketInputStream2(ndb_socket_t socket,
                      unsigned read_timeout = 60) :
-    m_socket(socket),
+    m_socket(socket, NdbSocket::From::Existing),
     m_read_timeout(read_timeout),
-    m_buffer_read_pos(0)
-    {}
+    m_buffer_read_pos(0)          {}
 
   /*
     Read a line from socket into the string "str" until

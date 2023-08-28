@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -28,8 +28,10 @@
 
 MY_COMPILER_DIAGNOSTIC_PUSH()
 MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE("-Wdeprecated-dynamic-exception-spec")
+#if !defined(__clang__) || (__clang_major__ >= 5)
 MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE(
     "-Winconsistent-missing-destructor-override")
+#endif
 #include <google/protobuf/message_lite.h>  // ShutdownProtobufLibrary()
 MY_COMPILER_DIAGNOSTIC_POP()
 
@@ -38,18 +40,24 @@ MY_COMPILER_DIAGNOSTIC_POP()
 extern "C" {
 
 mysql_harness::Plugin ROUTER_PROTOBUF_EXPORT harness_plugin_router_protobuf = {
-    mysql_harness::PLUGIN_ABI_VERSION, mysql_harness::ARCHITECTURE_DESCRIPTOR,
-    "", VERSION_NUMBER(0, 0, 1),
+    mysql_harness::PLUGIN_ABI_VERSION,
+    mysql_harness::ARCHITECTURE_DESCRIPTOR,
+    "",
+    VERSION_NUMBER(0, 0, 1),
     // requires
-    0, nullptr,
+    0,
+    nullptr,
     // conflicts
-    0, nullptr,
+    0,
+    nullptr,
     nullptr,  // init
     [](mysql_harness::PluginFuncEnv *) {
       google::protobuf::ShutdownProtobufLibrary();
     },
     nullptr,  // start
     nullptr,  // stop
-    false     // declare_readiness
+    false,    // declare_readiness
+    0,
+    nullptr,
 };
 }

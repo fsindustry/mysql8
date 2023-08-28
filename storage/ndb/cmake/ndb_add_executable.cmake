@@ -1,4 +1,4 @@
-# Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -20,7 +20,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #
-INCLUDE(mysql_add_executable)
 
 #
 # NDB_ADD_EXECUTABLE(options source_files)
@@ -36,8 +35,9 @@ FUNCTION(NDB_ADD_EXECUTABLE target)
   SET(OPTIONS "NDBCLIENT" "STATIC_NDBCLIENT" "MYSQLCLIENT" "NDBTEST")
   CMAKE_PARSE_ARGUMENTS(OPT "${OPTIONS}" "" "" ${ARGN})
 
-  MYSQL_ADD_EXECUTABLE(${target} ${OPT_UNPARSED_ARGUMENTS})
-  SET_TARGET_PROPERTIES(${target} PROPERTIES ENABLE_EXPORTS TRUE)
+  MYSQL_ADD_EXECUTABLE(${target} ${OPT_UNPARSED_ARGUMENTS}
+    ENABLE_EXPORTS
+    )
 
   IF(OPT_NDBTEST)
     TARGET_LINK_LIBRARIES(${target} ndbNDBT)

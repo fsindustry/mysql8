@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -71,12 +71,12 @@ static inline row_id_t dict_sys_read_row_id(
     const byte *field); /*!< in: record field */
 
 /** Writes a row id to a record or other 6-byte stored form.
-@param[in]	field	record field
-@param[in]	row_id	row id */
+@param[in]      field   record field
+@param[in]      row_id  row id */
 static inline void dict_sys_write_row_id(byte *field, row_id_t row_id);
 
 /** Check if a table id belongs to old innodb internal system table.
-@param[in]	id		table id
+@param[in]      id              table id
 @return true if the table id belongs to a system table. */
 [[nodiscard]] static inline bool dict_is_old_sys_table(table_id_t id);
 #endif /* !UNIV_HOTBACKUP */
@@ -90,46 +90,48 @@ static inline void dict_sys_write_row_id(byte *field, row_id_t row_id);
  @return DB_SUCCESS or error code. */
 [[nodiscard]] dberr_t dict_create(void);
 
-/* Space id and page no where the dictionary header resides */
-#define DICT_HDR_SPACE 0 /* the SYSTEM tablespace */
-#define DICT_HDR_PAGE_NO FSP_DICT_HDR_PAGE_NO
-
-/* The ids for the basic system tables and their indexes */
-#define DICT_TABLES_ID 1
-#define DICT_COLUMNS_ID 2
-#define DICT_INDEXES_ID 3
-#define DICT_FIELDS_ID 4
+/** The ids for the basic system tables and their indexes */
+constexpr uint32_t DICT_TABLES_ID = 1;
+constexpr uint32_t DICT_COLUMNS_ID = 2;
+constexpr uint32_t DICT_INDEXES_ID = 3;
+constexpr uint32_t DICT_FIELDS_ID = 4;
 /* The following is a secondary index on SYS_TABLES */
-#define DICT_TABLE_IDS_ID 5
+constexpr uint32_t DICT_TABLE_IDS_ID = 5;
 
-#define DICT_HDR_FIRST_ID                  \
-  10 /* the ids for tables etc. start      \
-     from this number, except for basic    \
-     system tables and their above defined \
-     indexes; ibuf tables and indexes are  \
-     assigned as the id the number         \
-     DICT_IBUF_ID_MIN plus the space id */
+/** the ids for tables etc. start from this number, except for basic system
+ tables and their above defined indexes; ibuf tables and indexes are assigned
+ as the id the number DICT_IBUF_ID_MIN plus the space id */
+constexpr uint32_t DICT_HDR_FIRST_ID = 10;
 
 /* The offset of the dictionary header on the page */
-#define DICT_HDR FSEG_PAGE_DATA
+constexpr uint32_t DICT_HDR = FSEG_PAGE_DATA;
 
 /*-------------------------------------------------------------*/
 /* Dictionary header offsets */
-#define DICT_HDR_ROW_ID 0        /* The latest assigned row id */
-#define DICT_HDR_TABLE_ID 8      /* The latest assigned table id */
-#define DICT_HDR_INDEX_ID 16     /* The latest assigned index id */
-#define DICT_HDR_MAX_SPACE_ID 24 /* The latest assigned space id,or 0*/
-#define DICT_HDR_MIX_ID_LOW 28   /* Obsolete,always DICT_HDR_FIRST_ID*/
-#define DICT_HDR_TABLES 32       /* Root of SYS_TABLES clust index */
-#define DICT_HDR_TABLE_IDS 36    /* Root of SYS_TABLE_IDS sec index */
-#define DICT_HDR_COLUMNS 40      /* Root of SYS_COLUMNS clust index */
-#define DICT_HDR_INDEXES 44      /* Root of SYS_INDEXES clust index */
-#define DICT_HDR_FIELDS 48       /* Root of SYS_FIELDS clust index */
+/** The latest assigned row id */
+constexpr uint32_t DICT_HDR_ROW_ID = 0;
+/** The latest assigned table id */
+constexpr uint32_t DICT_HDR_TABLE_ID = 8;
+/** The latest assigned index id */
+constexpr uint32_t DICT_HDR_INDEX_ID = 16;
+/** The latest assigned space id,or 0*/
+constexpr uint32_t DICT_HDR_MAX_SPACE_ID = 24;
+/** Obsolete,always DICT_HDR_FIRST_ID*/
+constexpr uint32_t DICT_HDR_MIX_ID_LOW = 28;
+/** Root of SYS_TABLES clust index */
+constexpr uint32_t DICT_HDR_TABLES = 32;
+/** Root of SYS_TABLE_IDS sec index */
+constexpr uint32_t DICT_HDR_TABLE_IDS = 36;
+/** Root of SYS_COLUMNS clust index */
+constexpr uint32_t DICT_HDR_COLUMNS = 40;
+/** Root of SYS_INDEXES clust index */
+constexpr uint32_t DICT_HDR_INDEXES = 44;
+/** Root of SYS_FIELDS clust index */
+constexpr uint32_t DICT_HDR_FIELDS = 48;
 
-#define DICT_HDR_FSEG_HEADER              \
-  56 /* Segment header for the tablespace \
-     segment into which the dictionary    \
-     header is created */
+/* Segment header for the tablespace segment into which the dictionary header is
+ created */
+constexpr uint32_t DICT_HDR_FSEG_HEADER = 56;
 /*-------------------------------------------------------------*/
 
 /* The columns in SYS_TABLES */
@@ -302,6 +304,38 @@ enum dict_fld_sys_datafiles_enum {
   DICT_FLD__SYS_DATAFILES__PATH = 3,
   DICT_NUM_FIELDS__SYS_DATAFILES = 4
 };
+/* The columns in SYS_DICT */
+enum dict_col_sys_zip_dict_enum {
+  DICT_COL__SYS_ZIP_DICT__ID = 0,
+  DICT_COL__SYS_ZIP_DICT__NAME = 1,
+  DICT_COL__SYS_ZIP_DICT__DATA = 2,
+  DICT_NUM_COLS__SYS_ZIP_DICT = 3
+};
+/* The field numbers in the SYS_DICT clustered index */
+enum dict_fld_sys_zip_dict_enum {
+  DICT_FLD__SYS_ZIP_DICT__ID = 0,
+  DICT_FLD__SYS_ZIP_DICT__DB_TRX_ID = 1,
+  DICT_FLD__SYS_ZIP_DICT__DB_ROLL_PTR = 2,
+  DICT_FLD__SYS_ZIP_DICT__NAME = 3,
+  DICT_FLD__SYS_ZIP_DICT__DATA = 4,
+  DICT_NUM_FIELDS__SYS_ZIP_DICT = 5
+};
+/* The columns in SYS_DICT_COLS */
+enum dict_col_sys_zip_dict_cols_enum {
+  DICT_COL__SYS_ZIP_DICT_COLS__TABLE_ID = 0,
+  DICT_COL__SYS_ZIP_DICT_COLS__COLUMN_POS = 1,
+  DICT_COL__SYS_ZIP_DICT_COLS__DICT_ID = 2,
+  DICT_NUM_COLS__SYS_ZIP_DICT_COLS = 3
+};
+/* The field numbers in the SYS_DICT_COLS clustered index */
+enum dict_fld_sys_zip_dict_cols_enum {
+  DICT_FLD__SYS_ZIP_DICT_COLS__TABLE_ID = 0,
+  DICT_FLD__SYS_ZIP_DICT_COLS__COLUMN_POS = 1,
+  DICT_FLD__SYS_ZIP_DICT_COLS__DB_TRX_ID = 2,
+  DICT_FLD__SYS_ZIP_DICT_COLS__DB_ROLL_PTR = 3,
+  DICT_FLD__SYS_ZIP_DICT_COLS__DICT_ID = 4,
+  DICT_NUM_FIELDS__SYS_ZIP_DICT_COLS = 5
+};
 
 /* The columns in SYS_VIRTUAL */
 enum dict_col_sys_virtual_enum {
@@ -321,14 +355,14 @@ enum dict_fld_sys_virtual_enum {
 };
 
 /* A number of the columns above occur in multiple tables.  These are the
-length of thos fields. */
-#define DICT_FLD_LEN_SPACE 4
-#define DICT_FLD_LEN_FLAGS 4
+length of those fields. */
+constexpr uint32_t DICT_FLD_LEN_SPACE = 4;
+constexpr uint32_t DICT_FLD_LEN_FLAGS = 4;
 
 /* When a row id which is zero modulo this number (which must be a power of
 two) is assigned, the field DICT_HDR_ROW_ID on the dictionary header page is
 updated */
-#define DICT_HDR_ROW_ID_WRITE_MARGIN 256
+constexpr uint32_t DICT_HDR_ROW_ID_WRITE_MARGIN = 256;
 
 #ifndef UNIV_HOTBACKUP
 #include "dict0boot.ic"

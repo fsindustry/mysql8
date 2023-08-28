@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,13 +34,14 @@
 #include "sql/table.h"
 #include "sql/thr_malloc.h"
 
+struct IO_CACHE;
 class Item;
 class THD;
 
 typedef int64 query_id_t;
 
 extern ST_FIELD_INFO query_profile_statistics_info[];
-int fill_query_profile_statistics_info(THD *thd, TABLE_LIST *tables, Item *);
+int fill_query_profile_statistics_info(THD *thd, Table_ref *tables, Item *);
 int make_profile_table_for_show(THD *thd, ST_SCHEMA_TABLE *schema_table);
 
 #define PROFILE_NONE (uint)0
@@ -63,6 +64,14 @@ int make_profile_table_for_show(THD *thd, ST_SCHEMA_TABLE *schema_table);
 #include "mysql/service_mysql_alloc.h"
 
 extern PSI_memory_key key_memory_queue_item;
+extern bool opt_jemalloc_profiling_enabled;
+extern bool opt_jemalloc_detected;
+
+int jemalloc_mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp,
+                     size_t newlen);
+int jemalloc_profiling_dump();
+int jemalloc_profiling_enable(bool enable);
+bool jemalloc_detected();
 
 class PROFILING;
 class QUERY_PROFILE;
@@ -161,11 +170,15 @@ class Queue {
   A single entry in a single profile.
 */
 class PROF_MEASUREMENT {
- private:
-  friend class QUERY_PROFILE;
-  friend class PROFILING;
-
   QUERY_PROFILE *profile;
+
+  char *allocated_status_memory;
+
+  void set_label(const char *status_arg, const char *function_arg,
+                 const char *file_arg, unsigned int line_arg);
+  void clean_up();
+
+ public:
   const char *status;
 #ifdef HAVE_GETRUSAGE
   struct rusage rusage;
@@ -179,10 +192,7 @@ class PROF_MEASUREMENT {
 
   ulong m_seq;
   double time_usecs;
-  char *allocated_status_memory;
-
-  void set_label(const char *status_arg, const char *function_arg,
-                 const char *file_arg, unsigned int line_arg);
+  double cpu_time_usecs;
   PROF_MEASUREMENT(QUERY_PROFILE *profile_arg, const char *status_arg);
   PROF_MEASUREMENT(QUERY_PROFILE *profile_arg, const char *status_arg,
                    const char *function_arg, const char *file_arg,
@@ -217,6 +227,9 @@ class QUERY_PROFILE {
   /* Add a profile status change to the current profile. */
   void new_status(const char *status_arg, const char *function_arg,
                   const char *file_arg, unsigned int line_arg);
+
+ public:
+  PROFILING *get_profiling() const noexcept { return profiling; }
 };
 
 /**
@@ -259,10 +272,13 @@ class PROFILING {
 
   /* SHOW PROFILES */
   bool show_profiles();
+  bool enabled_getrusage() const noexcept;
 
   /* ... from INFORMATION_SCHEMA.PROFILING ... */
-  int fill_statistics_info(THD *thd, TABLE_LIST *tables);
+  int fill_statistics_info(THD *thd, Table_ref *tables);
   void cleanup();
+
+  int print_current(IO_CACHE *log_file) const noexcept;
 };
 
 #endif /* HAVE_PROFILING */

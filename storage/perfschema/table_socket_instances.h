@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,7 +37,7 @@
 
 #include "my_base.h"
 #include "my_inttypes.h"
-#include "mysql/components/services/psi_socket_bits.h"
+#include "mysql/components/services/bits/psi_socket_bits.h"
 #include "storage/perfschema/pfs_engine_table.h"
 #include "storage/perfschema/table_helper.h"
 
@@ -80,7 +80,8 @@ struct row_socket_instances {
 
 class PFS_index_socket_instances : public PFS_engine_index {
  public:
-  PFS_index_socket_instances(PFS_engine_key *key_1) : PFS_engine_index(key_1) {}
+  explicit PFS_index_socket_instances(PFS_engine_key *key_1)
+      : PFS_engine_index(key_1) {}
 
   PFS_index_socket_instances(PFS_engine_key *key_1, PFS_engine_key *key_2)
       : PFS_engine_index(key_1, key_2) {}
@@ -155,7 +156,7 @@ class table_socket_instances : public PFS_engine_table {
   static PFS_engine_table *create(PFS_engine_table_share *);
   static ha_rows get_row_count();
 
-  void reset_position(void) override;
+  void reset_position() override;
 
   int rnd_next() override;
   int rnd_pos(const void *pos) override;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -72,6 +72,22 @@ class Partition_index_impl : public Weak_object_impl, public Partition_index {
   bool restore_attributes(const Raw_record &r) override;
 
   bool store_attributes(Raw_record *r) override;
+
+  /////////////////////////////////////////////////////////////////////////
+  // is_disabled.
+  /////////////////////////////////////////////////////////////////////////
+
+  virtual bool is_disabled() const noexcept override {
+    return m_index->is_disabled();
+  }
+
+  virtual void set_disabled(bool disable) noexcept override {
+    m_index->set_disabled(disable);
+  }
+
+  virtual Index::enum_index_type type() const noexcept override {
+    return m_index->type();
+  }
 
   void serialize(Sdi_wcontext *wctx, Sdi_writer *w) const override;
 

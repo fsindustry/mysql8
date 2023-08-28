@@ -1,4 +1,4 @@
--- Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+-- Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -174,32 +174,38 @@ INSERT INTO global_suppressions VALUES
  */
 
  ("Lock wait timeout exceeded"),
- ("Log entry on master is longer than max_allowed_packet"),
+ ("Log entry on source is longer than max_allowed_packet"),
  ("unknown option '--loose-"),
  ("unknown variable 'loose-"),
  ("Setting lower_case_table_names=2"),
  ("NDB Binlog:"),
  ("Neither --relay-log nor --relay-log-index were used"),
  ("Query partially completed"),
- ("Slave SQL thread is stopped because UNTIL condition"),
- ("Slave SQL thread retried transaction"),
- ("Slave: .*master may suffer from"),
- ("Slave: Table .* doesn't exist"),
- ("Slave: Unknown error.* MY-001105"),
+ ("Replica SQL thread is stopped because UNTIL condition"),
+ ("Replica SQL thread retried transaction"),
+ ("Replica: .*source may suffer from"),
+ ("Replica: Table .* doesn't exist"),
+ ("Replica: Unknown error.* MY-001105"),
  ("Time-out in NDB"),
  ("You have an error in your SQL syntax"),
  ("deprecated"),
  ("equal MySQL server ids"),
- ("error .*connecting to master"),
+ ("Error .*connecting to source"),
  ("error reading log entry"),
  ("lower_case_table_names is set"),
  ("skip-name-resolve mode"),
- ("slave SQL thread aborted"),
- ("Slave: .*Duplicate entry"),
+ ("replica SQL thread aborted"),
+ ("Replica: .*Duplicate entry"),
+ /* In certain cases, due to unlucky scheduling, we might receive a temporary
+ warning about running out of space in the redo log. In such case, it might
+ result in temporary stall and suggestion to increase space in the redo log
+ by increasing the innodb_redo_log_capacity. */
+ ("Consider increasing innodb_redo_log_capacity."),
+ ("Redo log reclaimed some free space"),
 
  /*
     innodb_dedicated_server warning which raised if innodb_buffer_pool_size,
-    innodb_log_file_size or innodb_flush_method is specified.
+    innodb_redo_log_capacity or innodb_flush_method is specified.
  */
  ("InnoDB: Option innodb_dedicated_server is ignored"),
 
@@ -240,11 +246,11 @@ INSERT INTO global_suppressions VALUES
    Transient network failures that cause warnings on reconnect.
    BUG#47743 and BUG#47983.
  */
- ("Slave I/O.*: Get master SERVER_UUID failed with error:.*"),
- ("Slave I/O.*: Get master SERVER_ID failed with error:.*"),
+ ("Replica I/O.*: Get source SERVER_UUID failed with error:.*"),
+ ("Replica I/O.*: Get source SERVER_ID failed with error:.*"),
 
  /*
-   Warning message is printed out whenever a slave is started with
+   Warning message is printed out whenever a replica is started with
    a configuration that is not crash-safe.
  */
  (".*If a crash happens this configuration does not guarantee.*"),
@@ -252,12 +258,12 @@ INSERT INTO global_suppressions VALUES
  /*
    Warning messages introduced in the context of the WL#4143.
  */
- ("Storing MySQL user name or password information in the master.info repository is not secure.*"),
+ ("Storing MySQL user name or password information in the connection metadata repository is not secure.*"),
 /*
-  In MTS if the user issues a stop slave sql while it is scheduling a group
+  In MTS if the user issues a stop replica sql while it is scheduling a group
   of events, this warning is emitted.
   */
- ("Slave SQL.*: Coordinator thread of multi-threaded slave is being stopped in the middle of assigning a group of events.*"),
+ ("Replica SQL.*: Coordinator thread of multi-threaded replica is being stopped in the middle of assigning a group of events.*"),
  /*
   Warning messages seen on Fedora and older Debian and Ubuntu versions
  */
@@ -273,6 +279,11 @@ INSERT INTO global_suppressions VALUES
    Warnings related to --secure-file-priv
  */
  ("Insecure configuration for --secure-file-priv:*"),
+
+ /*
+   Warnings related to --secure-log-path
+ */
+ ("Insecure configuration for --secure-log-path:*"),
 
  /*
    Bug#26585560, warning related to --pid-file
@@ -299,7 +310,7 @@ INSERT INTO global_suppressions VALUES
  ("\\[GCS\\] Error on opening a connection to .*"),
  ("\\[GCS\\] Error pushing message into group communication engine."),
  ("\\[GCS\\] Message cannot be sent because the member does not belong to a group."),
- ("\\[GCS\\] Automatically adding IPv4 localhost address to the allowlist. It is mandatory that it is added."),
+ ("\\[GCS\\] Automatically adding IPv. localhost address to the allowlist. It is mandatory that it is added."),
  ("\\[GCS\\] Unable to bind to INADDR_ANY:.*"),
  ("\\[GCS\\] Unable to announce tcp port .*. Port already in use\\?"),
  ("\\[GCS\\] Error joining the group while waiting for the network layer to become ready."),
@@ -311,13 +322,15 @@ INSERT INTO global_suppressions VALUES
  ("The member has resumed contact with a majority of the members in the group.*"),
  ("Members removed from the group.*"),
  ("Error while sending message for group replication recovery"),
- ("Slave SQL for channel 'group_replication_recovery': ... The slave coordinator and worker threads are .*"),
+ ("Replica SQL for channel 'group_replication_recovery': ... The replica coordinator and worker threads are .*"),
  ("A message intended for a client cannot be sent there as no client-session is attached. Therefore, we're sending the information to the error-log instead: MY-001160 - Got an error writing communication packets.*"),
  ("A message intended for a client cannot be sent there as no client-session is attached. Therefore, we're sending the information to the error-log instead: MY-001158 - Got an error reading communication packets.*"),
  ("Failed to establish MySQL client connection in Group Replication.*."),
  ("\\[GCS\\] client closed the signalling connection .*"),
  ("\\[GCS\\] local_server: client closed the signalling connection.*"),
  ("\\[GCS\\] local_server: error reading from the signalling connection.*"),
+ ("\\[GCS\\] Unable to start XCom Network Provider.*"),
+ ("\\[GCS\\] Error initializing the group communication engine.*"),
 
  /*
    Warnings/errors related to SSL connection by mysqlx
@@ -340,7 +353,7 @@ INSERT INTO global_suppressions VALUES
  ("The SSL library function CRYPTO_set_mem_functions failed"),
 
  /*
-   binlog-less slave (WL#7846)
+   binlog-less replica (WL#7846)
  */
  ("The transaction owned GTID is already in the gtid_executed table"),
 
@@ -360,10 +373,6 @@ INSERT INTO global_suppressions VALUES
    Manifest file processing
  */
  ("Manifest file '.*' is not read-only. For better security, please make sure that the file is read-only."),
-
- /* TLS v1.0 and v1.1 deprecated */
- ("A deprecated TLS version TLSv1 is enabled for channel"),
- ("A deprecated TLS version TLSv1.1 is enabled for channel"),
 
  ("THE_LAST_SUPPRESSION");
 
@@ -433,11 +442,11 @@ BEGIN
   --
   -- Get the number of marked lines and return result
   --
-  SELECT COUNT(*) INTO @num_warnings FROM error_log
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ COUNT(*) INTO @num_warnings FROM error_log
     WHERE suspicious=1;
 
   IF @num_warnings > 0 THEN
-    SELECT line
+    SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ line
         FROM error_log WHERE suspicious=1;
     -- SELECT * FROM test_suppressions;
     -- Return 2 -> check failed

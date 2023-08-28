@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,8 @@
 #include <mysql/components/services/group_replication_status_service.h>
 #include "mysql/components/services/log_builtins.h"
 
+#include "sql-common/json_dom.h"
 #include "sql/changestreams/apply/replication_thread_status.h"
-#include "sql/json_dom.h"
 #include "sql/mysqld.h"
 #include "sql/mysqld_thd_manager.h"  // Global_THD_manager
 #include "sql/protocol_classic.h"
@@ -203,7 +203,7 @@ bool Source_IO_monitor::launch_monitoring_process(PSI_thread_key thread_key) {
 
   if (mysql_thread_create(thread_key, &m_th, &connection_attrib,
                           launch_handler_thread, (void *)this)) {
-    my_error(ER_SLAVE_THREAD, MYF(0));
+    my_error(ER_REPLICA_THREAD, MYF(0));
     mysql_mutex_unlock(&m_run_lock);
     return true;
   }
@@ -221,7 +221,7 @@ bool Source_IO_monitor::launch_monitoring_process(PSI_thread_key thread_key) {
 
 void Source_IO_monitor::source_monitor_handler() {
   THD *thd{nullptr};  // needs to be first for thread_stack
-  thd = new THD;      // note that contructor of THD uses DBUG_ !
+  thd = new THD;      // note that constructor of THD uses DBUG_ !
   m_monitor_thd = thd;
   struct timespec waittime;
 
@@ -238,7 +238,7 @@ void Source_IO_monitor::source_monitor_handler() {
   thd->thread_stack = (char *)&thd;  // remember where our stack is
 
   if (init_replica_thread(thd, SLAVE_THD_IO)) {
-    my_error(ER_SLAVE_FATAL_ERROR, MYF(0),
+    my_error(ER_REPLICA_FATAL_ERROR, MYF(0),
              "Failed during Replica IO Monitor thread initialization ");
     goto err;
   }
@@ -472,7 +472,7 @@ int Source_IO_monitor::connect_senders(THD *thd,
     }
 
     /*
-      3.4. Store gathered memebership details to
+      3.4. Store gathered membership details to
            replication_asynchronous_connection_failover table.
     */
     THD_STAGE_INFO(thd, stage_rpl_failover_updating_source_member_details);
@@ -1100,7 +1100,8 @@ static bool restart_io_thread(THD *thd, const std::string &channel_name,
   }
 
   if (Async_conn_failover_manager::do_auto_conn_failover(
-          mi, force_sender_with_highest_weight)) {
+          mi, force_sender_with_highest_weight) !=
+      Async_conn_failover_manager::DoAutoConnFailoverError::no_error) {
     LogErr(WARNING_LEVEL, ER_RPL_REPLICA_MONITOR_IO_THREAD_RECONNECT_CHANNEL,
            "choosing the source for", channel_name.c_str());
     channel_map.unlock();

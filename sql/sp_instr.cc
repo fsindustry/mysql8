@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,6 +44,7 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/binlog.h"            // mysql_bin_log
+#include "sql/debug_sync.h"
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Strict_error_handler
 #include "sql/field.h"
@@ -60,7 +61,8 @@
 #include "sql/sp_head.h"      // sp_head
 #include "sql/sp_pcontext.h"  // sp_pcontext
 #include "sql/sp_rcontext.h"  // sp_rcontext
-#include "sql/sql_base.h"     // open_temporary_tables
+#include "sql/sql_audit.h"
+#include "sql/sql_base.h"  // open_temporary_tables
 #include "sql/sql_const.h"
 #include "sql/sql_digest_stream.h"
 #include "sql/sql_parse.h"    // parse_sql
@@ -357,7 +359,7 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
 
   /*
     In case a session state exists do not cache the SELECT stmt. If we
-    cache SELECT statment when session state information exists, then
+    cache SELECT statement when session state information exists, then
     the result sets of this SELECT are cached which contains changed
     session information. Next time when same query is executed when there
     is no change in session state, then result sets are picked from cache
@@ -414,7 +416,7 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
         key read.
       */
 
-      m_lex->cleanup(thd, true);
+      m_lex->cleanup(true);
 
       /* Here we also commit or rollback the current statement. */
 
@@ -476,14 +478,14 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
     statement. To make sure that items are created in the statement mem_root,
     change state to STMT_INITIALIZED_FOR_SP.
 
-    When a "table exists" error occur for CREATE TABLE ... SELECT change state
+    When a "table exists" error occurs for CREATE TABLE ... SELECT change state
     to STMT_INITIALIZED_FOR_SP, as if statement must be reprepared.
 
       Why is this necessary? A useful pointer would be to note how
       PREPARE/EXECUTE uses functions like select_like_stmt_test to implement
       CREATE TABLE .... SELECT. The SELECT part of the DDL is resolved first.
       Then there is an attempt to create the table. So in the execution phase,
-      if "table exists" error occurs or flush table preceeds the execute, the
+      if "table exists" error occurs or flush table precedes the execute, the
       item tree of the select is re-created and followed by an attempt to create
       the table.
 
@@ -565,9 +567,7 @@ LEX *sp_lex_instr::parse_expr(THD *thd, sp_head *sp) {
   cleanup_before_parsing(thd);
 
   // Cleanup and re-init the lex mem_root for re-parse.
-  m_lex_mem_root.Clear();
-  init_sql_alloc(PSI_NOT_INSTRUMENTED, &m_lex_mem_root, MEM_ROOT_BLOCK_SIZE,
-                 MEM_ROOT_PREALLOC);
+  m_lex_mem_root.ClearForReuse();
 
   /*
     Switch mem-roots. We store the new LEX and its Items in the
@@ -595,7 +595,7 @@ LEX *sp_lex_instr::parse_expr(THD *thd, sp_head *sp) {
   Item *execution_item_list = thd->item_list();
   thd->reset_item_list();
 
-  // Create a new LEX and intialize it.
+  // Create a new LEX and initialize it.
 
   LEX *lex_saved = thd->lex;
 
@@ -743,9 +743,16 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
           raise it to the user;
     */
     if (stmt_reprepare_observer == nullptr || thd->is_fatal_error() ||
-        thd->killed || thd->get_stmt_da()->mysql_errno() != ER_NEED_REPREPARE)
+        thd->killed || thd->get_stmt_da()->mysql_errno() != ER_NEED_REPREPARE) {
+      /*
+        If an error occurred before execution, make sure next execution is
+        started with a clean statement:
+      */
+      if (m_lex->is_metadata_used() && !m_lex->is_exec_started()) {
+        invalidate();
+      }
       return true;
-
+    }
     /*
       Reprepare_observer ensures that the statement is retried a maximum number
       of times, to avoid an endless loop.
@@ -829,6 +836,7 @@ PSI_statement_info sp_instr_stmt::psi_info = {0, "stmt", 0, PSI_DOCUMENT_ME};
 bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
   bool need_subst = false;
   bool rc = false;
+  QUERY_START_TIME_INFO time_info;
 
   DBUG_PRINT("info", ("query: '%.*s'", (int)m_query.length, m_query.str));
 
@@ -840,6 +848,17 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
   /* This SP-instr is profilable and will be captured. */
   thd->profiling->set_query_source(m_query.str, m_query.length);
 #endif
+
+  memset(&time_info, 0, sizeof(time_info));
+
+  if (thd->enable_slow_log) {
+    /*
+      Save start time info for the CALL statement and overwrite it with the
+      current time for log_slow_statement() to log the individual query timing.
+    */
+    thd->get_time(&time_info);
+    thd->set_time();
+  }
 
   /*
     If we can't set thd->query_string at all, we give up on this statement.
@@ -898,7 +917,13 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
     thd->send_statement_status();
   }
 
-  if (!rc && unlikely(log_slow_applicable(thd))) {
+  const std::string &cn = Command_names::str_notranslate(COM_QUERY);
+  mysql_audit_notify(
+      thd, AUDIT_EVENT(MYSQL_AUDIT_GENERAL_STATUS),
+      thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0,
+      cn.c_str(), cn.length());
+
+  if (!rc && unlikely(log_slow_applicable(thd, get_command()))) {
     /*
       We actually need to write the slow log. Check whether we already
       called subst_spvars() above, otherwise, do it now.  In the highly
@@ -911,7 +936,7 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
       and therefore pass in a null-pointer instead of a pointer to
       state at the beginning of execution.
     */
-    log_slow_do(thd, nullptr);
+    log_slow_do(thd);
   }
 
   /*
@@ -926,6 +951,9 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
 
   thd->set_query(query_backup);
   thd->query_name_consts = 0;
+
+  /* Restore the original query start time */
+  if (thd->enable_slow_log) thd->set_time(time_info);
 
   return rc || thd->is_error();
 }

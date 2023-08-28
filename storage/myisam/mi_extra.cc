@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,9 +63,11 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
       info->page_changed = true;
       /* Next/prev gives first/last */
       if (info->opt_flag & READ_CACHE_USED) {
-        reinit_io_cache(&info->rec_cache, READ_CACHE, 0,
-                        (bool)(info->lock_type != F_UNLCK),
-                        (bool)(info->update & HA_STATE_ROW_CHANGED));
+        if ((error =
+                 reinit_io_cache(&info->rec_cache, READ_CACHE, 0,
+                                 (bool)(info->lock_type != F_UNLCK),
+                                 (bool)(info->update & HA_STATE_ROW_CHANGED))))
+          break;
       }
       info->update = ((info->update & HA_STATE_CHANGED) | HA_STATE_NEXT_FOUND |
                       HA_STATE_PREV_FOUND);
@@ -109,7 +111,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
       info->read_record = share->read_record;
       info->opt_flag &= ~(KEY_READ_USED | REMEMBER_OLD_POS);
       break;
-    case HA_EXTRA_NO_USER_CHANGE: /* Database is somehow locked agains changes
+    case HA_EXTRA_NO_USER_CHANGE: /* Database is somehow locked against changes
                                    */
       info->lock_type = F_EXTRA_LCK; /* Simulate as locked */
       break;
@@ -175,7 +177,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
       }
       if (share->base.blobs) mi_alloc_rec_buff(info, -1, &info->rec_buff);
       break;
-    case HA_EXTRA_NORMAL: /* Theese isn't in use */
+    case HA_EXTRA_NORMAL: /* This isn't in use */
       info->quick_mode = false;
       break;
     case HA_EXTRA_QUICK:

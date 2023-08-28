@@ -1,4 +1,4 @@
-# Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -34,8 +34,6 @@ INCLUDE_DIRECTORIES(
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-MY_INCLUDE_SYSTEM_DIRECTORIES(LIBEVENT)
-
 MYSQL_ADD_EXECUTABLE(mysqlxtest
   ${XTEST_SRC}
   COMPONENT Test
@@ -43,11 +41,12 @@ MYSQL_ADD_EXECUTABLE(mysqlxtest
   LINK_LIBRARIES
   mysys
   strings
-  mysqlclient
+  perconaserverclient
   ${MYSQLX_CLIENT_FULL_LIB}
   ${MYSQLX_PROTOCOL_FULL_LIB}
   ${PROTOBUF_LIBRARY}
-  ${LZ4_LIBRARY}
+  ext::lz4
+  extra::rapidjson
 )
 
 IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR)
@@ -59,7 +58,7 @@ MYSQLX_APPEND_COMPILE_FLAGS(mysqlxtest
 )
 
 MYSQLX_APPEND_COMPILE_DEFINITIONS(mysqlxtest
-  "NGS_DISABLE_LOGGING;USE_MYSQLX_FULL_PROTO"
+  "NGS_DISABLE_LOGGING"
 )
 
 MY_CHECK_CXX_COMPILER_WARNING("-Wunused-but-set-parameter" HAS_WARN_FLAG)

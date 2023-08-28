@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -51,7 +51,7 @@ class iterator {
     Create a cursor.
 
     The name is expected to be in UTF8mb4's primary collation.
-    Sets the iterator to the first maching element (if any) or at eof.
+    Sets the iterator to the first matching element (if any) or at eof.
 
     @param hthd the thread handle
     @param name the query attribute name to look for and set the iterator to
@@ -101,7 +101,9 @@ class iterator {
     while (ofs < thd->bind_parameter_values_count) {
       ofs++;
       current++;
-      if (current->name_length > 0 && current->name) break;
+      if (ofs < thd->bind_parameter_values_count) {
+        if (current->name_length > 0 && current->name) break;
+      }
     }
     return ofs >= thd->bind_parameter_values_count;
   }

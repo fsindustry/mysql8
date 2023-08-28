@@ -46,7 +46,7 @@
 CALL mtr.add_suppression("Statement is unsafe because it is being used inside a XA transaction");
 
 --source include/rpl_connection_slave.inc
-CALL mtr.add_suppression(".*slave coordinator and worker threads are stopped.*");
+CALL mtr.add_suppression(".*replica coordinator and worker threads are stopped.*");
 CALL mtr.add_suppression("Could not execute Write_rows event on table test.*");
 CALL mtr.add_suppression("Worker .* failed executing transaction");
 CALL mtr.add_suppression("Error writing relay log configuration");
@@ -121,7 +121,9 @@ SET GLOBAL binlog_transaction_dependency_tracking=@save_binlog_transaction_depen
 --source include/stop_slave.inc
 
 SET GLOBAL replica_parallel_type= @save_replica_parallel_type;
+--disable_warnings
 SET GLOBAL replica_parallel_workers= @save_replica_parallel_workers;
+--enable_warnings
 SET GLOBAL replica_preserve_commit_order= @save_replica_preserve_commit_order;
 --source include/start_slave.inc
 

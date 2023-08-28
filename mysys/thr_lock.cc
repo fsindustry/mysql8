@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,7 @@
 
 /**
   @file mysys/thr_lock.cc
-Read and write locks for Posix threads. All tread must acquire
+Read and write locks for Posix threads. Every thread must acquire
 all locks it needs through thr_multi_lock() to avoid dead-locks.
 A lock consists of a master lock (THR_LOCK), and lock instances
 (THR_LOCK_DATA).
@@ -366,8 +366,8 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     One can use this to signal when a thread is going to wait for a lock.
     See debug_sync.cc.
 
-    Beware of waiting for a signal here. The lock has aquired its mutex.
-    While waiting on a signal here, the locking thread could not aquire
+    Beware of waiting for a signal here. The lock has acquired its mutex.
+    While waiting on a signal here, the locking thread could not acquire
     the mutex to release the lock. One could lock up the table
     completely.
 
@@ -376,8 +376,8 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     if not, it calls wait_for_lock(). Here it unlocks the table lock
     while waiting on a condition. The sync point is located before this
     wait for condition. If we have a waiting action here, we hold the
-    the table locks mutex all the time. Any attempt to look at the table
-    lock by another thread blocks it immediately on lock->mutex. This
+    table locks mutex all the time. Any attempt to look at the table
+    lock from another thread blocks it immediately on lock->mutex. This
     can easily become an unexpected and unobvious blockage. So be
     warned: Do not request a WAIT_FOR action for the 'wait_for_lock'
     sync point unless you really know what you do.
@@ -409,8 +409,13 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     ourselves to call it before_lock_wait once before starting to wait
     and once after the thread has exited the wait loop.
    */
-  if ((!is_killed_hook(nullptr) || in_wait_list) && before_lock_wait)
+  bool use_wait_callbacks;
+  if ((!is_killed_hook(nullptr) || in_wait_list) && before_lock_wait) {
+    use_wait_callbacks = true;
     (*before_lock_wait)();
+  } else {
+    use_wait_callbacks = false;
+  }
 
   set_timespec(&wait_timeout, lock_wait_timeout);
   while (!is_killed_hook(nullptr) || in_wait_list) {
@@ -443,7 +448,7 @@ static enum enum_thr_lock_result wait_for_lock(struct st_lock_list *wait,
     We call the after_lock_wait callback once the wait loop has
     finished.
    */
-  if (after_lock_wait) (*after_lock_wait)();
+  if (after_lock_wait && use_wait_callbacks) (*after_lock_wait)();
 
   if (data->cond || data->type == TL_UNLOCK) {
     if (data->cond) /* aborted or timed out */
@@ -516,8 +521,8 @@ enum enum_thr_lock_result thr_lock(THR_LOCK_DATA *data, THR_LOCK_INFO *owner,
            |\  = READ_WITH_SHARED_LOCKS
            \   = READ
 
-        + = Request can be satisified.
-        - = Request cannot be satisified.
+        + = Request can be satisfied.
+        - = Request cannot be satisfied.
 
         READ_NO_INSERT and WRITE_ALLOW_WRITE should in principle
         be incompatible. Before this could have caused starvation of
@@ -868,7 +873,7 @@ end:
 
 /*
 ** Get all locks in a specific order to avoid dead-locks
-** Sort acording to lock position and put write_locks before read_locks if
+** Sort according to lock position and put write_locks before read_locks if
 ** lock on same lock.
 */
 

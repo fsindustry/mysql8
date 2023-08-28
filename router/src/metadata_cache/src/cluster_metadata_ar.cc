@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,7 @@
 
 #include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/mysql_session.h"
-#include "mysqlrouter/utils.h"
+#include "mysqlrouter/utils.h"  // strtoull_checked
 #include "mysqlrouter/utils_sqlstring.h"
 
 using mysqlrouter::MySQLSession;
@@ -39,12 +39,11 @@ ARClusterMetadata::~ARClusterMetadata() = default;
 stdx::expected<metadata_cache::ClusterTopology, std::error_code>
 ARClusterMetadata::fetch_cluster_topology(
     const std::atomic<bool> &terminated,
-    mysqlrouter::TargetCluster & /*target_cluster*/,
-    const unsigned /*router_id*/,
+    mysqlrouter::TargetCluster &target_cluster, const unsigned /*router_id*/,
     const metadata_cache::metadata_servers_list_t &metadata_servers,
-    bool /* needs_writable_node */, const std::string &cluster_type_specific_id,
-    const std::string & /*clusterset_id*/, std::size_t &instance_id) {
-  std::vector<metadata_cache::ManagedInstance> new_instances;
+    bool /* needs_writable_node */, const std::string & /*clusterset_id*/,
+    bool /*whole_topology*/, std::size_t &instance_id) {
+  metadata_cache::ClusterTopology result;
 
   bool metadata_read = false;
 
@@ -78,8 +77,12 @@ ARClusterMetadata::fetch_cluster_topology(
       }
 
       uint64_t view_id{0};
-      if (!get_member_view_id(*metadata_connection_, cluster_type_specific_id,
-                              view_id)) {
+      const std::string cluster_id =
+          target_cluster.target_type() ==
+                  mysqlrouter::TargetCluster::TargetType::ByUUID
+              ? target_cluster.to_string()
+              : "";
+      if (!get_member_view_id(*metadata_connection_, cluster_id, view_id)) {
         log_warning("Failed fetching view_id from the metadata server on %s:%d",
                     metadata_server.address().c_str(), metadata_server.port());
         continue;
@@ -93,8 +96,8 @@ ARClusterMetadata::fetch_cluster_topology(
         continue;
       }
 
-      new_instances = fetch_instances_from_member(*metadata_connection_,
-                                                  cluster_type_specific_id);
+      result = fetch_topology_from_member(*metadata_connection_, view_id,
+                                          cluster_id);
 
       this->view_id_ = view_id;
       metadata_read = true;
@@ -108,22 +111,27 @@ ARClusterMetadata::fetch_cluster_topology(
     }
   }
 
-  if (new_instances.empty()) {
+  const auto &cluster_members = result.get_all_members();
+
+  if (cluster_members.empty()) {
     return stdx::make_unexpected(make_error_code(
         metadata_cache::metadata_errc::no_metadata_read_successful));
   }
 
-  metadata_cache::ClusterTopology result;
-  result.cluster_data.single_primary_mode = true;
-  result.cluster_data.members = std::move(new_instances);
-  result.cluster_data.writable_server =
-      find_rw_server(result.cluster_data.members);
-  result.cluster_data.view_id = this->view_id_;
-
   // for ReplicaSet Cluster we assume metadata servers are just Cluster nodes
-  for (const auto &cluster_node : result.cluster_data.members) {
-    result.metadata_servers.push_back({cluster_node.host, cluster_node.port});
+  // we want PRIMARY(s) at the beginning of the vector
+  metadata_cache::metadata_servers_list_t non_primary_mds;
+  for (const auto &cluster_node : cluster_members) {
+    if (cluster_node.role == metadata_cache::ServerRole::Primary)
+      result.metadata_servers.emplace_back(cluster_node.host,
+                                           cluster_node.port);
+    else
+      non_primary_mds.emplace_back(cluster_node.host, cluster_node.port);
   }
+  result.metadata_servers.insert(result.metadata_servers.end(),
+                                 non_primary_mds.begin(),
+                                 non_primary_mds.end());
+  result.writable_server = find_rw_server(cluster_members);
 
   return result;
 }
@@ -149,17 +157,18 @@ bool ARClusterMetadata::get_member_view_id(mysqlrouter::MySQLSession &session,
 }
 
 // throws metadata_cache::metadata_error
-std::vector<metadata_cache::ManagedInstance>
-ARClusterMetadata::fetch_instances_from_member(
-    mysqlrouter::MySQLSession &session, const std::string &cluster_id) {
-  std::vector<metadata_cache::ManagedInstance> result;
+metadata_cache::ClusterTopology ARClusterMetadata::fetch_topology_from_member(
+    mysqlrouter::MySQLSession &session, unsigned view_id,
+    const std::string &cluster_id) {
+  metadata_cache::ClusterTopology result;
+  metadata_cache::ManagedCluster cluster;
 
   // Get expected topology (what was configured) from metadata server. This will
   // later be compared against current topology (what exists NOW) obtained by
   // comparing to other members view of the world
   std::string query =
-      "select M.member_id, I.endpoint, I.xendpoint, M.member_role, "
-      "I.attributes from "
+      "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, "
+      "I.xendpoint, M.member_role, I.attributes from "
       "mysql_innodb_cluster_metadata.v2_ar_members M join "
       "mysql_innodb_cluster_metadata.v2_instances I on I.instance_id = "
       "M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on "
@@ -169,39 +178,35 @@ ARClusterMetadata::fetch_instances_from_member(
     query += " where C.cluster_id = " + session.quote(cluster_id);
   }
 
-  // example response
-  // clang-format off
-  // +--------------------------------------+----------------+-----------------+-------------+--------------------------------------------------------------------+
-  // | member_id                            | endpoint       | xendpoint       | member_role | attributes                                                         |
-  // +--------------------------------------+----------------+-----------------+-------------+--------------------------------------------------------------------+
-  // | dc46223b-d620-11e9-9f25-0800276c00e7 | 127.0.0.1:5000 | 127.0.0.1:50000 | PRIMARY     | {"tags": {"_hidden": true}, "joinTime": "2020-03-18 09:36:50.416"} |
-  // | f167ceb4-d620-11e9-9155-0800276c00e7 | 127.0.0.1:5001 | 127.0.0.1:50010 | SECONDARY   | {"joinTime": "2020-03-18 09:36:51.000"}                            |
-  // | 06c519c9-d621-11e9-9451-0800276c00e7 | 127.0.0.1:5002 | 127.0.0.1:50020 | SECONDARY   | {"joinTime": "2020-03-18 09:36:53.456"}                            |
-  // +--------------------------------------+----------------+-----------------+-------------+--------------------------------------------------------------------+
-  // clang-format on
-
-  auto result_processor = [&result](const MySQLSession::Row &row) -> bool {
-    if (row.size() != 5) {
+  auto result_processor = [&cluster](const MySQLSession::Row &row) -> bool {
+    if (row.size() != 7) {
       throw metadata_cache::metadata_error(
           "Unexpected number of fields in the resultset. "
-          "Expected = 5, got = " +
+          "Expected = 7, got = " +
           std::to_string(row.size()));
     }
 
-    metadata_cache::ManagedInstance instance;
-    instance.mysql_server_uuid = get_string(row[0]);
+    cluster.id = as_string(row[0]);
+    cluster.name = as_string(row[1]);
+    metadata_cache::ManagedInstance instance{
+        metadata_cache::InstanceType::AsyncMember};
+    instance.mysql_server_uuid = as_string(row[2]);
 
-    if (!set_instance_ports(instance, row, 1, 2)) {
+    if (!set_instance_ports(instance, row, 3, 4)) {
       return true;  // next row
     }
 
-    instance.mode = get_string(row[3]) == "PRIMARY"
-                        ? metadata_cache::ServerMode::ReadWrite
-                        : metadata_cache::ServerMode::ReadOnly;
+    if (as_string(row[5]) == "PRIMARY") {
+      instance.mode = metadata_cache::ServerMode::ReadWrite;
+      instance.role = metadata_cache::ServerRole::Primary;
+    } else {
+      instance.mode = metadata_cache::ServerMode::ReadOnly;
+      instance.role = metadata_cache::ServerRole::Secondary;
+    }
 
-    set_instance_attributes(instance, get_string(row[4]));
+    set_instance_attributes(instance, as_string(row[6]));
 
-    result.push_back(instance);
+    cluster.members.push_back(instance);
     return true;  // get next row if available
   };
 
@@ -213,5 +218,9 @@ ARClusterMetadata::fetch_instances_from_member(
     throw metadata_cache::metadata_error(e.what());
   }
 
+  cluster.single_primary_mode = true;
+  result.view_id = view_id;
+  result.clusters_data.push_back(cluster);
+  result.target_cluster_pos = 0;
   return result;
 }

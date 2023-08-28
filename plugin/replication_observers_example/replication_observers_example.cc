@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -322,7 +322,7 @@ static int trans_before_rollback(Trans_param *) {
 }
 
 static int trans_after_commit(Trans_param *) {
-  DBUG_EXECUTE_IF("group_replication_before_commit_hook_wait", {
+  DBUG_EXECUTE_IF("bgc_after_after_commit_stage", {
     const char act[] = "now wait_for continue_commit";
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
@@ -836,7 +836,7 @@ int test_channel_service_interface_io_thread() {
 
 bool test_channel_service_interface_is_io_stopping() {
   // The initialization method should return OK
-  int error = initialize_channel_service_interface();
+  bool error = initialize_channel_service_interface();
   assert(!error);
 
   // Initialize the channel to be used with the channel service interface
@@ -909,7 +909,7 @@ bool test_channel_service_interface_is_io_stopping() {
 
 bool test_channel_service_interface_is_sql_stopping() {
   // The initialization method should return OK
-  int error = initialize_channel_service_interface();
+  bool error = initialize_channel_service_interface();
   assert(!error);
 
   // Initialize the channel to be used with the channel service interface
@@ -984,7 +984,7 @@ bool test_channel_service_interface_is_sql_stopping() {
 
 bool test_channel_service_interface_relay_log_renamed() {
   // The initialization method should return OK
-  int error = initialize_channel_service_interface();
+  bool error = initialize_channel_service_interface();
   assert(!error);
 
   // Initialize the channel to be used with the channel service interface
@@ -1033,11 +1033,10 @@ bool test_server_count_transactions() {
 
   assert(service.is_valid());
 
-  unsigned long *ids = NULL;
+  unsigned long *ids = nullptr;
   unsigned long size = 0;
   bool error = service->get_ongoing_server_transactions(&ids, &size);
   assert(!error);
-  fprintf(stderr, "[DEBUG:] Counting transactions! %lu \n", size);
 
   assert(size == 3);
 

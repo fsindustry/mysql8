@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,16 +25,17 @@
 #ifndef SOCKET_AUTHENTICATOR_HPP
 #define SOCKET_AUTHENTICATOR_HPP
 
-#include <NdbTCP.h>
+#include "util/NdbSocket.h"
 
 class SocketAuthenticator
 {
 public:
   SocketAuthenticator() {}
   virtual ~SocketAuthenticator() {}
-  virtual bool client_authenticate(NDB_SOCKET_TYPE sockfd) = 0;
-  virtual bool server_authenticate(NDB_SOCKET_TYPE sockfd) = 0;
+  virtual bool client_authenticate(NdbSocket &) = 0;
+  virtual bool server_authenticate(NdbSocket &) = 0;
 };
+
 
 class SocketAuthSimple : public SocketAuthenticator
 {
@@ -43,8 +44,9 @@ class SocketAuthSimple : public SocketAuthenticator
 public:
   SocketAuthSimple(const char *username, const char *passwd);
   ~SocketAuthSimple() override;
-  bool client_authenticate(NDB_SOCKET_TYPE sockfd) override;
-  bool server_authenticate(NDB_SOCKET_TYPE sockfd) override;
+  bool client_authenticate(NdbSocket &) override;
+  bool server_authenticate(NdbSocket &) override;
 };
+
 
 #endif // SOCKET_AUTHENTICATOR_HPP

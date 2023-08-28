@@ -1,6 +1,6 @@
 #ifndef MDL_H
 #define MDL_H
-/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,13 +37,14 @@
 #include "my_psi_config.h"
 #include "my_sys.h"
 #include "my_systime.h"  // Timout_type
-#include "mysql/components/services/mysql_cond_bits.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/mysql_rwlock_bits.h"
-#include "mysql/components/services/psi_mdl_bits.h"
-#include "mysql/components/services/psi_stage_bits.h"
+#include "mysql/components/services/bits/mysql_cond_bits.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
+#include "mysql/components/services/bits/mysql_rwlock_bits.h"
+#include "mysql/components/services/bits/psi_mdl_bits.h"
+#include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql_com.h"
+#include "prealloced_array.h"
 #include "sql/sql_plist.h"
 #include "template_utils.h"
 
@@ -398,7 +399,7 @@ struct MDL_key {
   */
   enum enum_mdl_namespace {
     GLOBAL = 0,
-    BACKUP_LOCK,
+    BACKUP_LOCK, /* Oracle LOCK INSTANCE FOR BACKUP */
     TABLESPACE,
     SCHEMA,
     TABLE,
@@ -415,6 +416,7 @@ struct MDL_key {
     RESOURCE_GROUPS,
     FOREIGN_KEY,
     CHECK_CONSTRAINT,
+    BACKUP_TABLES, /* Percona LOCK TABLES FOR BACKUP */
     /* This should be the last ! */
     NAMESPACE_END
   };
@@ -608,23 +610,25 @@ struct MDL_key {
 
     @remark The key for a routine/event/resource group/trigger is
       @<mdl_namespace@>+@<database name@>+@<normalized object name@>
-      additionaly @<object name@> is stored in the same buffer for information
-      purpose if buffer has sufficent space.
+      additionally @<object name@> is stored in the same buffer for information
+      purpose if buffer has sufficient space.
 
     Routine, Event and Resource group names are case sensitive and accent
     sensitive. So normalized object name is used to form a MDL_key.
 
-    With the UTF8MB3 charset space reserved for the db name/object name is
-    64 * 3  bytes. utf8_general_ci collation is used for the Routine, Event and
-    Resource group names. With this collation, the normalized object name uses
-    just 2 bytes for each character (max length = 64 * 2 bytes). MDL_key has
-    still some space to store the object names. If there is a sufficient space
-    for the object name in the MDL_key then it is stored in the MDL_key (similar
-    to the column names in the MDL_key). Actual object name is used by the PFS.
-    Not listing actual object name from the PFS should be OK when there is no
-    space to store it (instead of increasing the MDL_key size). Object name is
-    not used in the key comparisons. So only (mdl_namespace + strlen(db) + 1 +
-    normalized_name_len + 1) value is stored in the m_length member.
+    With the UTF8MB3 charset space reserved for the db name/object
+    name is 64 * 3 bytes. utf8mb3_general_ci collation is used for the
+    Routine, Event and Resource group names. With this collation, the
+    normalized object name uses just 2 bytes for each character (max
+    length = 64 * 2 bytes). MDL_key has still some space to store the
+    object names. If there is a sufficient space for the object name
+    in the MDL_key then it is stored in the MDL_key (similar to the
+    column names in the MDL_key). Actual object name is used by the
+    PFS.  Not listing actual object name from the PFS should be OK
+    when there is no space to store it (instead of increasing the
+    MDL_key size). Object name is not used in the key comparisons. So
+    only (mdl_namespace + strlen(db) + 1 + normalized_name_len + 1)
+    value is stored in the m_length member.
 
     @param  mdl_namespace       Id of namespace of object to be locked.
     @param  db                  Name of database to which the object belongs.
@@ -870,14 +874,15 @@ class MDL_request {
   /**
     This constructor exists for two reasons:
 
-    - TABLE_LIST objects are sometimes default-constructed. We plan to remove
-      this as there is no practical reason, the call to the default
-      constructor is always followed by either a call to TABLE_LIST::operator=
-      or memberwise assignments.
+    - Table_ref objects are sometimes default-constructed. We plan to
+      remove this as there is no practical reason, the call to the default
+      constructor is always followed by either a call to
+      Table_ref::operator= or memberwise assignments.
 
-    - In some legacy cases TABLE_LIST objects are copy-assigned without
-      intention to copy the TABLE_LIST::mdl_request member. In this cases they
-      are overwritten with an uninitialized MDL_request object. The cases are:
+    - In some legacy cases Table_ref objects are copy-assigned without
+      intention to copy the Table_ref::mdl_request member. In this cases
+      they are overwritten with an uninitialized MDL_request object. The cases
+      are:
 
       - Sql_cmd_handler_open::execute()
       - mysql_execute_command()
@@ -1422,6 +1427,10 @@ class MDL_context {
                      Timeout_type lock_wait_timeout);
   bool upgrade_shared_lock(MDL_ticket *mdl_ticket, enum_mdl_type new_type,
                            Timeout_type lock_wait_timeout);
+  bool upgrade_shared_locks(MDL_request_list *mdl_requests,
+                            enum_mdl_type new_type,
+                            Timeout_type lock_wait_timeout,
+                            bool (*filter_func)(MDL_request *) = nullptr);
 
   bool clone_ticket(MDL_request *mdl_request);
 
@@ -1666,6 +1675,10 @@ class MDL_context {
 
   friend bool mdl_unittest::test_drive_fix_pins(MDL_context *);
   bool fix_pins();
+
+  bool filter_and_sort_requests_by_mdl_key(
+      Prealloced_array<MDL_request *, 16> *sort_buf,
+      MDL_request_list *mdl_requests, bool (*filter_func)(MDL_request *));
 
  public:
   void find_deadlock();

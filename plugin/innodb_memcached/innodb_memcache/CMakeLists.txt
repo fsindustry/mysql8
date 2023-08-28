@@ -1,4 +1,4 @@
-# Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +33,9 @@ INCLUDE_DIRECTORIES(
 IF(CMAKE_C_FLAGS MATCHES "-Werror")
   STRING(REGEX REPLACE "-Werror( |$)" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 ENDIF(CMAKE_C_FLAGS MATCHES "-Werror")
+IF(CMAKE_CXX_FLAGS MATCHES "-Werror")
+  STRING(REGEX REPLACE "-Werror( |$)" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+ENDIF(CMAKE_CXX_FLAGS MATCHES "-Werror")
 
 # Set extra flags for the C/CXX compiler
 IF(MY_COMPILER_IS_GNU_OR_CLANG)
@@ -59,5 +62,5 @@ SET(INNODB_ENGINE_SOURCES
   cache-src/slabs.c)
 
 MYSQL_ADD_PLUGIN(innodb_engine ${INNODB_ENGINE_SOURCES}
-  LINK_LIBRARIES libmcd_util
+  LINK_LIBRARIES libmcd_util extra::rapidjson
   MODULE_ONLY MODULE_OUTPUT_NAME "innodb_engine")

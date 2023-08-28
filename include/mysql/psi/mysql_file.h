@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -309,6 +309,21 @@
   inline_mysql_file_open(K, __FILE__, __LINE__, N, F1, F2)
 #else
 #define mysql_file_open(K, N, F1, F2) inline_mysql_file_open(N, F1, F2)
+#endif
+
+/**
+  @def mysql_unix_socket_connect(K, N, F)
+  Instrumented open.
+  @c mysql_unix_socket_connect connects to the unix domain socket.
+*/
+#ifndef __WIN__
+#ifdef HAVE_PSI_FILE_INTERFACE
+#define mysql_unix_socket_connect(K, N, F) \
+  inline_mysql_unix_socket_connect(K, __FILE__, __LINE__, N, F)
+#else
+#define mysql_unix_socket_connect(K, N, F) \
+  inline_mysql_unix_socket_connect(N, F)
+#endif
 #endif
 
 /**
@@ -1000,6 +1015,30 @@ static inline File inline_mysql_file_open(
   file = my_open(filename, flags, myFlags);
   return file;
 }
+
+#ifndef __WIN__
+static inline File inline_mysql_unix_socket_connect(
+#ifdef HAVE_PSI_FILE_INTERFACE
+    PSI_file_key key, const char *src_file, uint src_line,
+#endif
+    const char *filename, myf myFlags) {
+  File file;
+#ifdef HAVE_PSI_FILE_INTERFACE
+  struct PSI_file_locker *locker;
+  PSI_file_locker_state state;
+  locker = PSI_FILE_CALL(get_thread_file_name_locker)(
+      &state, key, PSI_FILE_OPEN, filename, &locker);
+  if (likely(locker != nullptr)) {
+    PSI_FILE_CALL(start_file_open_wait)(locker, src_file, src_line);
+    file = my_unix_socket_connect(filename, myFlags);
+    PSI_FILE_CALL(end_file_open_wait_and_bind_to_descriptor)(locker, file);
+    return file;
+  }
+#endif
+  file = my_unix_socket_connect(filename, myFlags);
+  return file;
+}
+#endif
 
 static inline int inline_mysql_file_close(
 #ifdef HAVE_PSI_FILE_INTERFACE

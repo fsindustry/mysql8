@@ -42,10 +42,10 @@ INSERT INTO db1.t2 VALUES(1, NULL), (10, NULL), (100, NULL);
 INSERT INTO db2.t1 VALUES(1, NULL), (10, NULL), (100, NULL);
 
 --source include/sync_slave_sql_with_master.inc
-CALL mtr.add_suppression("Slave SQL for channel '':.*Lock wait timeout exceeded.*");
-CALL mtr.add_suppression("Slave SQL for channel '': Worker . failed executing transaction.*");
-CALL mtr.add_suppression("Slave SQL for channel '': .*Error_code: MY-001756");
-CALL mtr.add_suppression("Slave SQL for channel '': worker thread retried transaction.*");
+CALL mtr.add_suppression("Replica SQL for channel '':.*Lock wait timeout exceeded.*");
+CALL mtr.add_suppression("Replica SQL for channel '': Worker . failed executing transaction.*");
+CALL mtr.add_suppression("Replica SQL for channel '': .*Error_code: MY-001756");
+CALL mtr.add_suppression("Replica SQL for channel '': worker thread retried transaction.*");
 
 # Backup the original value of the variables
 SET @saved_innodb_lock_wait_timeout = @@GLOBAL.innodb_lock_wait_timeout;
@@ -229,7 +229,9 @@ DELETE FROM db1.t1 WHERE c1 = 50;
 --echo # Cleanup
 --echo #
 SET GLOBAL innodb_lock_wait_timeout = @saved_innodb_lock_wait_timeout;
+--disable_warnings
 SET GLOBAL replica_parallel_workers = @saved_replica_parallel_workers;
+--enable_warnings
 SET GLOBAL max_relay_log_size = @saved_max_relay_log_size;
 SET GLOBAL replica_transaction_retries = @saved_replica_transaction_retries;
 

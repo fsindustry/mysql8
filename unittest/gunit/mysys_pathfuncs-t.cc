@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -152,7 +152,7 @@ TEST(Mysys, CreateTempFile) {
   File fileno = create_temp_file(dst, "/tmp", prefix, 42, UNLINK_FILE, 0);
   EXPECT_GE(fileno, 0);
   my_close(fileno, 0);
-  EXPECT_THAT(dst, MatchesRegex("/tmp/[a]+fd=[0-9]+"));
+  EXPECT_THAT(dst, MatchesRegex("/tmp/[a]+(fd=[0-9]+|[a-zA-Z0-9]+)"));
   aset(dst, 0xaa);
 
   char *env_tmpdir = getenv("TMPDIR");

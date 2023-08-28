@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,7 +20,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/* write whats in isam.log */
+/* write what's in isam.log */
 
 #include "my_config.h"
 
@@ -337,7 +337,10 @@ static int examine_log(const char *file_name, char **table_names) {
     }
   }
 
-  init_io_cache(&cache, file, 0, READ_CACHE, start_offset, false, MYF(0));
+  if (init_io_cache(&cache, file, 0, READ_CACHE, start_offset, false, MYF(0))) {
+    if (write_file != nullptr) my_fclose(write_file, MYF(0));
+    my_close(file, MYF(0));
+  }
   memset(com_count, 0, sizeof(com_count));
   init_tree(&tree, 0, sizeof(file_info), file_info_compare, true,
             file_info_free, nullptr);
@@ -373,7 +376,7 @@ static int examine_log(const char *file_name, char **table_names) {
     switch ((enum myisam_log_commands)command) {
       case MI_LOG_OPEN:
         if (!table_names[0]) {
-          com_count[command][0]--; /* Must be counted explicite */
+          com_count[command][0]--; /* Must be counted explicitly */
           if (result) com_count[command][1]--;
         }
 
@@ -413,7 +416,7 @@ static int examine_log(const char *file_name, char **table_names) {
         (void)tree_walk(&tree, test_if_open, &open_param, left_root_right);
         file_info.id = open_param.max_id + 1;
         /*
-         * In the line below +10 is added to accomodate '<' and '>' chars
+         * In the line below +10 is added to accommodate '<' and '>' chars
          * plus '\0' at the end, so that there is place for 7 digits.
          * It is  improbable that same table can have that many entries in
          * the table cache.

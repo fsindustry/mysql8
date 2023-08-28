@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -413,7 +413,10 @@ XError set_object_capability(Context *context, Argument_object *capabilities,
 }  // namespace details
 
 Session_impl::Session_impl(std::unique_ptr<Protocol_factory> factory)
-    : m_context(std::make_shared<Context>()), m_factory(std::move(factory)) {
+    : m_context(std::make_shared<Context>()),
+      m_factory(std::move(factory)),
+      m_server_supported_auth_methods{Auth::k_mysql41, Auth::k_plain,
+                                      Auth::k_sha256_memory} {
   if (nullptr == m_factory.get()) {
     m_factory.reset(new details::Protocol_factory_default());
   }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -68,6 +68,14 @@ class Partition_index : virtual public Weak_object {
   virtual Index &index() = 0;
 
   const String_type &name() const { return index().name(); }
+
+  /////////////////////////////////////////////////////////////////////////
+  // disabled.
+  /////////////////////////////////////////////////////////////////////////
+
+  virtual bool is_disabled() const noexcept = 0;
+  virtual void set_disabled(bool disable) noexcept = 0;
+  virtual Index::enum_index_type type() const noexcept = 0;
 
   /////////////////////////////////////////////////////////////////////////
   // Options.

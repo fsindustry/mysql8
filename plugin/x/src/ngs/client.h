@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -158,6 +158,7 @@ class Client : public xpl::iface::Client {
   std::atomic<Client::State> m_state;
   std::atomic<Client::State> m_state_when_reason_changed;
   std::atomic<bool> m_removed;
+  std::shared_ptr<xpl::iface::Ssl_context> m_ssl;
 
   std::shared_ptr<xpl::iface::Session> m_session;
 

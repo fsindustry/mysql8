@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2021, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -41,17 +41,23 @@ struct File_cursor;
 /** Read rows from the temporary file. */
 struct File_reader : private ut::Non_copyable {
   /** Constructor.
-  @param[in] fd                 Open file descriptors.
+  @param[in] file               Opened file.
   @param[in,out] index          Index that the rows belong to.
   @param[in] buffer_size        Size of file buffer for reading.
   @param[in] size               File size in bytes. */
-  File_reader(os_fd_t fd, dict_index_t *index, size_t buffer_size,
-              os_offset_t size) noexcept
-      : m_index(index), m_fd(fd), m_size(size), m_buffer_size(buffer_size) {
+  File_reader(const Unique_os_file_descriptor &file, dict_index_t *index,
+              size_t buffer_size, os_offset_t size, space_id_t space_id,
+              const Write_offsets &write_offsets) noexcept
+      : m_index(index),
+        m_file(file),
+        m_size(size),
+        m_buffer_size(buffer_size),
+        m_space_id(space_id),
+        m_write_offsets(write_offsets) {
     ut_a(size > 0);
     ut_a(m_buffer_size > 0);
     ut_a(m_index != nullptr);
-    ut_a(fd != OS_FD_CLOSED);
+    ut_a(m_file.is_open());
   }
 
   /** Destructor. */
@@ -104,6 +110,8 @@ struct File_reader : private ut::Non_copyable {
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t next() noexcept;
 
+  [[nodiscard]] size_t get_read_len_next() const noexcept;
+
  public:
   using Offsets = std::vector<ulint, ut::allocator<ulint>>;
 
@@ -117,24 +125,24 @@ struct File_reader : private ut::Non_copyable {
   Offsets m_offsets{};
 
   /** File handle to read from. */
-  os_fd_t m_fd{OS_FD_CLOSED};
+  const Unique_os_file_descriptor &m_file;
 
  private:
-  using Bounds = std::pair<const byte *, const byte *>;
-
   /** Size of the file in bytes. */
   os_offset_t m_size{};
 
   /** Offset to read. */
   os_offset_t m_offset{};
 
+  /** Last read length */
+  os_offset_t m_read_len{};
+
+  byte *get_io_buffer_end() { return m_io_buffer.first + m_read_len; }
+
   /** Pointer current offset within file buffer. */
   const byte *m_ptr{};
 
-  /** File buffer bounds. */
-  Bounds m_bounds{};
-
-  /** Auxilliary buffer for records that span across pages. */
+  /** Auxiliary buffer for records that span across pages. */
   byte *m_aux_buf{};
 
   /** IO buffer size in bytes. */
@@ -145,6 +153,17 @@ struct File_reader : private ut::Non_copyable {
 
   /** File buffer for reading. */
   IO_buffer m_io_buffer{};
+
+  /** Aligned buffer for cryptography. */
+  Aligned_buffer m_aligned_buffer_crypt{};
+
+  /** File buffer for cryptography. */
+  IO_buffer m_crypt_buffer{};
+
+  /** Space id used to encrypt the file */
+  space_id_t m_space_id{};
+
+  Write_offsets m_write_offsets;
 
   /** Number of rows read from the file. */
   uint64_t m_n_rows_read{};

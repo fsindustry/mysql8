@@ -2,7 +2,7 @@
 #define HANDLER_INCLUDED
 
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,12 +40,14 @@
 #include <random>  // std::mt19937
 #include <set>
 #include <string>
+#include <string_view>
 
 #include <mysql/components/services/page_track_service.h>
 #include "ft_global.h"  // ft_hints
 #include "lex_string.h"
 #include "m_ctype.h"
 #include "map_helpers.h"
+#include "mem_root_deque.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_bitmap.h"
@@ -58,9 +60,11 @@
 #include "my_sys.h"
 #include "my_table_map.h"
 #include "my_thread_local.h"  // my_errno
-#include "mysql/components/services/psi_table_bits.h"
+#include "mysql/components/services/bits/psi_table_bits.h"
+#include "mysql_com.h"
 #include "sql/dd/object_id.h"  // dd::Object_id
 #include "sql/dd/string_type.h"
+#include "sql/dd/types/init_mode.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
 #include "sql/discrete_interval.h"      // Discrete_interval
 #include "sql/key.h"
@@ -97,7 +101,7 @@ struct LEX;
 struct MY_BITMAP;
 struct SAVEPOINT;
 struct TABLE;
-struct TABLE_LIST;
+class Table_ref;
 struct TABLE_SHARE;
 struct Tablespace_options;
 struct handlerton;
@@ -111,6 +115,8 @@ enum class enum_column_types;
 class Table;
 class Tablespace;
 }  // namespace dd
+
+constexpr const ha_rows EXTRA_RECORDS{10};
 
 /** Id for identifying Table SDIs */
 constexpr const uint32 SDI_TYPE_TABLE = 1;
@@ -141,10 +147,6 @@ typedef bool(stat_print_fn)(THD *thd, const char *type, size_t type_len,
 
 class ha_statistics;
 class ha_tablespace_statistics;
-
-namespace AQP {
-class Table_access;
-}  // namespace AQP
 class Unique_on_insert;
 
 extern ulong savepoint_alloc_size;
@@ -513,6 +515,11 @@ enum enum_alter_inplace_result {
   Supports multi-valued index
 */
 #define HA_MULTI_VALUED_KEY_SUPPORT (1LL << 55)
+/**
+  There is no need to evict the table from the table definition cache having run
+  ANALYZE TABLE on it
+*/
+#define HA_ONLINE_ANALYZE (1LL << 56)
 
 /*
   Bits in index_flags(index_number) for what you can do with index.
@@ -553,6 +560,13 @@ enum enum_alter_inplace_result {
 */
 #define HA_ONLY_WHOLE_INDEX 16
 /*
+  Index does not store NULL values, even if the column is nullable.
+  (KEY::flags may still contain HA_NULL_PART_KEY)
+  If the key has a NULL-value, the handler need to do a full table scan
+  instead of using this key. This is typically true for NDB hash indexes.
+*/
+#define HA_TABLE_SCAN_ON_NULL 32
+/*
   Does the storage engine support index-only scans on this index.
   Enables use of HA_EXTRA_KEYREAD and HA_EXTRA_NO_KEYREAD
   Used to set Key_map keys_for_keyread and to check in optimiser for
@@ -568,6 +582,7 @@ enum enum_alter_inplace_result {
 */
 #define HA_KEY_SCAN_NOT_ROR 128
 #define HA_DO_INDEX_COND_PUSHDOWN 256 /* Supports Index Condition Pushdown */
+#define HA_CLUSTERED_INDEX 512        /* Data is clustered on this key */
 
 /* operations for disable/enable indexes */
 #define HA_KEY_SWITCH_NONUNIQ 0
@@ -662,7 +677,9 @@ enum legacy_db_type {
   /** Performance schema engine. */
   DB_TYPE_PERFORMANCE_SCHEMA,
   DB_TYPE_TEMPTABLE,
-  DB_TYPE_FIRST_DYNAMIC = 42,
+  DB_TYPE_TOKUDB = 41,
+  DB_TYPE_ROCKSDB = 42,
+  DB_TYPE_FIRST_DYNAMIC = 43,
   DB_TYPE_DEFAULT = 127  // Must be last
 };
 
@@ -700,7 +717,7 @@ enum class enum_sampling_method { SYSTEM, NONE };
 
 /* Bits in used_fields */
 #define HA_CREATE_USED_AUTO (1L << 0)
-#define HA_CREATE_USED_RAID (1L << 1)  // RAID is no longer availble
+#define HA_CREATE_USED_RAID (1L << 1)  // RAID is no longer available
 #define HA_CREATE_USED_UNION (1L << 2)
 #define HA_CREATE_USED_INSERT_METHOD (1L << 3)
 #define HA_CREATE_USED_MIN_ROWS (1L << 4)
@@ -870,6 +887,7 @@ class st_alter_tablespace {
   bool wait_until_completed = true;
   const char *ts_comment = nullptr;
   const char *encryption = nullptr;
+  bool explicit_encryption{false};
 
   bool is_tablespace_command() {
     return ts_cmd_type == CREATE_TABLESPACE ||
@@ -907,6 +925,9 @@ enum enum_schema_tables : int {
   SCH_FIRST = 0,
   SCH_COLUMN_PRIVILEGES = SCH_FIRST,
   SCH_ENGINES,
+  SCH_CLIENT_STATS,
+  SCH_INDEX_STATS,
+  SCH_GLOBAL_TEMPORARY_TABLES,
   SCH_OPEN_TABLES,
   SCH_OPTIMIZER_TRACE,
   SCH_PLUGINS,
@@ -918,11 +939,21 @@ enum enum_schema_tables : int {
   SCH_USER_PRIVILEGES,
   SCH_TMP_TABLE_COLUMNS,
   SCH_TMP_TABLE_KEYS,
-  SCH_LAST = SCH_TMP_TABLE_KEYS
+  SCH_TABLE_STATS,
+  SCH_TEMPORARY_TABLES,
+  SCH_THREAD_STATS,
+  SCH_USER_STATS,
+  SCH_LAST = SCH_USER_STATS
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };
 enum ha_notification_type : int { HA_NOTIFY_PRE_EVENT, HA_NOTIFY_POST_EVENT };
+enum ha_ddl_type : int {
+  HA_INVALID_DDL,
+  HA_ALTER_DDL,
+  HA_TRUNCATE_DDL,
+  HA_RENAME_DDL
+};
 
 /** Clone start operation mode */
 enum Ha_clone_mode {
@@ -1211,6 +1242,112 @@ struct Ha_fk_column_type {
   bool is_unsigned;
 };
 
+typedef ulonglong my_xid;  // this line is the same as in log_event.h
+/**
+  Enumeration of possible states for externally coordinated transactions (XA).
+ */
+enum class enum_ha_recover_xa_state : int {
+  NOT_FOUND = -1,               // Trnasaction not found
+  PREPARED_IN_SE = 0,           // Transaction is prepared in SEs
+  PREPARED_IN_TC = 1,           // Transaction is prepared in SEs and TC
+  COMMITTED_WITH_ONEPHASE = 2,  // Transaction was one-phase committed
+  COMMITTED = 3,                // Transaction was committed
+  ROLLEDBACK = 4                // Transaction was rolled back
+};
+/**
+  Single occurrence set of XIDs of internally coordinated transactions
+  found as been committed in the transaction coordinator state.
+ */
+using Xid_commit_list =
+    std::unordered_set<my_xid, std::hash<my_xid>, std::equal_to<my_xid>,
+                       Mem_root_allocator<my_xid>>;
+
+/**
+  Class to maintain list of externally coordinated transactions and their
+  current state at recovery.
+ */
+class Xa_state_list {
+ public:
+  using pair = std::pair<const XID, enum_ha_recover_xa_state>;
+  using allocator = Mem_root_allocator<Xa_state_list::pair>;
+  using list = std::map<XID, enum_ha_recover_xa_state, std::less<XID>,
+                        Xa_state_list::allocator>;
+  using iterator = std::map<XID, enum_ha_recover_xa_state, std::less<XID>,
+                            Xa_state_list::allocator>::iterator;
+  using instantiation_tuple = std::tuple<
+      std::unique_ptr<MEM_ROOT>, std::unique_ptr<Xa_state_list::allocator>,
+      std::unique_ptr<Xa_state_list::list>, std::unique_ptr<Xa_state_list>>;
+
+  /**
+    Class constructor.
+
+    @param populated_by_tc The underlying list of XIDs and transaction
+                           states, after being populated by the transaction
+                           coodinator.
+   */
+  Xa_state_list(Xa_state_list::list &populated_by_tc);
+  virtual ~Xa_state_list() = default;
+
+  /**
+    Searches the underlying map to find an key that corresponds to the
+    parameter.
+
+    @param to_find The XID to find within the underlying map.
+
+    @return Ha_recover_states::NOT_FOUND if the transaction wasn't found,
+            the state of the transaction, otherwise.
+   */
+  enum_ha_recover_xa_state find(XID const &to_find);
+  /**
+    Adds a transaction and state to the underlying map. If the given XID
+    already exists in the underlying map, the associated state changes according
+    to the following rules:
+
+    - If the parameter state is `PREPARED_IN_SE` it means that the
+      transaction didn't reach PREPARED_IN_TC, COMMIT or ROLLBACK for
+      sure. In that case:
+      . If other participants state is `COMMITTED`/`ROLLEDBACK`, it would
+        mean that it's a state inherited from a previous execution with the
+        same XID and we should set the state to `PREPARED_IN_SE`.
+      . If other participants state is `PREPARED_IN_TC`/
+        `COMMITTED_WITH_ONEPHASE` it means that the current participant
+        didn't reach it but some other did so, keep the state as
+        `PREPARED_IN_TC`/`COMMITTED_WITH_ONEPHASE`.
+
+    - If the parameter state is `PREPARED_IN_TC`, it means that other
+      participants must have persisted either the PREPARE, the COMMIT or
+      the ROLLBACK. In that case, keep whatever state is already there and
+      ensure that is not `PREPARED_IN_SE`.
+
+    - If the parameter state is `COMMITTED_WITH_ONEPHASE`, `COMMITTED` or
+      `ROLLEDBACK`, do nothing, only the active transaction coordinator has
+      the ability, for now, to set the transaction state to those values.
+
+    @param xid The XID to be added (the key).
+    @param xid The state to be added (the value).
+
+    @return The current value of the transaction state if the XID has
+            already been added, Ha_recover_states::NOT_FOUND otherwise.
+   */
+  enum_ha_recover_xa_state add(XID const &xid, enum_ha_recover_xa_state state);
+  /**
+    Factory like method to instantiate all the infra-structure needed to
+    create an `Xa_state_list`. Since such infra-structuer is dependent on
+    `MEM_ROOT` and `Mem_root_allocator`, the method returns a tuple
+    containing unique pointers to all 4 objects needed: MEM_ROOT;
+    Mem_root_allocator; Xa_state_list::list; Xa_state_list.
+
+    @return An std::tuple containing unique pointers to all 4 objects
+            needed: MEM_ROOT; Mem_root_allocator; Xa_state_list::list;
+            Xa_state_list.
+   */
+  static Xa_state_list::instantiation_tuple new_instance();
+
+ private:
+  /** The underlying map holding the trx and states*/
+  Xa_state_list::list &m_underlying;
+};
+
 /* handlerton methods */
 
 /**
@@ -1266,8 +1403,25 @@ typedef int (*rollback_t)(handlerton *hton, THD *thd, bool all);
 
 typedef int (*prepare_t)(handlerton *hton, THD *thd, bool all);
 
+typedef int (*clone_consistent_snapshot_t)(handlerton *hton, THD *thd,
+                                           THD *from_thd);
+
+typedef int (*store_binlog_info_t)(handlerton *hton, THD *thd);
+
 typedef int (*recover_t)(handlerton *hton, XA_recover_txn *xid_list, uint len,
                          MEM_ROOT *mem_root);
+/**
+  Retrieves information about externally coordinated transactions for which
+  the two-phase prepare was finished and transactions were prepared in the
+  server TC.
+ */
+using recover_prepared_in_tc_t = int (*)(handlerton *hton,
+                                         Xa_state_list &xa_list);
+/**
+  Instructs the storage engine to mark the externally coordinated
+  transactions held by the THD parameters as prepared in the server TC.
+ */
+using set_prepared_in_tc_t = int (*)(handlerton *hton, THD *thd);
 
 /** X/Open XA distributed transaction status codes */
 enum xa_status_code {
@@ -1320,6 +1474,14 @@ enum xa_status_code {
 typedef xa_status_code (*commit_by_xid_t)(handlerton *hton, XID *xid);
 
 typedef xa_status_code (*rollback_by_xid_t)(handlerton *hton, XID *xid);
+
+/**
+  Instructs the storage engine to mark the externally coordinated
+  transactions identified by the XID parameters as prepared in the server
+  TC.
+ */
+using set_prepared_in_tc_by_xid_t = xa_status_code (*)(handlerton *hton,
+                                                       XID *xid);
 
 /**
   Create handler object for the table in the storage engine.
@@ -1504,7 +1666,7 @@ typedef bool (*get_tablespace_type_t)(const dd::Tablespace &space,
 typedef bool (*get_tablespace_type_by_name_t)(const char *tablespace_name,
                                               Tablespace_type *space_type);
 
-typedef int (*fill_is_table_t)(handlerton *hton, THD *thd, TABLE_LIST *tables,
+typedef int (*fill_is_table_t)(handlerton *hton, THD *thd, Table_ref *tables,
                                class Item *cond, enum enum_schema_tables);
 
 typedef int (*binlog_func_t)(handlerton *hton, THD *thd, enum_binlog_func fn,
@@ -1527,6 +1689,25 @@ typedef int (*find_files_t)(handlerton *hton, THD *thd, const char *db,
 
 typedef int (*table_exists_in_engine_t)(handlerton *hton, THD *thd,
                                         const char *db, const char *name);
+
+/**
+  Let storage engine inspect the query Accesspath and pick whatever
+  it like for being pushed down to the engine. (Join, conditions, ..)
+
+  The handler implementation should itself keep track of what it 'pushed',
+  such that later calls to the handlers access methods should
+  activate the pushed parts of the execution plan on the storage
+  engines.
+
+  @param  thd        Thread context
+  @param  query      The AccessPath for the entire query.
+  @param  join       The JOIN to be pushed
+
+  @returns
+    0     on success
+    error otherwise
+*/
+using push_to_engine_t = int (*)(THD *thd, AccessPath *query, JOIN *);
 
 /**
   Check if the given db.tablename is a system table for this SE.
@@ -1696,14 +1877,6 @@ typedef SE_cost_constants *(*get_cost_constants_t)(uint storage_category);
 */
 typedef void (*replace_native_transaction_in_thd_t)(THD *thd, void *new_trx_arg,
                                                     void **ptr_trx_arg);
-
-/** Mode for initializing the data dictionary. */
-enum dict_init_mode_t {
-  DICT_INIT_CREATE_FILES,      ///< Create all required SE files
-  DICT_INIT_CHECK_FILES,       ///< Verify existence of expected files
-  DICT_INIT_UPGRADE_57_FILES,  ///< Used for upgrade from mysql-5.7
-  DICT_INIT_IGNORE_FILES       ///< Don't care about files at all
-};
 
 /**
   Initialize the SE for being used to store the DD tables. Create
@@ -1878,6 +2051,40 @@ typedef bool (*notify_alter_table_t)(THD *thd, const MDL_key *mdl_key,
                                      ha_notification_type notification_type);
 
 /**
+  Notify/get permission from storage engine before or after execution of
+  RENAME TABLE operation on the table identified by the MDL key.
+
+  @param thd                Thread context.
+  @param mdl_key            MDL key identifying table which is going to be
+                            or was RENAMEd.
+  @param notification_type  Indicates whether this is pre-RENAME TABLE or
+                            post-RENAME TABLE notification.
+  @param old_db_name
+  @param old_table_name
+  @param new_db_name
+  @param new_table_name
+*/
+typedef bool (*notify_rename_table_t)(THD *thd, const MDL_key *mdl_key,
+                                      ha_notification_type notification_type,
+                                      const char *old_db_name,
+                                      const char *old_table_name,
+                                      const char *new_db_name,
+                                      const char *new_table_name);
+
+/**
+  Notify/get permission from storage engine before or after execution of
+  TRUNCATE TABLE operation on the table identified by the MDL key.
+
+  @param thd                Thread context.
+  @param mdl_key            MDL key identifying table which is going to be
+                            or was TRUNCATEd.
+  @param notification_type  Indicates whether this is pre-TRUNCATE TABLE or
+                            post-TRUNCATE TABLE notification.
+*/
+typedef bool (*notify_truncate_table_t)(THD *thd, const MDL_key *mdl_key,
+                                        ha_notification_type notification_type);
+
+/**
   @brief
   Initiate master key rotation
 
@@ -1885,6 +2092,31 @@ typedef bool (*notify_alter_table_t)(THD *thd, const MDL_key *mdl_key,
            true on failure
 */
 typedef bool (*rotate_encryption_master_key_t)(void);
+
+/**
+  @brief
+  Fix empty UUID of tablespaces of an engine. This is used when engine encrypts
+  tablespaces as part of initialization. These tablespaces will have empty UUID
+  because UUID is generated after all plugins are initialized. This API will be
+  called by server only after UUID is available.
+  @returns false on success,
+           true on failure
+*/
+using fix_tablespaces_empty_uuid_t = bool (*)(void);
+
+/**
+ @brief
+ This is used by encryption threads. It updates innodb's copy of
+ default_table_encryption variable according to the parameter.
+ @param value for innodb's copy of default_table_encryption
+*/
+using fix_default_table_encryption_t = bool (*)(ulong, bool);
+
+using compression_dict_data_vec_t =
+    std::vector<std::pair<std::string, std::string>>;
+
+using upgrade_get_compression_dict_data_t =
+    bool (*)(THD *thd, compression_dict_data_vec_t &names_vector);
 
 /**
   @brief
@@ -2245,7 +2477,15 @@ enum class SecondaryEngineFlag : SecondaryEngineFlags {
   // If this flag is set, aggregation (GROUP BY and DISTINCT) do not require
   // ordered inputs and create unordered outputs. This is typically the case
   // if they are implemented using hash-based techniques.
-  AGGREGATION_IS_UNORDERED = 2
+  AGGREGATION_IS_UNORDERED = 2,
+
+  /// This flag can be set to signal that a secondary storage engine will not
+  /// use MySQL's executor (see JOIN::override_executor_func). In this case, it
+  /// doesn't need MySQL's execution data structures, like internal temporary
+  /// tables, filesort objects or iterators. If the flag is set,
+  /// FinalizePlanForQueryBlock() will not make any changes to the plan, and
+  /// CreateIteratorFromAccessPath() will not be called.
+  USE_EXTERNAL_EXECUTOR = 3,
 };
 
 /// Creates an empty bitmap of access path types. This is the base
@@ -2259,6 +2499,10 @@ constexpr SecondaryEngineFlags MakeSecondaryEngineFlags(
   return (uint64_t{1} << static_cast<int>(flag1)) |
          MakeSecondaryEngineFlags(rest...);
 }
+
+/// Returns the handlerton of the secondary engine that is used in the session,
+/// or nullptr if a secondary engine is not used.
+const handlerton *SecondaryEngineHandlerton(const THD *thd);
 
 // FIXME: Temporary workaround to enable storage engine plugins to use the
 // before_commit hook. Remove after WL#11320 has been completed.
@@ -2433,13 +2677,18 @@ struct handlerton {
   rollback_t rollback;
   prepare_t prepare;
   recover_t recover;
+  recover_prepared_in_tc_t recover_prepared_in_tc;
   commit_by_xid_t commit_by_xid;
   rollback_by_xid_t rollback_by_xid;
+  set_prepared_in_tc_t set_prepared_in_tc;
+  set_prepared_in_tc_by_xid_t set_prepared_in_tc_by_xid;
   create_t create;
   drop_database_t drop_database;
   panic_t panic;
   start_consistent_snapshot_t start_consistent_snapshot;
+  clone_consistent_snapshot_t clone_consistent_snapshot;
   flush_logs_t flush_logs;
+  store_binlog_info_t store_binlog_info;
   show_status_t show_status;
   partition_flags_t partition_flags;
   is_valid_tablespace_name_t is_valid_tablespace_name;
@@ -2478,6 +2727,7 @@ struct handlerton {
   discover_t discover;
   find_files_t find_files;
   table_exists_in_engine_t table_exists_in_engine;
+  push_to_engine_t push_to_engine;
   is_supported_system_table_t is_supported_system_table;
 
   /*
@@ -2492,14 +2742,14 @@ struct handlerton {
   sdi_delete_t sdi_delete;
 
   /**
-    Null-ended array of file extentions that exist for the storage engine.
+    Null-ended array of file extensions that exist for the storage engine.
     Used by frm_error() and the default handler::rename_table and delete_table
     methods in handler.cc.
 
-    For engines that have two file name extentions (separate meta/index file
+    For engines that have two file name extensions (separate meta/index file
     and data file), the order of elements is relevant. First element of engine
-    file name extentions array should be meta/index file extention. Second
-    element - data file extention. This order is assumed by
+    file name extensions array should be meta/index file extension. Second
+    element - data file extension. This order is assumed by
     prepare_for_repair() when REPAIR TABLE ... USE_FRM is issued.
 
     For engines that don't have files, file_extensions is NULL.
@@ -2518,7 +2768,12 @@ struct handlerton {
   replace_native_transaction_in_thd_t replace_native_transaction_in_thd;
   notify_exclusive_mdl_t notify_exclusive_mdl;
   notify_alter_table_t notify_alter_table;
+  notify_rename_table_t notify_rename_table;
+  notify_truncate_table_t notify_truncate_table;
   rotate_encryption_master_key_t rotate_encryption_master_key;
+  fix_tablespaces_empty_uuid_t fix_tablespaces_empty_uuid;
+  fix_default_table_encryption_t fix_default_table_encryption;
+  upgrade_get_compression_dict_data_t upgrade_get_compression_dict_data;
   redo_log_set_state_t redo_log_set_state;
 
   get_table_statistics_t get_table_statistics;
@@ -2609,7 +2864,7 @@ struct handlerton {
 #define HTON_NO_FLAGS 0
 #define HTON_CLOSE_CURSORS_AT_COMMIT (1 << 0)
 #define HTON_ALTER_NOT_SUPPORTED (1 << 1)  // Engine does not support alter
-#define HTON_CAN_RECREATE (1 << 2)         // Delete all is used fro truncate
+#define HTON_CAN_RECREATE (1 << 2)         // Delete all is used for truncate
 #define HTON_HIDDEN (1 << 3)               // Engine does not appear in lists
 /*
   Bit 4 was occupied by BDB-specific HTON_FLUSH_AFTER_RENAME flag and is no
@@ -2670,8 +2925,71 @@ struct handlerton {
 /** Engine supports table or tablespace encryption . */
 #define HTON_SUPPORTS_TABLE_ENCRYPTION (1 << 16)
 
+struct TABLE_STATS {
+  ulonglong rows_read, rows_changed;
+  ulonglong rows_changed_x_indexes;
+  /* Stores enum db_type, but forward declarations cannot be done */
+  const int engine_type;
+
+  TABLE_STATS(int engine_type_, ulonglong rows_read_, ulonglong rows_changed_,
+              ulonglong rows_changed_x_indexes_)
+  noexcept
+      : rows_read(rows_read_),
+        rows_changed(rows_changed_),
+        rows_changed_x_indexes(rows_changed_x_indexes_),
+        engine_type(engine_type_) {}
+};
+
 constexpr const decltype(handlerton::flags) HTON_SUPPORTS_ENGINE_ATTRIBUTE{
     1 << 17};
+
+/** Engine supports Generated invisible primary key. */
+constexpr const decltype(
+    handlerton::flags) HTON_SUPPORTS_GENERATED_INVISIBLE_PK{1 << 18};
+
+/** Whether the secondary engine supports DDLs. No meaning if the engine is not
+ * secondary. */
+#define HTON_SECONDARY_ENGINE_SUPPORTS_DDL (1 << 19)
+
+/** Whether the engine does not support triggers. */
+#define HTON_NO_TRIGGER_SUPPORT (1 << 20)
+
+/** Whether the primary engine supports external data sources. This case refers
+   to having tables with data in object store and the engine does not store any
+   of those data, only metadata. Table contents can be accessed only after
+   loading the table in the secondary storage engine. The flag is used for
+   a primary engine only.
+ */
+#define HTON_SUPPORTS_EXTERNAL_SOURCE (1 << 21)
+
+/** Start of Percona specific HTON_* defines */
+
+/**
+  Engine supports secondary clustered keys.
+*/
+#define HTON_SUPPORTS_CLUSTERED_KEYS (1 << 29)
+
+/**
+  Engine supports compressed columns.
+*/
+#define HTON_SUPPORTS_COMPRESSED_COLUMNS (1 << 30)
+
+/**
+   Set if the storage engine supports 'online' backups. This means that there
+   exists a way to create a consistent copy of its tables without blocking
+   updates to them. If so, statements that update such tables will not be
+   affected by an active LOCK TABLES FOR BACKUP.
+*/
+#define HTON_SUPPORTS_ONLINE_BACKUPS (1 << 31)
+
+/** End of Percona specific HTON_* defines */
+
+
+inline bool secondary_engine_supports_ddl(const handlerton *hton) {
+  assert(hton->flags & HTON_IS_SECONDARY_ENGINE);
+
+  return (hton->flags & HTON_SECONDARY_ENGINE_SUPPORTS_DDL) != 0;
+}
 
 inline bool ddl_is_atomic(const handlerton *hton) {
   return (hton->flags & HTON_SUPPORTS_ATOMIC_DDL) != 0;
@@ -2694,7 +3012,7 @@ static const uint32 HTON_FKS_WITH_PREFIX_PARENT_KEYS = (1 << 0);
 /**
   Storage engine supports hash keys as supporting keys for foreign
   keys. Hash key should contain all foreign key columns and only
-  them (altough in any order).
+  them (although in any order).
 
   Storage engines which support foreign keys but do not have this
   flag set are assumed to not allow hash keys as supporting keys.
@@ -2780,12 +3098,17 @@ struct HA_CREATE_INFO {
   LEX_STRING compress{nullptr, 0};
 
   /**
-  This attibute is used for InnoDB's transparent page encryption.
+  This attribute is used for InnoDB's transparent page encryption.
   If this attribute is set then it is hint to the storage engine to encrypt
   the data. Note: this value is interpreted by the storage engine only.
   and ignored by the Server layer. */
 
   LEX_STRING encrypt_type{nullptr, 0};
+  // explicit_encryption should be true if table was originally created with
+  // ENCRYPTION clause. We keep it separate from used_fields &
+  // HA_CREATE_USED_ENCRYPT which can indicate whether current ALTER used
+  // ENCRYPTION clause.
+  bool explicit_encryption{false};
 
   /**
    * Secondary engine of the table.
@@ -2808,7 +3131,7 @@ struct HA_CREATE_INFO {
   uint stats_sample_pages{0}; /* number of pages to sample during
                            stats estimation, if used, otherwise 0. */
   enum_stats_auto_recalc stats_auto_recalc{HA_STATS_AUTO_RECALC_DEFAULT};
-  SQL_I_List<TABLE_LIST> merge_list;
+  SQL_I_List<Table_ref> merge_list;
   handlerton *db_type{nullptr};
   /**
     Row type of the table definition.
@@ -2846,6 +3169,12 @@ struct HA_CREATE_INFO {
   bool m_implicit_tablespace_autoextend_size_change{true};
 
   /**
+    Contains the actual user table which is being altered. If the system tables
+    are being altered, then this will be empty.
+  */
+  std::string actual_user_table_name{};
+
+  /**
     Fill HA_CREATE_INFO to be used by ALTER as well as upgrade code.
     This function separates code from mysql_prepare_alter_table() to be
     used by upgrade code as well to reduce code duplication.
@@ -2859,6 +3188,7 @@ struct HA_CREATE_INFO {
 
   void init_create_options_from_share(const TABLE_SHARE *share,
                                       uint64_t used_fields);
+  Item *zip_dict_name{nullptr};
 };
 
 /**
@@ -2955,7 +3285,7 @@ class Alter_inplace_info {
   static const HA_ALTER_FLAGS ADD_STORED_BASE_COLUMN = 1ULL << 7;
   // Stored generated column
   static const HA_ALTER_FLAGS ADD_STORED_GENERATED_COLUMN = 1ULL << 8;
-  // Add generic column (convience constant).
+  // Add generic column (convenience constant).
   static const HA_ALTER_FLAGS ADD_COLUMN =
       ADD_VIRTUAL_COLUMN | ADD_STORED_BASE_COLUMN | ADD_STORED_GENERATED_COLUMN;
 
@@ -3622,7 +3952,7 @@ class ha_statistics {
   uint mrr_length_per_rec;
 
   /**
-    Estimate for how much of the table that is availabe in a memory
+    Estimate for how much of the table that is available in a memory
     buffer. Valid range is [0..1]. If it has the special value
     IN_MEMORY_ESTIMATE_UNKNOWN (defined in structs.h), it means that
     the storage engine has not supplied any value for it.
@@ -3657,7 +3987,8 @@ class ha_statistics {
 
   @return Length of used key parts.
 */
-uint calculate_key_len(TABLE *table, uint key, key_part_map keypart_map);
+uint calculate_key_len(TABLE *table, uint key, key_part_map keypart_map,
+                       uint *count = nullptr);
 /*
   bitmap with first N+1 bits set
   (keypart_map for a key prefix of [0..N] keyparts)
@@ -4151,7 +4482,7 @@ class handler {
   ha_statistics stats;
 
   /* MultiRangeRead-related members: */
-  range_seq_t mrr_iter;   /* Interator to traverse the range sequence */
+  range_seq_t mrr_iter;   /* Iterator to traverse the range sequence */
   RANGE_SEQ_IF mrr_funcs; /* Range sequence traversal functions */
   HANDLER_BUFFER *multi_range_buffer; /* MRR buffer info */
   uint ranges_in_seq; /* Total number of ranges in the traversed sequence */
@@ -4221,6 +4552,9 @@ class handler {
   Item *pushed_idx_cond;
   uint pushed_idx_cond_keyno; /* The index which the above condition is for */
 
+  ulonglong rows_read;
+  ulonglong rows_changed;
+  ulonglong index_rows_read[MAX_KEY];
   /**
     next_insert_id is the next value which should be inserted into the
     auto_increment column: in a inserting-multi-row statement (like INSERT
@@ -4373,6 +4707,8 @@ class handler {
         pushed_cond(nullptr),
         pushed_idx_cond(nullptr),
         pushed_idx_cond_keyno(MAX_KEY),
+        rows_read(0),
+        rows_changed(0),
         next_insert_id(0),
         insert_id_for_cur_row(0),
         auto_inc_intervals_count(0),
@@ -4383,9 +4719,11 @@ class handler {
         m_lock_type(F_UNLCK),
         ha_share(nullptr),
         m_update_generated_read_fields(false),
-        m_unique(nullptr) {
+        m_unique(nullptr),
+        cloned(false) {
     DBUG_PRINT("info", ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                         F_UNLCK, F_RDLCK, F_WRLCK));
+    memset(index_rows_read, 0, sizeof(index_rows_read));
   }
 
   virtual ~handler(void) {
@@ -4407,6 +4745,17 @@ class handler {
   virtual handler *clone(const char *name, MEM_ROOT *mem_root);
   /** This is called after create to allow us to set up cached variables */
   void init() { cached_table_flags = table_flags(); }
+  /**
+    For MyRocks, secondary initialization that happens after frm is parsed into
+    field information from within open_binary_frm. MyRocks uses this secondary
+    init phase to analyze the key and field definitions to determine if
+    HA_PRIMARY_KEY_IN_READ_INDEX flag is available for the table as it only
+    supports that behavior for certain types of key combinations. The
+    HA_PRIMARY_KEY_IN_READ_INDEX flag is enabled by default till this method
+    invocation and can be disabled here in case it isn't supported.
+    Return values: false success, true failure.
+  */
+  virtual bool init_with_fields() { return false; }
   /* ha_ methods: public wrappers for private virtual API */
 
   /**
@@ -4671,6 +5020,8 @@ class handler {
   virtual void change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) {
     table = table_arg;
     table_share = share;
+    rows_read = rows_changed = 0;
+    memset(index_rows_read, 0, sizeof(index_rows_read));
   }
   const TABLE_SHARE *get_table_share() const { return table_share; }
 
@@ -4762,6 +5113,51 @@ class handler {
   virtual Cost_estimate read_cost(uint index, double ranges, double rows);
 
   /**
+    Cost estimate for doing a number of non-sequentially accesses
+    against the storage engine. Such accesses can be either number
+    of rows to read, or number of disk pages to access.
+    Each handler implementation is free to interpret that as best
+    suited, depending on what is the dominating cost for that
+    storage engine.
+
+    This method is mainly provided as a temporary workaround for
+    bug#33317872, where we fix problems caused by calling
+    Cost_model::page_read_cost() directly from the optimizer.
+    That should be avoided, as it introduced assumption about all
+    storage engines being disk-page based, and having a 'page' cost.
+    Furthermore, this page cost was even compared against read_cost(),
+    which was computed with an entirely different algorithm, and thus
+    could not be compared.
+
+    The default implementation still call Cost_model::page_read_cost(),
+    thus behaving just as before. However, handler implementation may
+    override it to call handler::read_cost() instead(), which probably
+    will be more correct. (If a page_read_cost should be included
+    in the cost estimate, that should preferable be done inside
+    each read_cost() implementation)
+
+    Longer term we should consider to remove all page_read_cost()
+    usage from the optimizer itself, making this method obsolete.
+
+    @param index  the index number
+    @param reads  the number of accesses being made
+
+    @returns the estimated cost
+  */
+  virtual double page_read_cost(uint index, double reads);
+
+  /**
+    Provide an upper cost-limit of doing a specified number of
+    seek-and-read key lookups. This need to be comparable and
+    calculated with the same 'metric' as page_read_cost.
+
+    @param reads the number of rows read in the 'worst' case.
+
+    @returns the estimated cost
+  */
+  virtual double worst_seek_times(double reads);
+
+  /**
     Return an estimate on the amount of memory the storage engine will
     use for caching data in memory. If this is unknown or the storage
     engine does not cache data in memory -1 is returned.
@@ -4838,7 +5234,7 @@ class handler {
   int check_collation_compatibility();
 
   /**
-    Make a guestimate for how much of a table or index is in a memory
+    Make a guesstimate for how much of a table or index is in a memory
     buffer in the case where the storage engine has not provided any
     estimate for this.
 
@@ -4867,7 +5263,7 @@ class handler {
                           bool eq_range, bool sorted);
   int ha_read_range_next();
 
-  bool has_transactions() {
+  bool has_transactions() const noexcept {
     return (ha_table_flags() & HA_NO_TRANSACTIONS) == 0;
   }
   virtual uint extra_rec_buf_length() const { return 0; }
@@ -4886,12 +5282,16 @@ class handler {
 
     @param error  error code received from the handler interface (HA_ERR_...)
 
-    @return   whether the error is ignorablel or not
+    @return   whether the error is ignorable or not
       @retval true  the error is ignorable
       @retval false the error is not ignorable
   */
 
   virtual bool is_ignorable_error(int error);
+  MY_NODISCARD virtual bool continue_partition_copying_on_error(
+      int error [[maybe_unused]]) {
+    return false;
+  }
 
   /**
     @brief Determine whether an error is fatal or not.
@@ -5116,8 +5516,56 @@ class handler {
     return index_read_last(buf, key, key_len);
   }
 
+ public:
+  /**
+    Notify storage engine about imminent index scan where a large number of
+    rows is expected to be returned. Does not replace nor call index_init.
+  */
+  virtual int prepare_index_scan(void) { return 0; }
+
+  /**
+    Notify storage engine about imminent index range scan.
+  */
+  virtual int prepare_range_scan(const key_range *, const key_range *) {
+    return 0;
+  }
+
+  /**
+    Notify storage engine about imminent index read with a bitmap of used key
+    parts.
+  */
+  int prepare_index_key_scan_map(const uchar *key, key_part_map keypart_map) {
+    const uint key_len = calculate_key_len(table, active_index, keypart_map);
+    return prepare_index_key_scan(key, key_len);
+  }
+
+  /**
+    Query storage engine to see if it supports gap locks on this table.
+  */
+  virtual bool has_gap_locks() const noexcept { return false; }
+
+  /**
+    Query storage engine to see if it can support handling specific replication
+    method in its current configuration.
+  */
+  virtual bool rpl_can_handle_stm_event() const noexcept { return true; }
+
+ protected:
+  static bool is_using_full_key(key_part_map keypart_map,
+                                uint actual_key_parts) noexcept;
+  bool is_using_full_unique_key(uint active_index, key_part_map keypart_map,
+                                enum ha_rkey_function find_flag) const noexcept;
+  bool is_using_prohibited_gap_locks(
+      TABLE *table, bool using_full_primary_key) const noexcept;
+
+  /**
+    Notify storage engine about imminent index read with key length.
+  */
+  virtual int prepare_index_key_scan(const uchar *, uint) { return 0; }
+
+ public:
   virtual int read_range_first(const key_range *start_key,
-                               const key_range *end_key, bool eq_range,
+                               const key_range *end_key, bool eq_range_arg,
                                bool sorted);
   virtual int read_range_next();
 
@@ -5136,11 +5584,7 @@ class handler {
   int compare_key_icp(const key_range *range) const;
   int compare_key_in_buffer(const uchar *buf) const;
   virtual int ft_init() { return HA_ERR_WRONG_COMMAND; }
-  virtual FT_INFO *ft_init_ext(uint flags [[maybe_unused]],
-                               uint inx [[maybe_unused]],
-                               String *key [[maybe_unused]]) {
-    return nullptr;
-  }
+  virtual FT_INFO *ft_init_ext(uint flags, uint inx, String *key);
   virtual FT_INFO *ft_init_ext_with_hints(uint inx, String *key,
                                           Ft_hints *hints) {
     return ft_init_ext(hints->get_flags(), inx, key);
@@ -5270,24 +5714,21 @@ class handler {
   }
 
   /**
-    Let storage engine inspect the optimized 'plan' and pick whatever
-    it like for being pushed down to the engine. (Join, conditions, ..)
+    Get the handlerton of the storage engine if the SE is capable of
+    pushing down some of the AccessPath functionality.
+    (Join, Filter conditions, ... possiby more)
 
-    The handler implementation should keep track of what it 'pushed',
-    such that later calls to the handlers access methods should
-    activate the pushed (part of) the execution plan on the storage
-    engines.
+    Call the handlerton::push_to_engine() method for performing the
+    actual pushdown of (parts of) the AccessPath functionality
 
-    @param  table
-            Abstract Query Plan 'table' object for the table
-            being pushed to
+    @returns   handlerton* of the SE if it may be capable of
+               off loading part of the query by calling
+               handlerton::push_to_engine()
 
-    @returns
-      0     on success
-      error otherwise
+               Else, 'nullptr' is returned.
   */
-  virtual int engine_push(AQP::Table_access *table [[maybe_unused]]) {
-    return 0;
+  virtual const handlerton *hton_supporting_engine_pushdown() {
+    return nullptr;
   }
 
   /**
@@ -5421,6 +5862,12 @@ class handler {
     @param    create_info         Create info from ALTER TABLE.
   */
 
+  /*
+    This function allows the storage engine to adust the create_info before
+    it is stored in the data dictionary.
+    This can be used for example to modify the create statement based on a
+    storage engine specific setting.
+  */
   virtual void update_create_info(HA_CREATE_INFO *create_info
                                   [[maybe_unused]]) {}
   virtual int assign_to_keycache(THD *, HA_CHECK_OPT *) {
@@ -5487,6 +5934,16 @@ class handler {
   */
 
   virtual bool is_crashed() const { return false; }
+
+  void update_global_table_stats();
+  void update_global_index_stats();
+  void update_index_stats(uint current_index) noexcept {
+    rows_read++;
+    if (current_index < MAX_KEY)
+      index_rows_read[current_index]++;
+    else
+      index_rows_read[0]++;
+  }
 
   /**
     Check if the table can be automatically repaired.
@@ -6052,6 +6509,69 @@ class handler {
   /* End of On-line/in-place ALTER TABLE interface. */
 
   /**
+    @brief Offload an update to the storage engine. See handler::fast_update()
+    for details.
+  */
+  MY_NODISCARD int ha_fast_update(THD *thd,
+                                  mem_root_deque<Item *> &update_fields,
+                                  mem_root_deque<Item *> &update_values,
+                                  Item *conds);
+
+  /**
+    @brief Offload an upsert to the storage engine. See handler::upsert()
+    for details.
+  */
+  MY_NODISCARD int ha_upsert(THD *thd, mem_root_deque<Item *> &update_fields,
+                             mem_root_deque<Item *> &update_values);
+
+ private:
+  /**
+    Offload an update to the storage engine implementation.
+
+    @param    thd              The thread handle.
+    @param    update_fields    The list of fields to update.
+    @param    update_values    The list of new values for the fields
+                               in update_fields.
+    @param    conds            Conditions tree.
+
+    @retval   0                if the storage engine handled the update.
+    @retval   ENOTSUP          if the storage engine can not handle the
+                               update and the slow update code path should
+                               continue executing the update.
+
+    @return an error if the update should be terminated.
+
+    @note HA_READ_BEFORE_WRITE_REMOVAL flag doesn not fit there because
+    handler::ha_update_row(...) does not accept conditions.
+  */
+  MY_NODISCARD virtual int fast_update(THD *, mem_root_deque<Item *> &,
+                                       mem_root_deque<Item *> &, Item *) {
+    return ENOTSUP;
+  }
+
+  /**
+    Offload an upsert to the storage engine implementation. Expects the row
+    to be stored in record[0].
+
+    @param    thd              The thread handle.
+    @param    update_fields    The list of fields to update.
+    @param    update_values    The list of new values for the fields
+                               in update_fields.
+
+    @retval   0                if the storage engine handled the upsert.
+    @retval   ENOTSUP          if the storage engine can not handle the upsert
+                               and the slow insert code path should continue
+                               executing the insert.
+
+    @return an error if the insert should be terminated.
+  */
+  MY_NODISCARD virtual int upsert(THD *, mem_root_deque<Item *> &,
+                                  mem_root_deque<Item *> &) {
+    return ENOTSUP;
+  }
+
+ public:
+  /**
     use_hidden_primary_key() is called in case of an update/delete when
     (table_flags() and HA_PRIMARY_KEY_REQUIRED_FOR_DELETE) is defined
     but we don't have a primary key
@@ -6553,6 +7073,41 @@ class handler {
   int get_lock_type() const { return m_lock_type; }
 
   /**
+    This method is supposed to fill field definition objects with
+    compression dictionary info (name and data). This is used
+    only during upgrade from 5.7 to 8.0
+    If the handler does not support compression dictionaries
+    this method should be left empty (not overloaded).
+
+    @param    thd          Thread handle
+    @param    part_name    Full table name (including partition part).
+                           Optional.
+  */
+  virtual void upgrade_update_field_with_zip_dict_info(THD *, const char *) {}
+
+ public:
+  /* Read-free replication interface */
+
+  /**
+     Determine whether the storage engine asks for row-based replication that
+     may skip the lookup of the old row image.
+
+     @return true if old rows should be read (the default)
+             false if old rows should not be read
+   */
+  virtual bool rpl_lookup_rows() { return true; }
+  /*
+     Storage engine hooks to be called before and after row write, delete, and
+     update events
+  */
+  virtual void rpl_before_write_rows() {}
+  virtual void rpl_after_write_rows() {}
+  virtual void rpl_before_delete_rows() {}
+  virtual void rpl_after_delete_rows() {}
+  virtual void rpl_before_update_rows() {}
+  virtual void rpl_after_update_rows() {}
+
+  /**
     Callback function that will be called by my_prepare_gcolumn_template
     once the table has been opened.
   */
@@ -6667,6 +7222,31 @@ class handler {
   void unlock_shared_ha_data();
 
   friend class DsMrr_impl;
+
+ private:
+  /**
+    If true, the current handler is a clone. In that case certain invariants
+    such as table->in_use == current_thd are relaxed to support cloning a
+    handler belonging to a different thread. */
+  bool cloned;
+};
+
+/* Temporary Table handle for opening uncached table */
+class Temp_table_handle {
+ public:
+  Temp_table_handle() : table(nullptr) {}
+
+  /** Open the table handler
+  @param[in]	thd		Thread object
+  @param[in]	db_name		Database name
+  @param[in]	table_name	Table name
+  @return table object or nullptr */
+  TABLE *open(THD *thd, const char *db_name, const char *table_name);
+
+  ~Temp_table_handle();
+
+ private:
+  TABLE *table;
 };
 
 /**
@@ -6753,9 +7333,9 @@ class DsMrr_impl {
   void dsmrr_close();
 
   /**
-    Resets the DS-MRR object to the state it had after being intialized.
+    Resets the DS-MRR object to the state it had after being initialized.
 
-    If there is an open scan then this will be closed.
+    If there is an open scan then it will be closed.
 
     This function should be called by handler::ha_reset() which is called
     when a statement is completed in order to make the handler object ready
@@ -6783,6 +7363,7 @@ class DsMrr_impl {
 /* lookups */
 handlerton *ha_default_handlerton(THD *thd);
 handlerton *ha_default_temp_handlerton(THD *thd);
+handlerton *ha_enforce_handlerton(THD *thd);
 /**
   Resolve handlerton plugin by name, without checking for "DEFAULT" or
   HTON_NOT_USER_SELECTABLE.
@@ -6801,6 +7382,9 @@ handler *get_new_handler(TABLE_SHARE *share, bool partitioned, MEM_ROOT *alloc,
                          handlerton *db_type);
 handlerton *ha_checktype(THD *thd, enum legacy_db_type database_type,
                          bool no_substitute, bool report_error);
+
+bool ha_secondary_engine_supports_ddl(
+    THD *thd, const LEX_CSTRING &secondary_engine) noexcept;
 
 /**
   Get default handlerton, if handler supplied is null.
@@ -6867,8 +7451,10 @@ void ha_pre_dd_shutdown(void);
 */
 bool ha_flush_logs(bool binlog_group_flush = false);
 void ha_drop_database(char *path);
+class Create_field;
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
+                    const List<Create_field> *create_fields,
                     bool update_create_info, bool is_temp_table,
                     dd::Table *table_def);
 
@@ -6898,38 +7484,66 @@ bool ha_rm_tmp_tables(THD *thd, List<LEX_STRING> *files);
 bool default_rm_tmp_tables(handlerton *hton, THD *thd, List<LEX_STRING> *files);
 
 /* key cache */
-extern "C" int ha_init_key_cache(const char *name, KEY_CACHE *key_cache);
+int ha_init_key_cache(std::string_view name, KEY_CACHE *key_cache);
 int ha_resize_key_cache(KEY_CACHE *key_cache);
 int ha_change_key_cache(KEY_CACHE *old_key_cache, KEY_CACHE *new_key_cache);
 
 /* transactions: interface to handlerton functions */
 int ha_start_consistent_snapshot(THD *thd);
+int ha_store_binlog_info(THD *thd);
 int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock = false);
 int ha_commit_attachable(THD *thd);
 int ha_rollback_trans(THD *thd, bool all);
 
-/* interface to handlerton function to prepare XA transaction */
-int ha_xa_prepare(THD *thd);
-
 /**
-  recover() step of xa.
+  Stage of the recovery process where information is collected from the
+  storage engines (SE), merged with information from the transaction
+  coordinator (TC) and transactions states are determined and enforced.
 
-  @note
-    there are three modes of operation:
-    - automatic recover after a crash
-    in this case commit_list != 0, tc_heuristic_recover==TC_HEURISTIC_NOT_USED
-    all xids from commit_list are committed, others are rolled back
-    - manual (heuristic) recover
-    in this case commit_list==0, tc_heuristic_recover != TC_HEURISTIC_NOT_USED
-    DBA has explicitly specified that all prepared transactions should
-    be committed (or rolled back).
-    - no recovery (MySQL did not detect a crash)
-    in this case commit_list==0, tc_heuristic_recover == TC_HEURISTIC_NOT_USED
-    there should be no prepared transactions in this case.
+  Implemented heuristics is as follows:
+
+  1. The `commit_list` parameter contains the set of internally coordinated
+     transactions that the TC ensures were marked as committed.
+
+  2. The `xa_state_list` parameter contains the list of externally
+     coordinated transactions and their states, as recorded by the TC.
+
+  3. For each SE:
+     a. Collect list of transactions found in `PREPARED_IN_TC` state in the
+        SE and merge it with the information collected from the TC, in
+        `xa_state_list`.
+     b. Retrieve the list of transactions found in prepared state in the
+        SE.
+
+     c. For each internally coordinated transactions found in prepared
+        state:
+        1. If the transaction is found in `commit_list`, commit it.
+        2. If the transaction is NOT found in `commit_list` but
+          `tc_heuristic_recover = TC_HEURISTIC_RECOVER_COMMIT`, commit it.
+        3. Otherwise, roll it back.
+
+     d. For each externally coordinated transactions found in prepared
+        state:
+        1. If the transaction isn't found in `xa_state_list`, roll it back.
+        2. If the transaction is found in `xa_state_list` in `COMMITTED`
+           state, commit it.
+        3. If the transaction is found in `xa_state_list` in `ROLLEDBACK`
+           state, roll it back.
+        4. If the transaction is found in `xa_state_list` in `PREPARED`
+           state, ensure that the transaction state in the SE is
+           `PREPARED_IN_TC`.
+
+  @param commit_list Set of XIDs of internally coordinated transactions
+                     found as been committed in the transaction coordinator
+                     state.
+  @param xa_state_list Map between XIDs and states of externally
+                       coordinated transactions as found in the internal
+                       transaction coordinator state.
+
+  @return 0 if recovery was successful, non-zero otherwise.
 */
-
-typedef ulonglong my_xid;  // this line is the same as in log_event.h
-int ha_recover(const mem_root_unordered_set<my_xid> *commit_list);
+int ha_recover(Xid_commit_list *commit_list = nullptr,
+               Xa_state_list *xa_state_list = nullptr);
 
 /**
   Perform SE-specific cleanup after recovery of transactions.
@@ -6946,6 +7560,22 @@ void ha_post_recover();
  commit/prepare/rollback transactions in the engines.
 */
 int ha_commit_low(THD *thd, bool all, bool run_after_commit = true);
+/**
+  Prepares the underlying transaction of the THD session object parameter
+  in the storage engines that participate in the transaction.
+
+  In case of failure, an error will be emitted by the function in the case
+  of internally coordinated transactions. In the case of externally
+  coordinated transactions (XA), the error treatment must follow the
+  XA/Open specification and is handled by the `Sql_cmd_xa_prepare` class.
+
+  @param thd The THD session object holding the transaction to be prepared.
+  @param all Whether or not the prepare regards a full transaction or the
+             statement being executed..
+
+  @return 0 if the transaction was successfully prepared, non-zero
+          otherwise.
+ */
 int ha_prepare_low(THD *thd, bool all);
 int ha_rollback_low(THD *thd, bool all);
 
@@ -6998,8 +7628,11 @@ bool ha_is_storage_engine_disabled(handlerton *se_engine);
 bool ha_notify_exclusive_mdl(THD *thd, const MDL_key *mdl_key,
                              ha_notification_type notification_type,
                              bool *victimized);
-bool ha_notify_alter_table(THD *thd, const MDL_key *mdl_key,
-                           ha_notification_type notification_type);
+bool ha_notify_table_ddl(THD *thd, const MDL_key *mdl_key,
+                         ha_notification_type notification_type,
+                         ha_ddl_type ddl_type, const char *old_db_name,
+                         const char *old_table_name, const char *new_db_name,
+                         const char *new_table_name);
 
 std::pair<int, bool> commit_owned_gtids(THD *thd, bool all);
 bool set_tx_isolation(THD *thd, enum_tx_isolation tx_isolation, bool one_shot);
@@ -7019,14 +7652,14 @@ class ha_tablespace_statistics {
  public:
   ha_tablespace_statistics()
       : m_id(0),
-        m_logfile_group_number(-1),
+        m_logfile_group_number(~0ULL),
         m_free_extents(0),
         m_total_extents(0),
         m_extent_size(0),
         m_initial_size(0),
         m_maximum_size(0),
         m_autoextend_size(0),
-        m_version(-1),
+        m_version(~0ULL),
         m_data_free(0) {}
 
   ulonglong m_id;

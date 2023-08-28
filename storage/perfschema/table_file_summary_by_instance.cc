@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -134,12 +134,12 @@ PFS_engine_table *table_file_summary_by_instance::create(
   return new table_file_summary_by_instance();
 }
 
-int table_file_summary_by_instance::delete_all_rows(void) {
+int table_file_summary_by_instance::delete_all_rows() {
   reset_file_instance_io();
   return 0;
 }
 
-ha_rows table_file_summary_by_instance::get_row_count(void) {
+ha_rows table_file_summary_by_instance::get_row_count() {
   return global_file_container.get_row_count();
 }
 
@@ -148,12 +148,12 @@ table_file_summary_by_instance::table_file_summary_by_instance()
   m_normalizer = time_normalizer::get_wait();
 }
 
-void table_file_summary_by_instance::reset_position(void) {
+void table_file_summary_by_instance::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
-int table_file_summary_by_instance::rnd_next(void) {
+int table_file_summary_by_instance::rnd_next() {
   PFS_file *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -203,7 +203,7 @@ int table_file_summary_by_instance::index_init(uint idx, bool) {
   return 0;
 }
 
-int table_file_summary_by_instance::index_next(void) {
+int table_file_summary_by_instance::index_next() {
   PFS_file *pfs;
 
   m_pos.set_at(&m_next_pos);
@@ -241,8 +241,7 @@ int table_file_summary_by_instance::make_row(PFS_file *pfs) {
     return HA_ERR_RECORD_DELETED;
   }
 
-  m_row.m_filename = pfs->m_filename;
-  m_row.m_filename_length = pfs->m_filename_length;
+  m_row.m_file_name = pfs->m_file_name;
   m_row.m_event_name.make_row(safe_class);
   m_row.m_identity = pfs->m_identity;
 
@@ -269,7 +268,8 @@ int table_file_summary_by_instance::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* FILE_NAME */
-          set_field_varchar_utf8(f, m_row.m_filename, m_row.m_filename_length);
+          set_field_varchar_utf8mb4(f, m_row.m_file_name.ptr(),
+                                    m_row.m_file_name.length());
           break;
         case 1: /* EVENT_NAME */
           m_row.m_event_name.set_field(f);

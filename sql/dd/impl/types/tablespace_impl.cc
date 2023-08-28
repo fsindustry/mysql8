@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -89,7 +89,7 @@ class Sdi_rcontext;
 class Sdi_wcontext;
 
 static const std::set<String_type> default_valid_option_keys = {
-    "encryption", "autoextend_size"};
+    "encryption", "autoextend_size", "explicit_encryption"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Tablespace_impl implementation.

@@ -1,4 +1,4 @@
-# Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -74,4 +74,3 @@ GET_OTHER_FUNCTION_NAMES(${PROJECT_SOURCE_DIR}/sql/sql_yacc.yy OTHER_MYSQL_FUNCT
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/mysql_function_names_t.cc.in
                 ${MYSQLX_GENERATE_DIR}/mysql_function_names_t.cc)
-

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,12 +37,13 @@ class THD;
 struct MEM_ROOT;
 
 enum keytype {
-  KEYTYPE_PRIMARY,
-  KEYTYPE_UNIQUE,
-  KEYTYPE_MULTIPLE,
-  KEYTYPE_FULLTEXT,
-  KEYTYPE_SPATIAL,
-  KEYTYPE_FOREIGN
+  KEYTYPE_PRIMARY = 0,
+  KEYTYPE_UNIQUE = 1,
+  KEYTYPE_MULTIPLE = 2,
+  KEYTYPE_FULLTEXT = 4,
+  KEYTYPE_SPATIAL = 8,
+  KEYTYPE_FOREIGN = 16,
+  KEYTYPE_CLUSTERING = 32
 };
 
 enum fk_option {

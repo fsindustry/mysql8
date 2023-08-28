@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,7 @@
 
 #include <string.h>
 
+#include <cstdint>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -43,6 +44,10 @@
 #include "my_inttypes.h"
 #include "my_pointer_arithmetic.h"
 #include "mysql/psi/psi_memory.h"
+
+#if defined(MYSQL_SERVER)
+extern "C" void sql_alloc_error_handler();
+#endif
 
 /**
  * The MEM_ROOT is a simple arena, where allocations are carved out of
@@ -79,6 +84,7 @@ struct MEM_ROOT {
  private:
   struct Block {
     Block *prev{nullptr}; /** Previous block; used for freeing. */
+    char *end{nullptr};   /** One byte past the end; used for Contains(). */
   };
 
  public:
@@ -87,7 +93,11 @@ struct MEM_ROOT {
   MEM_ROOT(PSI_memory_key key, size_t block_size)
       : m_block_size(block_size),
         m_orig_block_size(block_size),
-        m_psi_key(key) {}
+        m_psi_key(key) {
+#if defined(MYSQL_SERVER)
+    m_error_handler = sql_alloc_error_handler;
+#endif
+  }
 
   // MEM_ROOT is movable but not copyable.
   MEM_ROOT(const MEM_ROOT &) = delete;
@@ -153,6 +163,14 @@ struct MEM_ROOT {
     }
 
     return AllocSlow(length);
+  }
+
+  void *Alloc_aligned(size_t length, size_t alignment) MY_ATTRIBUTE((malloc)) {
+    void *ptr = Alloc(length + alignment);
+    if (!ptr) return nullptr;
+    ptr = reinterpret_cast<void *>(
+        MY_ALIGN(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+    return ptr;
   }
 
   /**
@@ -334,6 +352,22 @@ struct MEM_ROOT {
     m_current_free_start += length;
   }
 
+  /**
+   * Returns whether this MEM_ROOT contains the given pointer,
+   * ie., whether it was given back from Alloc(n) (given n >= 1)
+   * at some point. This means it will be legally accessible until
+   * the next Clear() or ClearForReuse() call.
+   */
+  bool Contains(void *ptr) const {
+    for (Block *block = m_current_block; block != nullptr;
+         block = block->prev) {
+      if (ptr >= block && ptr < block->end) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// @}
 
  private:
@@ -349,8 +383,7 @@ struct MEM_ROOT {
     than wanted_length, but if it cannot allocate at least minimum_length,
     will return nullptr.
   */
-  std::pair<Block *, size_t> AllocBlock(size_t wanted_length,
-                                        size_t minimum_length);
+  Block *AllocBlock(size_t wanted_length, size_t minimum_length);
 
   /** Allocate memory that doesn't fit into the current free block. */
   void *AllocSlow(size_t length);

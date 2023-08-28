@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
     Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
@@ -24,10 +24,9 @@
 */
 
 
-#include <ndb_global.h>
+#include "ndb_global.h"
 
 #include "InputStream.hpp"
-#include <socket_io.h>
 
 FileInputStream Stdin(stdin);
 
@@ -40,11 +39,11 @@ FileInputStream::gets(char * buf, int bufLen){
   if(!feof(f)){
     return fgets(buf, bufLen, f);
   }
-  return 0;
+  return nullptr;
 }
 
-SocketInputStream::SocketInputStream(NDB_SOCKET_TYPE socket, 
-				     unsigned read_timeout_ms)
+SecureSocketInputStream::SecureSocketInputStream(const NdbSocket & socket,
+                                                 unsigned read_timeout_ms)
   : m_socket(socket) {
   m_startover= true;
   m_timeout_remain= m_timeout_ms = read_timeout_ms;
@@ -53,9 +52,9 @@ SocketInputStream::SocketInputStream(NDB_SOCKET_TYPE socket,
 }
 
 char*
-SocketInputStream::gets(char * buf, int bufLen) {
+SecureSocketInputStream::gets(char * buf, int bufLen) {
   if(timedout())
-    return 0;
+    return nullptr;
   assert(bufLen >= 2);
   int offset= 0;
   if(m_startover)
@@ -67,8 +66,8 @@ SocketInputStream::gets(char * buf, int bufLen) {
     offset= (int)strlen(buf);
 
   int time= 0;
-  int res = readln_socket(m_socket, m_timeout_remain, &time,
-                          buf+offset, bufLen-offset, m_mutex);
+  int res = m_socket.readln(m_timeout_remain, &time,
+                            buf+offset, bufLen-offset, m_mutex);
 
   if(res >= 0)
     m_timeout_remain-=time;
@@ -83,7 +82,7 @@ SocketInputStream::gets(char * buf, int bufLen) {
 
   if(res == -1)
   {
-    return 0;
+    return nullptr;
   }
 
   return buf;

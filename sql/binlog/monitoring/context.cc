@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -246,7 +246,7 @@ void Transaction_compression::init() {
   auto log_types = std::set<binlog::monitoring::log_type>();
 
   comp_types.insert(binary_log::transaction::compression::type::NONE);
-  comp_types.insert(binary_log::transaction::compression::type::ZSTD);
+  comp_types.insert(binary_log::transaction::compression::type::ALGORITHM_ZSTD);
 
   log_types.insert(binlog::monitoring::log_type::BINARY);
   log_types.insert(binlog::monitoring::log_type::RELAY);

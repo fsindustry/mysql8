@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,10 @@
 
 #include <cmath>
 #include <optional>
+
+static constexpr const size_t MAX_BIT_FIELD_LENGTH{64};
+/** YYYYMMDDHHMMSS */
+static constexpr const size_t MAX_DATETIME_COMPRESSED_WIDTH{14};
 
 /**
     Constructs a column definition from an object representing an actual
@@ -70,10 +74,12 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
       treat_bit_as_char(
           false),  // Init to avoid valgrind warnings in opt. build
       pack_length_override(0),
+      zip_dict_name(old_field->zip_dict_name),
       gcol_info(old_field->gcol_info),
       stored_in_db(old_field->stored_in_db),
       m_default_val_expr(old_field->m_default_val_expr),
       is_array(old_field->is_array()),
+      zip_dict_id(0),
       m_engine_attribute(old_field->m_engine_attribute),
       m_secondary_engine_attribute(old_field->m_secondary_engine_attribute),
       m_max_display_width_in_codepoints(old_field->char_length()) {
@@ -98,6 +104,9 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
     }
     case MYSQL_TYPE_YEAR:
       m_max_display_width_in_codepoints = 4;  // set default value
+      break;
+    case MYSQL_TYPE_LONGLONG:
+      is_unsigned = old_field->is_unsigned();
       break;
     default:
       break;
@@ -169,6 +178,7 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
   @param fld_charset           Column charset.
   @param has_explicit_collation Column has an explicit COLLATE attribute.
   @param fld_geom_type         Column geometry type (if any.)
+  @param fld_zip_dict_name     Column compression dictionary.
   @param fld_gcol_info         Generated column data
   @param fld_default_val_expr  The expression for generating default values
   @param srid                  The SRID specification. This might be null
@@ -189,9 +199,9 @@ bool Create_field::init(
     const LEX_CSTRING *fld_comment, const char *fld_change,
     List<String> *fld_interval_list, const CHARSET_INFO *fld_charset,
     bool has_explicit_collation, uint fld_geom_type,
-    Value_generator *fld_gcol_info, Value_generator *fld_default_val_expr,
-    std::optional<gis::srid_t> srid, dd::Column::enum_hidden_type hidden,
-    bool is_array_arg) {
+    const LEX_CSTRING *fld_zip_dict_name, Value_generator *fld_gcol_info,
+    Value_generator *fld_default_val_expr, std::optional<gis::srid_t> srid,
+    dd::Column::enum_hidden_type hidden, bool is_array_arg) {
   uint sign_len, allowed_type_modifier = 0;
   ulong max_field_charlength = MAX_FIELD_CHARLENGTH;
 
@@ -310,7 +320,8 @@ bool Create_field::init(
     const ulonglong ull_length =
         my_strtoull(display_width_in_codepoints, nullptr, 10);
     if ((errno != 0) || (ull_length > MAX_FIELD_BLOBLENGTH)) {
-      my_error(ER_TOO_BIG_DISPLAYWIDTH, MYF(0), fld_name, MAX_FIELD_BLOBLENGTH);
+      my_error(ER_TOO_BIG_DISPLAYWIDTH, MYF(0), fld_name,
+               static_cast<unsigned long>(MAX_FIELD_BLOBLENGTH));
       return true;
     }
     m_max_display_width_in_codepoints = static_cast<size_t>(ull_length);
@@ -473,7 +484,6 @@ bool Create_field::init(
           and 19 as length of 4.1 compatible representation.  Silently
           shrink it to MAX_DATETIME_COMPRESSED_WIDTH.
         */
-        assert(MAX_DATETIME_COMPRESSED_WIDTH < UINT_MAX);
         if (m_max_display_width_in_codepoints !=
             UINT_MAX) /* avoid overflow; is safe because of min() */
           m_max_display_width_in_codepoints =
@@ -553,6 +563,7 @@ bool Create_field::init(
     return true;
   }
 
+  if (fld_zip_dict_name) zip_dict_name = *fld_zip_dict_name;
   /*
     After all checks were carried out we should be able guarantee that column
     can't have AUTO_INCREMENT and DEFAULT/ON UPDATE CURRENT_TIMESTAMP at the

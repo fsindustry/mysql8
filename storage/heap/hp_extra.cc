@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -62,7 +62,6 @@ int heap_reset(HP_INFO *info) {
   info->current_record = (ulong)~0L;
   info->current_hash_ptr = nullptr;
   info->update = 0;
-  info->next_block = 0;
   return 0;
 }
 

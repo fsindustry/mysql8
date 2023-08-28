@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -148,6 +148,15 @@ struct CHARSET_INFO;
 #endif
 
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
+#define MYSQL_NOTIFY_STATEMENT_QUERY_ATTRIBUTES(LOCKER, P1) \
+  inline_mysql_notify_statement_query_attributes(LOCKER, P1)
+#else
+#define MYSQL_NOTIFY_STATEMENT_QUERY_ATTRIBUTES(LOCKER, P1) \
+  do {                                                      \
+  } while (0)
+#endif
+
+#ifdef HAVE_PSI_STATEMENT_INTERFACE
 #define MYSQL_END_STATEMENT(LOCKER, DA) inline_mysql_end_statement(LOCKER, DA)
 #else
 #define MYSQL_END_STATEMENT(LOCKER, DA) \
@@ -247,6 +256,14 @@ static inline void inline_mysql_set_statement_rows_examined(
   }
 }
 
+static inline void inline_mysql_notify_statement_query_attributes(
+    PSI_statement_locker *locker, bool with_query_attributes) {
+  if (likely(locker != nullptr)) {
+    PSI_STATEMENT_CALL(notify_statement_query_attributes)
+    (locker, with_query_attributes);
+  }
+}
+
 static inline void inline_mysql_end_statement(
     struct PSI_statement_locker *locker, Diagnostics_area *stmt_da) {
 #ifdef HAVE_PSI_STAGE_INTERFACE
@@ -256,7 +273,17 @@ static inline void inline_mysql_end_statement(
     PSI_STATEMENT_CALL(end_statement)(locker, stmt_da);
   }
 }
-#endif
+#endif /* HAVE_PSI_STATEMENT_INTERFACE */
+
+static inline void mysql_statement_set_secondary_engine(
+    PSI_statement_locker *locker [[maybe_unused]],
+    bool secondary [[maybe_unused]]) {
+#ifdef HAVE_PSI_STATEMENT_INTERFACE
+  if (likely(locker != nullptr)) {
+    PSI_STATEMENT_CALL(set_statement_secondary_engine)(locker, secondary);
+  }
+#endif /* HAVE_PSI_STATEMENT_INTERFACE */
+}
 
 /** @} (end of group psi_api_statement) */
 

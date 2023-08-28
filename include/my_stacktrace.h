@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,6 +56,9 @@ void my_create_minidump(const char *name, HANDLE process, DWORD pid);
 #endif /* HAVE_BACKTRACE || _WIN32 */
 
 void my_write_core(int sig);
+#if HAVE_LIBCOREDUMPER
+void my_write_libcoredumper(int sig, char *path, time_t curr_time);
+#endif
 
 /**
   Async-signal-safe utility functions used by signal handler routines.

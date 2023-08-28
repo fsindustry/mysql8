@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,6 +100,13 @@ class Index : virtual public Entity_object {
 
   virtual bool is_hidden() const = 0;
   virtual void set_hidden(bool hidden) = 0;
+
+  /////////////////////////////////////////////////////////////////////////
+  // disabled.
+  /////////////////////////////////////////////////////////////////////////
+
+  virtual bool is_disabled() const noexcept = 0;
+  virtual void set_disabled(bool disable) noexcept = 0;
 
   /////////////////////////////////////////////////////////////////////////
   // comment.

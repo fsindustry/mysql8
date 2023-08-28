@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -58,8 +58,9 @@ int mi_panic(enum ha_panic_function flag) {
           if (flush_io_cache(&info->rec_cache)) error = my_errno();
         if (info->opt_flag & READ_CACHE_USED) {
           if (flush_io_cache(&info->rec_cache)) error = my_errno();
-          reinit_io_cache(&info->rec_cache, READ_CACHE, 0,
-                          (bool)(info->lock_type != F_UNLCK), true);
+          if (reinit_io_cache(&info->rec_cache, READ_CACHE, 0,
+                              (bool)(info->lock_type != F_UNLCK), true))
+            error = my_errno();
         }
         if (info->lock_type != F_UNLCK && !info->was_locked) {
           info->was_locked = info->lock_type;
@@ -75,7 +76,7 @@ int mi_panic(enum ha_panic_function flag) {
     }
   }
   if (flag == HA_PANIC_CLOSE) {
-    (void)mi_log(0); /* Close log if neaded */
+    (void)mi_log(0); /* Close log if needed */
     ft_free_stopwords();
   }
   mysql_mutex_unlock(&THR_LOCK_myisam);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,8 @@
 #ifndef METADATA_CACHE_METADATA_CACHE_INCLUDED
 #define METADATA_CACHE_METADATA_CACHE_INCLUDED
 
+#include "mysqlrouter/metadata_cache_export.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -37,10 +39,10 @@
 #include <thread>
 
 #include "gr_notifications_listener.h"
-#include "metadata.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/stdx/monitor.h"
 #include "mysql_router_thread.h"
+#include "mysqlrouter/metadata.h"
 #include "mysqlrouter/metadata_cache.h"
 
 class ClusterMetadata;
@@ -51,16 +53,13 @@ class ClusterMetadata;
  * MySQL Server.
  *
  */
-class METADATA_API MetadataCache
+class METADATA_CACHE_EXPORT MetadataCache
     : public metadata_cache::ClusterStateNotifierInterface {
  public:
   /**
    * Initialize a connection to the MySQL Metadata server.
    *
    * @param router_id id of the router in the cluster metadata
-   * @param cluster_type_specific_id id of the ReplicaSet in case of the
-   * ReplicaSet, Replication Group name for GR Cluster (if bootstrapped as a
-   * single Cluster, empty otherwise)
    * @param clusterset_id UUID of the ClusterSet the Cluster belongs to (if
    * bootstrapped as a ClusterSet, empty otherwise)
    * @param metadata_servers The servers that store the metadata
@@ -75,8 +74,7 @@ class METADATA_API MetadataCache
    * should use GR notifications as an additional trigger for metadata refresh
    */
   MetadataCache(
-      const unsigned router_id, const std::string &cluster_type_specific_id,
-      const std::string &clusterset_id,
+      const unsigned router_id, const std::string &clusterset_id,
       const std::vector<mysql_harness::TCPAddress> &metadata_servers,
       std::shared_ptr<MetaData> cluster_metadata,
       const metadata_cache::MetadataCacheTTLConfig &ttl_config,
@@ -101,28 +99,15 @@ class METADATA_API MetadataCache
   void stop() noexcept;
 
   /** @brief Returns list of managed servers in a cluster
-   * TODO: is this needed?!?
    *
-   * Returns list of managed servers in a cluster.
    *
    * @return std::vector containing ManagedInstance objects
    */
   metadata_cache::cluster_nodes_list_t get_cluster_nodes();
 
-  /** @brief Update the status of the instance
-   *
-   * Called when an instance from a cluster cannot be reached for one reason
-   * or another. When an instance becomes unreachable, an emergency mode is set
-   * (the rate of refresh of the metadata cache increases to once per second if
-   * currently lower) and lasts until disabled after a suitable change in the
-   * metadata cache is discovered.
-   *
-   * @param instance_id - the mysql_server_uuid that identifies the server
-   * instance
-   * @param status - the status of the instance
+  /** @brief Returns object containing current Cluster Topology
    */
-  void mark_instance_reachability(const std::string &instance_id,
-                                  metadata_cache::InstanceStatus status);
+  metadata_cache::ClusterTopology get_cluster_topology();
 
   /** Wait until cluster PRIMARY changes.
    *
@@ -194,6 +179,23 @@ class METADATA_API MetadataCache
   void remove_acceptor_handler_listener(
       metadata_cache::AcceptorUpdateHandlerInterface *listener);
 
+  /**
+   * @brief Register observer that is notified on each metadata refresh event.
+   *
+   * @param listener Observer object that is notified on md refresh.
+   */
+  void add_md_refresh_listener(
+      metadata_cache::MetadataRefreshListenerInterface *listener);
+
+  /**
+   * @brief Unregister observer previously registered with
+   * add_md_refresh_listener()
+   *
+   * @param listener Observer object that should be unregistered.
+   */
+  void remove_md_refresh_listener(
+      metadata_cache::MetadataRefreshListenerInterface *listener);
+
   metadata_cache::MetadataCacheAPIBase::RefreshStatus refresh_status() {
     return stats_([](auto const &stats)
                       -> metadata_cache::MetadataCacheAPIBase::RefreshStatus {
@@ -206,9 +208,6 @@ class METADATA_API MetadataCache
     });
   }
 
-  std::string cluster_type_specific_id() const {
-    return cluster_type_specific_id_;
-  }
   std::chrono::milliseconds ttl() const { return ttl_config_.ttl; }
   mysqlrouter::TargetCluster target_cluster() const { return target_cluster_; }
 
@@ -232,6 +231,10 @@ class METADATA_API MetadataCache
     trigger_acceptor_update_on_next_refresh_ = true;
   }
 
+  bool fetch_whole_topology() const { return fetch_whole_topology_; }
+
+  void fetch_whole_topology(bool val);
+
  protected:
   /** @brief Refreshes the cache
    *
@@ -246,8 +249,7 @@ class METADATA_API MetadataCache
   // the subscribed observers
   void on_instances_changed(
       const bool md_servers_reachable,
-      const metadata_cache::cluster_nodes_list_t &cluster_nodes,
-      const metadata_cache::metadata_servers_list_t &metadata_servers,
+      const metadata_cache::ClusterTopology &cluster_topology,
       uint64_t view_id = 0);
 
   /**
@@ -256,6 +258,16 @@ class METADATA_API MetadataCache
    * be handled when calling on_instances_changed).
    */
   void on_handle_sockets_acceptors();
+
+  /**
+   * Called on each metadata refresh.
+   *
+   * @param[in] cluster_nodes_changed Information whether there was a change
+   *            in instances reported by metadata refresh.
+   * @param[in] cluster_topology current cluster topology
+   */
+  void on_md_refresh(const bool cluster_nodes_changed,
+                     const metadata_cache::ClusterTopology &cluster_topology);
 
   // Called each time we were requested to refresh the metadata
   void on_refresh_requested();
@@ -272,15 +284,11 @@ class METADATA_API MetadataCache
   // Update Router last_check_in timestamp in the metadata
   void update_router_last_check_in();
 
-  // Stores the list of cluster's server instances.
-  metadata_cache::ManagedCluster cluster_data_;
+  // Stores the current cluster state and topology.
+  metadata_cache::ClusterTopology cluster_topology_;
 
   // identifies the Cluster we work with
   mysqlrouter::TargetCluster target_cluster_;
-
-  // For GR cluster Group Replication ID, for AR cluster cluster_id from the
-  // metadata
-  const std::string cluster_type_specific_id_;
 
   // Id of the ClusterSet in case of the ClusterSet setup
   const std::string clusterset_id_;
@@ -330,8 +338,6 @@ class METADATA_API MetadataCache
   // is consistent with the use of the server list.
   std::mutex metadata_servers_mutex_;
 
-  std::atomic<bool> has_unreachable_nodes{false};
-
   // Flag used to terminate the refresh thread.
   std::atomic<bool> terminated_{false};
 
@@ -346,13 +352,14 @@ class METADATA_API MetadataCache
   std::mutex refresh_completed_mtx_;
 
   std::mutex cluster_instances_change_callbacks_mtx_;
-
   std::mutex acceptor_handler_callbacks_mtx_;
+  std::mutex md_refresh_callbacks_mtx_;
 
   std::set<metadata_cache::ClusterStateListenerInterface *> state_listeners_;
-
   std::set<metadata_cache::AcceptorUpdateHandlerInterface *>
       acceptor_update_listeners_;
+  std::set<metadata_cache::MetadataRefreshListenerInterface *>
+      md_refresh_listeners_;
 
   struct Stats {
     std::chrono::system_clock::time_point last_refresh_failed;
@@ -366,10 +373,13 @@ class METADATA_API MetadataCache
 
   Monitor<Stats> stats_{{}};
 
-  bool version_updated_{false};
-  unsigned last_check_in_updated_{0};
+  bool initial_attributes_update_done_{false};
+  uint32_t periodic_stats_update_counter_{1};
+  std::chrono::steady_clock::time_point last_periodic_stats_update_timestamp_{
+      std::chrono::steady_clock::now()};
 
   bool ready_announced_{false};
+  std::atomic<bool> fetch_whole_topology_{false};
 
   /**
    * Flag indicating if socket acceptors state should be updated on next
@@ -378,19 +388,25 @@ class METADATA_API MetadataCache
   std::atomic<bool> trigger_acceptor_update_on_next_refresh_{false};
 
   metadata_cache::RouterAttributes router_attributes_;
+
+  bool needs_initial_attributes_update();
+  bool needs_last_check_in_update();
 };
-
-bool operator==(const metadata_cache::ManagedCluster &cluster_a,
-                const metadata_cache::ManagedCluster &cluster_b);
-
-bool operator!=(const metadata_cache::ManagedCluster &cluster_a,
-                const metadata_cache::ManagedCluster &cluster_b);
 
 std::string to_string(metadata_cache::ServerMode mode);
 
-/** Gets user readable information string about the nodes atributes
+/** Gets user readable information string about the nodes attributes
  * related to _hidden and _disconnect_existing_sessions_when_hidden tags.
  */
 std::string get_hidden_info(const metadata_cache::ManagedInstance &instance);
+
+namespace metadata_cache {
+
+bool operator==(const metadata_cache::ClusterTopology &a,
+                const metadata_cache::ClusterTopology &b);
+bool operator!=(const metadata_cache::ClusterTopology &a,
+                const metadata_cache::ClusterTopology &b);
+
+}  // namespace metadata_cache
 
 #endif  // METADATA_CACHE_METADATA_CACHE_INCLUDED

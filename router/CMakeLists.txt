@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -20,6 +20,23 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# Fix "undefined reference to '__muloti4'" for clang-7 or older
+# https://stackoverflow.com/questions/49793632/clang-fsanitize-undefined-with-128-integer-operations-undefined-reference-to
+IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8)
+  STRING_APPEND(CMAKE_CXX_LINK_FLAGS " --rtlib=compiler-rt -lgcc_s")
+ENDIF()
+
+IF(CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
+  MESSAGE(FATAL_ERROR "Compiler version not supported. Please, use -DWITH_ROUTER=OFF or use at least gcc 8.1.")
+ENDIF()
+
+# Disable ld.gold for clang-7 and clang-8
+IF(USE_LD_LLD AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+   NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0 AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+  STRING(REPLACE "-fuse-ld=gold" "" CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS}")
+  STRING(REPLACE "-fuse-ld=gold" "" CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
+ENDIF()
+
 INCLUDE(cmake/version.cmake)
 SET(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
@@ -36,6 +53,7 @@ CMAKE_POLICY(SET CMP0048 NEW)
 # only interpret if() arguments as variables or keywords when unquoted
 CMAKE_POLICY(SET CMP0054 NEW)
 PROJECT("MySQLRouter" VERSION ${PROJECT_VERSION_TEXT} LANGUAGES C CXX)
+MSVC_CPPCHECK_DISABLE()
 
 # In CMake 3.12 and above, the
 #
@@ -65,13 +83,13 @@ ENDIF()
 # version definition index 0 for symbol __gcov_var is out of bounds
 IF(ENABLE_GCOV)
   STRING(REPLACE "-fuse-ld=lld" ""
-    CMAKE_C_LINK_FLAGS ${CMAKE_C_LINK_FLAGS})
+    CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS}")
   STRING(REPLACE "-fuse-ld=lld" ""
-    CMAKE_CXX_LINK_FLAGS ${CMAKE_CXX_LINK_FLAGS})
+    CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
   STRING(REPLACE "-Wl,--gdb-index" ""
-    CMAKE_C_LINK_FLAGS ${CMAKE_C_LINK_FLAGS})
+    CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS}")
   STRING(REPLACE "-Wl,--gdb-index" ""
-    CMAKE_CXX_LINK_FLAGS ${CMAKE_CXX_LINK_FLAGS})
+    CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
 ENDIF()
 
 DISABLE_MISSING_PROFILE_WARNING()

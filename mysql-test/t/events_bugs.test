@@ -677,6 +677,37 @@ connection default;
 
 DROP USER mysqltest_u1@localhost;
 
+#
+# PS#8115: Check a user containing an '@' is processed correctly
+#
+
+--let $user= 'mysqltest_u1@corp'@'localhost'
+--let $event= e1
+--eval CREATE USER $user
+--eval GRANT EVENT ON events_test.* TO $user
+
+--eval CREATE DEFINER=$user EVENT $event ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1
+--eval SHOW CREATE EVENT $event
+
+--eval DROP EVENT $event
+--eval DROP USER $user
+
+# user with several '@' is processed correctly
+--let $user= 'mysqltest_u1@corp@comp'@'localhost'
+--let $event= e1
+--eval CREATE USER $user
+--eval GRANT EVENT ON events_test.* TO $user
+
+--eval CREATE DEFINER=$user EVENT $event ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1
+--eval SHOW CREATE EVENT $event
+
+--eval DROP EVENT $event
+--eval DROP USER $user
+
+# '@' is not allowed in the hostname
+--let $user= 'mysqltest_u1'@'localhost@corp'
+--error ER_UNKNOWN_ERROR
+--eval CREATE USER $user
 
 #
 # BUG#16420: Events: timestamps become UTC
@@ -1418,6 +1449,20 @@ eval SELECT (CREATED - CONVERT_TZ('$created', '+03:00', '-02:00')),
 DROP EVENT my_event;
 SET TIME_ZONE=default;
 SET TIMESTAMP=default;
+
+--echo #
+--echo # Bug#11764690: SOME FUNCTIONS CAUSE ASSERTION WHEN GIVEN A ROW
+--echo #               CONSTRUCTOR ARGUMENT
+--echo #
+
+--error ER_OPERAND_COLUMNS
+CREATE EVENT e ON SCHEDULE AT ROW(1, 2) DO SELECT 1;
+--error ER_OPERAND_COLUMNS
+CREATE EVENT e ON SCHEDULE EVERY ROW(1, 2) HOUR DO SELECT 1;
+--error ER_OPERAND_COLUMNS
+CREATE EVENT e ON SCHEDULE EVERY 1 HOUR STARTS ROW(1, 2) DO SELECT 1;
+--error ER_OPERAND_COLUMNS
+CREATE EVENT e ON SCHEDULE EVERY 1 HOUR ENDS ROW(1, 2) DO SELECT 1;
 
 ###########################################################################
 #

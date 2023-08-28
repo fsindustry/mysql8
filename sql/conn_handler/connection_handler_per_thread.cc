@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,13 +34,13 @@
 #include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_thread.h"
+#include "mysql/components/services/bits/mysql_cond_bits.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
+#include "mysql/components/services/bits/psi_cond_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/bits/psi_thread_bits.h"
 #include "mysql/components/services/log_builtins.h"
-#include "mysql/components/services/mysql_cond_bits.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/psi_cond_bits.h"
-#include "mysql/components/services/psi_mutex_bits.h"
-#include "mysql/components/services/psi_thread_bits.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_socket.h"
@@ -51,9 +51,10 @@
 #include "sql/conn_handler/channel_info.h"  // Channel_info
 #include "sql/conn_handler/connection_handler_impl.h"
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
-#include "sql/log.h"                                      // Error_log_throttle
-#include "sql/mysqld.h"                                   // max_connections
-#include "sql/mysqld_thd_manager.h"                       // Global_THD_manager
+#include "sql/debug_sync.h"
+#include "sql/log.h"                 // Error_log_throttle
+#include "sql/mysqld.h"              // max_connections
+#include "sql/mysqld_thd_manager.h"  // Global_THD_manager
 #include "sql/protocol_classic.h"
 #include "sql/sql_class.h"    // THD
 #include "sql/sql_connect.h"  // close_connection
@@ -268,6 +269,11 @@ static void *handle_connection(void *arg) {
       break;  // We are out of resources, no sense in continuing.
     }
 
+    DBUG_EXECUTE_IF("after_thread_setup", {
+      const char act[] = "now signal thread_setup";
+      assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
+    };);
+
 #ifdef HAVE_PSI_THREAD_INTERFACE
     if (pthread_reused) {
       /*
@@ -316,14 +322,17 @@ static void *handle_connection(void *arg) {
     Connection_handler_manager::dec_connection_count();
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
-    /*
-      Delete the instrumentation for the job that just completed.
-    */
+    /* Decouple THD and the thread instrumentation. */
     thd->set_psi(nullptr);
-    PSI_THREAD_CALL(delete_current_thread)();
+    mysql_thread_set_psi_THD(nullptr);
 #endif /* HAVE_PSI_THREAD_INTERFACE */
 
     delete thd;
+
+#ifdef HAVE_PSI_THREAD_INTERFACE
+    /* Delete the instrumentation for the job that just completed. */
+    PSI_THREAD_CALL(delete_current_thread)();
+#endif /* HAVE_PSI_THREAD_INTERFACE */
 
     // Server is shutting down so end the pthread.
     if (connection_events_loop_aborted()) break;
@@ -403,7 +412,7 @@ bool Per_thread_connection_handler::add_connection(Channel_info *channel_info) {
   if (!check_idle_thread_and_enqueue_connection(channel_info)) return false;
 
   /*
-    There are no idle threads avaliable to take up the new
+    There are no idle threads available to take up the new
     connection. Create a new thread to handle the connection
   */
   channel_info->set_prior_thr_create_utime();

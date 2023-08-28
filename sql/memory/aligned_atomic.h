@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
@@ -37,8 +38,9 @@
 #include <unistd.h>
 #endif
 
-namespace memory {
+#include "my_aligned_malloc.h"
 
+namespace memory {
 /**
  Calculates and returns the size of the CPU cache line.
 
@@ -79,6 +81,17 @@ static inline size_t _cache_line_size() {
 static inline size_t _cache_line_size() {
   long size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
   if (size == -1) return 64;
+#if defined(__s390x__)
+  // returns 0 on s390x RHEL 7.x
+  if (size == 0) {
+    FILE *p = fopen(
+        "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
+    if (p) {
+      fscanf(p, "%ld", &size);
+      fclose(p);
+    }
+  }
+#endif
   return static_cast<size_t>(size);
 }
 
@@ -246,14 +259,28 @@ class Aligned_atomic {
 
     @return The pointer to the underlying `std::atomic<T>` object.
    */
-  std::atomic<T> *operator->() const;
+  std::atomic<T> *operator->();
+  /*
+    Pointer operator that allows the access to the underlying `std::atomic<T>`
+    object.
+
+    @return The const pointer to the underlying `std::atomic<T>` object.
+   */
+  const std::atomic<T> *operator->() const;
   /*
     Dereference operator that allows the access to the underlying
     `std::atomic<T>` object.
 
     @return The reference to the underlying `std::atomic<T>` object.
    */
-  std::atomic<T> &operator*() const;
+  std::atomic<T> &operator*();
+  /*
+    Dereference operator that allows the access to the underlying
+    `std::atomic<T>` object.
+
+    @return The const reference to the underlying `std::atomic<T>` object.
+   */
+  const std::atomic<T> &operator*() const;
   /*
     The size of `std::atomic<T>`, as returned by `sizeof std::atomic<T>`.
 
@@ -271,7 +298,7 @@ class Aligned_atomic {
   /** The size of the byte buffer. */
   size_t m_storage_size{0};
   /** The byte buffer to use as underlying storage. */
-  alignas(std::max_align_t) unsigned char *m_storage{nullptr};
+  void *m_storage{nullptr};
   /** The pointer to the underlying `std::atomic<T>` object. */
   std::atomic<T> *m_underlying{nullptr};
 };
@@ -279,9 +306,10 @@ class Aligned_atomic {
 
 template <typename T>
 memory::Aligned_atomic<T>::Aligned_atomic()
-    : m_storage_size{memory::minimum_cacheline_for<std::atomic<T>>()},
-      m_storage{new unsigned char[m_storage_size]},
-      m_underlying{new (this->m_storage) std::atomic<T>()} {}
+    : m_storage_size{memory::minimum_cacheline_for<std::atomic<T>>()} {
+  m_storage = my_aligned_malloc(m_storage_size, cache_line_size());
+  m_underlying = new (this->m_storage) std::atomic<T>();
+}
 
 template <typename T>
 memory::Aligned_atomic<T>::Aligned_atomic(T value)
@@ -290,12 +318,16 @@ memory::Aligned_atomic<T>::Aligned_atomic(T value)
 }
 
 template <typename T>
-memory::Aligned_atomic<T>::Aligned_atomic(Aligned_atomic<T> &&rhs)
-    : m_storage_size{rhs.m_storage_size}, m_underlying{rhs.m_underlying} {
-  delete[] this->m_storage;
+memory::Aligned_atomic<T>::Aligned_atomic(Aligned_atomic<T> &&rhs) {
+  if (this->m_underlying != nullptr) {
+    this->m_underlying->~atomic();
+  }
+  my_aligned_free(this->m_storage);
   this->m_storage = rhs.m_storage;
-  rhs.m_storage_size = 0;
+  this->m_storage_size = rhs.m_storage_size;
+  this->m_underlying = rhs.m_underlying;
   rhs.m_storage = nullptr;
+  rhs.m_storage_size = 0;
   rhs.m_underlying = nullptr;
 }
 
@@ -303,22 +335,25 @@ template <typename T>
 memory::Aligned_atomic<T>::~Aligned_atomic() {
   if (this->m_underlying != nullptr) {
     this->m_underlying->~atomic();
-    this->m_underlying = nullptr;
   }
-  delete[] this->m_storage;
+  my_aligned_free(this->m_storage);
   this->m_storage = nullptr;
   this->m_storage_size = 0;
+  this->m_underlying = nullptr;
 }
 
 template <typename T>
 memory::Aligned_atomic<T> &memory::Aligned_atomic<T>::operator=(
     Aligned_atomic<T> &&rhs) {
-  delete[] this->m_storage;
-  this->m_storage_size = rhs.m_storage_size;
+  if (this->m_underlying != nullptr) {
+    this->m_underlying->~atomic();
+  }
+  my_aligned_free(this->m_storage);
   this->m_storage = rhs.m_storage;
+  this->m_storage_size = rhs.m_storage_size;
   this->m_underlying = rhs.m_underlying;
-  rhs.m_storage_size = 0;
   rhs.m_storage = nullptr;
+  rhs.m_storage_size = 0;
   rhs.m_underlying = nullptr;
   return (*this);
 }
@@ -358,13 +393,25 @@ bool memory::Aligned_atomic<T>::operator!=(T rhs) const {
 }
 
 template <typename T>
-std::atomic<T> *memory::Aligned_atomic<T>::operator->() const {
+std::atomic<T> *memory::Aligned_atomic<T>::operator->() {
   assert(this->m_underlying != nullptr);
   return this->m_underlying;
 }
 
 template <typename T>
-std::atomic<T> &memory::Aligned_atomic<T>::operator*() const {
+const std::atomic<T> *memory::Aligned_atomic<T>::operator->() const {
+  assert(this->m_underlying != nullptr);
+  return this->m_underlying;
+}
+
+template <typename T>
+std::atomic<T> &memory::Aligned_atomic<T>::operator*() {
+  assert(this->m_underlying != nullptr);
+  return *this->m_underlying;
+}
+
+template <typename T>
+const std::atomic<T> &memory::Aligned_atomic<T>::operator*() const {
   assert(this->m_underlying != nullptr);
   return *this->m_underlying;
 }

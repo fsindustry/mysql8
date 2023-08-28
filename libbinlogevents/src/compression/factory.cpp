@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,8 +21,10 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <compression/factory.h>
-#include <compression/none.h>
-#include <compression/zstd.h>
+#include <compression/none_comp.h>
+#include <compression/none_dec.h>
+#include <compression/zstd_comp.h>
+#include <compression/zstd_dec.h>
 #include <my_byteorder.h>
 #include <algorithm>
 
@@ -33,7 +35,7 @@ namespace compression {
 std::unique_ptr<Compressor> Factory::build_compressor(type t) {
   std::unique_ptr<Compressor> res{nullptr};
   switch (t) {
-    case ZSTD:
+    case ALGORITHM_ZSTD:
       res = std::make_unique<Zstd_comp>();
       break;
     case NONE:
@@ -48,7 +50,7 @@ std::unique_ptr<Compressor> Factory::build_compressor(type t) {
 std::unique_ptr<Decompressor> Factory::build_decompressor(type t) {
   std::unique_ptr<Decompressor> res{nullptr};
   switch (t) {
-    case ZSTD:
+    case ALGORITHM_ZSTD:
       res = std::make_unique<Zstd_dec>();
       break;
     case NONE:

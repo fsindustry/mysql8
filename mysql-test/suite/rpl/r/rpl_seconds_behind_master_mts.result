@@ -1,15 +1,19 @@
 include/master-slave.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection master]
 # Adding debug point 'dbug.mta.force_clock_diff_eq_0' to @@GLOBAL.debug
 SET @save_replica_parallel_type = @@GLOBAL.replica_parallel_type;
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @save.replica_parallel_workers= @@global.replica_parallel_workers;
 SET @save_replica_transaction_retries= @@global.replica_transaction_retries;
 SET @save_replica_preserve_commit_order= @@global.replica_preserve_commit_order;
 # Test for PARALLEL_DATABASE
 SET GLOBAL replica_parallel_type = 'DATABASE';
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @@global.replica_parallel_workers= 4;
 SET @@global.replica_preserve_commit_order=0;
 include/start_slave.inc
@@ -111,6 +115,8 @@ include/sync_slave_sql_with_master.inc
 include/stop_slave.inc
 # Test for LOGICAL_CLOCK
 SET GLOBAL replica_parallel_type = 'LOGICAL_CLOCK';
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET GLOBAL replica_parallel_workers = 3;
 SET GLOBAL replica_preserve_commit_order=1;
 include/start_slave.inc
@@ -225,6 +231,8 @@ include/sync_slave_sql_with_master.inc
 include/stop_slave.inc
 # Removing debug point 'dbug.mta.force_clock_diff_eq_0' from @@GLOBAL.debug
 SET @@GLOBAL.replica_parallel_type= @save_replica_parallel_type;
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @@global.replica_parallel_workers= @save.replica_parallel_workers;
 SET @@global.replica_transaction_retries= @save_replica_transaction_retries;
 SET @@global.replica_preserve_commit_order= @save_replica_preserve_commit_order;

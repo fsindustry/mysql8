@@ -1,4 +1,4 @@
-/* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,6 +44,7 @@
 #include <time.h>
 
 #include <algorithm>
+#include <cinttypes>
 
 #include "my_inttypes.h"
 #include "my_macros.h"
@@ -52,6 +53,11 @@
 
 #ifndef _WIN32
 #include <signal.h>
+
+#if HAVE_LIBCOREDUMPER
+#include <coredumper/coredumper.h>
+#include "my_io.h"
+#endif
 
 #include "my_thread.h"
 #ifdef HAVE_UNISTD_H
@@ -247,7 +253,6 @@ static void my_demangle_symbols(char **addrs, int n) {
 }
 
 #endif /* HAVE_ABI_CXA_DEMANGLE */
-
 void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
 #if defined(__FreeBSD__)
   static char procname_buffer[2048];
@@ -288,6 +293,29 @@ void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
 #endif /* HAVE_BACKTRACE */
 #endif /* HAVE_STACKTRACE */
 
+#if HAVE_LIBCOREDUMPER
+/* Produce a lib coredumper for the thread */
+void my_write_libcoredumper(int sig, char *path, time_t curr_time) {
+  int ret = 0;
+  char suffix[FN_REFLEN];
+  char core[FN_REFLEN];
+  struct tm *timeinfo = gmtime(&curr_time);
+  my_safe_printf_stderr("PATH: %s\n\n", path);
+  if (path == NULL)
+    strcpy(core, "core");
+  else
+    strcpy(core, path);
+  sprintf(suffix, ".%d%02d%02d%02d%02d%02d", (1900 + timeinfo->tm_year),
+          timeinfo->tm_mon, timeinfo->tm_mday, timeinfo->tm_hour,
+          timeinfo->tm_min, timeinfo->tm_sec);
+  strcat(core, suffix);
+  ret = WriteCoreDump(core);
+  if (ret != 0) {
+    my_safe_printf_stderr("Error writting coredump: %d Signal: %d\n", ret, sig);
+  }
+}
+#endif
+
 /* Produce a core for the thread */
 void my_write_core(int sig) {
   signal(sig, SIG_DFL);
@@ -306,7 +334,7 @@ void my_write_core(int sig) {
 #pragma comment(lib, "dbghelp")
 #endif
 
-static EXCEPTION_POINTERS *exception_ptrs;
+static thread_local EXCEPTION_POINTERS *exception_ptrs;
 
 #define MODULE64_SIZE_WINXP 576
 #define STACKWALK_MAX_FRAMES 64
@@ -398,22 +426,32 @@ static void get_symbol_path(char *path, size_t size) {
 #define SYMOPT_NO_PROMPTS 0
 #endif
 
-void my_print_stacktrace(const uchar *unused1, ulong unused2) {
+void my_print_stacktrace(const uchar * /* stack_bottom */,
+                         ulong /* thread_stack */) {
   HANDLE hProcess = GetCurrentProcess();
   HANDLE hThread = GetCurrentThread();
-  static IMAGEHLP_MODULE64 module = {sizeof(module)};
+  static IMAGEHLP_MODULE64 module{};
+  module.SizeOfStruct = sizeof(module);
+
   static IMAGEHLP_SYMBOL64_PACKAGE package;
   DWORD64 addr;
   DWORD machine;
   int i;
   CONTEXT context;
-  STACKFRAME64 frame = {0};
+  STACKFRAME64 frame{};
   static char symbol_path[MAX_SYMBOL_PATH];
 
-  if (!exception_ptrs) return;
+  if (exception_ptrs) {
+    /* Copy context, as stackwalking on original will unwind the stack */
+    context = *(exception_ptrs->ContextRecord);
+  } else {
+    /*
+      We are to print stack outside the signal handler, let's just capture the
+      current context.
+    */
+    RtlCaptureContext(&context);
+  }
 
-  /* Copy context, as stackwalking on original will unwind the stack */
-  context = *(exception_ptrs->ContextRecord);
   /*Initialize symbols.*/
   SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_NO_PROMPTS | SYMOPT_DEFERRED_LOADS |
                 SYMOPT_DEBUG);
@@ -423,13 +461,19 @@ void my_print_stacktrace(const uchar *unused1, ulong unused2) {
   /*Prepare stackframe for the first StackWalk64 call*/
   frame.AddrFrame.Mode = frame.AddrPC.Mode = frame.AddrStack.Mode =
       AddrModeFlat;
-#if (defined _M_X64)
+#if (defined _M_IX86)
+  machine = IMAGE_FILE_MACHINE_I386;
+  frame.AddrFrame.Offset = context.Ebp;
+  frame.AddrPC.Offset = context.Eip;
+  frame.AddrStack.Offset = context.Esp;
+#elif (defined _M_X64)
   machine = IMAGE_FILE_MACHINE_AMD64;
   frame.AddrFrame.Offset = context.Rbp;
   frame.AddrPC.Offset = context.Rip;
   frame.AddrStack.Offset = context.Rsp;
 #else
   /*There is currently no need to support IA64*/
+  /* Warning C4068: unknown pragma 'error' */
 #pragma error("unsupported architecture")
 #endif
 
@@ -440,7 +484,9 @@ void my_print_stacktrace(const uchar *unused1, ulong unused2) {
   for (i = 0; i < STACKWALK_MAX_FRAMES; i++) {
     DWORD64 function_offset = 0;
     DWORD line_offset = 0;
-    IMAGEHLP_LINE64 line = {sizeof(line)};
+    IMAGEHLP_LINE64 line{};
+    line.SizeOfStruct = sizeof(line);
+
     BOOL have_module = false;
     BOOL have_symbol = false;
     BOOL have_source = false;
@@ -454,7 +500,7 @@ void my_print_stacktrace(const uchar *unused1, ulong unused2) {
         SymGetSymFromAddr64(hProcess, addr, &function_offset, &(package.sym));
     have_source = SymGetLineFromAddr64(hProcess, addr, &line_offset, &line);
 
-    my_safe_printf_stderr("%p    ", addr);
+    my_safe_printf_stderr("%llx    ", addr);
     if (have_module) {
       char *base_image_name = strrchr(module.ImageName, '\\');
       if (base_image_name)
@@ -475,7 +521,7 @@ void my_print_stacktrace(const uchar *unused1, ulong unused2) {
         base_file_name++;
       else
         base_file_name = line.FileName;
-      my_safe_printf_stderr("[%s:%u]", base_file_name, line.LineNumber);
+      my_safe_printf_stderr("[%s:%lu]", base_file_name, line.LineNumber);
     }
     my_safe_printf_stderr("%s", "\n");
   }
@@ -486,7 +532,7 @@ void my_print_stacktrace(const uchar *unused1, ulong unused2) {
   file name is constructed from executable name plus
   ".dmp" extension
 */
-void my_write_core(int unused) {
+void my_write_core(int /* sig */) {
   char path[MAX_PATH];
   // See comment below for clarification about size of dump_fname
   char dump_fname[MAX_PATH + 1 + 10 + 4 + 1] = "core.dmp";
@@ -502,7 +548,7 @@ void my_write_core(int unused) {
     // 1 byte for termitated \0. Such size of output buffer guarantees
     // that there is enough space to place a result of string formatting
     // performed by snprintf().
-    snprintf(dump_fname, sizeof(dump_fname), "%s.%u.dmp", module_name,
+    snprintf(dump_fname, sizeof(dump_fname), "%s.%lu.dmp", module_name,
              GetCurrentProcessId());
   }
   my_create_minidump(dump_fname, 0, 0);
@@ -541,12 +587,12 @@ void my_create_minidump(const char *name, HANDLE process, DWORD pid) {
       my_safe_printf_stderr("Minidump written to %s\n",
                             _fullpath(path, name, sizeof(path)) ? path : name);
     } else {
-      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %d\n",
+      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %lu\n",
                             GetLastError());
     }
     CloseHandle(hFile);
   } else {
-    my_safe_printf_stderr("CreateFile(%s) failed, last error %d\n", name,
+    my_safe_printf_stderr("CreateFile(%s) failed, last error %lu\n", name,
                           GetLastError());
   }
 }

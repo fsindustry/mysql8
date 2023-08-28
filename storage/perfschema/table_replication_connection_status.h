@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -110,7 +110,7 @@ struct st_row_connect_status {
 
 class PFS_index_rpl_connection_status : public PFS_engine_index {
  public:
-  PFS_index_rpl_connection_status(PFS_engine_key *key)
+  explicit PFS_index_rpl_connection_status(PFS_engine_key *key)
       : PFS_engine_index(key) {}
 
   ~PFS_index_rpl_connection_status() override = default;
@@ -186,7 +186,7 @@ class table_replication_connection_status : public PFS_engine_table {
   static PFS_engine_table_share m_share;
   static PFS_engine_table *create(PFS_engine_table_share *);
   static ha_rows get_row_count();
-  void reset_position(void) override;
+  void reset_position() override;
 
   int rnd_next() override;
   int rnd_pos(const void *pos) override;

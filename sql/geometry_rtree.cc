@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -68,8 +68,7 @@ struct Rtree_value_maker_bggeom {
   typedef std::pair<BG_box, size_t> result_type;
   template <typename T>
   result_type operator()(T const &v) const {
-    BG_box box;
-    boost::geometry::envelope(v.value(), box);
+    BG_box box = boost::geometry::return_envelope<BG_box>(v.value());
 
     return result_type(box, v.index());
   }

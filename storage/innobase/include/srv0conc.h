@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -48,8 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define srv_conc_h
 
 /** We are prepared for a situation that we have this many threads waiting for
-a semaphore inside InnoDB. innobase_start_or_create_for_mysql() sets the
-value. */
+a semaphore inside InnoDB. */
 
 extern uint32_t srv_max_n_threads;
 
@@ -62,7 +61,7 @@ extern ulong srv_thread_concurrency;
 struct row_prebuilt_t;
 /** Puts an OS thread to wait if there are too many concurrent threads
  (>= srv_thread_concurrency) inside InnoDB. The threads wait in a FIFO queue.
- @param[in,out]	prebuilt	row prebuilt handler
+ @param[in,out] prebuilt        row prebuilt handler
  @return Innodb error code. */
 dberr_t srv_conc_enter_innodb(row_prebuilt_t *prebuilt);
 

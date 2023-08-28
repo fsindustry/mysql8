@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,6 +57,7 @@
 #include "sql/dd/impl/upgrade/dd.h"             // dd::upgrade::upgrade_tables
 #include "sql/dd/impl/upgrade/server.h"  // dd::upgrade::do_server_upgrade_checks
 #include "sql/dd/impl/utils.h"           // dd::execute_query
+#include "sql/dd/info_schema/metadata.h"
 #include "sql/dd/object_id.h"
 #include "sql/dd/types/abstract_table.h"
 #include "sql/dd/types/object_table.h"             // dd::Object_table
@@ -70,6 +71,7 @@
 #include "sql/mdl.h"
 #include "sql/mysqld.h"
 #include "sql/sd_notify.h"  // sysd::notify
+#include "sql/sql_zip_dict.h"
 #include "sql/thd_raii.h"
 
 using namespace dd;
@@ -164,6 +166,9 @@ bool update_system_tables(THD *thd) {
       std::unique_ptr<Properties> table_def_properties(
           Properties::parse_properties(def));
       table_def->set_actual_table_definition(*table_def_properties);
+      if (bootstrap::DD_bootstrap_ctx::instance().is_dd_encrypted()) {
+        table_def->set_actual_encrypted();
+      }
     }
   }
 
@@ -738,6 +743,25 @@ bool DDSE_dict_init(THD *thd, dict_init_mode_t dict_init_mode, uint version) {
                            &ddse_tablespaces))
     return true;
 
+  // first table in ddse_tablespaces is mysql.ibd
+  std::unique_ptr<dd::Properties> p{dd::Properties_impl::parse_properties(
+      ddse_tablespaces.begin()->get_options())};
+
+  assert(p != nullptr);
+
+  assert(memcmp(ddse_tablespaces.begin()->get_name(), MYSQL_TABLESPACE_NAME.str,
+                MYSQL_TABLESPACE_NAME.length) == 0);
+
+  if (p->exists("encryption")) {
+    dd::String_type tablespace_encryption;
+    p->get("encryption", &tablespace_encryption);
+    if (my_strcasecmp(system_charset_info, tablespace_encryption.c_str(),
+                      "y") == 0) {
+      bootstrap::DD_bootstrap_ctx::instance().set_dd_encrypted();
+      // From now on all DD tables will be created with encryption='y'
+    }
+  }
+
   /*
     Iterate over the table definitions and add them to the System_tables
     registry. The Object_table instances will later be used to execute
@@ -857,8 +881,11 @@ bool initialize_dictionary(THD *thd, bool is_dd_upgrade_57,
       populate_tables(thd) ||
       update_properties(thd, nullptr, nullptr,
                         String_type(MYSQL_SCHEMA_NAME.str)) ||
-      verify_contents(thd) | update_versions(thd, is_dd_upgrade_57))
+      verify_contents(thd) || update_versions(thd, is_dd_upgrade_57))
     return true;
+
+  // Create compression dictionary tables
+  if (compression_dict::bootstrap(thd)) return true;
 
   DBUG_EXECUTE_IF(
       "schema_read_only",
@@ -906,6 +933,55 @@ bool initialize(THD *thd) {
   return false;
 }
 
+/** On startup from mysql datadir to Percona Server, compression dictionary
+tables and I_S views on them will be missing. We check if they are missing
+and create the tables mysql.compression_dictionary,
+mysql.compression_dictionary_cols
+@param[in,out]  thd  Session context
+@return false on success, true on failure */
+static bool check_and_create_compression_dict_tables(THD *thd) {
+  const dd::Table *comp_table_def = nullptr;
+  if (thd->dd_client()->acquire("mysql", "compression_dictionary",
+                                &comp_table_def)) {
+    return true;
+  }
+
+  const dd::Table *comp_cols_table_def = nullptr;
+  if (thd->dd_client()->acquire("mysql", "compression_dictionary_cols",
+                                &comp_cols_table_def)) {
+    return true;
+  }
+
+  if (comp_table_def && comp_cols_table_def) {
+    // Compression dictionary tables exist. Do nothing.
+    return false;
+  }
+
+  /*
+    We must also check if the DDSE is started in a way that makes the DD
+    read only. For now, we only support InnoDB as SE for the DD. The call
+    to retrieve the handlerton for the DDSE should be replaced by a more
+    generic mechanism.
+  */
+  handlerton *ddse = ha_resolve_by_legacy_type(thd, DB_TYPE_INNODB);
+
+  if (ddse->is_dict_readonly && ddse->is_dict_readonly()) {
+    LogErr(WARNING_LEVEL, ER_COMPRESSION_DICTIONARY_NO_CREATE, "InnoDB", " ");
+    return false;
+  }
+
+  // Create the compression dictionary tables
+  if (compression_dict::bootstrap(thd)) return true;
+
+  dd::info_schema::create_system_views(thd, true, true);
+
+  /*
+    We must commit the transaction before executing a new query, which
+    expects the transaction to be empty.
+  */
+  return (dd::end_transaction(thd, false));
+}
+
 // Normal server restart.
 bool restart(THD *thd) {
   bootstrap::DD_bootstrap_ctx::instance().set_stage(bootstrap::Stage::STARTED);
@@ -933,6 +1009,7 @@ bool restart(THD *thd) {
       DDSE_dict_recover(thd, DICT_RECOVERY_RESTART_SERVER,
                         d->get_actual_dd_version(thd)) ||
       upgrade::do_server_upgrade_checks(thd) || upgrade::upgrade_tables(thd) ||
+      check_and_create_compression_dict_tables(thd) ||
       repopulate_charsets_and_collations(thd) || verify_contents(thd) ||
       update_versions(thd, false)) {
     return true;
@@ -1045,8 +1122,11 @@ void store_predefined_tablespace_metadata(THD *thd) {
       space_file->set_se_private_data(file->get_se_private_data());
     }
 
-    // All the predefined tablespace are unencrypted (atleast for now).
-    tablespace->options().set("encryption", "N");
+    // If predefined tablespace is not encrypted assign
+    // encryption=n to it.
+    if (!tablespace->options().exists("encryption")) {
+      tablespace->options().set("encryption", "N");
+    }
 
     /*
       Here, we just want to populate the core registry in the storage
@@ -1062,17 +1142,20 @@ void store_predefined_tablespace_metadata(THD *thd) {
 }
 
 bool create_dd_schema(THD *thd) {
-  return dd::execute_query(thd,
-                           dd::String_type("CREATE SCHEMA ") +
-                               dd::String_type(MYSQL_SCHEMA_NAME.str) +
-                               dd::String_type(" DEFAULT COLLATE ") +
-                               dd::String_type(default_charset_info->name)) ||
+  return dd::execute_query(
+             thd, dd::String_type("CREATE SCHEMA ") +
+                      dd::String_type(MYSQL_SCHEMA_NAME.str) +
+                      dd::String_type(" DEFAULT COLLATE ") +
+                      dd::String_type(default_charset_info->m_coll_name)) ||
          dd::execute_query(thd, dd::String_type("USE ") +
                                     dd::String_type(MYSQL_SCHEMA_NAME.str));
 }
 
 bool initialize_dd_properties(THD *thd) {
   // Create the dd_properties table.
+  if (bootstrap::DD_bootstrap_ctx::instance().is_dd_encrypted()) {
+    dd::tables::DD_properties::instance().set_target_encrypted();
+  }
   const Object_table_definition *dd_properties_def =
       dd::tables::DD_properties::instance().target_table_definition();
   if (dd::execute_query(thd, dd_properties_def->get_ddl())) return true;
@@ -1204,7 +1287,6 @@ bool initialize_dd_properties(THD *thd) {
     */
     if (bootstrap::DD_bootstrap_ctx::instance().is_dd_upgrade()) {
       LogErr(SYSTEM_LEVEL, ER_DD_UPGRADE, actual_version, dd::DD_VERSION);
-      log_sink_buffer_check_timeout();
       sysd::notify("STATUS=Data Dictionary upgrade in progress\n");
     }
     if (bootstrap::DD_bootstrap_ctx::instance().is_server_upgrade()) {
@@ -1365,7 +1447,7 @@ bool sync_meta_data(THD *thd) {
 
     // If the persisted meta data indicates that the DD tablespace is
     // encrypted, then we record this fact to make sure the DDL statements
-    // that are genereated during e.g. upgrade will have the correct
+    // that are generated during e.g. upgrade will have the correct
     // encryption option.
     String_type encryption("");
     Object_table_definition_impl::set_dd_tablespace_encrypted(
@@ -1405,6 +1487,56 @@ bool sync_meta_data(THD *thd) {
       if (thd->dd_client()->acquire((*it)->entity()->get_name(), &tspace))
         return dd::end_transaction(thd, true);
 
+      /*
+        There is a possibility of the InnoDB system tablespace being extended by
+        adding additional datafiles during server restart. Hence, we would need
+        to check the DD tables to verify which tablespace datafiles have been
+        persisted already and then add the extra datafiles to system tablespace
+        and persist the updated metadata.
+
+        The documentation mentions that datafiles can only be added to the sytem
+        tablespace and can not be removed.
+      */
+      Tablespace::Name_key predef_tspace_key;
+      tspace->update_name_key(&predef_tspace_key);
+      const Tablespace *predef_tspace = nullptr;
+
+      if (dd::cache::Storage_adapter::instance()->get(
+              thd, predef_tspace_key, ISO_READ_COMMITTED, true, &predef_tspace))
+        return dd::end_transaction(thd, true);
+
+      std::unique_ptr<Tablespace> predef_tspace_persist(
+          const_cast<Tablespace *>(predef_tspace));
+
+      size_t existing_datafiles, added_datafiles;
+      existing_datafiles = predef_tspace->files().size();
+      added_datafiles = tspace->files().size() - existing_datafiles;
+      if (added_datafiles) {
+        std::unordered_set<std::string> predef_tspace_files;
+        for (auto tspace_file_it = predef_tspace->files().begin();
+             tspace_file_it != predef_tspace->files().end(); ++tspace_file_it) {
+          predef_tspace_files.insert((*tspace_file_it)->filename().c_str());
+        }
+
+        List<const Plugin_tablespace::Plugin_tablespace_file> files =
+            (*it)->entity()->get_files();
+        List_iterator<const Plugin_tablespace::Plugin_tablespace_file> file_it(
+            files);
+        const Plugin_tablespace::Plugin_tablespace_file *file = nullptr;
+        while ((file = file_it++)) {
+          if (predef_tspace_files.find(file->get_name()) ==
+              predef_tspace_files.end()) {
+            Tablespace_file *space_file = predef_tspace_persist->add_file();
+            space_file->set_filename(file->get_name());
+            space_file->set_se_private_data(file->get_se_private_data());
+          }
+        }
+        dd::cache::Storage_adapter::instance()->store(
+            thd, predef_tspace_persist.get());
+        DBUG_PRINT("info", ("Persisted metadata for additional datafile(s) "
+                            "added to the predefined tablespace %s",
+                            predef_tspace_persist->name().c_str()));
+      }
       dd::cache::Storage_adapter::instance()->core_drop(thd, tspace);
     }
     /*
@@ -1558,6 +1690,25 @@ bool sync_meta_data(THD *thd) {
   return false;
 }
 
+// Helper guard used in update_properties, to be sure
+// that encryption will get set back before
+// update_properties exits.
+struct Target_encryption_guard {
+ public:
+  Target_encryption_guard(const Object_table *object_table)
+      : m_object_table(object_table),
+        set_encryption(object_table->is_target_encrypted()) {}
+  ~Target_encryption_guard() {
+    if (set_encryption) {
+      m_object_table->set_target_encrypted();
+    }
+  }
+
+ private:
+  const Object_table *m_object_table;
+  bool set_encryption;
+};
+
 bool update_properties(THD *thd, const std::set<String_type> *create_set,
                        const std::set<String_type> *remove_set,
                        const String_type &target_table_schema_name) {
@@ -1577,6 +1728,22 @@ bool update_properties(THD *thd, const std::set<String_type> *create_set,
         will have a corresponding Object_table.
       */
       assert((*it)->entity() != nullptr);
+
+      /*
+        Percona Server supports mysql.ibd encryption in earlier versions than
+        upstream. Upstream started supporting it since 8.0.16. Upstream when
+        ALTER TABLESPACE mysql ENCRYPTION='Y' is issued does not update
+        dd_properties table that is updated here. To be in sync with upstream we
+        also do not want to update dd_properties. Since dd_properties are
+        updated based on target definition we unset the encryption from target
+        definition for the time of updating dd_properties. The exact field that
+        contains system tables properties in dd_properties is SYSTEM_TABLES.
+      */
+      Target_encryption_guard target_encryption_guard((*it)->entity());
+      if ((*it)->entity()->is_target_encrypted()) {
+        (*it)->entity()->unset_target_encrypted();
+      }
+
       const Object_table_definition *table_def =
           (*it)->entity()->target_table_definition();
 

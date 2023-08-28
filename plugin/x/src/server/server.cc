@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -132,6 +132,10 @@ void Server::delayed_start_tasks() {
       start_tasks();
     }
   });
+}
+
+void Server::reload_ssl_context() {
+  m_ssl_context = xpl::Ssl_context_builder().get_result_context();
 }
 
 void Server::start_tasks() {

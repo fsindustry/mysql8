@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -28,11 +28,13 @@ SET(HEAP_SOURCES
   hp_close.cc
   hp_create.cc
   hp_delete.cc
+  hp_dspace.cc
   hp_extra.cc
   hp_hash.cc
   hp_info.cc
   hp_open.cc
   hp_panic.cc
+  hp_record.cc
   hp_rename.cc
   hp_rfirst.cc
   hp_rkey.cc
@@ -56,7 +58,7 @@ TARGET_LINK_LIBRARIES(heap_library mysys)
 
 MYSQL_ADD_PLUGIN(heap ha_heap.cc
   STORAGE_ENGINE MANDATORY
-  LINK_LIBRARIES heap_library
+  LINK_LIBRARIES heap_library extra::rapidjson
   )
 
 IF(WITH_UNIT_TESTS)

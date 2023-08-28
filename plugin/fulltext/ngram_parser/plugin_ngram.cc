@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -67,11 +67,10 @@ static int ngram_parse(MYSQL_FTPARSER_PARAM *param, const char *doc, int len,
     if (next + char_len > end || char_len == 0) {
       break;
     } else {
-      /* Skip SPACE or ","/"." etc as they are not words*/
-      int ctype;
+      /* Skip SPACE and control characters */
+      int ctype = 0;
       cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
-
-      if (char_len == 1 && (*next == ' ' || !true_word_char(ctype, *next))) {
+      if (char_len == 1 && (*next == ' ' || ctype & _MY_CTR)) {
         start = next + 1;
         next = start;
         n_chars = 0;
@@ -203,6 +202,7 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
   uchar *end = *start + param->length;
   FT_WORD word = {nullptr, 0, 0};
   int ret = 0;
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   switch (param->mode) {
     case MYSQL_FTPARSER_SIMPLE_MODE:
@@ -215,14 +215,15 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
       /* Ngram parser cannot handle query in boolean mode, so we
       first parse query into words with boolean info, then we parse
       the words into ngram. */
-      while (fts_get_word(cs, start, end, &word, &bool_info)) {
+      while (
+          fts_get_word(cs, extra_word_chars, start, end, &word, &bool_info)) {
         if (bool_info.type == FT_TOKEN_WORD) {
           if (bool_info.quot != nullptr) {
             /* Phrase search */
             ret = ngram_parse(param, reinterpret_cast<char *>(word.pos),
                               word.len, &bool_info);
           } else {
-            /* Term serach */
+            /* Term search */
             ret = ngram_term_convert(param, reinterpret_cast<char *>(word.pos),
                                      word.len, &bool_info);
             assert(bool_info.quot == nullptr);

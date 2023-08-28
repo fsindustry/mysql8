@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,11 +49,11 @@ class table_plugin_table : public PFS_engine_table {
   static PFS_engine_table *create(PFS_engine_table_share *share);
   int delete_all_rows();
   /*
-  PFS_engine_table* open(void);
+  PFS_engine_table* open();
   ha_rows get_row_count();
   */
 
-  void reset_position(void) override;
+  void reset_position() override;
 
   int rnd_init(bool scan) override;
   int rnd_next() override;
@@ -64,7 +64,7 @@ class table_plugin_table : public PFS_engine_table {
 
   int write_row(PSI_field *field, uint index, bool finished);
 
-  table_plugin_table(PFS_engine_table_share *share);
+  explicit table_plugin_table(PFS_engine_table_share *share);
 
   void deinitialize_table_share();
 
@@ -101,7 +101,7 @@ class table_plugin_table : public PFS_engine_table {
 
 class PFS_plugin_table_index : public PFS_engine_index_abstract {
  public:
-  PFS_plugin_table_index(PFS_engine_table_proxy *st_table)
+  explicit PFS_plugin_table_index(PFS_engine_table_proxy *st_table)
       : m_st_table(st_table), m_idx(0), m_plugin_index(nullptr) {}
 
   ~PFS_plugin_table_index() override = default;

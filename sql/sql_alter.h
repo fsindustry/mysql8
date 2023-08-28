@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,11 +31,14 @@
 
 #include "lex_string.h"
 
+#include "field_types.h"
 #include "my_io.h"
 #include "my_sqlcommand.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "sql/dd/types/column.h"
 #include "sql/gis/srid.h"
+#include "sql/key.h"  // KEY
+#include "sql/key_spec.h"
 #include "sql/mdl.h"                   // MDL_request
 #include "sql/mem_root_array.h"        // Mem_root_array
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec_list
@@ -52,9 +55,7 @@ class Item;
 class Key_spec;
 class String;
 class THD;
-struct TABLE_LIST;
-
-enum enum_field_types : int;
+class Table_ref;
 
 /**
   Class representing DROP COLUMN, DROP KEY, DROP FOREIGN KEY, DROP CHECK
@@ -86,10 +87,10 @@ class Alter_column {
   /// The default value supplied.
   Item *def;
 
-  /// The expression to be used to generated the default value.
+  /// The expression to be used to generate the default value.
   Value_generator *m_default_val_expr;
 
-  /// The new colum name.
+  /// The new column name.
   const char *m_new_name;
 
   enum class Type {
@@ -287,7 +288,7 @@ class Alter_info {
     /// Set for DROP FOREIGN KEY
     DROP_FOREIGN_KEY = 1ULL << 22,
 
-    /// Set for EXCHANGE PARITION
+    /// Set for EXCHANGE PARTITION
     ALTER_EXCHANGE_PARTITION = 1ULL << 23,
 
     /// Set by Sql_cmd_alter_table_truncate_partition::execute()
@@ -370,10 +371,10 @@ class Alter_info {
      Describes the level of concurrency during ALTER TABLE.
   */
   enum enum_alter_table_lock {
-    // Maximum supported level of concurency for the given operation.
+    // Maximum supported level of concurrency for the given operation.
     ALTER_TABLE_LOCK_DEFAULT,
 
-    // Allow concurrent reads & writes. If not supported, give erorr.
+    // Allow concurrent reads & writes. If not supported, give error.
     ALTER_TABLE_LOCK_NONE,
 
     // Allow concurrent reads only. If not supported, give error.
@@ -422,6 +423,13 @@ class Alter_info {
 
   // List of columns, used by both CREATE and ALTER TABLE.
   List<Create_field> create_list;
+  // List of keys, which creation is delayed to benefit from fast index creation
+  Mem_root_array<const Key_spec *> delayed_key_list;
+  // Keys, which creation is delayed to benefit from fast index creation
+  KEY *delayed_key_info;
+  // Count of keys, which creation is delayed to benefit from fast index
+  // creation
+  uint delayed_key_count;
   std::vector<CreateFieldApplier> cf_appliers;
 
   // Type of ALTER TABLE operation.
@@ -461,6 +469,7 @@ class Alter_info {
         alter_index_visibility_list(mem_root),
         alter_constraint_enforcement_list(mem_root),
         check_constraint_spec_list(mem_root),
+        delayed_key_list(mem_root),
         flags(0),
         keys_onoff(LEAVE_AS_IS),
         num_parts(0),
@@ -493,11 +502,20 @@ class Alter_info {
                  Item *on_update_value, LEX_CSTRING *comment,
                  const char *change, List<String> *interval_list,
                  const CHARSET_INFO *cs, bool has_explicit_collation,
-                 uint uint_geom_type, Value_generator *gcol_info,
-                 Value_generator *default_val_expr, const char *opt_after,
-                 std::optional<gis::srid_t> srid,
+                 uint uint_geom_type, const LEX_CSTRING *zip_dict,
+                 Value_generator *gcol_info, Value_generator *default_val_expr,
+                 const char *opt_after, std::optional<gis::srid_t> srid,
                  Sql_check_constraint_spec_list *check_cons_list,
                  dd::Column::enum_hidden_type hidden, bool is_array = false);
+
+  /**
+     Checks if there are any columns with COLUMN_FORMAT COMRPESSED
+     attribute among field definitions in create_list.
+
+     @retval false there are no compressed columns
+     @retval true there is at least one compressed column
+  */
+  bool has_compressed_columns() const;
 
  private:
   Alter_info &operator=(const Alter_info &rhs);  // not implemented
@@ -509,7 +527,7 @@ class Alter_table_ctx {
  public:
   Alter_table_ctx();
 
-  Alter_table_ctx(THD *thd, TABLE_LIST *table_list, uint tables_opened_arg,
+  Alter_table_ctx(THD *thd, Table_ref *table_list, uint tables_opened_arg,
                   const char *new_db_arg, const char *new_name_arg);
 
   ~Alter_table_ctx();
@@ -630,7 +648,7 @@ class Sql_cmd_discard_import_tablespace : public Sql_cmd_common_alter_table {
   bool execute(THD *thd) override;
 
  private:
-  bool mysql_discard_or_import_tablespace(THD *thd, TABLE_LIST *table_list);
+  bool mysql_discard_or_import_tablespace(THD *thd, Table_ref *table_list);
 };
 
 /**
@@ -644,7 +662,7 @@ class Sql_cmd_secondary_load_unload final : public Sql_cmd_common_alter_table {
   bool execute(THD *thd) override;
 
  private:
-  bool mysql_secondary_load_or_unload(THD *thd, TABLE_LIST *table_list);
+  bool mysql_secondary_load_or_unload(THD *thd, Table_ref *table_list);
 };
 
 #endif

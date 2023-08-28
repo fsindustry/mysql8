@@ -132,7 +132,7 @@ if ($rpl_corrupt_channel_name != "''")
 
 --echo ===== STOP SLAVE without 'FOR CHANNEL' clause.
 --let $rpl_channel_name=
---let $slave_sql_errno= convert_error(ER_SERVER_SLAVE_RLI_INIT_REPOSITORY)
+--let $slave_sql_errno= convert_error(ER_SERVER_REPLICA_AM_INIT_REPOSITORY)
 --source include/stop_slave.inc
 
 --echo === Assert that all channels IO and SQL threads are in OFF state ===
@@ -147,11 +147,11 @@ if ($rpl_corrupt_channel_name != "''")
 ################################################################################
 # Step-3.2: START SLAVE should be able to bring all the *good* channels's IO and SQL
 # thread up except the corrupted channel. START SLAVE should throw error
-# ER_SLAVE_RLI_INIT_REPOSITORY because it is unable to bring up corrupted
+# ER_REPLICA_AM_INIT_REPOSITORY because it is unable to bring up corrupted
 # channel's IO and SQL thread.
 ################################################################################
 --echo ===== START SLAVE without 'FOR CHANNEL' clause.
---error ER_SLAVE_RLI_INIT_REPOSITORY
+--error ER_REPLICA_AM_INIT_REPOSITORY
 START SLAVE;
 
 --echo === Assert that all channels IO and SQL threads are in expected state ===
@@ -174,40 +174,41 @@ START SLAVE;
 ###############################################################################
 # Step-3.3: SHOW RELAYLOG EVENTS without 'FOR CHANNEL' clause when we have
 #           multiple channels, should throw error
-#           ER_SLAVE_MULTIPLE_CHANNELS_CMD.
+#           ER_REPLICA_MULTIPLE_CHANNELS_CMD.
 ###############################################################################
 
 --echo ===== SHOW RELAYLOG EVENTS without 'FOR CHANNEL' clause should throw error.
---error ER_SLAVE_MULTIPLE_CHANNELS_CMD
+--error ER_REPLICA_MULTIPLE_CHANNELS_CMD
 SHOW RELAYLOG EVENTS;
 
 ###############################################################################
 # Step-3.4: SOURCE_POS_WAIT function without 4th argument (channel name
 #           argument) when we have multiple channels, should throw error
-#           ER_SLAVE_MULTIPLE_CHANNELS_CMD.
+#           ER_REPLICA_MULTIPLE_CHANNELS_CMD.
 ###############################################################################
 
 --echo ===== SELECT SOURCE_POS_WAIT(...) without 'FOR CHANNEL' argument should throw error.
---error ER_SLAVE_MULTIPLE_CHANNELS_CMD
+--error ER_REPLICA_MULTIPLE_CHANNELS_CMD
 SELECT SOURCE_POS_WAIT('server1-bin.000001', 120, 5);
 
 ###############################################################################
 # Step-3.5: WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS function without 3rd argument
 #           (channel name argument) when we have multiple channels, should
-#           throw error ER_SLAVE_MULTIPLE_CHANNELS_CMD.
+#           throw error ER_REPLICA_MULTIPLE_CHANNELS_CMD.
 ###############################################################################
 
 --echo ===== SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(...) without 'FOR CHANNEL' argument should throw error.
---error ER_SLAVE_MULTIPLE_CHANNELS_CMD
+--error ER_REPLICA_MULTIPLE_CHANNELS_CMD
 SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('01010101-0101-0101-0101-010101010101:1', 1);
 
 ###############################################################################
-# Step-3.6: CHANGE MASTER TO without 'FOR CHANNEL' clause when we have multiple
-#           channels, should throw error ER_SLAVE_MULTIPLE_CHANNELS_CMD.
+# Step-3.6: CHANGE REPLICATION SOURCE TO without 'FOR CHANNEL' clause when we
+#           have multiple channels, should throw error
+#           ER_REPLICA_MULTIPLE_CHANNELS_CMD.
 ###############################################################################
 
---echo ===== CHANGE MASTER without 'FOR CHANNEL' clause should throw error.
---error ER_SLAVE_MULTIPLE_CHANNELS_CMD
+--echo ===== CHANGE REPLICATION SOURCE without 'FOR CHANNEL' clause should throw error.
+--error ER_REPLICA_MULTIPLE_CHANNELS_CMD
 CHANGE REPLICATION SOURCE TO SOURCE_HEARTBEAT_PERIOD=10,  SOURCE_CONNECT_RETRY=10, SOURCE_RETRY_COUNT=10;
 
 ###############################################################################
@@ -363,10 +364,10 @@ while ($i <= $number_of_channels)
   --source include/stop_slave.inc
 
   #############################################################################
-  # Step 4.6: CHANGE MASTER TO ... FOR CHANNEL 'channel_name'
+  # Step 4.6: CHANGE REPLICATION SOURCE TO ... FOR CHANNEL 'channel_name'
   #############################################################################
 
-  --echo ===== Executing CHANGE MASTER FOR CHANNEL on channel $channel_name.
+  --echo ===== Executing CHANGE REPLICATION SOURCE FOR CHANNEL on channel $channel_name.
   --eval CHANGE REPLICATION SOURCE TO SOURCE_CONNECT_RETRY=100, SOURCE_RETRY_COUNT=100 FOR CHANNEL $channel_name
   --let $status_items=Connect_Retry, Master_Retry_Count, Slave_IO_State,Slave_SQL_Running_State, Channel_Name
   --let $rpl_channel_name=$channel_name

@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -23,6 +23,8 @@
 IF(NOT WITH_UNIT_TESTS)
   RETURN()
 ENDIF()
+
+MSVC_CPPCHECK_DISABLE()
 
 IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
   # We get ODR violations because of multiple bison parsers.
@@ -66,8 +68,6 @@ IF(LINUX OR FREEBSD)
     CACHE INTERNAL "")
 ENDIF()
 
-MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
-
 # main-wrapper libraries (with tap-compatible option).
 ADD_LIBRARY(gunit_small STATIC
   benchmark.cc
@@ -82,16 +82,28 @@ SET_TARGET_PROPERTIES(gunit_small
   PROPERTIES COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}"
 )
 
-ADD_LIBRARY(gunit_large STATIC
+ADD_STATIC_LIBRARY(gunit_large
   benchmark.cc
   gunit_test_main_server.cc
   test_utils.cc
   thread_utils.cc
+  LINK_LIBRARIES ext::icu ext::zlib
 )
+
+# Add a library for enable_win_jemalloc.cc
+# and link it with both gunit_small and gunit_large below.
+UNSET(UNITTEST_JEMALLOC_LIB)
+IF(WIN32)
+  ADD_LIBRARY(unittest_jemalloc STATIC ../../sql/enable_win_jemalloc.cc)
+  SET(UNITTEST_JEMALLOC_LIB unittest_jemalloc)
+ENDIF()
+
 ADD_DEPENDENCIES(gunit_small GenError)
 ADD_DEPENDENCIES(gunit_large GenError)
-TARGET_LINK_LIBRARIES(gunit_small mysys strings ${GTEST_LIBRARIES})
-TARGET_LINK_LIBRARIES(gunit_large mysys strings ${GTEST_LIBRARIES})
+TARGET_LINK_LIBRARIES(gunit_small
+  mysys strings ${GTEST_LIBRARIES} ${UNITTEST_JEMALLOC_LIB} extra::rapidjson)
+TARGET_LINK_LIBRARIES(gunit_large
+  mysys strings ${GTEST_LIBRARIES} ${UNITTEST_JEMALLOC_LIB} extra::rapidjson)
 
 IF(WIN32)
   ## Create an object library of nt_servc.cc, so we don't have to
@@ -115,7 +127,6 @@ SET(TESTS
   charset_bug32788301
   collation_loader
   cost_estimate
-  dbug
   decimal
   dns_srv_data
   dphyp
@@ -123,7 +134,6 @@ SET(TESTS
   filesort_buffer
   filesort_compare
   filesort_mergechunk
-  float_compare
   inplace_vector
   integer_digits
   intrusive_list_iterator
@@ -132,6 +142,7 @@ SET(TESTS
   m_string
   mdl
   mem_root_deque
+  mutex_lock
   my_alloc
   my_bitmap
   my_error
@@ -189,9 +200,17 @@ FOREACH(test ${TESTS})
   LIST(APPEND ALL_SMALL_TESTS ${test}-t.cc)
 ENDFOREACH()
 
+OPTION(WITH_FAILING_GUNIT_TESTS "Build deliberately failing GUint tests" OFF)
+IF (WITH_FAILING_GUNIT_TESTS)
+    LIST(APPEND TESTS junit_integration)
+ENDIF()
+
 # Add tests (link them with gunit/gmock libraries and the server libraries)
 SET(SERVER_TESTS
+  bgc_ticket_manager
   character_set_deprecation
+  compare_access_paths
+  connect_joins
   copy_info
   create_field
   dd_cache
@@ -225,12 +244,15 @@ SET(SERVER_TESTS
   gis_setops
   gis_srs
   gis_symdifference
+  gis_transform
   gis_union
   gis_wkb_parser
   gis_wkb_writer
+  graph_simplification
   handler
   hash_join
   histograms
+  histogram_selectivity
   hypergraph_optimizer
   initialize_password
   insert_delayed
@@ -263,6 +285,7 @@ SET(SERVER_TESTS
   opt_range
   opt_ref
   opt_trace
+  persisted_variables
   protocol_classic
   regexp_engine
   regexp_facade
@@ -282,8 +305,20 @@ SET(SERVER_TESTS
   union_syntax
   unique
   value_map
+  walk_access_paths
   wild_case_compare
+  ha_info_iterator
+  xid_extract
+  log_event_status_size
 )
+
+IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12)
+  ADD_COMPILE_FLAGS(regexp_engine-t.cc COMPILE_FLAGS "-Wno-restrict")
+ENDIF()
+
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8)
+  ADD_COMPILE_FLAGS(hypergraph_optimizer-t.cc connect_joins-t.cc COMPILE_FLAGS "-Wno-unused-variable")
+ENDIF()
 
 IF(WIN32)
   LIST(APPEND SERVER_TESTS win_tests)
@@ -293,6 +328,17 @@ ENDIF()
 MY_CHECK_CXX_COMPILER_WARNING("format-overflow" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
   ADD_COMPILE_FLAGS(segfault-t.cc COMPILE_FLAGS ${HAS_WARN_FLAG})
+ENDIF()
+
+# Suppress warnings for gcc-10 or newer
+IF(CMAKE_COMPILER_IS_GNUCXX AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-stringop-overflow FILES integer_digits-t.cc)
+ENDIF()
+
+# Avoid 'requires dynamic R_X86_64_PC32 reloc' linker error for dd_sdi-t.cc
+# when built with ASAN
+IF(WITH_ASAN)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-fPIC FILES dd_sdi-t.cc)
 ENDIF()
 
 # Warnings about missing PGO profile data are not useful for unit tests.
@@ -312,6 +358,7 @@ SET(SQL_GUNIT_LIB_SOURCE
   ${CMAKE_SOURCE_DIR}/sql-common/sql_string.cc
   ${CMAKE_SOURCE_DIR}/sql/thr_malloc.cc
   ${CMAKE_SOURCE_DIR}/sql/join_optimizer/hypergraph.cc
+  ${CMAKE_SOURCE_DIR}/sql/join_optimizer/online_cycle_finder.cc
   ${CMAKE_SOURCE_DIR}/sql/join_optimizer/overflow_bitset.cc
   ${CMAKE_SOURCE_DIR}/sql/locks/shared_spin_lock.cc
   )
@@ -321,12 +368,13 @@ ADD_DEPENDENCIES(sqlgunitlib GenError)
 SET_TARGET_PROPERTIES(sqlgunitlib
   PROPERTIES COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}"
 )
+TARGET_LINK_LIBRARIES(sqlgunitlib ext::zlib)
 
 MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   ADD_TEST merge_small_tests
   COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
   ENABLE_EXPORTS
-  LINK_LIBRARIES sqlgunitlib gunit_small
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson
   )
 
 IF(WIN32)
@@ -399,6 +447,17 @@ MYSQL_ADD_EXECUTABLE(rpl_commit_order_queue-t rpl_commit_order_queue-t.cc
   LINK_LIBRARIES rpl_commit_order_queue_lib gunit_small sqlgunitlib
 )
 
+ADD_LIBRARY(rpl_event_ctx_lib STATIC
+  ${CMAKE_SOURCE_DIR}/sql/rpl_event_ctx.cc
+)
+TARGET_LINK_LIBRARIES(rpl_event_ctx_lib ext::zlib)
+
+MYSQL_ADD_EXECUTABLE(rpl_event_ctx-t rpl_event_ctx-t.cc
+  ENABLE_EXPORTS
+  ADD_TEST rpl_event_ctx
+  LINK_LIBRARIES rpl_event_ctx_lib gunit_small
+)
+
 ADD_SUBDIRECTORY(ddl_rewriter)
 ADD_SUBDIRECTORY(innodb)
 ADD_SUBDIRECTORY(keyring)
@@ -407,8 +466,10 @@ ADD_SUBDIRECTORY(components/keyring_common)
 ADD_SUBDIRECTORY(xplugin)
 ADD_SUBDIRECTORY(group_replication)
 ADD_SUBDIRECTORY(libmysqlgcs)
+ADD_SUBDIRECTORY(keyring_vault)
 ADD_SUBDIRECTORY(temptable)
 ADD_SUBDIRECTORY(binlogevents)
 ADD_SUBDIRECTORY(memory)
 ADD_SUBDIRECTORY(containers)
 ADD_SUBDIRECTORY(locks)
+ADD_SUBDIRECTORY(changestreams)

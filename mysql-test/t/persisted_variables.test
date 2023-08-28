@@ -71,7 +71,7 @@ SET PERSIST sort_buffer_size=256000;
 SET PERSIST max_heap_table_size=999424, replica_net_timeout=124;
 SET PERSIST long_query_time= 8.3452;
 SET PERSIST sql_require_primary_key= true;
-SET PERSIST default_table_encryption= true;
+SET PERSIST default_table_encryption= ON;
 SET PERSIST table_encryption_privilege_check= true;
 
 --echo # Restart server
@@ -97,7 +97,7 @@ SET PERSIST sort_buffer_size=156000,max_connections= 52;
 SET PERSIST max_heap_table_size=887808, replica_net_timeout=160;
 SET PERSIST long_query_time= 7.8102;
 SET PERSIST sql_require_primary_key= false;
-SET PERSIST default_table_encryption= false;
+SET PERSIST default_table_encryption= OFF;
 SET PERSIST table_encryption_privilege_check= false;
 
 --echo # Restart server
@@ -126,7 +126,7 @@ SET PERSIST sort_buffer_size=256000;
 SET PERSIST max_heap_table_size=999424, replica_net_timeout=124;
 SET PERSIST long_query_time= 2.999999;
 SET PERSIST sql_require_primary_key= true;
-SET PERSIST default_table_encryption= true;
+SET PERSIST default_table_encryption= ON;
 SET PERSIST table_encryption_privilege_check= true;
 SET @@persist.max_execution_time=44000, @@persist.max_user_connections=30;
 
@@ -384,7 +384,9 @@ SELECT @@global.general_log, @@global.autocommit,
 
 SELECT @@global.innodb_buffer_pool_size;
 --remove_file $MYSQLD_DATADIR/mysqld-auto.cnf
-SET PERSIST innodb_buffer_pool_size=10*1024*1024;
+# In Percona Server, resize to 20MB instead of 10MB to stay compatible
+# with innodb_empty_free_list_algorithm=backoff
+SET PERSIST innodb_buffer_pool_size=20*1024*1024;
 SELECT @@global.innodb_buffer_pool_size;
 
 --echo # Restart server
@@ -416,4 +418,57 @@ RESET PERSIST;
 --echo # Restart server with all defaults
 --source include/restart_mysqld.inc
 
-SELECT 'END OF TEST';
+--echo #
+--echo # Bug #33417357: RESET PERSIST THROWS SYNTAX ERROR WITH COMPONENT SYSTEM VARIABLES
+--echo #
+
+--echo #
+--echo # 1. test MyISAM Multiple Key Cache variables:
+--echo #
+
+SET PERSIST default.key_buffer_size = 1024*1024;
+# Add reload tests after fixing a separate bug#33420306 "SET PERSIST fails with 2-component names of MyISAM Multiple Key Caches"
+RESET PERSIST default.key_buffer_size;
+SET GLOBAL default.key_buffer_size = DEFAULT;
+
+--echo #
+--echo # 2. test component-registered variable names:
+--echo #
+
+# int_sys_var.str_sys_var is duplicated in component_test_sys_var_service, this is expected.
+call mtr.add_suppression("Duplicate variable name 'test_component.int_sys_var'");
+
+INSTALL COMPONENT "file://component_test_sys_var_service";
+
+SET PERSIST test_component.str_sys_var = 'test';
+
+--source include/restart_mysqld.inc
+
+--echo # Should return "test":
+SELECT @@global.test_component.str_sys_var;
+UNINSTALL COMPONENT "file://component_test_sys_var_service";
+
+call mtr.add_suppression("Currently unknown variable 'test_component.str_sys_var' was read from the persisted config file");
+--source include/restart_mysqld.inc
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.test_component.str_sys_var;
+
+INSTALL COMPONENT "file://component_test_sys_var_service";
+
+--echo # Should return "test":
+SELECT @@global.test_component.str_sys_var;
+
+RESET PERSIST test_component.str_sys_var;
+
+--echo # Should return "test":
+SELECT @@global.test_component.str_sys_var;
+
+--source include/restart_mysqld.inc
+
+--echo # Should return NULL:
+SELECT @@global.test_component.str_sys_var;
+
+UNINSTALL COMPONENT "file://component_test_sys_var_service";
+
+--echo # END OF TEST

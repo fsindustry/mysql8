@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -251,7 +251,8 @@ static inline uint64 base64_decode_max_arg_length() {
 /*
   Encode data as a base64 string
 */
-static inline int base64_encode(const void *src, size_t src_len, char *dst) {
+static inline int base64_encode(const void *src, size_t src_len, char *dst,
+                                bool inject_linebreak = true) {
   const unsigned char *s = (const unsigned char *)src;
   size_t i = 0;
   size_t len = 0;
@@ -259,7 +260,7 @@ static inline int base64_encode(const void *src, size_t src_len, char *dst) {
   for (; i < src_len; len += 4) {
     unsigned c;
 
-    if (len == 76) {
+    if (len == 76 && inject_linebreak) {
       len = 0;
       *dst++ = '\n';
     }

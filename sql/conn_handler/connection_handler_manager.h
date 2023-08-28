@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2013, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@ struct mysql_mutex_t;
 
 /**
   Functions to notify interested connection handlers
-  of events like begining of wait and end of wait and post-kill
+  of events like beginning of wait and end of wait and post-kill
   notification events.
 */
 struct THD_event_functions {
@@ -109,6 +109,7 @@ class Connection_handler_manager {
   enum scheduler_types {
     SCHEDULER_ONE_THREAD_PER_CONNECTION = 0,
     SCHEDULER_NO_THREADS,
+    SCHEDULER_THREAD_POOL,
     SCHEDULER_TYPES_COUNT
   };
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -52,6 +52,7 @@ int hp_close(HP_INFO *info) {
     heap_open_list = list_delete(heap_open_list, &info->open_list);
   if (!--info->s->open_count && info->s->delete_on_close)
     hp_free(info->s); /* Table was deleted */
+  if (info->blob_buffer) my_free(info->blob_buffer);
   my_free(info);
   return error;
 }

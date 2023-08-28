@@ -1,7 +1,7 @@
 include/group_replication.inc
 Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
-Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
 [connection server1]
 SET @group_replication_flow_control_mode_save= @@GLOBAL.group_replication_flow_control_mode;
 SET @group_replication_flow_control_certifier_threshold_save= @@GLOBAL.group_replication_flow_control_certifier_threshold;
@@ -29,16 +29,21 @@ SET GLOBAL group_replication_flow_control_mode= "XXX";
 ERROR 42000: Variable 'group_replication_flow_control_mode' can't be set to the value of 'XXX'
 SET GLOBAL group_replication_flow_control_mode= -1;
 ERROR 42000: Variable 'group_replication_flow_control_mode' can't be set to the value of '-1'
-SET GLOBAL group_replication_flow_control_mode= 2;
-ERROR 42000: Variable 'group_replication_flow_control_mode' can't be set to the value of '2'
+SET GLOBAL group_replication_flow_control_mode= 3;
+ERROR 42000: Variable 'group_replication_flow_control_mode' can't be set to the value of '3'
 SET GLOBAL group_replication_flow_control_mode= DISABLED;
 include/assert.inc [group_replication_flow_control_mode is correct]
 SET GLOBAL group_replication_flow_control_mode= QUOTA;
+include/assert.inc [group_replication_flow_control_mode is correct]
+SET GLOBAL group_replication_flow_control_mode= MAJORITY;
 include/assert.inc [group_replication_flow_control_mode is correct]
 SET GLOBAL group_replication_flow_control_mode= 0;
 include/assert.inc [group_replication_flow_control_mode is correct]
 SET GLOBAL group_replication_flow_control_mode= 1;
 include/assert.inc [group_replication_flow_control_mode is correct]
+SET GLOBAL group_replication_flow_control_mode= 2;
+include/assert.inc [group_replication_flow_control_mode is correct]
+SET GLOBAL group_replication_flow_control_mode= DEFAULT;
 
 ############################################################
 # 2. Test group_replication_flow_control_certifier_threshold
@@ -219,6 +224,9 @@ SET GLOBAL group_replication_flow_control_mode= DISABLED;
 include/assert.inc [group_replication_flow_control_mode is correct]
 SET GLOBAL group_replication_flow_control_mode= QUOTA;
 include/assert.inc [group_replication_flow_control_mode is correct]
+SET GLOBAL group_replication_flow_control_mode= MAJORITY;
+include/assert.inc [group_replication_flow_control_mode is correct]
+SET GLOBAL group_replication_flow_control_mode= DEFAULT;
 SET GLOBAL group_replication_flow_control_certifier_threshold= 1000;
 include/assert.inc [group_replication_flow_control_certifier_threshold is correct]
 SET GLOBAL group_replication_flow_control_applier_threshold= 1000;

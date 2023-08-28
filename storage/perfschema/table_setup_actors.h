@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,17 +49,11 @@ struct THR_LOCK;
 /** A row of PERFORMANCE_SCHEMA.SETUP_ACTORS. */
 struct row_setup_actors {
   /** Column HOST. */
-  char m_hostname[HOSTNAME_LENGTH];
-  /** Length in bytes of @c m_hostname. */
-  uint m_hostname_length;
+  PFS_host_name m_host_name;
   /** Column USER. */
-  char m_username[USERNAME_LENGTH];
-  /** Length in bytes of @c m_username. */
-  uint m_username_length;
+  PFS_user_name m_user_name;
   /** Column ROLE. */
-  char m_rolename[16];
-  /** Length in bytes of @c m_rolename. */
-  uint m_rolename_length;
+  PFS_role_name m_role_name;
   /** Column ENABLED. */
   bool *m_enabled_ptr;
   /** Column HISTORY. */
@@ -96,7 +90,7 @@ class table_setup_actors : public PFS_engine_table {
   static int delete_all_rows();
   static ha_rows get_row_count();
 
-  void reset_position(void) override;
+  void reset_position() override;
 
   int rnd_next() override;
   int rnd_pos(const void *pos) override;
@@ -120,7 +114,7 @@ class table_setup_actors : public PFS_engine_table {
   ~table_setup_actors() override = default;
 
  private:
-  int make_row(PFS_setup_actor *actor);
+  int make_row(PFS_setup_actor *pfs);
 
   /** Table share lock. */
   static THR_LOCK m_table_lock;

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2021, Oracle and/or its affiliates.
+Copyright (c) 1997, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -43,29 +43,33 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class MVCC {
  public:
   /** Constructor
-  @param size		Number of views to pre-allocate */
+  @param size           Number of views to pre-allocate */
   explicit MVCC(ulint size);
 
   /** Destructor.
   Free all the views in the m_free list */
   ~MVCC();
 
+  /** Insert the view in the proper order into the view list.
+  @param	view	view to add */
+  void view_add(const ReadView *view);
+
   /** Allocate and create a view.
-  @param view	View owned by this class created for the caller. Must be
+  @param view   View owned by this class created for the caller. Must be
   freed by calling view_close()
-  @param trx	Transaction instance of caller */
+  @param trx    Transaction instance of caller */
   void view_open(ReadView *&view, trx_t *trx);
 
   /**
   Close a view created by the above function.
-  @param view		view allocated by trx_open.
-  @param own_mutex	true if caller owns trx_sys_t::mutex */
+  @param view           view allocated by trx_open.
+  @param own_mutex      true if caller owns trx_sys_t::mutex */
   void view_close(ReadView *&view, bool own_mutex);
 
   /**
   Release a view that is inactive but not closed. Caller must own
   the trx_sys_t::mutex.
-  @param view		View to release */
+  @param view           View to release */
   void view_release(ReadView *&view);
 
   /** Clones the oldest view and stores it in view. No need to
@@ -73,7 +77,7 @@ class MVCC {
   It will also move the closed views from the m_views list to the
   m_free list. This function is called by Purge to determine whether it should
   purge the delete marked record or not.
-  @param view		Preallocated view, owned by the caller */
+  @param view           Preallocated view, owned by the caller */
   void clone_oldest_view(ReadView *view);
 
   /**
@@ -89,7 +93,7 @@ class MVCC {
   }
 
   /**
-  Set the view creator transaction id. Note: This shouldbe set only
+  Set the view creator transaction id. Note: This should be set only
   for views created by RW transactions.
   @param view   Set the creator trx id for this view
   @param id     Transaction id to set */
@@ -104,6 +108,8 @@ class MVCC {
   Validates a read view list. */
   bool validate() const;
 
+  friend class ReadView;
+
   /**
   Find a free view from the active list, if none found then allocate
   a new view. This function will also attempt to move delete marked
@@ -111,11 +117,12 @@ class MVCC {
   @return a view to use */
   inline ReadView *get_view();
 
+ public:
   /**
   Get the oldest view in the system. It will also move the delete
   marked read views from the views list to the freed list.
   @return oldest view if found or NULL */
-  inline ReadView *get_oldest_view() const;
+  ReadView *get_oldest_view() const;
   ReadView *get_view_created_by_trx_id(trx_id_t trx_id) const;
 
  private:

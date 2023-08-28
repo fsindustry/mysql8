@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -97,7 +97,7 @@ table_keyring_keys::table_keyring_keys()
   copy_keys_from_keyring();
 }
 
-ha_rows table_keyring_keys::get_row_count(void) {
+ha_rows table_keyring_keys::get_row_count() {
   /*
   The real number of keys in the keyring does not matter,
   we only need to hint the optimizer,
@@ -106,7 +106,7 @@ ha_rows table_keyring_keys::get_row_count(void) {
   return sizeof(row_keyring_keys);
 }
 
-void table_keyring_keys::reset_position(void) {
+void table_keyring_keys::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -118,17 +118,16 @@ int table_keyring_keys::rnd_pos(const void *pos) {
   return 0;
 }
 
-int table_keyring_keys::rnd_next(void) {
+int table_keyring_keys::rnd_next() {
   m_pos.set_at(&m_next_pos);
 
   if (m_pos.m_index < m_copy_keyring_keys.size()) {
     m_row = &m_copy_keyring_keys[m_pos.m_index];
     m_next_pos.set_after(&m_pos);
     return 0;
-  } else {
-    m_row = nullptr;
-    return HA_ERR_END_OF_FILE;
   }
+  m_row = nullptr;
+  return HA_ERR_END_OF_FILE;
 }
 
 int table_keyring_keys::read_row_values(TABLE *table, unsigned char *buf,
@@ -145,16 +144,17 @@ int table_keyring_keys::read_row_values(TABLE *table, unsigned char *buf,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case FO_KEY_ID:
-          set_field_varchar_utf8(f, m_row->m_key_id.c_str(),
-                                 static_cast<uint>(m_row->m_key_id.length()));
+          set_field_varchar_utf8mb4(
+              f, m_row->m_key_id.c_str(),
+              static_cast<uint>(m_row->m_key_id.length()));
           break;
         case FO_KEY_OWNER:
-          set_field_varchar_utf8(
+          set_field_varchar_utf8mb4(
               f, m_row->m_key_owner.c_str(),
               static_cast<uint>(m_row->m_key_owner.length()));
           break;
         case FO_BACKEND_KEY_ID:
-          set_field_varchar_utf8(
+          set_field_varchar_utf8mb4(
               f, m_row->m_backend_key_id.c_str(),
               static_cast<uint>(m_row->m_backend_key_id.length()));
           break;
@@ -180,15 +180,15 @@ static bool fetch_keys(std::vector<row_keyring_keys> &keyring_keys) {
   bool next_ok = true;
 
   SERVICE_TYPE(registry) *plugin_registry = mysql_plugin_registry_acquire();
-  my_service<SERVICE_TYPE(keyring_keys_metadata_iterator)>
+  const my_service<SERVICE_TYPE(keyring_keys_metadata_iterator)>
       keyring_keys_metadata_iterator("keyring_keys_metadata_iterator",
                                      plugin_registry);
   // check if the keyring plugin supports the backend key ID
-  my_service<SERVICE_TYPE(mysql_keyring_native_key_id)> svc(
+  const my_service<SERVICE_TYPE(mysql_keyring_native_key_id)> svc(
       "mysql_keyring_native_key_id", plugin_registry);
 
   my_h_keyring_keys_metadata_iterator forward_iterator = nullptr;
-  if (keyring_keys_metadata_iterator->init(&forward_iterator) == true) {
+  if (keyring_keys_metadata_iterator->init(&forward_iterator) != 0) {
     mysql_plugin_registry_release(plugin_registry);
     return false;
   }
@@ -199,12 +199,12 @@ static bool fetch_keys(std::vector<row_keyring_keys> &keyring_keys) {
     memset(user_id, 0, KEYRING_ITEM_BUFFER_SIZE);
     if (keyring_keys_metadata_iterator->get(forward_iterator, key_id,
                                             KEYRING_ITEM_BUFFER_SIZE, user_id,
-                                            KEYRING_ITEM_BUFFER_SIZE) == true) {
+                                            KEYRING_ITEM_BUFFER_SIZE) != 0) {
       break;
     }
 
     // truncate longer strings
-    assert(KEYRING_ITEM_BUFFER_SIZE > MAX_FIELD_LENGTH);
+    static_assert(KEYRING_ITEM_BUFFER_SIZE > MAX_FIELD_LENGTH);
     key_id[MAX_FIELD_LENGTH] = '\0';
     user_id[MAX_FIELD_LENGTH] = '\0';
 

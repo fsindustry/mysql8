@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+Copyright (c) 2013, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -38,16 +38,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** FTS default parser init
  @return 0 */
-static int fts_default_parser_init(
-    MYSQL_FTPARSER_PARAM *param) /*!< in: plugin parser param */
+static int fts_default_parser_init(MYSQL_FTPARSER_PARAM *param [
+    [maybe_unused]]) /*!< in: plugin parser param */
 {
   return (0);
 }
 
 /** FTS default parser deinit
  @return 0 */
-static int fts_default_parser_deinit(
-    MYSQL_FTPARSER_PARAM *param) /*!< in: plugin parser param */
+static int fts_default_parser_deinit(MYSQL_FTPARSER_PARAM *param [
+    [maybe_unused]]) /*!< in: plugin parser param */
 {
   return (0);
 }
@@ -217,13 +217,14 @@ static int fts_parse_query_internal(
   uchar **start = reinterpret_cast<uchar **>(&query);
   uchar *end = reinterpret_cast<uchar *>(query + len);
   FT_WORD w = {nullptr, 0, 0};
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   info.prev = ' ';
   info.quot = nullptr;
   memset(&w, 0, sizeof(w));
   /* Note: We don't handle simple parser mode here,
   but user supplied plugin parser should handler it. */
-  while (fts_get_word(cs, start, end, &w, &info)) {
+  while (fts_get_word(cs, extra_word_chars, start, end, &w, &info)) {
     int ret = param->mysql_add_word(param, reinterpret_cast<char *>(w.pos),
                                     w.len, &info);
     if (ret) {
@@ -236,7 +237,7 @@ static int fts_parse_query_internal(
 
 /** fts parse query by plugin parser.
  @return 0 if parse successfully, or return non-zero. */
-int fts_parse_by_parser(ibool mode,       /*!< in: parse boolean mode */
+int fts_parse_by_parser(bool mode,        /*!< in: parse boolean mode */
                         uchar *query_str, /*!< in: query string */
                         ulint query_len,  /*!< in: query string length */
                         st_mysql_ftparser *parser, /*!< in: fts plugin parser */

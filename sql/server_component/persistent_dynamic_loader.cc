@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -44,11 +44,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "my_macros.h"
 #include "my_sys.h"
 #include "mysql/components/service_implementation.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/psi_mutex_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysqld_error.h"
 #include "persistent_dynamic_loader_imp.h"
@@ -59,13 +59,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "sql/derror.h"
 #include "sql/field.h"
 #include "sql/handler.h"
+#include "sql/iterators/row_iterator.h"
 #include "sql/key.h"
 #include "sql/mysqld.h"
-#include "sql/records.h"
-#include "sql/row_iterator.h"
 #include "sql/sql_base.h"
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
+#include "sql/sql_executor.h"
 #include "sql/table.h"
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"
@@ -92,7 +92,7 @@ static const TABLE_FIELD_TYPE component_table_fields[CT_FIELD_COUNT] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("component_urn")},
      {STRING_WITH_LEN("text")},
-     {STRING_WITH_LEN("utf8")}}};
+     {STRING_WITH_LEN("utf8mb3")}}};
 
 static const TABLE_FIELD_DEF component_table_def = {CT_FIELD_COUNT,
                                                     component_table_fields};
@@ -152,7 +152,7 @@ static Component_db_intact table_intact;
 */
 static bool open_component_table(THD *thd, enum thr_lock_type lock_type,
                                  TABLE **table, ulong acl_to_check) {
-  TABLE_LIST tables("mysql", "component", lock_type);
+  Table_ref tables("mysql", "component", lock_type);
 
   if (mysql_persistent_dynamic_loader_imp::initialized() && !opt_noacl &&
       check_one_table_access(thd, acl_to_check, &tables))
@@ -338,6 +338,16 @@ bool mysql_persistent_dynamic_loader_imp::initialized() {
   return mysql_persistent_dynamic_loader_imp::is_initialized;
 }
 
+int mysql_persistent_dynamic_loader_imp::remove_from_cache(
+    const char *urns[], int component_count) {
+  int count_erased = 0;
+  MUTEX_LOCK(lock, &component_id_by_urn_mutex);
+  for (int i = 0; i < component_count; ++i)
+    count_erased +=
+        mysql_persistent_dynamic_loader_imp::component_id_by_urn.erase(urns[i]);
+  return count_erased;
+}
+
 /**
   Loads specified group of components by URN, initializes them and
   registers all service implementations present in these components.
@@ -415,6 +425,11 @@ DEFINE_BOOL_METHOD(mysql_persistent_dynamic_loader_imp::load,
         return true;
       }
 
+      /*
+        This is an attempt to sync an out of sync memory cache.
+        This should ideally be removing zero rows.
+      */
+      mysql_persistent_dynamic_loader_imp::component_id_by_urn.erase(urns[i]);
       /* Use last insert auto-increment column value and store it by the URN. */
       mysql_persistent_dynamic_loader_imp::component_id_by_urn.emplace(
           urns[i], component_table->file->insert_id_for_cur_row);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -192,7 +192,7 @@ void vio_delete_shared_memory(Vio *vio) {
   All handles are closed and the VIO is cleaned up when vio_delete() is
   called and this completes the vio cleanup operation in its entirety.
 */
-int vio_shutdown_shared_memory(Vio *vio) {
+int vio_shutdown_shared_memory(Vio *vio, int how) {
   DBUG_TRACE;
   if (vio->inactive == false) {
     /*
@@ -206,4 +206,18 @@ int vio_shutdown_shared_memory(Vio *vio) {
   vio->mysql_socket = MYSQL_INVALID_SOCKET;
 
   return 0;
+}
+
+int vio_cancel_shared_memory(Vio *vio, int how) {
+  DBUG_ENTER("vio_cancel_shred_memory");
+  if (!vio->inactive) {
+    /*
+      Set event_conn_closed for notification of both client and server that
+      connection is closed
+    */
+    SetEvent(vio->event_conn_closed);
+    vio->inactive = true;
+  }
+
+  DBUG_RETURN(0);
 }

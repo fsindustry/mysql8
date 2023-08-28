@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <optional>
@@ -47,6 +48,7 @@
 #include "my_sys.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "sql-common/json_dom.h"
 #include "sql/aggregate_check.h"  // Distinct_check
 #include "sql/create_field.h"
 #include "sql/current_thd.h"  // current_thd
@@ -62,7 +64,6 @@
 #include "sql/item_func.h"
 #include "sql/item_json_func.h"
 #include "sql/item_subselect.h"
-#include "sql/json_dom.h"
 #include "sql/key_spec.h"
 #include "sql/mysqld.h"
 #include "sql/parse_tree_helpers.h"    // PT_item_list
@@ -515,12 +516,25 @@ bool Item_sum::resolve_type(THD *thd) {
   @see Item_cond::remove_const_cond()
  */
 bool Item_sum::clean_up_after_removal(uchar *arg) {
+  Cleanup_after_removal_context *const ctx =
+      pointer_cast<Cleanup_after_removal_context *>(arg);
+
+  if (ctx->is_stopped(this)) return false;
+
+  // Remove item on upward traversal, not downward:
+  if (marker == MARKER_NONE) {
+    marker = MARKER_TRAVERSAL;
+    return false;
+  }
+  assert(marker == MARKER_TRAVERSAL);
+  marker = MARKER_NONE;
+
   /*
     Don't do anything if
     1) this is an unresolved item (This may happen if an
        expression occurs twice in the same query. In that case, the
-       whole item tree for the second occurence is replaced by the
-       item tree for the first occurence, without calling fix_fields()
+       whole item tree for the second occurrence is replaced by the
+       item tree for the first occurrence, without calling fix_fields()
        on the second tree. Therefore there's nothing to clean up.), or
     If it is a grouped aggregate,
     2) there is no inner_sum_func_list, or
@@ -535,15 +549,12 @@ bool Item_sum::clean_up_after_removal(uchar *arg) {
 
   if (m_window) {
     // Cleanup the reference for this window function from m_functions
-    auto *ctx = pointer_cast<Cleanup_after_removal_context *>(arg);
-    if (ctx != nullptr) {
-      List_iterator<Item_sum> li(m_window->functions());
-      Item *item = nullptr;
-      while ((item = li++)) {
-        if (item == this) {
-          li.remove();
-          break;
-        }
+    List_iterator<Item_sum> li(m_window->functions());
+    Item *item = nullptr;
+    while ((item = li++)) {
+      if (item == this) {
+        li.remove();
+        break;
       }
     }
   } else {
@@ -582,10 +593,18 @@ bool Item_sum::eq(const Item *item, bool binary_cmp) const {
   if (item->type() != type() ||
       item->m_is_window_function != m_is_window_function)
     return false;
-  const Item_sum *const item_sum = static_cast<const Item_sum *>(item);
+  const Item_sum *item_sum = down_cast<const Item_sum *>(item);
   const enum Sumfunctype my_sum_func = sum_func();
   if (item_sum->sum_func() != my_sum_func || item_sum->m_window != m_window)
     return false;
+
+  if (is_rollup_sum_wrapper() || item_sum->is_rollup_sum_wrapper()) {
+    // we want to compare underlying Item_sums
+    const Item_sum *this_real_sum = unwrap_sum();
+    const Item_sum *item_real_sum = item_sum->unwrap_sum();
+    return this_real_sum->eq(item_real_sum, binary_cmp);
+  }
+
   if (arg_count != item_sum->arg_count ||
       (my_sum_func != Item_sum::UDF_SUM_FUNC &&
        strcmp(func_name(), item_sum->func_name()) != 0) ||
@@ -671,7 +690,7 @@ Field *Item_sum::create_tmp_field(bool, TABLE *table) {
       break;
     case ROW_RESULT:
     default:
-      // This case should never be choosen
+      // This case should never be chosen
       assert(0);
       return nullptr;
   }
@@ -977,7 +996,7 @@ static enum enum_field_types calc_tmp_field_type(
 
 /***************************************************************************/
 
-/* Declarations for auxilary C-callbacks */
+/* Declarations for auxiliary C-callbacks */
 
 static int simple_raw_key_cmp(const void *arg, const void *key1,
                               const void *key2) {
@@ -996,7 +1015,7 @@ static int item_sum_distinct_walk(void *element, element_count, void *item) {
   @param thd Thread descriptor
   @return status
     @retval false success
-    @retval true  faliure
+    @retval true  failure
 
     Prepares Aggregator_distinct to process the incoming stream.
     Creates the temporary table and the Unique class if needed.
@@ -1266,9 +1285,16 @@ bool Aggregator_distinct::add() {
     }
 
     if (!check_unique_constraint(table)) return false;
-    if ((error = table->file->ha_write_row(table->record[0])) &&
-        !table->file->is_ignorable_error(error))
-      return true;
+    error = table->file->ha_write_row(table->record[0]);
+    if (error && !table->file->is_ignorable_error(error)) {
+      if (create_ondisk_from_heap(current_thd, table, error,
+                                  /*insert_last_record=*/true,
+                                  /*ignore_last_dup=*/true,
+                                  /*is_duplicate=*/nullptr) ||
+          table->file->ha_index_init(0, false)) {
+        return true;
+      }
+    }
     return false;
   } else {
     item_sum->get_arg(0)->save_in_field(table->field[0], false);
@@ -1386,7 +1412,7 @@ bool Item_sum_num::fix_fields(THD *thd, Item **ref) {
     if ((!args[i]->fixed && args[i]->fix_fields(thd, args + i)) ||
         args[i]->check_cols(1))
       return true;
-    set_nullable(is_nullable() | args[i]->is_nullable());
+    set_nullable(is_nullable() || args[i]->is_nullable());
   }
 
   // Set this value before calling resolve_type()
@@ -1721,7 +1747,7 @@ bool Item_sum_hybrid::fix_fields(THD *thd, Item **ref) {
   hybrid_type = item->result_type();
 
   if (setup_hybrid(args[0], nullptr)) return true;
-  /* MIN/MAX can return NULL for empty set indepedent of the used column */
+  /* MIN/MAX can return NULL for empty set independent of the used column */
   set_nullable(true);
   result_field = nullptr;
   null_value = true;
@@ -2258,9 +2284,7 @@ double Item_sum_avg::val_real() {
     double sum = Item_sum_sum::val_real();
 
     if (m_window->is_last_row_in_frame()) {
-      int64 divisor = (m_window->needs_buffering()
-                           ? m_window->rowno_in_frame() - m_frame_null_count
-                           : m_count - m_frame_null_count);
+      const int64 divisor = m_count - m_frame_null_count;
       if (divisor > 0) sum = sum / ulonglong2double(divisor);
     }
     m_avg = sum;  // save
@@ -2321,9 +2345,7 @@ my_decimal *Item_sum_avg::val_decimal(my_decimal *val) {
       }
     }
 
-    int64 divisor = (m_window->needs_buffering()
-                         ? m_window->rowno_in_frame() - m_frame_null_count
-                         : m_count - m_frame_null_count);
+    const int64 divisor = m_count - m_frame_null_count;
 
     if (m_window->is_last_row_in_frame() && divisor > 0) {
       int2my_decimal(E_DEC_FATAL_ERROR, divisor, false, &cnt);
@@ -2388,7 +2410,7 @@ Item *Item_sum_std::copy_or_same(THD *thd) {
 
 /*
   Variance function has two implementations:
-  The first implementation (Algorthm I - see Item_sum_variance) is based
+  The first implementation (Algorithm I - see Item_sum_variance) is based
   on Knuth's _TAoCP_, 3rd ed, volume 2, pg232. This alters the value at
   m, s, and increments count.
   The second implementation (Algorithm II - See Item_sum_variance)
@@ -2402,7 +2424,7 @@ Item *Item_sum_std::copy_or_same(THD *thd) {
   variance_fp_recurrence_next calculates the recurrence values m,s used in
   algorithm I.
   add_sample/remove_sample calculates the recurrence values m,s,s2 used in
-  algorthm II.
+  algorithm II.
 */
 
 /**
@@ -2450,6 +2472,7 @@ static void remove_sample(double *m, double *s, double *s2, ulonglong *count,
 /**
   Calculates the next recurrence value for current sample.
 
+  @param[in]     self  The object on which behalf we are computing
   @param[in,out] m     recurrence value
   @param[in,out] s     recurrence value
   @param[in,out] s2    Square of the recurrence value s
@@ -2462,6 +2485,8 @@ static void remove_sample(double *m, double *s, double *s2, ulonglong *count,
                        to remove value calculated for s,s2 for sample "nr"
                        from the the current value of (s,s2).
 
+  @returns false if success, true if error
+
   Note:
   variance_fp_recurrence_next and variance_fp_recurrence_result are used by
   Item_sum_variance and Item_variance_field classes, which are unrelated,
@@ -2469,12 +2494,25 @@ static void remove_sample(double *m, double *s, double *s2, ulonglong *count,
   classes is that the first is used for a mundane SELECT and when used with
   windowing functions, while the latter is used in a GROUPing SELECT.
 */
-static void variance_fp_recurrence_next(double *m, double *s, double *s2,
-                                        ulonglong *count, double nr,
-                                        bool optimize, bool inverse) {
+static bool variance_fp_recurrence_next(Item_sum_variance *self, double *m,
+                                        double *s, double *s2, ulonglong *count,
+                                        double nr, bool optimize,
+                                        bool inverse) {
+  assert(!std::isnan(*m));
+  assert(!std::isnan(*s));
+  assert(s2 == nullptr || !std::isnan(*s2));
+  assert(!std::isnan(nr));
+
+  assert(!std::isinf(*m));
+  assert(!std::isinf(*s));
+  assert(s2 == nullptr || !std::isinf(*s2));
+  assert(!std::isinf(nr));
+
   if (optimize) {
-    return inverse ? remove_sample(m, s, s2, count, nr)
-                   : add_sample(m, s, s2, count, nr);
+    if (inverse)
+      remove_sample(m, s, s2, count, nr);
+    else
+      add_sample(m, s, s2, count, nr);
   } else {
     *count += 1;
 
@@ -2487,23 +2525,27 @@ static void variance_fp_recurrence_next(double *m, double *s, double *s2,
       *s = *s + (nr - m_kminusone) * (nr - *m);
     }
   }
+  *m = self->check_float_overflow(*m);
+  *s = self->check_float_overflow(*s);
+  if (s2 != nullptr) *s2 = self->check_float_overflow(*s2);
+  return current_thd->is_error();
 }
 
 /**
   Calculates variance using one of the two algorithms
   (See Item_sum_variance) as specified.
 
-  @param[in] s                  recurrence value
+  @param[in] s                  Recurrence value
   @param[in] s2                 Square of the recurrence value. Used
                                 only by Algorithm II
   @param[in] count              Number of rows for which variance needs
                                 to be calculated.
-  @param[in] is_sample_variance true if calculating sample variance and
+  @param[in] is_sample_variance True if calculating sample variance and
                                 false if population variance.
-  @param[in] optimize           true if algorthm II is used to calculate
+  @param[in] optimize           True if algorithm II is used to calculate
                                 variance.
 
-  @retval                       returns calculated variance value
+  @retval                       Returns calculated variance value
 
 */
 static double variance_fp_recurrence_result(double s, double s2,
@@ -2567,7 +2609,7 @@ bool Item_sum_variance::resolve_type(THD *thd) {
   /*
     According to the SQL2003 standard (Part 2, Foundations; sec 10.9,
     aggregate function; paragraph 7h of Syntax Rules), "the declared
-    type of the result is an implementation-defined aproximate numeric
+    type of the result is an implementation-defined approximate numeric
     type.
   */
   set_data_type_double();
@@ -2624,10 +2666,13 @@ bool Item_sum_variance::add() {
     return true;
   }
 
-  if (!args[0]->null_value)
-    variance_fp_recurrence_next(
-        &recurrence_m, &recurrence_s, &recurrence_s2, &count, nr, optimize,
-        m_is_window_function ? m_window->do_inverse() : false);
+  if (!args[0]->null_value) {
+    if (variance_fp_recurrence_next(
+            this, &recurrence_m, &recurrence_s, &recurrence_s2, &count, nr,
+            optimize, m_is_window_function ? m_window->do_inverse() : false))
+      return true;
+  }
+
   null_value = (count <= sample);
   return false;
 }
@@ -2641,7 +2686,7 @@ double Item_sum_variance::val_real() {
     is one or zero.  If it's zero, i.e. a population variance, then we only
     set nullness when the count is zero.
 
-    Another way to read it is that 'sample' is the numerical threshhold, at and
+    Another way to read it is that 'sample' is the numerical threshold, at and
     below which a 'count' number of items is called NULL.
   */
   assert((sample == 0) || (sample == 1));
@@ -2700,8 +2745,10 @@ void Item_sum_variance::update_field() {
   double field_recurrence_s = float8get(res + sizeof(double));
   field_count = sint8korr(res + sizeof(double) * 2);
 
-  variance_fp_recurrence_next(&field_recurrence_m, &field_recurrence_s, nullptr,
-                              &field_count, nr, false, false);
+  if (variance_fp_recurrence_next(this, &field_recurrence_m,
+                                  &field_recurrence_s, nullptr, &field_count,
+                                  nr, false, false))
+    return;
 
   float8store(res, field_recurrence_m);
   float8store(res + sizeof(double), field_recurrence_s);
@@ -2784,8 +2831,16 @@ bool Item_sum_hybrid::compute() {
   */
   if (m_want_first != m_nulls_first) {
     // Cases (2) and (3): same structure as Item_first_last_value::compute
+
+    const bool visiting_first_in_frame =
+        (m_window->optimizable_row_aggregates() &&
+         m_window->rowno_being_visited() ==
+             m_window->first_rowno_in_rows_frame()) ||
+        !m_window->optimizable_row_aggregates();
+
     if ((m_window->needs_buffering() &&
-         (((m_window->rowno_in_frame() == 1 && m_want_first) ||
+         (((m_window->rowno_in_frame() == 1 && m_want_first &&
+            visiting_first_in_frame) ||
            (m_window->is_last_row_in_frame() && !m_want_first)) ||
           m_window->rowno_being_visited() == 0 /* No FROM; one const row */)) ||
         (!m_window->needs_buffering() &&
@@ -2851,8 +2906,11 @@ bool Item_sum_hybrid::compute() {
         (!m_window->needs_buffering())) {
       value->store_and_cache(args[0]);
       null_value = value->null_value;
-      const int64 frame_start =
-          (m_window->rowno_being_visited() - m_window->rowno_in_frame() + 1);
+
+      const int64 frame_start = m_window->optimizable_row_aggregates()
+                                    ? m_window->first_rowno_in_rows_frame()
+                                    : (m_window->rowno_being_visited() -
+                                       m_window->rowno_in_frame() + 1);
 
       if (!value->null_value &&
           m_window->rowno_being_visited() > m_saved_last_value_at) {
@@ -2960,10 +3018,8 @@ bool Item_sum_hybrid::get_time(MYSQL_TIME *ltime) {
 String *Item_sum_hybrid::val_str(String *str) {
   assert(fixed == 1);
   if (m_is_window_function) {
-    if (wf_common_init()) return nullptr;
-    bool ret = false;
-    m_optimize ? ret = compute() : add();
-    if (ret) return nullptr;
+    if (wf_common_init()) return error_str();
+    if (m_optimize ? compute() : add()) return error_str();
   }
   if (null_value) return nullptr;
 
@@ -4257,14 +4313,20 @@ Field *Item_func_group_concat::make_string_field(TABLE *table_arg) const {
 
   const uint32 max_characters =
       group_concat_max_len / collation.collation->mbminlen;
+
+  // Avoid arithmetic overflow
+  const uint32 field_length = min<uint64>(
+      static_cast<uint64>(max_characters) * collation.collation->mbmaxlen,
+      UINT_MAX32);
+
   if (max_characters > CONVERT_IF_BIGGER_TO_BLOB)
     field = new (*THR_MALLOC)
-        Field_blob(max_characters * collation.collation->mbmaxlen,
-                   is_nullable(), item_name.ptr(), collation.collation, true);
+        Field_blob(field_length, is_nullable(), item_name.ptr(),
+                   collation.collation, true);
   else
-    field = new (*THR_MALLOC) Field_varstring(
-        max_characters * collation.collation->mbmaxlen, is_nullable(),
-        item_name.ptr(), table_arg->s, collation.collation);
+    field = new (*THR_MALLOC)
+        Field_varstring(field_length, is_nullable(), item_name.ptr(),
+                        table_arg->s, collation.collation);
 
   if (field) field->init(table_arg);
   return field;
@@ -4373,7 +4435,10 @@ bool Item_func_group_concat::fix_fields(THD *thd, Item **ref) {
     group_concat_max_len =
         static_cast<uint>(thd->variables.group_concat_max_len);
   uint32 max_chars = group_concat_max_len / collation.collation->mbminlen;
-  uint32 max_byte_length = max_chars * collation.collation->mbmaxlen;
+  // Avoid arithmetic overflow
+  uint32 max_byte_length = min<uint64>(
+      static_cast<uint64>(max_chars) * collation.collation->mbmaxlen,
+      UINT_MAX32);
   max_chars > CONVERT_IF_BIGGER_TO_BLOB ? set_data_type_blob(max_byte_length)
                                         : set_data_type_string(max_chars);
 
@@ -4404,7 +4469,8 @@ bool Item_func_group_concat::fix_fields(THD *thd, Item **ref) {
   for (uint i = 0; i < m_field_arg_count; i++) {
     Item *item = args[i];
     fields.push_back(item);
-    if (item->const_item() && item->is_null()) {
+    if (item->const_item() && !thd->lex->is_view_context_analysis() &&
+        item->is_null()) {
       // "is_null()" may cause error:
       if (thd->is_error()) return true;
       always_null = true;
@@ -4486,7 +4552,7 @@ bool Item_func_group_concat::setup(THD *thd) {
   if (order_or_distinct) {
     /*
       Force the create_tmp_table() to convert BIT columns to INT
-      as we cannot compare two table records containg BIT fields
+      as we cannot compare two table records containing BIT fields
       stored in the the tree used for distinct/order by.
       Moreover we don't even save in the tree record null bits
       where BIT fields store parts of their data.
@@ -4687,11 +4753,22 @@ void Item_rank::update_after_wf_arguments_changed(THD *thd) {
   if (!order) return;
   ORDER *o = order->value.first;
   for (unsigned i = 0; i < m_previous.size(); ++i, o = o->next) {
-    if (thd->lex->is_exec_started())
-      thd->change_item_tree(m_previous[i]->get_item_ptr(),
-                            (*o->item)->real_item());
-    else
-      *m_previous[i]->get_item_ptr() = (*o->item)->real_item();
+    // If using the old optimizer, the references created for ORDER BY
+    // expressions should not be disturbed. The ref array slices depend
+    // on them. This is called only during resolving with ROLLUP in case
+    // of old optimizer.
+    Item **item_to_be_changed;
+    if (!thd->lex->using_hypergraph_optimizer) {
+      Item_ref *item_ref = down_cast<Item_ref *>(m_previous[i]->get_item());
+      item_to_be_changed = item_ref->ref_pointer();
+    } else {
+      item_to_be_changed = m_previous[i]->get_item_ptr();
+    }
+    if (thd->lex->is_exec_started()) {
+      thd->change_item_tree(item_to_be_changed, (*o->item)->real_item());
+    } else {
+      *item_to_be_changed = (*o->item)->real_item();
+    }
   }
 }
 
@@ -4922,6 +4999,10 @@ longlong Item_ntile::val_int() {
     }
 
     longlong buckets = args[0]->val_int();
+    if (buckets == 0) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+      return error_int();
+    }
 
     /*
       Should not be evaluated until we have read all rows in partition
@@ -5029,11 +5110,9 @@ bool Item_first_last_value::fix_fields(THD *thd, Item **items) {
       args[0]->check_cols(1))
     return true;
 
-  if (setup_first_last()) return true;
-
-  result_field = nullptr;
-
   if (resolve_type(thd)) return true;
+
+  if (setup_first_last()) return true;
 
   if (check_sum_func(thd, items)) return true;
 
@@ -5088,7 +5167,6 @@ bool Item_first_last_value::compute() {
   }
   return null_value || current_thd->is_error();
 }
-
 longlong Item_first_last_value::val_int() {
   if (wf_common_init()) return 0;
 
@@ -5684,7 +5762,9 @@ String *Item_sum_json::val_str(String *str) {
   }
   if (null_value || m_wrapper->empty()) return nullptr;
   str->length(0);
-  if (m_wrapper->to_string(str, true, func_name())) return error_str();
+  if (m_wrapper->to_string(str, true, func_name(),
+                           JsonDocumentDefaultDepthHandler))
+    return error_str();
 
   return str;
 }
@@ -5708,7 +5788,7 @@ bool Item_sum_json::val_json(Json_wrapper *wr) {
     val_* functions are called more than once in aggregates and
     by passing the dom some function will destroy it so a clone is needed.
   */
-  *wr = Json_wrapper(m_wrapper->clone_dom(current_thd));
+  *wr = Json_wrapper(m_wrapper->clone_dom());
   return false;
 }
 
@@ -5899,7 +5979,7 @@ bool Item_sum_json_array::add() {
   try {
     if (m_is_window_function) {
       if (m_window->do_inverse()) {
-        auto arr = down_cast<Json_array *>(m_wrapper->to_dom(thd));
+        auto arr = down_cast<Json_array *>(m_wrapper->to_dom());
         arr->remove(0);  // Remove the first element from the array
         arr->size() == 0 ? null_value = true : null_value = false;
         return false;
@@ -5911,14 +5991,14 @@ bool Item_sum_json_array::add() {
                               &m_conversion_buffer, &value_wrapper))
       return error_json();
 
-    Json_dom_ptr value_dom(value_wrapper.to_dom(thd));
+    Json_dom_ptr value_dom(value_wrapper.to_dom());
     value_wrapper.set_alias();  // release the DOM
 
     /*
       The m_wrapper always points to m_json_array or the result of
       deserializing the result_field in reset/update_field.
     */
-    const auto arr = down_cast<Json_array *>(m_wrapper->to_dom(thd));
+    const auto arr = down_cast<Json_array *>(m_wrapper->to_dom());
     if (arr->append_alias(std::move(value_dom)))
       return error_json(); /* purecov: inspected */
 
@@ -5979,7 +6059,7 @@ bool Item_sum_json_object::add() {
         If the count is 0, remove the key/value pair from the Json_object.
       */
       if (m_window->do_inverse()) {
-        auto object = down_cast<Json_object *>(m_wrapper->to_dom(thd));
+        auto object = down_cast<Json_object *>(m_wrapper->to_dom());
         if (m_optimize)  // Option 1
         {
           if (m_window->is_last_row_in_peerset_within_frame())
@@ -6011,8 +6091,8 @@ bool Item_sum_json_object::add() {
       The m_wrapper always points to m_json_object or the result of
       deserializing the result_field in reset/update_field.
     */
-    Json_object *object = down_cast<Json_object *>(m_wrapper->to_dom(thd));
-    if (object->add_alias(key, value_wrapper.to_dom(thd)))
+    Json_object *object = down_cast<Json_object *>(m_wrapper->to_dom());
+    if (object->add_alias(key, value_wrapper.to_dom()))
       return error_json(); /* purecov: inspected */
     /*
       If rows in the window are not ordered based on "key", add this key
@@ -6095,7 +6175,7 @@ bool Item_func_grouping::fix_fields(THD *thd, Item **ref) {
 
   /*
     More than 64 args cannot be supported as the bitmask which is
-    used to represent the result cannot accomodate.
+    used to represent the result cannot accommodate.
   */
   if (arg_count > 64) {
     my_error(ER_INVALID_NO_OF_ARGS, MYF(0), "GROUPING", arg_count, "64");
@@ -6128,19 +6208,41 @@ bool Item_func_grouping::fix_fields(THD *thd, Item **ref) {
 
   @return
   integer bit mask having 1's for the arguments which have a
-  NULL in their result becuase of ROLLUP operation.
+  NULL in their result because of ROLLUP operation.
 */
 longlong Item_func_grouping::val_int() {
   longlong result = 0;
   for (uint i = 0; i < arg_count; i++) {
-    Item *real_item = args[i];
-    while (real_item->type() == REF_ITEM)
-      real_item = *((down_cast<Item_ref *>(real_item))->ref);
+    Item *real_item = args[i]->real_item();
     if (has_rollup_result(real_item)) {
-      result += 1 << (arg_count - (i + 1));
+      result += 1ULL << (arg_count - (i + 1));
     }
   }
   return result;
+}
+
+/**
+  Used by Distinct_check::check_query to determine whether an
+  error should be returned if the GROUPING item from the ORDER
+  is not present in the select list.
+
+  @retval
+    true  if error
+  @retval
+    false on success
+*/
+bool Item_func_grouping::aggregate_check_distinct(uchar *arg) {
+  assert(fixed);
+  Distinct_check *dc = reinterpret_cast<Distinct_check *>(arg);
+
+  /**
+    If the GROUPING function in ORDER BY is not in the SELECT list, it
+    might not be functionally dependent on all selected expressions, and thus
+    might produce random order in combination with DISTINCT; so we reject
+    it.
+  */
+  if (dc->is_stopped(this)) return false;
+  return true;
 }
 
 /**

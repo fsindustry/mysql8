@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,13 +35,13 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql-common/json_dom.h"
+#include "sql-common/json_path.h"
 #include "sql/error_handler.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/item_json_func.h"
-#include "sql/json_dom.h"
-#include "sql/json_path.h"
 #include "sql/psi_memory_key.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_exception_handler.h"
@@ -160,9 +160,9 @@ bool Table_function_json::init_json_table_col_lists(uint *nest_idx,
               col->m_default_empty_string->val_str(&buffer);
           assert(default_string != nullptr);
           Json_dom_ptr dom;  //@< we'll receive a DOM here
-          bool parse_error;
-          if (parse_json(*default_string, 0, "JSON_TABLE", &dom, true,
-                         &parse_error) ||
+          JsonParseDefaultErrorHandler parse_handler("JSON_TABLE", 0);
+          if (parse_json(*default_string, &dom, true, parse_handler,
+                         JsonDocumentDefaultDepthHandler) ||
               (col->sql_type != MYSQL_TYPE_JSON && !dom->is_scalar())) {
             my_error(ER_INVALID_DEFAULT, MYF(0), col->field_name);
             return true;
@@ -174,9 +174,9 @@ bool Table_function_json::init_json_table_col_lists(uint *nest_idx,
               col->m_default_error_string->val_str(&buffer);
           assert(default_string != nullptr);
           Json_dom_ptr dom;  //@< we'll receive a DOM here
-          bool parse_error;
-          if (parse_json(*default_string, 0, "JSON_TABLE", &dom, true,
-                         &parse_error) ||
+          JsonParseDefaultErrorHandler parse_handler("JSON_TABLE", 0);
+          if (parse_json(*default_string, &dom, true, parse_handler,
+                         JsonDocumentDefaultDepthHandler) ||
               (col->sql_type != MYSQL_TYPE_JSON && !dom->is_scalar())) {
             my_error(ER_INVALID_DEFAULT, MYF(0), col->field_name);
             return true;
@@ -245,6 +245,11 @@ bool Table_function_json::do_init_args() {
     my_error(ER_WRONG_ARGUMENTS, MYF(0), "JSON_TABLE");
     return true;
   }
+
+  if (source->check_cols(1)) {
+    return true;
+  }
+
   try {
     /*
       Check whether given JSON source is a const and it's valid, see also
@@ -353,7 +358,7 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
             Json_array *a = new (std::nothrow) Json_array();
             if (!a) return true;
             for (Json_wrapper &w : data_v) {
-              if (a->append_alias(w.clone_dom(thd))) {
+              if (a->append_alias(w.clone_dom())) {
                 delete a; /* purecov: inspected */
                 return true;
               }
@@ -428,6 +433,7 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
         fld->store(1, true);
       else
         fld->store(0, true);
+      if (current_thd->is_error()) return true;
       fld->set_notnull();
       break;
     }
@@ -477,7 +483,7 @@ bool Json_table_column::fill_column(Table_function_json *table_function,
 
 Json_table_column::~Json_table_column() {
   // Reset paths and wrappers to free allocated memory.
-  m_path_json = Json_path();
+  m_path_json = Json_path(key_memory_JSON);
   if (m_on_empty == Json_on_response_type::DEFAULT)
     m_default_empty_json = Json_wrapper();
   if (m_on_error == Json_on_response_type::DEFAULT)
@@ -671,7 +677,7 @@ static bool print_json_table_column_type(const Field *field, String *str) {
     // character set.
     if ((field->charset()->state & MY_CS_PRIMARY) == 0 &&
         (str->append(STRING_WITH_LEN(" collate ")) ||
-         str->append(field->charset()->name)))
+         str->append(field->charset()->m_coll_name)))
       return true;
   }
   return false;
@@ -762,4 +768,116 @@ void Table_function_json::do_cleanup() {
 void JT_data_source::cleanup() {
   v.clear();
   producing_records = false;
+}
+
+Table_function_sequence::Table_function_sequence(const char *alias, Item *a)
+    : Table_function(),
+      m_table_alias(alias),
+      m_source(a),
+      m_vt_list(),
+      m_upper_bound_precalculated(false),
+      m_precalculated_upper_bound(0) {
+  m_value_field.init_for_tmp_table(MYSQL_TYPE_LONGLONG,  // sql_type_arg
+                                   20,                   // length_arg
+                                   0,                    // decimals_arg
+                                   false,                // maybe_null_arg
+                                   true,                 // is_unsigned_arg
+                                   8,  // pack_length_override_arg
+                                   value_field_name);  // fld_name
+}
+
+bool Table_function_sequence::init() {
+  return m_vt_list.push_back(&m_value_field);
+}
+
+List<Create_field> *Table_function_sequence::get_field_list() {
+  return &m_vt_list;
+}
+
+bool Table_function_sequence::fill_result_table() {
+  assert(!table->materialized);
+  // reset table
+  empty_table();
+
+  ulonglong upper_bound;
+  if (m_upper_bound_precalculated) {
+    upper_bound = m_precalculated_upper_bound;
+  } else {
+    upper_bound = calculate_upper_bound();
+    if (m_source->const_item()) m_upper_bound_precalculated = true;
+  }
+
+  if (upper_bound > tf_sequence_table_max_upper_bound) {
+    my_error(ER_SEQUENCE_TABLE_SIZE_LIMIT, MYF(0),
+             tf_sequence_table_max_upper_bound, upper_bound);
+    return true;
+  }
+
+  for (ulonglong u = 0; u < upper_bound; ++u) {
+    if (get_field(0)->store(u, true)) return true;
+    if (write_row()) return true;
+  }
+  return false;
+}
+
+table_map Table_function_sequence::used_tables() {
+  return m_source->used_tables();
+}
+
+bool Table_function_sequence::print(const THD *thd, String *str,
+                                    enum_query_type query_type) const {
+  if (str->append(STRING_WITH_LEN("sequence_table("))) return true;
+  m_source->print(thd, str, query_type);
+  if (thd->is_error()) return true;
+  return str->append(')');
+}
+
+bool Table_function_sequence::walk(Item_processor processor, enum_walk walk,
+                                   uchar *arg) {
+  // Only 'source' may reference columns of other tables; rest is literals.
+  return m_source->walk(processor, walk, arg);
+}
+
+bool Table_function_sequence::do_init_args() {
+  assert(!m_upper_bound_precalculated);
+
+  Item *dummy = m_source;
+  if (m_source->fix_fields(current_thd, &dummy)) return true;
+
+  // Set the default type of '?'
+  if (m_source->propagate_type(current_thd, MYSQL_TYPE_LONGLONG)) return true;
+
+  assert(m_source->data_type() != MYSQL_TYPE_VAR_STRING);
+  if (m_source->has_aggregation() || m_source->has_subquery() ||
+      m_source != dummy) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), "SEQUENCE_TABLE");
+    return true;
+  }
+
+  if (m_source->const_item()) {
+    m_precalculated_upper_bound = calculate_upper_bound();
+    m_upper_bound_precalculated = true;
+  }
+
+  return false;
+}
+
+void Table_function_sequence::do_cleanup() {
+  m_source->cleanup();
+  m_vt_list.clear();
+  m_upper_bound_precalculated = false;
+  m_precalculated_upper_bound = 0;
+}
+
+ulonglong Table_function_sequence::calculate_upper_bound() const {
+  ulonglong res = 0;
+  if (!m_source->is_null()) {
+    if (m_source->unsigned_flag) {
+      res = m_source->val_uint();
+    } else {
+      auto signed_res = m_source->val_int();
+      if (signed_res > 0) res = static_cast<ulonglong>(signed_res);
+    }
+  }
+  return res;
 }

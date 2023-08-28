@@ -1,4 +1,4 @@
-# Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -35,8 +35,8 @@ ADD_LIBRARY(http_common
 TARGET_LINK_LIBRARIES(http_common
   PUBLIC
   harness_tls
+  ext::libevent
   PRIVATE
-  ${LIBEVENT_LIBRARIES}
   ${SSL_LIBRARIES}
   )
 TARGET_INCLUDE_DIRECTORIES(http_common
@@ -74,7 +74,7 @@ GENERATE_EXPORT_HEADER(http_auth_backend_lib
   EXPORT_FILE_NAME
   ${CMAKE_CURRENT_BINARY_DIR}/../include/mysqlrouter/http_auth_backend_lib_export.h
   )
-TARGET_LINK_LIBRARIES(http_auth_backend_lib http_common)
+TARGET_LINK_LIBRARIES(http_auth_backend_lib http_common extra::rapidjson)
 SET_TARGET_PROPERTIES(http_auth_backend_lib PROPERTIES
   OUTPUT_NAME "mysqlrouter_http_auth_backend"
   SOVERSION 1
@@ -162,7 +162,6 @@ TARGET_INCLUDE_DIRECTORIES(http_auth_realm PRIVATE
 
 ADD_HARNESS_PLUGIN(http_server
   SOURCES
-  content_type.cc
   http_auth.cc
   http_auth_method_basic.cc
   http_server_component.cc
@@ -177,6 +176,13 @@ TARGET_INCLUDE_DIRECTORIES(http_server PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../include/)
 
+# Suppress warnings for gcc-5 or older
+IF(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 6.0)
+  MY_CHECK_CXX_COMPILER_FLAG("-Wno-unused-value" HAVE_NO_UNUSED_VALUE)
+  IF(HAVE_NO_UNUSED_VALUE)
+    ADD_COMPILE_FLAGS(tls_server_context.cc COMPILE_FLAGS "-Wno-unused-value")
+  ENDIF()
+ENDIF()
 
 ADD_LIBRARY(http_client
   SHARED
@@ -184,7 +190,6 @@ ADD_LIBRARY(http_client
   rest_client.cc
   )
 TARGET_LINK_LIBRARIES(http_client
-  ${LIBEVENT_LIBRARIES}
   ${LIBRT}
   http_common)
 
@@ -226,7 +231,6 @@ MYSQL_ADD_EXECUTABLE(mysqlrouter_passwd
   )
 ADD_INSTALL_RPATH(mysqlrouter_passwd "${ROUTER_INSTALL_RPATH}")
 
-MY_INCLUDE_SYSTEM_DIRECTORIES(LIBEVENT)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/harness/include/)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/router/include/)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/metadata_cache/include/)

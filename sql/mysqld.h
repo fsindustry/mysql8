@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,12 +31,14 @@
 #include <time.h>
 #include <atomic>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <mysql/components/minimal_chassis.h>
 #include <mysql/components/services/dynamic_loader_scheme_file.h>
 #include "lex_string.h"
 #include "m_ctype.h"
+#include "map_helpers.h"
 #include "my_command.h"
 #include "my_compress.h"
 #include "my_getopt.h"
@@ -48,24 +50,26 @@
 #include "my_sqlcommand.h"  // SQLCOM_END
 #include "my_sys.h"         // MY_TMPDIR
 #include "my_thread.h"      // my_thread_attr_t
-#include "mysql/components/services/mysql_cond_bits.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/mysql_rwlock_bits.h"
-#include "mysql/components/services/psi_cond_bits.h"
-#include "mysql/components/services/psi_file_bits.h"
-#include "mysql/components/services/psi_mutex_bits.h"
-#include "mysql/components/services/psi_rwlock_bits.h"
-#include "mysql/components/services/psi_socket_bits.h"
-#include "mysql/components/services/psi_stage_bits.h"
-#include "mysql/components/services/psi_statement_bits.h"
-#include "mysql/components/services/psi_thread_bits.h"
+#include "mysql/components/services/bits/mysql_cond_bits.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
+#include "mysql/components/services/bits/mysql_rwlock_bits.h"
+#include "mysql/components/services/bits/psi_cond_bits.h"
+#include "mysql/components/services/bits/psi_file_bits.h"
+#include "mysql/components/services/bits/psi_mutex_bits.h"
+#include "mysql/components/services/bits/psi_rwlock_bits.h"
+#include "mysql/components/services/bits/psi_socket_bits.h"
+#include "mysql/components/services/bits/psi_stage_bits.h"
+#include "mysql/components/services/bits/psi_statement_bits.h"
+#include "mysql/components/services/bits/psi_thread_bits.h"
 #include "mysql/status_var.h"
 #include "mysql_com.h"  // SERVER_VERSION_LENGTH
+#include "sql/handler.h"
 #ifdef _WIN32
 #include "sql/nt_servc.h"
 #endif  // _WIN32
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"  // UUID_LENGTH
+#include "sql_connect.h"
 
 class Rpl_global_filter;
 class Rpl_acf_configuration_handler;
@@ -128,10 +132,20 @@ extern bool dynamic_plugins_are_initialized;
 bool signal_restart_server();
 void kill_mysql(void);
 void refresh_status();
+void reset_status_by_thd();
 bool is_secure_file_path(const char *path);
+bool is_secure_log_path(const char *path);
 ulong sql_rnd_with_mutex();
 
 struct System_status_var *get_thd_status_var(THD *thd, bool *aggregated);
+
+#ifndef NDEBUG
+void thd_mem_cnt_alloc(THD *thd, size_t size, const char *key_name);
+#else
+void thd_mem_cnt_alloc(THD *thd, size_t size);
+#endif
+
+void thd_mem_cnt_free(THD *thd, size_t size);
 
 // These are needed for unit testing.
 void set_remaining_args(int argc, char **argv);
@@ -149,7 +163,7 @@ extern CHARSET_INFO *character_set_filesystem;
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */
   SERVER_OPERATING,    /* Server is fully initialized and operating */
-  SERVER_SHUTTING_DOWN /* erver is shutting down */
+  SERVER_SHUTTING_DOWN /* Server is shutting down */
 };
 enum_server_operational_state get_server_state();
 
@@ -158,6 +172,7 @@ extern bool opt_bin_log;
 extern bool opt_log_replica_updates;
 extern bool opt_log_unsafe_statements;
 extern bool opt_general_log, opt_slow_log, opt_general_log_raw;
+extern ulonglong slow_query_log_always_write_time;
 extern ulonglong log_output_options;
 extern bool opt_log_queries_not_using_indexes;
 extern ulong opt_log_throttle_queries_not_using_indexes;
@@ -172,6 +187,7 @@ extern MYSQL_PLUGIN_IMPORT std::atomic<int32>
 extern bool opt_no_dd_upgrade;
 extern long opt_upgrade_mode;
 extern bool opt_initialize;
+extern bool dd_init_failed_during_upgrade;
 extern bool opt_safe_user_create;
 extern bool opt_local_infile, opt_myisam_use_mmap;
 extern bool opt_replica_compressed_protocol;
@@ -221,11 +237,15 @@ extern mysql_rwlock_t LOCK_named_pipe_full_access_group;
 #endif
 extern bool opt_allow_suspicious_udfs;
 extern const char *opt_secure_file_priv;
-extern bool opt_log_slow_admin_statements, opt_log_slow_replica_statements;
+extern const char *opt_secure_log_path;
+extern bool opt_log_slow_replica_statements;
 extern bool sp_automatic_privileges, opt_noacl;
 extern bool opt_old_style_user_limits, trust_function_creators;
 extern bool check_proxy_users, mysql_native_password_proxy_users,
     sha256_password_proxy_users;
+extern bool opt_userstat, opt_thread_statistics;
+extern ulonglong opt_slow_query_log_use_global_control;
+extern ulong opt_slow_query_log_rate_type;
 #ifdef _WIN32
 extern const char *shared_memory_base_name;
 #endif
@@ -242,7 +262,11 @@ extern bool locked_in_memory;
 extern bool opt_using_transactions;
 extern ulong current_pid;
 extern ulong expire_logs_days;
+extern ulong max_slowlog_size;
+extern ulong max_slowlog_files;
 extern ulong binlog_expire_logs_seconds;
+extern ulonglong binlog_space_limit;
+extern bool opt_binlog_expire_logs_auto_purge;
 extern uint sync_binlog_period, sync_relaylog_period, sync_relayloginfo_period,
     sync_masterinfo_period, opt_mta_checkpoint_period, opt_mta_checkpoint_group;
 extern ulong opt_tc_log_size, tc_log_max_pages_used, tc_log_page_size;
@@ -288,9 +312,14 @@ extern bool listen_admin_interface_in_separate_thread;
 extern char glob_hostname[HOSTNAME_LENGTH + 1];
 extern char system_time_zone_dst_on[30], system_time_zone_dst_off[30];
 extern char *opt_init_file;
+extern char *my_proxy_protocol_networks;
 extern const char *opt_tc_log_file;
 extern char server_uuid[UUID_LENGTH + 1];
 extern const char *server_uuid_ptr;
+#if defined(HAVE_BUILD_ID_SUPPORT)
+extern char server_build_id[42];
+extern const char *server_build_id_ptr;
+#endif
 extern const double log_10[309];
 extern ulong binlog_cache_use, binlog_cache_disk_use;
 extern ulong binlog_stmt_cache_use, binlog_stmt_cache_disk_use;
@@ -315,6 +344,7 @@ extern ulonglong opt_mts_pending_jobs_size_max;
 extern ulong rpl_stop_replica_timeout;
 extern bool log_bin_use_v1_row_events;
 extern ulong what_to_log, flush_time;
+extern ulonglong denied_connections;
 extern ulong max_prepared_stmt_count, prepared_stmt_count;
 extern ulong open_files_limit;
 extern bool clone_startup;
@@ -327,6 +357,7 @@ extern ulong opt_binlog_group_commit_sync_no_delay_count;
 extern ulong max_binlog_size, max_relay_log_size;
 extern ulong replica_max_allowed_packet;
 extern ulong binlog_row_event_max_size;
+extern ulong net_buffer_shrink_interval;
 extern ulong binlog_checksum_options;
 extern ulong binlog_row_metadata;
 extern const char *binlog_checksum_type_names[];
@@ -343,6 +374,7 @@ enum enum_binlog_error_action {
   ABORT_SERVER = 1
 };
 extern const char *binlog_error_action_list[];
+extern bool opt_binlog_skip_flush_commands;
 extern char *opt_authentication_policy;
 extern std::vector<std::string> authentication_policy_list;
 
@@ -361,6 +393,17 @@ extern SHOW_VAR status_vars[];
 extern struct System_variables max_system_variables;
 extern struct System_status_var global_status_var;
 extern struct rand_struct sql_rand;
+
+using user_stats_t = collation_unordered_map<std::string, USER_STATS>;
+using thread_stats_t = malloc_unordered_map<my_thread_id, THREAD_STATS>;
+using table_stats_t = collation_unordered_map<std::string, TABLE_STATS>;
+using index_stats_t = collation_unordered_map<std::string, ulonglong>;
+
+extern user_stats_t *global_user_stats;
+extern user_stats_t *global_client_stats;
+extern thread_stats_t *global_thread_stats;
+extern table_stats_t *global_table_stats;
+extern index_stats_t *global_index_stats;
 extern handlerton *myisam_hton;
 extern handlerton *heap_hton;
 extern handlerton *temptable_hton;
@@ -380,10 +423,18 @@ extern ulong connection_errors_internal;
 extern ulong connection_errors_peer_addr;
 extern char *opt_log_error_suppression_list;
 extern char *opt_log_error_services;
+extern bool encrypt_tmp_files;
+extern ulonglong tf_sequence_table_max_upper_bound;
 extern char *opt_protocol_compression_algorithms;
 /** The size of the host_cache. */
 extern uint host_cache_size;
 extern ulong log_error_verbosity;
+
+extern char *utility_user;
+extern char *utility_user_password;
+extern char *utility_user_schema_access;
+extern ulonglong utility_user_privileges;
+extern char *utility_user_dynamic_privileges;
 
 extern bool persisted_globals_load;
 extern bool opt_keyring_operations;
@@ -395,6 +446,9 @@ extern char *opt_keyring_migration_socket;
 extern char *opt_keyring_migration_source;
 extern char *opt_keyring_migration_destination;
 extern ulong opt_keyring_migration_port;
+
+extern ulonglong global_conn_mem_limit;
+extern ulonglong global_conn_mem_counter;
 /**
   Variable to check if connection related options are set
   as part of keyring migration.
@@ -402,6 +456,8 @@ extern ulong opt_keyring_migration_port;
 extern bool migrate_connect_options;
 
 extern LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
+
+extern char *enforce_storage_engine;
 
 extern thread_local MEM_ROOT **THR_MALLOC;
 
@@ -416,6 +472,7 @@ extern PSI_mutex_key key_LOCK_error_log;
 extern PSI_mutex_key key_LOCK_thd_data;
 extern PSI_mutex_key key_LOCK_thd_sysvar;
 extern PSI_mutex_key key_LOCK_thd_protocol;
+extern PSI_mutex_key key_LOCK_thd_security_ctx;
 extern PSI_mutex_key key_LOG_LOCK_log;
 extern PSI_mutex_key key_source_info_data_lock;
 extern PSI_mutex_key key_source_info_run_lock;
@@ -437,6 +494,10 @@ extern PSI_mutex_key key_LOCK_query_plan;
 extern PSI_mutex_key key_LOCK_thd_query;
 extern PSI_mutex_key key_LOCK_cost_const;
 extern PSI_mutex_key key_LOCK_current_cond;
+extern PSI_mutex_key key_LOCK_temporary_tables;
+extern PSI_mutex_key key_LOCK_global_user_client_stats;
+extern PSI_mutex_key key_LOCK_global_table_stats;
+extern PSI_mutex_key key_LOCK_global_index_stats;
 extern PSI_mutex_key key_RELAYLOG_LOCK_commit;
 extern PSI_mutex_key key_RELAYLOG_LOCK_index;
 extern PSI_mutex_key key_RELAYLOG_LOCK_log;
@@ -462,6 +523,7 @@ extern PSI_rwlock_key key_rwlock_receiver_sid_lock;
 extern PSI_rwlock_key key_rwlock_rpl_filter_lock;
 extern PSI_rwlock_key key_rwlock_channel_to_filter_lock;
 extern PSI_rwlock_key key_rwlock_resource_group_mgr_map_lock;
+extern PSI_rwlock_key key_rwlock_LOCK_consistent_snapshot;
 
 extern PSI_cond_key key_PAGE_cond;
 extern PSI_cond_key key_COND_active;
@@ -632,6 +694,7 @@ extern PSI_stage_info stage_rpl_failover_fetching_source_member_details;
 extern PSI_stage_info stage_rpl_failover_updating_source_member_details;
 extern PSI_stage_info stage_rpl_failover_wait_before_next_fetch;
 extern PSI_stage_info stage_communication_delegation;
+extern PSI_stage_info stage_restoring_secondary_keys;
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
 /**
   Statement instrumentation keys (sql).
@@ -669,6 +732,8 @@ extern size_t mysql_data_home_len;
 extern const char *mysql_real_data_home_ptr;
 extern MYSQL_PLUGIN_IMPORT char *mysql_data_home;
 extern "C" MYSQL_PLUGIN_IMPORT char server_version[SERVER_VERSION_LENGTH];
+extern "C" MYSQL_PLUGIN_IMPORT char
+    server_version_suffix[SERVER_VERSION_LENGTH];
 extern MYSQL_PLUGIN_IMPORT char mysql_real_data_home[];
 extern char mysql_unpacked_real_data_home[];
 extern MYSQL_PLUGIN_IMPORT struct System_variables global_system_variables;
@@ -699,6 +764,9 @@ extern mysql_mutex_t LOCK_mandatory_roles;
 extern mysql_mutex_t LOCK_password_history;
 extern mysql_mutex_t LOCK_password_reuse_interval;
 extern mysql_mutex_t LOCK_default_password_lifetime;
+extern mysql_mutex_t LOCK_global_user_client_stats;
+extern mysql_mutex_t LOCK_global_table_stats;
+extern mysql_mutex_t LOCK_global_index_stats;
 extern mysql_mutex_t LOCK_server_started;
 extern mysql_mutex_t LOCK_reset_gtid_table;
 extern mysql_mutex_t LOCK_compress_gtid_table;
@@ -709,6 +777,7 @@ extern mysql_mutex_t LOCK_admin_tls_ctx_options;
 extern mysql_mutex_t LOCK_rotate_binlog_master_key;
 extern mysql_mutex_t LOCK_partial_revokes;
 extern mysql_mutex_t LOCK_authentication_policy;
+extern mysql_mutex_t LOCK_global_conn_mem_limit;
 
 extern mysql_cond_t COND_server_started;
 extern mysql_cond_t COND_compress_gtid_table;
@@ -717,6 +786,7 @@ extern mysql_cond_t COND_manager;
 extern mysql_rwlock_t LOCK_sys_init_connect;
 extern mysql_rwlock_t LOCK_sys_init_replica;
 extern mysql_rwlock_t LOCK_system_variables_hash;
+extern mysql_rwlock_t LOCK_consistent_snapshot;
 
 extern ulong opt_ssl_fips_mode;
 
@@ -736,6 +806,19 @@ char ***get_remaining_argv();
 }
 
 #define ER(X) please_use_ER_THD_or_ER_DEFAULT_instead(X)
+
+void init_global_user_stats(void);
+void init_global_table_stats(void);
+void init_global_index_stats(void);
+void init_global_client_stats(void);
+void init_global_thread_stats(void);
+void free_global_user_stats(void) noexcept;
+void free_global_table_stats(void) noexcept;
+void free_global_index_stats(void) noexcept;
+void free_global_client_stats(void) noexcept;
+void free_global_thread_stats(void) noexcept;
+
+void refresh_concurrent_conn_stats() noexcept;
 
 /* Accessor function for _connection_events_loop_aborted flag */
 [[nodiscard]] inline bool connection_events_loop_aborted() {
@@ -808,6 +891,11 @@ extern LEX_STRING opt_mandatory_roles;
 extern bool opt_mandatory_roles_cache;
 extern bool opt_always_activate_granted_roles;
 
+/* coredumper */
+extern bool opt_libcoredumper;
+extern char *opt_libcoredumper_path;
+bool validate_libcoredumper_path(char *opt_libcoredumper_path);
+
 extern mysql_component_t mysql_component_mysql_server;
 extern mysql_component_t mysql_component_performance_schema;
 /* This variable is a registry handler, defined in mysql_server component and
@@ -820,4 +908,8 @@ extern SERVICE_TYPE(dynamic_loader) * dynamic_loader_srv;
 
 class Deployed_components;
 extern Deployed_components *g_deployed_components;
+
+extern bool opt_persist_sensitive_variables_in_plaintext;
+
+void persisted_variables_refresh_keyring_support();
 #endif /* MYSQLD_INCLUDED */

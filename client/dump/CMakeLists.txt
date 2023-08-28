@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -96,9 +96,20 @@ SET(MYSQLPUMP_LIB_SOURCES
   trigger.cc
   view.cc
 )
-ADD_LIBRARY(mysqlpump_lib STATIC ${MYSQLPUMP_LIB_SOURCES})
-TARGET_LINK_LIBRARIES(mysqlpump_lib
-   client_base ${LZ4_LIBRARY})
+
+# Silence -Werror=unused-result for fwrite().
+IF(MY_COMPILER_IS_GNU)
+  ADD_COMPILE_FLAGS(
+    standard_writer.cc
+    COMPILE_FLAGS "-Wno-unused-result"
+  )
+ENDIF()
+
+ADD_STATIC_LIBRARY(mysqlpump_lib
+  ${MYSQLPUMP_LIB_SOURCES}
+  LINK_LIBRARIES
+  client_base ext::lz4 ext::zlib
+  )
 
 MYSQL_ADD_EXECUTABLE(mysqlpump  program.cc)
 

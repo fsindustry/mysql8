@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,7 +35,7 @@ namespace binary_log_debug {
 bool debug_query_mts_corrupt_db_names = false;
 bool debug_checksum_test = false;
 bool debug_simulate_invalid_address = false;
-bool debug_pretend_version_50034_in_binlog = false;
+bool debug_expect_unknown_event = false;
 }  // namespace binary_log_debug
 
 namespace binary_log {
@@ -78,7 +78,7 @@ enum_binlog_checksum_alg Log_event_footer::get_checksum_alg(
 
    @return  the version-safe checksum alg descriptor where zero
             designates no checksum, 255 - the orginator is
-            checksum-unaware (effectively no checksum) and the actuall
+            checksum-unaware (effectively no checksum) and the actual
             [1-254] range alg descriptor.
 */
 enum_binlog_checksum_alg Log_event_footer::get_checksum_alg(const char *buf,
@@ -135,10 +135,6 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
     uint32_t computed;
 
     if (event_buf[EVENT_TYPE_OFFSET] == FORMAT_DESCRIPTION_EVENT) {
-#ifndef NDEBUG
-      unsigned char fd_alg = event_buf[event_len - BINLOG_CHECKSUM_LEN -
-                                       BINLOG_CHECKSUM_ALG_DESC_LEN];
-#endif
       /*
         FD event is checksummed and therefore verified w/o
         the binlog-in-use flag.
@@ -147,16 +143,13 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
       flags = le16toh(flags);
       if (flags & LOG_EVENT_BINLOG_IN_USE_F)
         event_buf[FLAGS_OFFSET] &= ~LOG_EVENT_BINLOG_IN_USE_F;
-        /*
-           The only algorithm currently is CRC32. Zero indicates
-           the binlog file is checksum-free *except* the FD-event.
-        */
-#ifndef NDEBUG
-      BAPI_ASSERT(fd_alg == BINLOG_CHECKSUM_ALG_CRC32 || fd_alg == 0);
-#endif
+      /*
+         The only algorithm currently is CRC32. Zero indicates
+         the binlog file is checksum-free *except* the FD-event.
+      */
       BAPI_ASSERT(alg == BINLOG_CHECKSUM_ALG_CRC32);
       /*
-        Complile time guard to watch over  the max number of alg
+        Compile time guard to watch over the max number of alg
       */
       static_assert(BINLOG_CHECKSUM_ALG_ENUM_END <= 0x80, "");
     }

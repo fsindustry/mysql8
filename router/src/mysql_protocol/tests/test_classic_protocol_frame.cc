@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -33,42 +33,50 @@ using namespace classic_protocol;
 
 // check constexpr handling
 
-// Frame is fixed size
-static_assert(Codec<frame::Header>({0, 0}, {}).size() == 4, "");
+static_assert(Codec<borrowable::wire::FixedInt<1>>::size() == 1);
+static_assert(Codec<borrowable::wire::FixedInt<2>>::size() == 2);
+static_assert(Codec<borrowable::wire::FixedInt<3>>::size() == 3);
+static_assert(Codec<borrowable::wire::FixedInt<4>>::size() == 4);
+static_assert(Codec<borrowable::wire::FixedInt<8>>::size() == 8);
 
-// Frame<Ping> is fixed size
+static_assert(Codec<borrowable::wire::VarInt>({1}, {}).size() == 1);
+
+static_assert(borrowable::message::client::StmtClose(1).statement_id() == 1);
+
+static_assert(Codec<borrowable::message::client::StmtClose>({1}, {}).size() ==
+              1 + 4);
+
+// static_assert(Codec<message::client::StmtClose>({1}, {}).size() == 1 + 4);
+
+static_assert(Codec<message::client::Ping>({}, {}).size() == 1);
+
+// Frame is fixed size
+static_assert(Codec<frame::Header>({0, 0}, {}).size() == 4);
+
 static_assert(Codec<frame::Frame<message::client::Quit>>({0, {}}, {}).size() ==
-                  4 + 1,
-              "");
+              4 + 1);
 
 static_assert(Codec<frame::Frame<message::client::ResetConnection>>({0, {}}, {})
-                      .size() == 4 + 1,
-              "");
+                  .size() == 4 + 1);
 
 static_assert(Codec<frame::Frame<message::client::Statistics>>({0, {}}, {})
-                      .size() == 4 + 1,
-              "");
+                  .size() == 4 + 1);
 
+// Frame<Ping> is fixed size
 static_assert(Codec<frame::Frame<message::client::Ping>>({0, {}}, {}).size() ==
-                  4 + 1,
-              "");
+              4 + 1);
 
 static_assert(Codec<frame::Frame<message::client::StmtClose>>({0, {1}}, {})
-                      .size() == 4 + 1 + 4,
-              "");
+                  .size() == 4 + 1 + 4);
 
 static_assert(Codec<frame::Frame<message::client::StmtReset>>({0, {1}}, {})
-                      .size() == 4 + 1 + 4,
-              "");
+                  .size() == 4 + 1 + 4);
 
 static_assert(Codec<frame::Frame<message::client::StmtFetch>>({0, {1, 2}}, {})
-                      .size() == 4 + 1 + 4 + 4,
-              "");
+                  .size() == 4 + 1 + 4 + 4);
 
-static_assert(Codec<frame::Frame<message::client::StmtSetOption>>({0, {1}}, {})
-                      .size() == 4 + 1 + 2,
-              "");
-
+static_assert(Codec<frame::Frame<message::client::SetOption>>({0, {1}}, {})
+                  .size() == 4 + 1 + 2);
 // Frame::Quit
 
 using CodecFrameQuitTest = CodecTest<frame::Frame<message::client::Quit>>;

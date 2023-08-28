@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -51,6 +51,7 @@
 #include "lex_string.h"
 #include "m_ctype.h"
 #include "map_helpers.h"
+#include "mutex_lock.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_command.h"
@@ -63,18 +64,20 @@
 #include "my_sys.h"
 #include "my_table_map.h"
 #include "my_thread_local.h"
+#include "my_time_t.h"
+#include "mysql/components/services/bits/my_thread_bits.h"
+#include "mysql/components/services/bits/mysql_cond_bits.h"
+#include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/psi_bits.h"
-#include "mysql/components/services/my_thread_bits.h"
-#include "mysql/components/services/mysql_cond_bits.h"
-#include "mysql/components/services/mysql_mutex_bits.h"
-#include "mysql/components/services/psi_idle_bits.h"
-#include "mysql/components/services/psi_stage_bits.h"
-#include "mysql/components/services/psi_statement_bits.h"
-#include "mysql/components/services/psi_thread_bits.h"
-#include "mysql/components/services/psi_transaction_bits.h"
+#include "mysql/components/services/bits/psi_idle_bits.h"
+#include "mysql/components/services/bits/psi_stage_bits.h"
+#include "mysql/components/services/bits/psi_statement_bits.h"
+#include "mysql/components/services/bits/psi_thread_bits.h"
+#include "mysql/components/services/bits/psi_transaction_bits.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_statement.h"
 #include "mysql/psi/mysql_thread.h"
+#include "mysql/service_thread_scheduler.h"
 #include "mysql/thread_type.h"
 #include "mysql_com.h"
 #include "mysql_com_server.h"  // NET_SERVER
@@ -131,7 +134,7 @@ class user_var_entry;
 struct LEX;
 struct LEX_USER;
 struct TABLE;
-struct TABLE_LIST;
+class Table_ref;
 struct timeval;
 struct User_level_lock;
 struct YYLTYPE;
@@ -154,6 +157,12 @@ class sp_cache;
 struct Binlog_user_var_event;
 struct LOG_INFO;
 
+extern bool opt_log_slow_admin_statements;
+extern ulong opt_log_slow_sp_statements;
+
+extern ulong kill_idle_transaction_timeout;
+extern PSI_mutex_key key_LOCK_bloom_filter;
+
 typedef struct user_conn USER_CONN;
 struct MYSQL_LOCK;
 
@@ -172,6 +181,43 @@ extern "C" void thd_enter_stage(void *opaque_thd,
                                 PSI_stage_info *old_stage,
                                 const char *src_function, const char *src_file,
                                 int src_line);
+enum enum_slow_query_log_use_global_control {
+  SLOG_UG_LOG_SLOW_FILTER,
+  SLOG_UG_LOG_SLOW_RATE_LIMIT,
+  SLOG_UG_LOG_SLOW_VERBOSITY,
+  SLOG_UG_LONG_QUERY_TIME,
+  SLOG_UG_MIN_EXAMINED_ROW_LIMIT,
+  SLOG_UG_LOG_QUERY_ERRORS,
+  SLOG_UG_ALL
+};
+enum enum_log_slow_verbosity {
+  SLOG_V_MICROTIME,
+  SLOG_V_QUERY_PLAN,
+  SLOG_V_INNODB,
+  SLOG_V_PROFILING,
+  SLOG_V_PROFILING_USE_GETRUSAGE,
+  SLOG_V_QUERY_INFO,
+  SLOG_V_MINIMAL,
+  SLOG_V_STANDARD,
+  SLOG_V_FULL
+};
+enum enum_slow_query_log_rate_type { SLOG_RT_SESSION, SLOG_RT_QUERY };
+#define QPLAN_NONE 0
+#define QPLAN_FULL_SCAN (1 << 0)
+#define QPLAN_FULL_JOIN (1 << 1)
+#define QPLAN_TMP_TABLE (1 << 2)
+#define QPLAN_TMP_DISK (1 << 3)
+#define QPLAN_FILESORT (1 << 4)
+#define QPLAN_FILESORT_DISK (1 << 5)
+enum class enum_log_slow_filter {
+  SLOG_F_FULL_SCAN,
+  SLOG_F_FULL_JOIN,
+  SLOG_F_TMP_TABLE,
+  SLOG_F_TMP_DISK,
+  SLOG_F_FILESORT,
+  SLOG_F_FILESORT_DISK
+};
+#define SLOG_SLOW_RATE_LIMIT_MAX 1000
 
 extern "C" void thd_set_waiting_for_disk_space(void *opaque_thd,
                                                const bool waiting);
@@ -188,6 +234,13 @@ extern char empty_c_string[1];
   (yes, the sum is deliberately inaccurate)
 */
 constexpr size_t PREALLOC_NUM_HA = 15;
+
+#ifndef NDEBUG
+// Used to sample certain debug flags when a query is read but before the reply
+// is sent.
+enum class TDM { ANY, ON, ZERO, NOT_AVAILABLE };
+inline thread_local TDM expected_from_debug_flag = TDM::ANY;
+#endif /* not defined NDEBUG */
 
 /**
   To be used for pool-of-threads (implemented differently on various OSs)
@@ -212,14 +265,114 @@ void thd_set_psi(THD *thd, PSI_thread *psi);
 */
 extern "C" unsigned int thd_get_current_thd_terminology_use_previous();
 
+enum enum_mem_cnt_mode {
+  /**
+    Memory counter object doesn't update global memory counter and doesn't throw
+    OOM error.
+  */
+  MEM_CNT_DEFAULT = 0U,
+  /**
+    if MEM_CNT_UPDATE_GLOBAL_COUNTER is set, memory counter object updates
+    global memory counter.
+  */
+  MEM_CNT_UPDATE_GLOBAL_COUNTER = (1U << 0),
+  /**
+  if MEM_CNT_GENERATE_ERROR is set, memory counter object generates OOM error if
+  any.
+*/
+  MEM_CNT_GENERATE_ERROR = (1U << 1),
+  /**
+  if MEM_CNT_GENERATE_LOG_ERROR is set, memory counter object generates OOM
+  error to error log if any.
+*/
+  MEM_CNT_GENERATE_LOG_ERROR = (1U << 2)
+};
+
+class Thd_mem_cnt {
+ private:
+  bool m_enabled{false};
+  THD *m_thd{nullptr};              // Pointer to THD object.
+  Diagnostics_area m_da{false};     // Diagnostics area.
+  ulonglong mem_counter{0};         // Amount of memory consumed by thread.
+  ulonglong max_conn_mem{0};        // Max amount memory consumed by thread.
+  ulonglong glob_mem_counter{0};    // Amount of memory added to global
+                                    // memory counter.
+  uint curr_mode{MEM_CNT_DEFAULT};  // Current memory counter mode.
+  uint orig_mode{MEM_CNT_DEFAULT};  // Original memory counter mode
+                                    // (sets at init_mode() stage).
+  bool is_connection_stage{true};   // True on connection stage,
+                                    // resets to false after successful
+                                    // connection.
+ public:
+  Thd_mem_cnt() {}
+  ~Thd_mem_cnt() {
+    assert(!m_enabled);
+    assert(glob_mem_counter == 0);
+  }
+  void set_thd(THD *thd) { m_thd = thd; }
+  void enable() { m_enabled = true; }
+  void disable();
+
+  void alloc_cnt(size_t size);
+  void free_cnt(size_t size);
+  int reset();
+  void flush();
+  /**
+    Restore original memory counter mode.
+  */
+  void restore_mode() { curr_mode = orig_mode; }
+  /**
+    Set NO ERROR memory counter mode.
+  */
+  void no_error_mode() {
+    curr_mode &= ~(MEM_CNT_GENERATE_ERROR | MEM_CNT_GENERATE_LOG_ERROR);
+  }
+  /**
+     Function sets current memory counter mode.
+
+     @param mode_arg         current memory counter mode.
+  */
+  void set_curr_mode(uint mode_arg) { curr_mode = mode_arg; }
+  /**
+     Function sets original memory counter mode.
+
+     @param mode_arg         original memory counter mode.
+  */
+  void set_orig_mode(uint mode_arg) { orig_mode = mode_arg; }
+  /**
+    Check if memory counter error is issued.
+
+    @retval true if memory counter error is issued, false otherwise.
+  */
+  bool is_error() const { return m_da.is_error(); }
+  void set_thd_error_status() const;
+
+ private:
+  int generate_error(int err_no, ulonglong mem_limit, ulonglong mem_size);
+  /**
+    Check if memory counter is in error mode.
+
+    @retval true if memory counter is in error mode, false otherwise.
+  */
+  bool is_error_mode() const { return (curr_mode & MEM_CNT_GENERATE_ERROR); }
+  /**
+    Check if memory counter is in error log  mode.
+
+    @retval true if memory counter is in error log mode, false otherwise.
+  */
+  bool is_error_log_mode() const {
+    return (curr_mode & MEM_CNT_GENERATE_LOG_ERROR);
+  }
+};
+
 /**
-  the struct aggregates two paramenters that identify an event
+  the struct aggregates two parameters that identify an event
   uniquely in scope of communication of a particular master and slave couple.
   I.e there can not be 2 events from the same staying connected master which
   have the same coordinates.
   @note
   Such identifier is not yet unique generally as the event originating master
-  is resetable. Also the crashed master can be replaced with some other.
+  is resettable. Also the crashed master can be replaced with some other.
 */
 typedef struct rpl_event_coordinates {
   char *file_name;  // binlog file name (directories stripped)
@@ -309,6 +462,15 @@ class Query_arena {
   void *mem_calloc(size_t size) {
     void *ptr;
     if ((ptr = mem_root->Alloc(size))) memset(ptr, 0, size);
+    return ptr;
+  }
+  inline void *mem_aligned_calloc(size_t size, size_t alignment) {
+    size_t unaligned_size = size + alignment;
+    void *ptr = mem_root->Alloc(unaligned_size);
+    if (!ptr) return nullptr;
+    ptr = reinterpret_cast<void *>(
+        MY_ALIGN(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+    memset(ptr, 0, size);
     return ptr;
   }
   template <typename T>
@@ -638,6 +800,24 @@ class Sub_statement_state {
   ulong client_capabilities;
   uint in_sub_stmt;
   bool enable_slow_log;
+
+  /*** Following variables used in slow_extended.patch ***/
+  ulong tmp_tables_used;
+  ulong tmp_tables_disk_used;
+  ulonglong tmp_tables_size;
+
+  bool innodb_was_used;
+  ulong innodb_io_reads;
+  ulonglong innodb_io_read;
+  uint64_t innodb_io_reads_wait_timer;
+  uint64_t innodb_lock_que_wait_timer;
+  uint64_t innodb_innodb_que_wait_timer;
+  ulong innodb_page_access;
+
+  ulong query_plan_flags;
+  ulong query_plan_fsort_passes;
+  /*** The variables above used in slow_extended.patch ***/
+
   SAVEPOINT *savepoints;
   enum enum_check_fields check_for_truncated_fields;
 };
@@ -770,7 +950,109 @@ class Global_read_lock {
   MDL_ticket *m_mdl_blocks_commits_lock;
 };
 
+/**
+  An instance of a global backup lock in a connection.
+*/
+
+class Global_backup_lock final {
+ public:
+  Global_backup_lock(MDL_key::enum_mdl_namespace mdl_namespace) noexcept
+      : m_namespace(mdl_namespace), m_lock(nullptr) {}
+
+  bool acquire(THD *thd);
+  void release(THD *thd) noexcept;
+
+  bool acquire_protection(THD *thd, enum_mdl_duration duration,
+                          ulong lock_wait_timeout);
+  void init_protection_request(MDL_request *mdl_request,
+                               enum_mdl_duration duration) const;
+
+  /**
+    Throw the ER_CANT_EXECUTE_WITH_BACKUP_LOCK error and return 'true', if the
+    current connection has already acquired the lock. Otherwise return
+    'false'.
+  */
+  bool abort_if_acquired() const noexcept {
+    if (is_acquired()) {
+      my_error(ER_CANT_EXECUTE_WITH_BACKUP_LOCK, MYF(0));
+      return true;
+    }
+
+    return false;
+  }
+
+  bool is_acquired() const noexcept { return m_lock != nullptr; }
+
+ private:
+  const MDL_key::enum_mdl_namespace m_namespace;
+  MDL_ticket *m_lock;
+};
+
 extern "C" void my_message_sql(uint error, const char *str, myf MyFlags);
+
+struct QUERY_START_TIME_INFO {
+  struct timeval start_time;
+  ulonglong start_utime;
+};
+
+/**
+   A single-hash-function bloom filter for approximate accessed page
+   counter.
+*/
+class Bloom_filter final {
+ private:
+  /** Bloom filter size, and a prime number for the calculation below */
+  static const constexpr auto SIZE = 8191;
+
+  typedef std::bitset<SIZE> Bit_set;
+
+  Bit_set *bit_set;
+  // Protects the bit set from concurrent assignment
+  mysql_mutex_t LOCK_bit_set;
+
+  // Non-copyable
+  Bloom_filter(const Bloom_filter &);
+  Bloom_filter &operator=(const Bloom_filter &);
+
+ public:
+  Bloom_filter() : bit_set(nullptr) {
+    mysql_mutex_init(key_LOCK_bloom_filter, &LOCK_bit_set, MY_MUTEX_INIT_FAST);
+  }
+
+  ~Bloom_filter() {
+    clear();
+    mysql_mutex_destroy(&LOCK_bit_set);
+  }
+
+  void clear() noexcept {
+    MUTEX_LOCK(lock, &LOCK_bit_set);
+    delete bit_set;
+    bit_set = NULL;
+  }
+
+  /**
+     Check whether key is maybe a member of a set
+
+     @param[in, out]    mem_root        MEM_ROOT to allocate the bit set in, if
+      not allocated already
+     @param[in]         key             key whose presence to check
+
+     @return if true, the key might be a member of the set. If false, the key
+     is definitely not a member of the set.
+  */
+  bool test_and_set(ulong key) {
+    MUTEX_LOCK(lock, &LOCK_bit_set);
+    if (bit_set == nullptr) {
+      bit_set = new Bit_set();
+    }
+    // Duplicating ut_hash_ulint calculation
+    const ulong pos = (key ^ 1653893711) % SIZE;
+    assert(pos < SIZE);
+    if (bit_set->test(pos)) return false;
+    bit_set->set(pos);
+    return true;
+  }
+};
 
 /**
   This class keeps the context of transactional DDL statements. Currently only
@@ -819,26 +1101,19 @@ struct PS_PARAM;
 class THD : public MDL_context_owner,
             public Query_arena,
             public Open_tables_state {
+ public:
+  /**
+    Controlled memory stats for this session.
+    This member is the first in THD,
+    to initialize Thd_mem_cnt() before allocating more memory.
+  */
+  Thd_mem_cnt m_mem_cnt;
+
  private:
-  inline bool is_stmt_prepare() const {
-    assert(0);
-    return Query_arena::is_stmt_prepare();
-  }
-
-  inline bool is_stmt_prepare_or_first_sp_execute() const {
-    assert(0);
-    return Query_arena::is_stmt_prepare_or_first_sp_execute();
-  }
-
-  inline bool is_stmt_prepare_or_first_stmt_execute() const {
-    assert(0);
-    return Query_arena::is_stmt_prepare_or_first_stmt_execute();
-  }
-
-  inline bool is_regular() const {
-    assert(0);
-    return Query_arena::is_regular();
-  }
+  bool is_stmt_prepare() const = delete;
+  bool is_stmt_prepare_or_first_sp_execute() const = delete;
+  bool is_stmt_prepare_or_first_stmt_execute() const = delete;
+  inline bool is_regular() const = delete;
 
  public:
   MDL_context mdl_context;
@@ -905,7 +1180,7 @@ class THD : public MDL_context_owner,
     0. In other words, "db", "db_length" must either be NULL, or contain a
     valid database name.
 
-    @note this attribute is set and alloced by the slave SQL thread (for
+    @note this attribute is set and allocated by the slave SQL thread (for
     the THD of that thread); that thread is (and must remain, for now) the
     only responsible for freeing this member.
   */
@@ -991,8 +1266,12 @@ class THD : public MDL_context_owner,
   */
   static const char *const DEFAULT_WHERE;
 
-  /** Aditional network instrumentation for the server only. */
+  /** Additional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
+  /** Thread scheduler callbacks for this connection per-thread and one-thread
+  scheduler callbacks are no-ops, so nullptr works for them, threadpool
+  scheduler will change this for its THDs */
+  THD_event_functions *scheduler{nullptr};
   /**
     Hash for user variables.
     User variables are per session,
@@ -1005,6 +1284,11 @@ class THD : public MDL_context_owner,
   struct rand_struct rand;                      // used for authentication
   struct System_variables variables;            // Changeable local variables
   struct System_status_var status_var;          // Per thread statistic vars
+  struct rand_struct slog_rand;                 // used for random slow log
+                                                // filtering
+  struct System_status_var
+      *copy_status_var_ptr;  // A copy of the statistic vars asof the start of
+                             // the query
   struct System_status_var *initial_status_var; /* used by show status */
   // has status_var already been added to global_status_var?
   bool status_var_aggregated;
@@ -1049,6 +1333,34 @@ class THD : public MDL_context_owner,
     status_var.last_query_partial_plans = m_current_query_partial_plans;
   }
 
+  /**
+    Clear copy of the status variables.
+  */
+  void clear_copy_status_var() { copy_status_var_ptr = nullptr; }
+
+  /**
+    Copy status variables into a structure pointed by the specified pointer and
+    keep track of the pointer internally.
+
+    @param dst_var status variable structure pointer, where internal status
+                   variables are copied into.
+  */
+  void copy_status_var(System_status_var *dst_var) {
+    *dst_var = status_var;
+    copy_status_var_ptr = dst_var;
+  }
+
+  /**
+    Copy status variables into a structure pointed by the specified pointer
+    passed into copy_status_var method call.
+  */
+  void reset_copy_status_var() {
+    if (copy_status_var_ptr) {
+      /* Reset for values at start of next statement */
+      *copy_status_var_ptr = status_var;
+    }
+  }
+
   THR_LOCK_INFO lock_info;  // Locking info of this thread
   /**
     Protects THD data accessed from other threads.
@@ -1066,15 +1378,30 @@ class THD : public MDL_context_owner,
   mysql_mutex_t LOCK_thd_query;
 
   /**
+    Protects temporary_tables.
+  */
+  mysql_mutex_t LOCK_temporary_tables;
+
+  /**
     Protects THD::variables while being updated. This should be taken inside
     of LOCK_thd_data and outside of LOCK_global_system_variables.
   */
   mysql_mutex_t LOCK_thd_sysvar;
 
+#ifndef NDEBUG
+  bool for_debug_only_is_set_persist_options{false};
+#endif
+
   /**
     Protects THD::m_protocol when it gets removed in x plugin.
   */
   mysql_mutex_t LOCK_thd_protocol;
+
+  /**
+    Protects THD::m_security_ctx from inspection (e.g. by old-style
+    SHOW PROCESSLIST) while COM_CHANGE_USER changes the context.
+  */
+  mysql_mutex_t LOCK_thd_security_ctx;
 
   /**
     Protects query plan (SELECT/UPDATE/DELETE's) from being freed/changed
@@ -1118,7 +1445,7 @@ class THD : public MDL_context_owner,
   /**
     @note
     Some members of THD (currently 'Statement::db',
-    'catalog' and 'query')  are set and alloced by the slave SQL thread
+    'catalog' and 'query')  are set and allocated by the slave SQL thread
     (for the THD of that thread); that thread is (and must remain, for now)
     the only responsible for freeing these 3 members. If you add members
     here, and you add code to set them in replication, don't forget to
@@ -1168,6 +1495,8 @@ class THD : public MDL_context_owner,
 #endif
     return m_SSL;
   }
+
+  bool is_ssl() const noexcept { return m_SSL != nullptr; }
 
   /**
     Asserts that the protocol is of type text or binary and then
@@ -1330,7 +1659,7 @@ class THD : public MDL_context_owner,
 
   ulong max_client_packet_length;
 
-  collation_unordered_map<std::string, unique_ptr_my_free<TABLE_LIST>>
+  collation_unordered_map<std::string, unique_ptr_my_free<Table_ref>>
       handler_tables_hash{&my_charset_latin1,
                           key_memory_THD_handler_tables_hash};
   /*
@@ -1368,7 +1697,31 @@ class THD : public MDL_context_owner,
   */
   mysql_cond_t COND_thr_lock;
 
+  /// @brief Enables ordering in ha_commit_low. Used in binlog::commit
+  /// @note Additional requirements need to be met
+  /// in order to invoke commit ordering in ha_commit_low
+  /// @see is_ha_commit_low_invoking_commit_order
+  void enable_low_level_commit_ordering();
+
+  /// @brief Enables ordering in ha_commit_low. Used in binlog::commit
+  /// @note Additional requirements need to be met
+  /// in order to invoke commit ordering in ha_commit_low
+  /// @see is_ha_commit_low_invoking_commit_order
+  void disable_low_level_commit_ordering();
+
+  /// @brief Obtains flag indicating whether additional ordering in the
+  /// ha_commit_low function is enabled. If not, ordering will take place in
+  /// binlog::commit
+  /// @details Accessor for the m_is_low_level_commit_ordering_enabled
+  /// @return When true, ha_commit_low may order this transaction
+  bool is_low_level_commit_ordering_enabled() const;
+
  private:
+  /// @brief Flag indicating whether additional ordering in the ha_commit_low
+  /// function is enabled. If disabled, ordering will take place in
+  /// binlog::commit. It is set up in binlog::commit
+  bool m_is_low_level_commit_ordering_enabled = false;
+
   /**
     Type of current query: COM_STMT_PREPARE, COM_QUERY, etc.
     Set from first byte of the packet in do_command()
@@ -1389,7 +1742,26 @@ class THD : public MDL_context_owner,
   uint16 peer_port;
   struct timeval start_time;
   struct timeval user_time;
-  ulonglong start_utime, utime_after_lock;
+  /**
+    Query start time, expressed in microseconds.
+  */
+  ulonglong start_utime;
+
+ private:
+  /**
+    Time spent waiting for TABLE locks and DATA locks.
+    Expressed in microseconds.
+  */
+  ulonglong m_lock_usec;
+
+ public:
+  ulonglong get_lock_usec() { return m_lock_usec; }
+  void inc_lock_usec(ulonglong usec);
+  void push_lock_usec(ulonglong &top) {
+    top = m_lock_usec;
+    m_lock_usec = 0;
+  }
+  void pop_lock_usec(ulonglong top) { m_lock_usec = top; }
 
   /**
     Type of lock to be used for all DML statements, except INSERT, in cases
@@ -1405,8 +1777,101 @@ class THD : public MDL_context_owner,
   */
   thr_lock_type insert_lock_default;
 
+  /*** Following variables used in slow_extended.patch ***/
+  /*
+    Variable bytes_send_old saves value of thd->status_var.bytes_sent
+    before query execution.
+  */
+  ulonglong bytes_sent_old;
+  /*
+    Variables tmp_tables_*** collect statistics about usage of temporary tables
+  */
+  ulong tmp_tables_used;
+  ulong tmp_tables_disk_used;
+  ulonglong tmp_tables_size;
+  /*
+    Following Variables innodb_*** (is |should be) different from
+    default values only if (innodb_was_used==true)
+  */
+  ulonglong innodb_trx_id;
+  ulong innodb_io_reads;
+  ulonglong innodb_io_read;
+  uint64_t innodb_io_reads_wait_timer;
+  uint64_t innodb_lock_que_wait_timer;
+  uint64_t innodb_innodb_que_wait_timer;
+
+ private:
+  /*
+    Variable innodb_was_used shows used or not InnoDB engine in current query.
+  */
+  bool innodb_was_used;
+  Bloom_filter approx_distinct_pages;
+
+ public:
+  ulong innodb_page_access;
+
+  void mark_innodb_used(ulonglong trx_id) noexcept {
+    assert(innodb_slow_log_enabled());
+    if (trx_id && !is_attachable_transaction_active()) innodb_trx_id = trx_id;
+    innodb_was_used = true;
+  }
+
+  void access_distinct_page(ulong page_id) {
+    if (approx_distinct_pages.test_and_set(page_id)) innodb_page_access++;
+  }
+
+  bool innodb_slow_log_enabled() const noexcept {
+    return variables.log_slow_verbosity & (1ULL << SLOG_V_INNODB);
+  }
+
+  bool innodb_slow_log_data_logged() const noexcept { return innodb_was_used; }
+
+  /*
+    Variable query_plan_flags collects information about query plan entites
+    used on query execution.
+  */
+  ulong query_plan_flags;
+  /*
+    Variable query_plan_fsort_passes collects information about file sort passes
+    acquired during query execution.
+  */
+  ulong query_plan_fsort_passes;
+  /*
+    Query can generate several errors/warnings during execution
+    (see THD::handle_condition comment in sql_class.h)
+    Variable last_errno contains the last error/warning acquired during
+    query execution.
+  */
+  uint last_errno;
+  /*** The variables above used in slow_extended.patch ***/
+
+  inline void set_slow_log_for_admin_command() noexcept {
+    enable_slow_log = opt_log_slow_admin_statements &&
+                      (sp_runtime_ctx ? opt_log_slow_sp_statements : true);
+  }
+  /*** Following methods used in slow_extended.patch ***/
+  void clear_slow_extended() noexcept;
+
+ private:
+  void reset_sub_statement_state_slow_extended(
+      Sub_statement_state *backup) noexcept;
+  void restore_sub_statement_state_slow_extended(
+      const Sub_statement_state &backup) noexcept;
+  /*** The methods above used in slow_extended.patch ***/
+ public:
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
+
+  /* Do not set socket timeouts for wait_timeout (used with threadpool) */
+  bool skip_wait_timeout{false};
+
+  inline ulong get_wait_timeout(void) const noexcept {
+    if (in_active_multi_stmt_transaction() &&
+        kill_idle_transaction_timeout > 0 &&
+        kill_idle_transaction_timeout < variables.net_wait_timeout)
+      return kill_idle_transaction_timeout;
+    return variables.net_wait_timeout;
+  }
 
   /**
     Used by fill_status() to avoid acquiring LOCK_status mutex twice
@@ -1456,6 +1921,8 @@ class THD : public MDL_context_owner,
     ha_data = backup;
     mysql_mutex_unlock(&this->LOCK_thd_data);
   }
+
+  bool order_deterministic{false};
 
   /*
     Position of first event in Binlog
@@ -1562,6 +2029,17 @@ class THD : public MDL_context_owner,
     @retval false The binary log is currently enabled for the statement.
   */
   bool is_current_stmt_binlog_log_replica_updates_disabled() const;
+
+  /**
+    Checks whether binlog caches are disabled (binlog does not cache data) or
+    empty in case binloggging is enabled in the current call to this function.
+    This function may be safely called in case binlogging is disabled.
+    @retval true binlog local caches are empty or disabled and binlogging is
+    enabled
+    @retval false binlog local caches are enabled and contain data or binlogging
+    is disabled
+  */
+  bool is_current_stmt_binlog_enabled_and_caches_empty() const;
 
   /**
     Determine if binloging is enabled in row format and write set extraction is
@@ -1676,6 +2154,8 @@ class THD : public MDL_context_owner,
   NET net;        // client connection descriptor
   String packet;  // dynamic buffer for network I/O
  public:
+  const NET *get_net() const { return &net; }
+
   void set_skip_readonly_check() { skip_readonly_check = true; }
 
   bool is_cmd_skip_readonly() const { return skip_readonly_check; }
@@ -1698,6 +2178,11 @@ class THD : public MDL_context_owner,
 
   /* MTS: method inserts a new unique name into binlog_updated_dbs */
   void add_to_binlog_accessed_dbs(const char *db);
+
+  bool is_applier_thread() const {
+    return system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+           system_thread == SYSTEM_THREAD_SLAVE_WORKER;
+  }
 
  private:
   std::unique_ptr<Transaction_ctx> m_transaction;
@@ -1849,6 +2334,8 @@ class THD : public MDL_context_owner,
   void set_transaction(Transaction_ctx *transaction_ctx);
 
   Global_read_lock global_read_lock;
+
+  Global_backup_lock backup_tables_lock{MDL_key::BACKUP_TABLES};
 
   Vio *active_vio = {nullptr};
 
@@ -2082,9 +2569,9 @@ class THD : public MDL_context_owner,
   /**
     Stores the result of ROW_COUNT() function.
 
-    ROW_COUNT() function is a MySQL extention, but we try to keep it
+    ROW_COUNT() function is a MySQL extension, but we try to keep it
     similar to ROW_COUNT member of the GET DIAGNOSTICS stack of the SQL
-    standard (see SQL99, part 2, search for ROW_COUNT). It's value is
+    standard (see SQL99, part 2, search for ROW_COUNT). Its value is
     implementation defined for anything except INSERT, DELETE, UPDATE.
 
     ROW_COUNT is assigned according to the following rules:
@@ -2230,17 +2717,17 @@ class THD : public MDL_context_owner,
   /* Statement id is thread-wide. This counter is used to generate ids */
   ulong statement_id_counter;
   ulong rand_saved_seed1, rand_saved_seed2;
-  my_thread_t real_id; /* For debugging */
-                       /**
-                         This counter is 32 bit because of the client protocol.
-                     
-                         @note It is not meant to be used for my_thread_self(), see @c real_id for
-                         this.
-                     
-                         @note Set to reserved_thread_id on initialization. This is a magic
-                         value that is only to be used for temporary THDs not present in
-                         the global THD list.
-                       */
+  my_thread_t real_id;
+  /**
+    This counter is 32 bit because of the client protocol.
+
+    @note It is not meant to be used for my_thread_self(), see @c real_id for
+    this.
+
+    @note Set to reserved_thread_id on initialization. This is a magic
+    value that is only to be used for temporary THDs not present in
+    the global THD list.
+  */
  private:
   my_thread_id m_thread_id;
 
@@ -2332,6 +2819,8 @@ class THD : public MDL_context_owner,
   int thd_tx_priority;
 
   enum_check_fields check_for_truncated_fields;
+  ha_rows updated_row_count{0};
+  ha_rows sent_row_count_2{0}; /* for userstat */
 
   // For user variables replication
   Prealloced_array<Binlog_user_var_event *, 2> user_var_events;
@@ -2526,12 +3015,49 @@ class THD : public MDL_context_owner,
   /** number of name_const() substitutions, see sp_head.cc:subst_spvars() */
   uint query_name_consts;
 
+
   /*
-    If we do a purge of binary logs, log index info of the threads
-    that are currently reading it needs to be adjusted. To do that
-    each thread that is using LOG_INFO needs to adjust the pointer to it
+    Used to update global user stats.  The global user stats are updated
+    occasionally with the 'diff' variables.  After the update, the 'diff'
+    variables are reset to 0.
   */
-  LOG_INFO *current_linfo;
+  // Time when the current thread connected to MySQL.
+  ulonglong current_connect_time;
+  // Last time when THD stats were updated in global_user_stats.
+  ulonglong last_global_update_time;
+  // Busy (non-idle) time for just one command.
+  double busy_time{0.0};
+  // Busy time not updated in global_user_stats yet.
+  double diff_total_busy_time;
+  // Cpu (non-idle) time for just one thread.
+  double cpu_time{0.0};
+  // Cpu time not updated in global_user_stats yet.
+  double diff_total_cpu_time;
+  /* bytes counting */
+  ulonglong bytes_received{0};
+  ulonglong diff_total_bytes_received;
+  ulonglong bytes_sent{0};
+  ulonglong diff_total_bytes_sent;
+  ulonglong binlog_bytes_written{0};
+  ulonglong diff_total_binlog_bytes_written;
+
+  // Number of rows not reflected in global_user_stats yet.
+  ha_rows diff_total_sent_rows, diff_total_updated_rows, diff_total_read_rows;
+  // Number of commands not reflected in global_user_stats yet.
+  ulonglong diff_select_commands, diff_update_commands, diff_other_commands;
+  // Number of transactions not reflected in global_user_stats yet.
+  ulonglong diff_commit_trans, diff_rollback_trans;
+  // Number of connection errors not reflected in global_user_stats yet.
+  ulonglong diff_denied_connections, diff_lost_connections;
+  // Number of db access denied, not reflected in global_user_stats yet.
+  ulonglong diff_access_denied_errors;
+  // Number of queries that return 0 rows
+  ulonglong diff_empty_queries;
+
+  // Per account query delay in miliseconds. When not 0, sleep this number of
+  // milliseconds before every SQL command.
+  ulonglong query_delay_millis;
+
   /* Used by the sys_var class to store temporary values */
   union {
     bool bool_value;
@@ -2606,7 +3132,7 @@ class THD : public MDL_context_owner,
   */
   bool m_audited;
 
-  THD(bool enable_plugins = true);
+  explicit THD(bool enable_plugins = true);
 
   /*
     The THD dtor is effectively split in two:
@@ -2688,6 +3214,11 @@ class THD : public MDL_context_owner,
   */
   void init_query_mem_roots();
   void cleanup_connection(void);
+  void reset_stats(void) noexcept;
+  void reset_diff_stats(void) noexcept;
+  // ran_command is true when this is called immediately after a
+  // command has been run.
+  void update_stats(bool ran_command) noexcept;
   void cleanup_after_query();
   void store_globals();
   void restore_globals();
@@ -2695,6 +3226,7 @@ class THD : public MDL_context_owner,
   inline void set_active_vio(Vio *vio) {
     mysql_mutex_lock(&LOCK_thd_data);
     active_vio = vio;
+    vio_set_thread_id(vio, pthread_self());
     mysql_mutex_unlock(&LOCK_thd_data);
   }
 
@@ -2862,16 +3394,27 @@ class THD : public MDL_context_owner,
     return variables.time_zone;
   }
   time_t query_start_in_secs() const { return start_time.tv_sec; }
-  timeval query_start_timeval_trunc(uint decimals);
+  ulonglong query_start_in_usecs() const { return start_utime; }
+  my_timeval query_start_timeval_trunc(uint decimals);
   void set_time();
   void set_time(const struct timeval *t) {
     user_time = *t;
     set_time();
   }
-  void set_time_after_lock();
+  void get_time(QUERY_START_TIME_INFO *time_info) const noexcept {
+    time_info->start_time = start_time;
+    time_info->start_utime = start_utime;
+  }
+  void set_time(const QUERY_START_TIME_INFO &time_info) noexcept {
+    start_time = time_info.start_time;
+    start_utime = time_info.start_utime;
+  }
+
   inline bool is_fsp_truncate_mode() const {
     return (variables.sql_mode & MODE_TIME_TRUNCATE_FRACTIONAL);
   }
+
+  static inline ulonglong current_utime() noexcept { return my_micro_time(); }
 
   /**
    Evaluate the current time, and if it exceeds the long-query-time
@@ -3634,7 +4177,7 @@ class THD : public MDL_context_owner,
   /*
     There are some statements (like OPTIMIZE TABLE, ANALYZE TABLE and
     REPAIR TABLE) that might call trans_rollback_stmt() and also will be
-    sucessfully executed and will have to go to the binary log.
+    successfully executed and will have to go to the binary log.
     For these statements, the skip_gtid_rollback flag must be set to avoid
     problems when the statement is executed with a GTID_NEXT set to
     ASSIGNED_GTID (like the SQL thread do when applying events from other
@@ -3719,7 +4262,7 @@ class THD : public MDL_context_owner,
     return copy_db_to(const_cast<char const **>(p_db), p_db_length);
   }
 
-  thd_scheduler scheduler;
+  thd_scheduler event_scheduler;
 
   /**
     Get resource group context.
@@ -4035,7 +4578,7 @@ class THD : public MDL_context_owner,
     locked_tables_mode = mode_arg;
   }
   void leave_locked_tables_mode();
-  int decide_logging_format(TABLE_LIST *tables);
+  int decide_logging_format(Table_ref *tables);
   /**
     is_dml_gtid_compatible() and is_ddl_gtid_compatible() check if the
     statement that is about to be processed will safely get a
@@ -4132,7 +4675,7 @@ class THD : public MDL_context_owner,
   Diagnostics_area *m_stmt_da;
 
   /**
-    It will be set TURE if CURRENT_USER() is called in account management
+    It will be set TRUE if CURRENT_USER() is called in account management
     statements or default definer is set in CREATE/ALTER SP, SF, Event,
     TRIGGER or VIEW statements.
 
@@ -4290,7 +4833,7 @@ class THD : public MDL_context_owner,
   /**
     Claim all the memory used by the THD object.
     This method is to keep memory instrumentation statistics
-    updated, when an object is transfered across threads.
+    updated, when an object is transferred across threads.
   */
   void claim_memory_ownership(bool claim);
 
@@ -4414,10 +4957,18 @@ class THD : public MDL_context_owner,
     Flag that indicates if the user of current session has SYSTEM_USER privilege
   */
   std::atomic<bool> m_is_system_user;
+  /**
+    Flag that indicates if the user of current session has CONNECTION_ADMIN
+    privilege
+  */
+  std::atomic<bool> m_is_connection_admin;
 
  public:
   bool is_system_user();
   void set_system_user(bool system_user_flag);
+
+  bool is_connection_admin();
+  void set_connection_admin(bool connection_admin_flag);
 
  public:
   Transactional_ddl_context m_transactional_ddl{this};
@@ -4444,6 +4995,13 @@ class THD : public MDL_context_owner,
   /** the number of elements in parameters */
   unsigned long bind_parameter_values_count;
 
+ private:
+  bool is_rpl_stmt_event_format_used;
+
+ public:
+  void check_rpl_stmt_event_format_used();
+  bool get_rpl_stmt_event_format_used() const;
+
  public:
   /**
     Copy session properties that affect table access
@@ -4464,6 +5022,27 @@ class THD : public MDL_context_owner,
   void copy_table_access_properties(THD *thd);
   mysql_mutex_t LOCK_group_replication_connection_mutex;
   mysql_cond_t COND_group_replication_connection_cond_var;
+
+  void enable_mem_cnt() { m_mem_cnt.enable(); }
+  void disable_mem_cnt() { m_mem_cnt.disable(); }
+
+#ifndef NDEBUG
+  const char *current_key_name;
+  ulonglong conn_mem_alloc_number;
+  bool is_mem_cnt_error_issued;
+  bool is_mem_cnt_error() {
+    return (is_error() &&
+            (get_stmt_da()->mysql_errno() == ER_DA_GLOBAL_CONN_LIMIT ||
+             get_stmt_da()->mysql_errno() == ER_DA_CONN_LIMIT));
+  }
+#endif
+
+ public:
+  bool add_external(unsigned int slot, void *data);
+  void *fetch_external(unsigned int slot);
+
+ private:
+  std::unordered_map<unsigned int, void *> external_store_;
 };
 
 /**
@@ -4476,6 +5055,11 @@ inline bool secondary_engine_lock_tables_mode(const THD &cthd) {
   return (cthd.locked_tables_mode == LTM_LOCK_TABLES ||
           cthd.locked_tables_mode == LTM_PRELOCKED_UNDER_LOCK_TABLES);
 }
+
+/* Returns string as 'IP' for the client-side of the connection represented by
+   'client'. Does not allocate memory. May return "".
+*/
+const char *get_client_host(const THD &client) noexcept;
 
 /** A short cut for thd->get_stmt_da()->set_ok_status(). */
 void my_ok(THD *thd, ulonglong affected_rows = 0, ulonglong id = 0,
@@ -4517,6 +5101,36 @@ inline bool THD::is_system_user() {
 */
 inline void THD::set_system_user(bool system_user_flag) {
   m_is_system_user.store(system_user_flag, std::memory_order_seq_cst);
+}
+
+inline ulonglong get_query_time(THD *thd) {
+  return my_micro_time() - thd->start_utime;
+}
+
+/**
+  Returns if the user of the session has the CONNECTION_ADMIN privilege or not.
+
+  @retval true  User has CONNECTION_ADMIN privilege
+  @retval false Otherwise
+*/
+inline bool THD::is_connection_admin() {
+  return m_is_connection_admin.load(std::memory_order_seq_cst);
+}
+
+/**
+  Sets the connection_admin flag atomically for the current session.
+
+  @param [in] connection_admin_flag  boolean flag that indicates value to set.
+*/
+inline void THD::set_connection_admin(bool connection_admin_flag) {
+  m_is_connection_admin.store(connection_admin_flag, std::memory_order_seq_cst);
+}
+
+/**
+  Returns true if xa transactions are detached as part of executing XA PREPARE.
+*/
+inline bool is_xa_tran_detached_on_prepare(const THD *thd) {
+  return thd->variables.xa_detach_on_prepare;
 }
 
 #endif /* SQL_CLASS_INCLUDED */

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,6 @@
 #include <thread>
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
-// if we build within the server, it will set RAPIDJSON_NO_SIZETYPEDEFINE
-// globally and require to include my_rapidjson_size_t.h
 #include "my_rapidjson_size_t.h"
 #endif
 
@@ -44,6 +42,7 @@
 #include <rapidjson/stringbuffer.h>
 
 #include "mysqlrouter/cluster_metadata.h"
+#include "rest_api_testutils.h"
 #include "router_component_test.h"
 
 using mysqlrouter::ClusterType;
@@ -59,13 +58,14 @@ using JsonStringBuffer =
     rapidjson::GenericStringBuffer<rapidjson::UTF8<>, rapidjson::CrtAllocator>;
 }  // namespace
 
-class RouterComponentClusterSetTest : virtual public RouterComponentTest {
+class RouterComponentClusterSetTest : public RestApiComponentTest {
  protected:
   struct ClusterNode {
     std::string uuid;
 
     std::string host;
     uint16_t classic_port;
+    uint16_t x_port{0};
     uint16_t http_port;
 
     ProcessWrapper *process{nullptr};
@@ -92,11 +92,20 @@ class RouterComponentClusterSetTest : virtual public RouterComponentTest {
 
     auto get_all_nodes_classic_ports() const {
       std::vector<uint16_t> result;
+      std::vector<uint16_t> secondary_clusters_nodes;
       for (const auto &cluster : clusters) {
         for (const auto &node : cluster.nodes) {
-          result.push_back(node.classic_port);
+          // PRIMARY cluster nodes first to match the metadata-servers order
+          // expectation
+          if (cluster.role == "PRIMARY")
+            result.push_back(node.classic_port);
+          else
+            secondary_clusters_nodes.push_back(node.classic_port);
         }
       }
+      result.insert(result.end(), secondary_clusters_nodes.begin(),
+                    secondary_clusters_nodes.end());
+
       return result;
     }
 
@@ -125,7 +134,8 @@ class RouterComponentClusterSetTest : virtual public RouterComponentTest {
                          int primary_cluster_id, const std::string &tracefile,
                          const std::string &router_options = "",
                          const std::string &expected_target_cluster = ".*",
-                         bool simulate_cluster_not_found = false);
+                         bool simulate_cluster_not_found = false,
+                         bool use_gr_notifications = false);
 
   void change_clusterset_primary(ClusterSetData &clusterset_data,
                                  const unsigned new_primary_id);

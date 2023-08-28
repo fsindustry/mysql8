@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -96,20 +96,20 @@ table_replication_applier_filters::table_replication_applier_filters()
 table_replication_applier_filters::~table_replication_applier_filters() =
     default;
 
-void table_replication_applier_filters::reset_position(void) {
+void table_replication_applier_filters::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
 
 ha_rows table_replication_applier_filters::get_row_count() {
   rpl_channel_filters.rdlock();
-  uint count = rpl_channel_filters.get_filter_count();
+  const uint count = rpl_channel_filters.get_filter_count();
   rpl_channel_filters.unlock();
 
   return count;
 }
 
-int table_replication_applier_filters::rnd_next(void) {
+int table_replication_applier_filters::rnd_next() {
   int res = HA_ERR_END_OF_FILE;
   Rpl_pfs_filter *rpl_pfs_filter = nullptr;
 
@@ -120,11 +120,10 @@ int table_replication_applier_filters::rnd_next(void) {
 
     if (rpl_pfs_filter == nullptr) {
       break;
-    } else {
-      make_row(rpl_pfs_filter);
-      m_next_pos.set_after(&m_pos);
-      res = 0;
     }
+    make_row(rpl_pfs_filter);
+    m_next_pos.set_after(&m_pos);
+    res = 0;
   }
   rpl_channel_filters.unlock();
 
@@ -161,9 +160,7 @@ void table_replication_applier_filters::make_row(
   memcpy(m_row.filter_name, rpl_pfs_filter->get_filter_name(),
          m_row.filter_name_length);
 
-  if (!rpl_pfs_filter->get_filter_rule().is_empty()) {
-    m_row.filter_rule.copy(rpl_pfs_filter->get_filter_rule());
-  }
+  m_row.filter_rule.copy(rpl_pfs_filter->get_filter_rule());
 
   m_row.configured_by =
       rpl_pfs_filter->get_rpl_filter_statistics()->get_configured_by();
@@ -194,10 +191,12 @@ int table_replication_applier_filters::read_row_values(TABLE *table,
     if (read_all || bitmap_is_set(table->read_set, f->field_index())) {
       switch (f->field_index()) {
         case 0: /* channel_name */
-          set_field_char_utf8(f, m_row.channel_name, m_row.channel_name_length);
+          set_field_char_utf8mb4(f, m_row.channel_name,
+                                 m_row.channel_name_length);
           break;
         case 1: /* filter_name */
-          set_field_char_utf8(f, m_row.filter_name, m_row.filter_name_length);
+          set_field_char_utf8mb4(f, m_row.filter_name,
+                                 m_row.filter_name_length);
           break;
         case 2: /* filter_rule */
           if (!m_row.filter_rule.is_empty())

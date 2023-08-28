@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -244,7 +244,7 @@ static int validate_dictionary_check(my_h_string password) {
     return (0);
 
   if (mysql_service_mysql_string_converter->convert_to_buffer(
-          lower_string_handle, buffer, MAX_PASSWORD_LENGTH, "utf8")) {
+          lower_string_handle, buffer, MAX_PASSWORD_LENGTH, "utf8mb3")) {
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -374,7 +374,7 @@ static bool is_valid_password_by_user_name(void *thd, my_h_string password) {
   }
 
   if (mysql_service_mysql_string_converter->convert_to_buffer(
-          password, buffer, MAX_PASSWORD_LENGTH, "utf8")) {
+          password, buffer, MAX_PASSWORD_LENGTH, "utf8mb3")) {
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(WARNING_LEVEL)
@@ -481,7 +481,7 @@ static int validate_password_policy_strength(void *thd, my_h_string password,
     return (0);
   }
   while (mysql_service_mysql_string_iterator->iterator_get_next(
-             iter, &out_iter_char) != true) {
+             iter, &out_iter_char) == 0) {
     n_chars++;
     if (policy > PASSWORD_POLICY_LOW) {
       if (!mysql_service_mysql_string_ctype->is_lower(iter, &out) && out)
@@ -551,7 +551,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::get_strength,
     return true;
   }
   while (mysql_service_mysql_string_iterator->iterator_get_next(
-             iter, &out_iter_char) != true)
+             iter, &out_iter_char) == 0)
     n_chars++;
 
   mysql_service_mysql_string_iterator->iterator_destroy(iter);
@@ -870,9 +870,27 @@ static mysql_service_status_t validate_password_init() {
   dictionary_words = new set_type();
   init_validate_password_psi_keys();
   mysql_rwlock_init(key_validate_password_LOCK_dict_file, &LOCK_dict_file);
-  if (log_service_init() || register_system_variables() ||
-      register_status_variables())
+  if (log_service_init()) {
+    delete dictionary_words;
+    dictionary_words = nullptr;
+    mysql_rwlock_destroy(&LOCK_dict_file);
     return true;
+  }
+  if (register_system_variables()) {
+    log_service_deinit();
+    delete dictionary_words;
+    dictionary_words = nullptr;
+    mysql_rwlock_destroy(&LOCK_dict_file);
+    return true;
+  }
+  if (register_status_variables()) {
+    unregister_system_variables();
+    log_service_deinit();
+    delete dictionary_words;
+    dictionary_words = nullptr;
+    mysql_rwlock_destroy(&LOCK_dict_file);
+    return true;
+  }
   read_dictionary_file();
   /* Check if validate_password_length needs readjustment */
   readjust_validate_password_length();
@@ -931,8 +949,7 @@ REQUIRES_MYSQL_RWLOCK_SERVICE_PLACEHOLDER;
    component load time and disposes off them at unload.
 */
 BEGIN_COMPONENT_REQUIRES(validate_password)
-REQUIRES_SERVICE(registry), REQUIRES_SERVICE(log_builtins),
-    REQUIRES_SERVICE(log_builtins_string),
+REQUIRES_SERVICE(log_builtins), REQUIRES_SERVICE(log_builtins_string),
     REQUIRES_SERVICE(mysql_string_factory), REQUIRES_SERVICE(mysql_string_case),
     REQUIRES_SERVICE(mysql_string_converter),
     REQUIRES_SERVICE(mysql_string_iterator),

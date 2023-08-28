@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,9 +20,9 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql/sql_show_processlist.h"
-
 #include <stddef.h>
+
+#include "sql/sql_show_processlist.h"
 
 #include "lex_string.h"
 #include "m_string.h"  // STRING_WITH_LEN
@@ -40,7 +40,10 @@
 #include "sql/strfunc.h"
 #include "sql_string.h"
 
-extern bool pfs_processlist_enabled;
+/**
+  Implement SHOW PROCESSLIST by using performance schema.processlist
+*/
+bool pfs_processlist_enabled = false;
 
 static const LEX_CSTRING field_id = {STRING_WITH_LEN("ID")};
 static const LEX_CSTRING alias_id = {STRING_WITH_LEN("Id")};
@@ -58,6 +61,14 @@ static const LEX_CSTRING field_state = {STRING_WITH_LEN("STATE")};
 static const LEX_CSTRING alias_state = {STRING_WITH_LEN("State")};
 static const LEX_CSTRING field_info = {STRING_WITH_LEN("INFO")};
 static const LEX_CSTRING alias_info = {STRING_WITH_LEN("Info")};
+static const LEX_CSTRING field_time_ms = {STRING_WITH_LEN("TIME_MS")};
+static const LEX_CSTRING alias_time_ms = {STRING_WITH_LEN("Time_ms")};
+static const LEX_CSTRING field_rows_sent = {STRING_WITH_LEN("ROWS_SENT")};
+static const LEX_CSTRING alias_rows_sent = {STRING_WITH_LEN("Rows_sent")};
+static const LEX_CSTRING field_rows_examined = {
+    STRING_WITH_LEN("ROWS_EXAMINED")};
+static const LEX_CSTRING alias_rows_examined = {
+    STRING_WITH_LEN("Rows_examined")};
 
 static const LEX_CSTRING pfs = {STRING_WITH_LEN("performance_schema")};
 static const LEX_CSTRING table_processlist = {STRING_WITH_LEN("processlist")};
@@ -124,7 +135,8 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
     if (lex_string_strmake(thd->mem_root, &info_len, "100", 3)) return true;
   }
 
-  /* Id, User, Host, db, Command, Time, State */
+  /* Id, User, Host, db, Command, Time, State, Time_ms,
+   * Rows_sent, Rows_examined */
   PT_select_item_list *item_list = new (thd->mem_root) PT_select_item_list();
   if (item_list == nullptr) return true;
 
@@ -143,7 +155,7 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
       new (thd->mem_root) PTI_simple_ident_ident(pos, field_info);
   if (ident_info == nullptr) return true;
 
-  /* Info length is either "25" or "100" depending on verbose */
+  /* Info length is either "100" or "1024" depending on verbose */
   Item_int *item_info_len = new (thd->mem_root) Item_int(pos, info_len);
   if (item_info_len == nullptr) return true;
 
@@ -157,6 +169,14 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   if (expr_left == nullptr) return true;
 
   item_list->push_back(expr_left);
+
+  if (add_expression(pos, thd, item_list, field_time_ms, alias_time_ms))
+    return true;
+  if (add_expression(pos, thd, item_list, field_rows_sent, alias_rows_sent))
+    return true;
+  if (add_expression(pos, thd, item_list, field_rows_examined,
+                     alias_rows_examined))
+    return true;
 
   /*
     make_table_list() might alter the database and table name strings. Create
@@ -247,6 +267,6 @@ bool build_processlist_query(const POS &pos, THD *thd, bool verbose) {
   assert(!thd->is_error());
 
   if (query_expression2->contextualize(&pc)) return true;
-
+  if (pc.finalize_query_expression()) return true;
   return false;
 }

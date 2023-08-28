@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +33,7 @@
 #include "my_sys.h"
 #include "mysys_err.h"
 #include "sql/mysqld.h"
+#include "storage/perfschema/mysql_server_telemetry_traces_service_imp.h"
 #include "storage/perfschema/pfs.h"
 #include "storage/perfschema/pfs_account.h"
 #include "storage/perfschema/pfs_builtin_memory.h"
@@ -62,8 +63,8 @@ PFS_global_param pfs_param;
 
 PFS_table_stat PFS_table_stat::g_reset_template;
 
-static void cleanup_performance_schema(void);
-void cleanup_instrument_config(void);
+static void cleanup_performance_schema();
+void cleanup_instrument_config();
 
 void pre_initialize_performance_schema() {
   record_main_thread_id();
@@ -175,6 +176,8 @@ int initialize_performance_schema(
         param->m_consumer_events_stages_history_enabled;
     flag_events_stages_history_long =
         param->m_consumer_events_stages_history_long_enabled;
+    flag_events_statements_cpu =
+        param->m_consumer_events_statements_cpu_enabled;
     flag_events_statements_current =
         param->m_consumer_events_statements_current_enabled;
     flag_events_statements_history =
@@ -200,6 +203,7 @@ int initialize_performance_schema(
     flag_events_stages_current = false;
     flag_events_stages_history = false;
     flag_events_stages_history_long = false;
+    flag_events_statements_cpu = false;
     flag_events_statements_current = false;
     flag_events_statements_history = false;
     flag_events_statements_history_long = false;
@@ -262,6 +266,17 @@ int initialize_performance_schema(
   */
   init_pfs_tls_channels_instrumentation();
 
+  /*
+     Initialize telemetry tracing service.
+    This must be done:
+    - after the memory allocation for mutex instrumentation,
+      so that mutex LOCK_pfs_tracing_callback gets instrumented
+      (if the instrumentation is enabled),
+    - Even if the mutex LOCK_pfs_tracing_callback ends up not instrumented,
+       it still needs to be initialized.
+  */
+  initialize_mysql_server_telemetry_traces_service();
+
   if (init_failed) {
     return 1;
   }
@@ -269,7 +284,7 @@ int initialize_performance_schema(
   return 0;
 }
 
-static void cleanup_performance_schema(void) {
+static void cleanup_performance_schema() {
   /*
     my.cnf options
   */
@@ -321,6 +336,7 @@ static void cleanup_performance_schema(void) {
     find_XXX_class(key)
     will return PSI_NOT_INSTRUMENTED
   */
+  cleanup_mysql_server_telemetry_traces_service();
   cleanup_pfs_tls_channels_instrumentation();
   cleanup_pfs_plugin_table();
   cleanup_error();
@@ -340,13 +356,14 @@ static void cleanup_performance_schema(void) {
   cleanup_instruments();
 }
 
-void shutdown_performance_schema(void) {
+void shutdown_performance_schema() {
   pfs_initialized = false;
 
   /* disable everything, especially for this thread. */
   flag_events_stages_current = false;
   flag_events_stages_history = false;
   flag_events_stages_history_long = false;
+  flag_events_statements_cpu = false;
   flag_events_statements_current = false;
   flag_events_statements_history = false;
   flag_events_statements_history_long = false;
@@ -400,11 +417,11 @@ void cleanup_instrument_config() {
 */
 
 int add_pfs_instr_to_array(const char *name, const char *value) {
-  size_t name_length = strlen(name);
-  size_t value_length = strlen(value);
+  const size_t name_length = strlen(name);
+  const size_t value_length = strlen(value);
 
   /* Allocate structure plus string buffers plus null terminators */
-  PFS_instr_config *e = (PFS_instr_config *)my_malloc(
+  auto *e = (PFS_instr_config *)my_malloc(
       PSI_NOT_INSTRUMENTED,
       sizeof(PFS_instr_config) + name_length + 1 + value_length + 1,
       MYF(MY_WME));

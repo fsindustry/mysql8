@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -126,9 +126,9 @@ bool Rpl_info_table_access::close_table(THD *thd, TABLE *table,
   @param[in,out]  field_values The sequence of values
   @param[in,out]  table        Table
 
-  @retval FOUND     The row was found.
-  @retval NOT_FOUND The row was not found.
-  @retval ERROR     There was a failure.
+  @retval FOUND_ID     The row was found.
+  @retval NOT_FOUND_ID The row was not found.
+  @retval ERROR_ID     There was a failure.
 */
 enum enum_return_id Rpl_info_table_access::find_info(
     Rpl_info_values *field_values, TABLE *table) {
@@ -166,9 +166,13 @@ enum enum_return_id Rpl_info_table_access::find_info(
   }
   key_copy(key, table->record[0], table->key_info, table->key_info->key_length);
 
-  if (table->file->ha_index_read_idx_map(table->record[0], 0, key, HA_WHOLE_KEY,
-                                         HA_READ_KEY_EXACT))
+  int lookup_return_value = table->file->ha_index_read_idx_map(
+      table->record[0], 0, key, HA_WHOLE_KEY, HA_READ_KEY_EXACT);
+
+  if (lookup_return_value == HA_ERR_KEY_NOT_FOUND)
     return NOT_FOUND_ID;
+  else if (lookup_return_value)
+    return ERROR_ID;
 
   return FOUND_ID;
 }
@@ -182,7 +186,7 @@ enum enum_return_id Rpl_info_table_access::find_info(
   The code built on top of this function needs to ensure there is
   no concurrent threads trying to update the table. So if an error
   different from HA_ERR_END_OF_FILE is returned, we abort with an
-  error because this implies that someone has manualy and
+  error because this implies that someone has manually and
   concurrently changed something.
 
   @retval FOUND     The row was found.

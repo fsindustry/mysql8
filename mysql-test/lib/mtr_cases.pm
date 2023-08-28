@@ -1,5 +1,5 @@
 # -*- cperl -*-
-# Copyright (c) 2005, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -46,6 +46,7 @@ use My::Test;
 
 use mtr_match;
 use mtr_report;
+use My::Constants;
 
 require "mtr_misc.pl";
 
@@ -688,7 +689,20 @@ sub combinations_from_file($) {
     foreach my $option ($group->options()) {
       push(@{ $comb->{comb_opt} }, $option->option());
     }
-    push(@combinations, $comb);
+    if ($::opt_only_combinations) {
+      for my $only_combination (split(",", $::opt_only_combinations)) {
+        if ($comb->{name} eq $only_combination) {
+          mtr_report(" - Only-combination '$only_combination' added");
+          push(@combinations, $comb);
+        }
+      }
+    } else {
+      push(@combinations, $comb);
+    }
+  }
+
+  if ($::opt_only_combinations && !@combinations) {
+    mtr_error("Couldn't find '$::opt_only_combinations' for $combination_file file.");
   }
 
   return @combinations;
@@ -981,6 +995,7 @@ sub optimize_cases {
           grep { $_ eq lc $binlog_format } @{ $tinfo->{'binlog_formats'} };
         if (!$supported) {
           $tinfo->{'skip'} = 1;
+          $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
           $tinfo->{'comment'} =
             "Doesn't support --binlog-format='$binlog_format'";
         }
@@ -1245,8 +1260,9 @@ sub collect_one_test_case {
   my $master_sh = "$testdir/$tname-master.sh";
   if (-f $master_sh) {
     if (IS_WIN32PERL) {
-      $tinfo->{'skip'}    = 1;
-      $tinfo->{'comment'} = "No tests with sh scripts on Windows";
+      $tinfo->{'skip'}        = 1;
+      $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
+      $tinfo->{'comment'}     = "No tests with sh scripts on Windows";
       return $tinfo;
     } else {
       $tinfo->{'master_sh'} = $master_sh;
@@ -1257,8 +1273,9 @@ sub collect_one_test_case {
   my $slave_sh = "$testdir/$tname-slave.sh";
   if (-f $slave_sh) {
     if (IS_WIN32PERL) {
-      $tinfo->{'skip'}    = 1;
-      $tinfo->{'comment'} = "No tests with sh scripts on Windows";
+      $tinfo->{'skip'}        = 1;
+      $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
+      $tinfo->{'comment'}     = "No tests with sh scripts on Windows";
       return $tinfo;
     } else {
       $tinfo->{'slave_sh'} = $slave_sh;

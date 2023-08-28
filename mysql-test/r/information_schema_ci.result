@@ -64,16 +64,21 @@ ADMINISTRABLE_ROLE_AUTHORIZATIONS
 APPLICABLE_ROLES
 CHARACTER_SETS
 CHECK_CONSTRAINTS
+CLIENT_STATISTICS
 COLLATIONS
 COLLATION_CHARACTER_SET_APPLICABILITY
 COLUMNS
 COLUMNS_EXTENSIONS
 COLUMN_PRIVILEGES
 COLUMN_STATISTICS
+COMPRESSION_DICTIONARY
+COMPRESSION_DICTIONARY_TABLES
 ENABLED_ROLES
 ENGINES
 EVENTS
 FILES
+GLOBAL_TEMPORARY_TABLES
+INDEX_STATISTICS
 KEYWORDS
 KEY_COLUMN_USAGE
 OPTIMIZER_TRACE
@@ -102,9 +107,13 @@ TABLES_EXTENSIONS
 TABLE_CONSTRAINTS
 TABLE_CONSTRAINTS_EXTENSIONS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
+TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 USER_ATTRIBUTES
 USER_PRIVILEGES
+USER_STATISTICS
 VIEWS
 VIEW_ROUTINE_USAGE
 VIEW_TABLE_USAGE
@@ -209,7 +218,7 @@ Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 a	int	NULL	YES	MUL	NULL		select,insert,update,references	
 show full columns from mysql.db like "Insert%";
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
-Insert_priv	enum('N','Y')	utf8_general_ci	NO		N		select,insert,update,references	
+Insert_priv	enum('N','Y')	utf8mb3_general_ci	NO		N		select,insert,update,references	
 show full columns from v1;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 c	varchar(64)	utf8_bin	YES		NULL		select,insert,update,references	
@@ -564,11 +573,11 @@ NULL
 drop table t1;
 SHOW CREATE TABLE INFORMATION_SCHEMA.character_sets;
 View	Create View	character_set_client	collation_connection
-CHARACTER_SETS	CREATE ALGORITHM=UNDEFINED DEFINER=`mysql.infoschema`@`localhost` SQL SECURITY DEFINER VIEW `information_schema`.`CHARACTER_SETS` AS select `cs`.`name` AS `CHARACTER_SET_NAME`,`col`.`name` AS `DEFAULT_COLLATE_NAME`,`cs`.`comment` AS `DESCRIPTION`,`cs`.`mb_max_length` AS `MAXLEN` from (`mysql`.`character_sets` `cs` join `mysql`.`collations` `col` on((`cs`.`default_collation_id` = `col`.`id`)))	utf8	utf8_general_ci
+CHARACTER_SETS	CREATE ALGORITHM=UNDEFINED DEFINER=`mysql.infoschema`@`localhost` SQL SECURITY DEFINER VIEW `information_schema`.`CHARACTER_SETS` AS select `cs`.`name` AS `CHARACTER_SET_NAME`,`col`.`name` AS `DEFAULT_COLLATE_NAME`,`cs`.`comment` AS `DESCRIPTION`,`cs`.`mb_max_length` AS `MAXLEN` from (`mysql`.`character_sets` `cs` join `mysql`.`collations` `col` on((`cs`.`default_collation_id` = `col`.`id`)))	utf8mb3	utf8mb3_general_ci
 set names latin2;
 SHOW CREATE TABLE INFORMATION_SCHEMA.character_sets;
 View	Create View	character_set_client	collation_connection
-CHARACTER_SETS	CREATE ALGORITHM=UNDEFINED DEFINER=`mysql.infoschema`@`localhost` SQL SECURITY DEFINER VIEW `information_schema`.`CHARACTER_SETS` AS select `cs`.`name` AS `CHARACTER_SET_NAME`,`col`.`name` AS `DEFAULT_COLLATE_NAME`,`cs`.`comment` AS `DESCRIPTION`,`cs`.`mb_max_length` AS `MAXLEN` from (`mysql`.`character_sets` `cs` join `mysql`.`collations` `col` on((`cs`.`default_collation_id` = `col`.`id`)))	utf8	utf8_general_ci
+CHARACTER_SETS	CREATE ALGORITHM=UNDEFINED DEFINER=`mysql.infoschema`@`localhost` SQL SECURITY DEFINER VIEW `information_schema`.`CHARACTER_SETS` AS select `cs`.`name` AS `CHARACTER_SET_NAME`,`col`.`name` AS `DEFAULT_COLLATE_NAME`,`cs`.`comment` AS `DESCRIPTION`,`cs`.`mb_max_length` AS `MAXLEN` from (`mysql`.`character_sets` `cs` join `mysql`.`collations` `col` on((`cs`.`default_collation_id` = `col`.`id`)))	utf8mb3	utf8mb3_general_ci
 set names latin1;
 create table t1 select * from information_schema.CHARACTER_SETS
 where CHARACTER_SET_NAME like "latin1" order by character_set_name;
@@ -647,6 +656,9 @@ TABLES_EXTENSIONS
 TABLE_CONSTRAINTS
 TABLE_CONSTRAINTS_EXTENSIONS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
+TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 create database information_schema;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -660,6 +672,9 @@ TABLES_EXTENSIONS	SYSTEM VIEW
 TABLE_CONSTRAINTS	SYSTEM VIEW
 TABLE_CONSTRAINTS_EXTENSIONS	SYSTEM VIEW
 TABLE_PRIVILEGES	SYSTEM VIEW
+TABLE_STATISTICS	SYSTEM VIEW
+TEMPORARY_TABLES	SYSTEM VIEW
+THREAD_STATISTICS	SYSTEM VIEW
 TRIGGERS	SYSTEM VIEW
 create table t1(a int);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -676,6 +691,9 @@ TABLES_EXTENSIONS
 TABLE_CONSTRAINTS
 TABLE_CONSTRAINTS_EXTENSIONS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
+TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 select table_name from tables where table_name='user';
 TABLE_NAME
@@ -819,10 +837,14 @@ EVENTS	ENDS	datetime
 EVENTS	EXECUTE_AT	datetime
 EVENTS	LAST_EXECUTED	datetime
 EVENTS	STARTS	datetime
+GLOBAL_TEMPORARY_TABLES	CREATE_TIME	datetime
+GLOBAL_TEMPORARY_TABLES	UPDATE_TIME	datetime
 PARTITIONS	CHECK_TIME	datetime
 PARTITIONS	UPDATE_TIME	datetime
 TABLES	CHECK_TIME	datetime
 TABLES	UPDATE_TIME	datetime
+TEMPORARY_TABLES	CREATE_TIME	datetime
+TEMPORARY_TABLES	UPDATE_TIME	datetime
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES A
 WHERE NOT EXISTS
 (SELECT * FROM INFORMATION_SCHEMA.COLUMNS B
@@ -861,7 +883,10 @@ COLUMNS	TABLE_NAME	select
 COLUMNS_EXTENSIONS	TABLE_NAME	select
 COLUMN_PRIVILEGES	TABLE_NAME	select
 COLUMN_STATISTICS	TABLE_NAME	select
+COMPRESSION_DICTIONARY_TABLES	TABLE_NAME	select
 FILES	TABLE_NAME	select
+GLOBAL_TEMPORARY_TABLES	TABLE_NAME	select
+INDEX_STATISTICS	TABLE_NAME	select
 INNODB_BUFFER_PAGE	TABLE_NAME	select
 INNODB_BUFFER_PAGE_LRU	TABLE_NAME	select
 INNODB_CMP_PER_INDEX	table_name	select
@@ -878,6 +903,8 @@ TABLES_EXTENSIONS	TABLE_NAME	select
 TABLE_CONSTRAINTS	TABLE_NAME	select
 TABLE_CONSTRAINTS_EXTENSIONS	TABLE_NAME	select
 TABLE_PRIVILEGES	TABLE_NAME	select
+TABLE_STATISTICS	TABLE_NAME	select
+TEMPORARY_TABLES	TABLE_NAME	select
 VIEWS	TABLE_NAME	select
 VIEW_ROUTINE_USAGE	TABLE_NAME	select
 VIEW_TABLE_USAGE	TABLE_NAME	select
@@ -889,7 +916,7 @@ table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name COLLATE utf8_general_ci not like 'innodb_%'
 GROUP BY TABLE_SCHEMA;
 TABLE_SCHEMA	count(*)
-information_schema	48
+information_schema	57
 mysql	35
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
@@ -1037,7 +1064,7 @@ drop procedure p1;
 drop procedure p2;
 show create database information_schema;
 Database	Create Database
-information_schema	CREATE DATABASE `information_schema` /*!40100 DEFAULT CHARACTER SET utf8 */ /*!80016 DEFAULT ENCRYPTION='N' */
+information_schema	CREATE DATABASE `information_schema` /*!40100 DEFAULT CHARACTER SET utf8mb3 */ /*!80016 DEFAULT ENCRYPTION='N' */
 create table t1(f1 LONGBLOB, f2 LONGTEXT);
 select column_name,data_type,CHARACTER_OCTET_LENGTH,
 CHARACTER_MAXIMUM_LENGTH
@@ -1344,15 +1371,20 @@ ADMINISTRABLE_ROLE_AUTHORIZATIONS	information_schema.ADMINISTRABLE_ROLE_AUTHORIZ
 APPLICABLE_ROLES	information_schema.APPLICABLE_ROLES	1
 CHARACTER_SETS	information_schema.CHARACTER_SETS	1
 CHECK_CONSTRAINTS	information_schema.CHECK_CONSTRAINTS	1
+CLIENT_STATISTICS	information_schema.CLIENT_STATISTICS	1
 COLLATIONS	information_schema.COLLATIONS	1
 COLUMNS	information_schema.COLUMNS	1
 COLUMNS_EXTENSIONS	information_schema.COLUMNS_EXTENSIONS	1
 COLUMN_PRIVILEGES	information_schema.COLUMN_PRIVILEGES	1
 COLUMN_STATISTICS	information_schema.COLUMN_STATISTICS	1
+COMPRESSION_DICTIONARY	information_schema.COMPRESSION_DICTIONARY	1
+COMPRESSION_DICTIONARY_TABLES	information_schema.COMPRESSION_DICTIONARY_TABLES	1
 ENABLED_ROLES	information_schema.ENABLED_ROLES	1
 ENGINES	information_schema.ENGINES	1
 EVENTS	information_schema.EVENTS	1
 FILES	information_schema.FILES	1
+GLOBAL_TEMPORARY_TABLES	information_schema.GLOBAL_TEMPORARY_TABLES	1
+INDEX_STATISTICS	information_schema.INDEX_STATISTICS	1
 KEY_COLUMN_USAGE	information_schema.KEY_COLUMN_USAGE	1
 OPTIMIZER_TRACE	information_schema.OPTIMIZER_TRACE	1
 PARAMETERS	information_schema.PARAMETERS	1
@@ -1379,9 +1411,13 @@ TABLES_EXTENSIONS	information_schema.TABLES_EXTENSIONS	1
 TABLE_CONSTRAINTS	information_schema.TABLE_CONSTRAINTS	1
 TABLE_CONSTRAINTS_EXTENSIONS	information_schema.TABLE_CONSTRAINTS_EXTENSIONS	1
 TABLE_PRIVILEGES	information_schema.TABLE_PRIVILEGES	1
+TABLE_STATISTICS	information_schema.TABLE_STATISTICS	1
+TEMPORARY_TABLES	information_schema.TEMPORARY_TABLES	1
+THREAD_STATISTICS	information_schema.THREAD_STATISTICS	1
 TRIGGERS	information_schema.TRIGGERS	1
 USER_ATTRIBUTES	information_schema.USER_ATTRIBUTES	1
 USER_PRIVILEGES	information_schema.USER_PRIVILEGES	1
+USER_STATISTICS	information_schema.USER_STATISTICS	1
 VIEWS	information_schema.VIEWS	1
 VIEW_ROUTINE_USAGE	information_schema.VIEW_ROUTINE_USAGE	1
 VIEW_TABLE_USAGE	information_schema.VIEW_TABLE_USAGE	1
@@ -1549,7 +1585,7 @@ information_schema
 SELECT TABLE_COLLATION FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA='mysql' and TABLE_NAME= 'db';
 TABLE_COLLATION
-utf8_bin
+utf8mb3_bin
 select * from information_schema.columns where table_schema = NULL;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
@@ -1727,6 +1763,10 @@ SELECT length(CAST(b AS CHAR)) FROM ubig;
 length(CAST(b AS CHAR))
 20
 DROP TABLE ubig;
+create user mysqltest_1@localhost identified by 'password';
+select 1 from information_schema.tables where table_schema=repeat('a', 2000);
+1
+drop user mysqltest_1@localhost;
 End of 5.1 tests.
 create function f1 (p1 int, p2 datetime, p3 decimal(10,2))
 returns char(10) return null;
@@ -2294,9 +2334,9 @@ AND t.table_name = 't1' limit 1;
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8 COLLATE utf8_tolower_ci DEFAULT NULL,
-  `TABLE_NAME` varchar(64) CHARACTER SET utf8 COLLATE utf8_tolower_ci DEFAULT NULL,
-  `COLUMN_NAME` varchar(64) CHARACTER SET utf8 COLLATE utf8_tolower_ci DEFAULT NULL
+  `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_tolower_ci DEFAULT NULL,
+  `TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_tolower_ci DEFAULT NULL,
+  `COLUMN_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_tolower_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t1, t2;
 DROP VIEW v1;
@@ -2473,16 +2513,21 @@ ADMINISTRABLE_ROLE_AUTHORIZATIONS	USER
 APPLICABLE_ROLES	USER
 CHARACTER_SETS	CHARACTER_SET_NAME
 CHECK_CONSTRAINTS	CONSTRAINT_SCHEMA
+CLIENT_STATISTICS	CLIENT
 COLLATIONS	COLLATION_NAME
 COLLATION_CHARACTER_SET_APPLICABILITY	COLLATION_NAME
 COLUMNS	TABLE_SCHEMA
 COLUMNS_EXTENSIONS	TABLE_SCHEMA
 COLUMN_PRIVILEGES	TABLE_SCHEMA
 COLUMN_STATISTICS	SCHEMA_NAME
+COMPRESSION_DICTIONARY	DICT_VERSION
+COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA
 ENABLED_ROLES	ROLE_NAME
 ENGINES	ENGINE
 EVENTS	EVENT_SCHEMA
 FILES	TABLE_SCHEMA
+GLOBAL_TEMPORARY_TABLES	TABLE_SCHEMA
+INDEX_STATISTICS	TABLE_SCHEMA
 KEYWORDS	WORD
 KEY_COLUMN_USAGE	CONSTRAINT_SCHEMA
 OPTIMIZER_TRACE	QUERY
@@ -2511,9 +2556,13 @@ TABLES_EXTENSIONS	TABLE_SCHEMA
 TABLE_CONSTRAINTS	CONSTRAINT_SCHEMA
 TABLE_CONSTRAINTS_EXTENSIONS	CONSTRAINT_SCHEMA
 TABLE_PRIVILEGES	TABLE_SCHEMA
+TABLE_STATISTICS	TABLE_SCHEMA
+TEMPORARY_TABLES	TABLE_SCHEMA
+THREAD_STATISTICS	THREAD_ID
 TRIGGERS	TRIGGER_SCHEMA
 USER_ATTRIBUTES	USER
 USER_PRIVILEGES	GRANTEE
+USER_STATISTICS	USER
 VIEWS	TABLE_SCHEMA
 VIEW_ROUTINE_USAGE	TABLE_SCHEMA
 VIEW_TABLE_USAGE	VIEW_SCHEMA
@@ -2540,16 +2589,21 @@ ADMINISTRABLE_ROLE_AUTHORIZATIONS	USER
 APPLICABLE_ROLES	USER
 CHARACTER_SETS	CHARACTER_SET_NAME
 CHECK_CONSTRAINTS	CONSTRAINT_SCHEMA
+CLIENT_STATISTICS	CLIENT
 COLLATIONS	COLLATION_NAME
 COLLATION_CHARACTER_SET_APPLICABILITY	COLLATION_NAME
 COLUMNS	TABLE_SCHEMA
 COLUMNS_EXTENSIONS	TABLE_SCHEMA
 COLUMN_PRIVILEGES	TABLE_SCHEMA
 COLUMN_STATISTICS	SCHEMA_NAME
+COMPRESSION_DICTIONARY	DICT_VERSION
+COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA
 ENABLED_ROLES	ROLE_NAME
 ENGINES	ENGINE
 EVENTS	EVENT_SCHEMA
 FILES	TABLE_SCHEMA
+GLOBAL_TEMPORARY_TABLES	TABLE_SCHEMA
+INDEX_STATISTICS	TABLE_SCHEMA
 KEYWORDS	WORD
 KEY_COLUMN_USAGE	CONSTRAINT_SCHEMA
 OPTIMIZER_TRACE	QUERY
@@ -2578,9 +2632,13 @@ TABLES_EXTENSIONS	TABLE_SCHEMA
 TABLE_CONSTRAINTS	CONSTRAINT_SCHEMA
 TABLE_CONSTRAINTS_EXTENSIONS	CONSTRAINT_SCHEMA
 TABLE_PRIVILEGES	TABLE_SCHEMA
+TABLE_STATISTICS	TABLE_SCHEMA
+TEMPORARY_TABLES	TABLE_SCHEMA
+THREAD_STATISTICS	THREAD_ID
 TRIGGERS	TRIGGER_SCHEMA
 USER_ATTRIBUTES	USER
 USER_PRIVILEGES	GRANTEE
+USER_STATISTICS	USER
 VIEWS	TABLE_SCHEMA
 VIEW_ROUTINE_USAGE	TABLE_SCHEMA
 VIEW_TABLE_USAGE	VIEW_SCHEMA
@@ -2704,6 +2762,8 @@ hijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcde
 fghijabcdefghijabcde';
 SET big_tables=1;
 SET character_set_connection=ucs2;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 # The below statement asserts or shows comment text in ucs2 instead of
 # using system charset, when run without the fix.
 SHOW TABLE STATUS;
@@ -2884,7 +2944,7 @@ SELECT TABLE_NAME, CREATE_OPTIONS
 FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_NAME = 't1';
 TABLE_NAME	CREATE_OPTIONS
-t1	SECONDARY_ENGINE="myisam"
+t1	SECONDARY_ENGINE="myisam" SECONDARY_LOAD="0"
 DROP TABLE t1;
 CREATE TABLE t1 (f1 INT);
 SELECT TABLE_NAME, CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES
@@ -2895,7 +2955,7 @@ ALTER TABLE t1 SECONDARY_ENGINE=myisam;
 SELECT TABLE_NAME, CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_NAME = 't1';
 TABLE_NAME	CREATE_OPTIONS
-t1	SECONDARY_ENGINE="myisam"
+t1	SECONDARY_ENGINE="myisam" SECONDARY_LOAD="0"
 DROP TABLE t1;
 #
 # BUG#29406053: OPTIMIZER_SWITCH DERIVED_MERGE=OFF CAUSES TABLE COMMENTS
@@ -2958,3 +3018,87 @@ SELECT * FROM INFORMATION_SCHEMA.APPLICABLE_ROLES;
 USER	HOST	GRANTEE	GRANTEE_HOST	ROLE_NAME	ROLE_HOST	IS_GRANTABLE	IS_DEFAULT	IS_MANDATORY
 UNLOCK TABLES;
 DROP TABLE t1;
+#
+# Bug #30624990 NO UTF8MB3 IN INFORMATION_SCHEMA.CHARACTER_SETS
+#
+SELECT * FROM information_schema.CHARACTER_SETS
+WHERE CHARACTER_SET_NAME LIKE 'utf8%'
+ORDER BY character_set_name;
+CHARACTER_SET_NAME	DEFAULT_COLLATE_NAME	DESCRIPTION	MAXLEN
+utf8mb3	utf8mb3_general_ci	UTF-8 Unicode	3
+utf8mb4	utf8mb4_0900_ai_ci	UTF-8 Unicode	4
+SHOW CHARACTER SET LIKE 'utf8%';
+Charset	Description	Default collation	Maxlen
+utf8mb3	UTF-8 Unicode	utf8mb3_general_ci	3
+utf8mb4	UTF-8 Unicode	utf8mb4_0900_ai_ci	4
+
+Bug #33787300 Rename utf8_xxx collations to utf8mb3_xxx
+
+SELECT * FROM information_schema.COLLATIONS
+WHERE COLLATION_NAME LIKE "utf8\_%"
+ORDER BY collation_name;
+COLLATION_NAME	CHARACTER_SET_NAME	ID	IS_DEFAULT	IS_COMPILED	SORTLEN	PAD_ATTRIBUTE
+SELECT * FROM information_schema.COLLATIONS
+WHERE COLLATION_NAME LIKE "utf8mb3\_%"
+ORDER BY collation_name;
+COLLATION_NAME	CHARACTER_SET_NAME	ID	IS_DEFAULT	IS_COMPILED	SORTLEN	PAD_ATTRIBUTE
+utf8mb3_bin	utf8mb3	83		Yes	1	PAD SPACE
+utf8mb3_croatian_ci	utf8mb3	213		Yes	8	PAD SPACE
+utf8mb3_czech_ci	utf8mb3	202		Yes	8	PAD SPACE
+utf8mb3_danish_ci	utf8mb3	203		Yes	8	PAD SPACE
+utf8mb3_esperanto_ci	utf8mb3	209		Yes	8	PAD SPACE
+utf8mb3_estonian_ci	utf8mb3	198		Yes	8	PAD SPACE
+utf8mb3_general_ci	utf8mb3	33	Yes	Yes	1	PAD SPACE
+utf8mb3_general_mysql500_ci	utf8mb3	223		Yes	1	PAD SPACE
+utf8mb3_german2_ci	utf8mb3	212		Yes	8	PAD SPACE
+utf8mb3_hungarian_ci	utf8mb3	210		Yes	8	PAD SPACE
+utf8mb3_icelandic_ci	utf8mb3	193		Yes	8	PAD SPACE
+utf8mb3_latvian_ci	utf8mb3	194		Yes	8	PAD SPACE
+utf8mb3_lithuanian_ci	utf8mb3	204		Yes	8	PAD SPACE
+utf8mb3_persian_ci	utf8mb3	208		Yes	8	PAD SPACE
+utf8mb3_polish_ci	utf8mb3	197		Yes	8	PAD SPACE
+utf8mb3_romanian_ci	utf8mb3	195		Yes	8	PAD SPACE
+utf8mb3_roman_ci	utf8mb3	207		Yes	8	PAD SPACE
+utf8mb3_sinhala_ci	utf8mb3	211		Yes	8	PAD SPACE
+utf8mb3_slovak_ci	utf8mb3	205		Yes	8	PAD SPACE
+utf8mb3_slovenian_ci	utf8mb3	196		Yes	8	PAD SPACE
+utf8mb3_spanish2_ci	utf8mb3	206		Yes	8	PAD SPACE
+utf8mb3_spanish_ci	utf8mb3	199		Yes	8	PAD SPACE
+utf8mb3_swedish_ci	utf8mb3	200		Yes	8	PAD SPACE
+utf8mb3_tolower_ci	utf8mb3	76		Yes	1	PAD SPACE
+utf8mb3_turkish_ci	utf8mb3	201		Yes	8	PAD SPACE
+utf8mb3_unicode_520_ci	utf8mb3	214		Yes	8	PAD SPACE
+utf8mb3_unicode_ci	utf8mb3	192		Yes	8	PAD SPACE
+utf8mb3_vietnamese_ci	utf8mb3	215		Yes	8	PAD SPACE
+SHOW COLLATION LIKE 'utf8\_%';
+Collation	Charset	Id	Default	Compiled	Sortlen	Pad_attribute
+SHOW COLLATION LIKE 'utf8mb3\_%';
+Collation	Charset	Id	Default	Compiled	Sortlen	Pad_attribute
+utf8mb3_bin	utf8mb3	83		Yes	1	PAD SPACE
+utf8mb3_croatian_ci	utf8mb3	213		Yes	8	PAD SPACE
+utf8mb3_czech_ci	utf8mb3	202		Yes	8	PAD SPACE
+utf8mb3_danish_ci	utf8mb3	203		Yes	8	PAD SPACE
+utf8mb3_esperanto_ci	utf8mb3	209		Yes	8	PAD SPACE
+utf8mb3_estonian_ci	utf8mb3	198		Yes	8	PAD SPACE
+utf8mb3_general_ci	utf8mb3	33	Yes	Yes	1	PAD SPACE
+utf8mb3_general_mysql500_ci	utf8mb3	223		Yes	1	PAD SPACE
+utf8mb3_german2_ci	utf8mb3	212		Yes	8	PAD SPACE
+utf8mb3_hungarian_ci	utf8mb3	210		Yes	8	PAD SPACE
+utf8mb3_icelandic_ci	utf8mb3	193		Yes	8	PAD SPACE
+utf8mb3_latvian_ci	utf8mb3	194		Yes	8	PAD SPACE
+utf8mb3_lithuanian_ci	utf8mb3	204		Yes	8	PAD SPACE
+utf8mb3_persian_ci	utf8mb3	208		Yes	8	PAD SPACE
+utf8mb3_polish_ci	utf8mb3	197		Yes	8	PAD SPACE
+utf8mb3_romanian_ci	utf8mb3	195		Yes	8	PAD SPACE
+utf8mb3_roman_ci	utf8mb3	207		Yes	8	PAD SPACE
+utf8mb3_sinhala_ci	utf8mb3	211		Yes	8	PAD SPACE
+utf8mb3_slovak_ci	utf8mb3	205		Yes	8	PAD SPACE
+utf8mb3_slovenian_ci	utf8mb3	196		Yes	8	PAD SPACE
+utf8mb3_spanish2_ci	utf8mb3	206		Yes	8	PAD SPACE
+utf8mb3_spanish_ci	utf8mb3	199		Yes	8	PAD SPACE
+utf8mb3_swedish_ci	utf8mb3	200		Yes	8	PAD SPACE
+utf8mb3_tolower_ci	utf8mb3	76		Yes	1	PAD SPACE
+utf8mb3_turkish_ci	utf8mb3	201		Yes	8	PAD SPACE
+utf8mb3_unicode_520_ci	utf8mb3	214		Yes	8	PAD SPACE
+utf8mb3_unicode_ci	utf8mb3	192		Yes	8	PAD SPACE
+utf8mb3_vietnamese_ci	utf8mb3	215		Yes	8	PAD SPACE

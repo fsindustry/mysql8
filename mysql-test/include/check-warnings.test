@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2023, Oracle and/or its affiliates.
 #
 # This test is executed once after each test to check the servers
 # for unexpected warnings found in the servers error log
@@ -24,6 +24,10 @@ USE mtr;
 # --transaction-read-only. And set autocommit mode for the session
 # irrespective of server --autocommit setting.
 SET SESSION TRANSACTION READ WRITE;
+
+# Allow super to write
+SET @original_super_read_only = @@GLOBAL.super_read_only;
+SET GLOBAL super_read_only = 0;
 
 # Due to the lack of WL#7828 / WL#8003 now, we might have a pending
 # Data Dictionary read-only transaction at this point. Even though
@@ -54,6 +58,9 @@ SET SESSION AUTOCOMMIT = 1;
 # Call check_warnings to filter out any warning in the error_log table.
 CALL mtr.check_warnings(@result);
 --enable_query_log
+
+# Restore the original value
+SET @@GLOBAL.super_read_only = @original_super_read_only;
 
 if (`SELECT @result = 0`) {
   --skip OK

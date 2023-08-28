@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,7 +65,7 @@ ssize_t (*mock_pwrite)(int fd, const void *buf, size_t count,
     to set the position in the file back to the original position
     if the system doesn't support pread().
 
-    @param Filedes	File decsriptor
+    @param Filedes	File descriptor
     @param Buffer	Buffer to read data into
     @param Count	Number of bytes to read
     @param offset	Position to read from
@@ -77,6 +77,7 @@ ssize_t (*mock_pwrite)(int fd, const void *buf, size_t count,
 
 size_t my_pread(File Filedes, uchar *Buffer, size_t Count, my_off_t offset,
                 myf MyFlags) {
+  size_t total_readbytes = 0;
   DBUG_TRACE;
   for (;;) {
     errno = 0; /* Linux, Windows don't reset this on EOF/success */
@@ -88,7 +89,26 @@ size_t my_pread(File Filedes, uchar *Buffer, size_t Count, my_off_t offset,
         pread(Filedes, Buffer, Count, offset);
 #endif
     const bool error = (readbytes != static_cast<int64_t>(Count));
+    if (readbytes > 0) total_readbytes += readbytes;
     if (error) {
+      if (readbytes > 0 && readbytes < static_cast<int64_t>(Count) &&
+          errno == 0) {
+        /*
+          pread() may return less bytes than requested even if enough bytes are
+          available according to the Linux man page.
+          This makes determining the end-of-file condition a bit harder.
+          We just do another pread() call to see if more bytes can be read,
+          since all my_pread() users expect it to always return all available
+          bytes. For end-of-file 0 bytes is returned. This can never be the case
+          for a partial read, since according to the man page, -1 is returned
+          with errno set to EINTR if no data has been read.
+        */
+        Buffer += readbytes;
+        offset += readbytes;
+        Count -= readbytes;
+
+        continue;
+      }
       set_my_errno(errno ? errno : -1);
       if (errno == 0 || (readbytes != -1 && (MyFlags & (MY_NABP | MY_FNABP))))
         set_my_errno(HA_ERR_FILE_TOO_SHORT);
@@ -107,10 +127,9 @@ size_t my_pread(File Filedes, uchar *Buffer, size_t Count, my_off_t offset,
         return MY_FILE_ERROR;
     }                                             // if (error)
     if (MyFlags & (MY_NABP | MY_FNABP)) return 0; /* Read went ok; Return 0 */
-    assert(readbytes >= 0);
-    return readbytes; /* purecov: inspected */
-  }                   // for (;;)
-}
+    return total_readbytes;                       /* purecov: inspected */
+  }
+} /* my_pread */
 
 /**
   Write a chunk of bytes to a file at a given position

@@ -1,4 +1,4 @@
-# Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -101,13 +101,15 @@ FUNCTION(ADD_LINUX_RPM_FLAGS)
     RESULT_VARIABLE RPM_EVAL_RESULT
     )
   IF(RPM_EVAL_RESULT EQUAL 0)
-    SET(CMAKE_C_FLAGS   "${RPM_EVAL_OPTFLAGS}" PARENT_SCOPE)
-    SET(CMAKE_CXX_FLAGS "${RPM_EVAL_OPTFLAGS}" PARENT_SCOPE)
+    STRING_APPEND(CMAKE_C_FLAGS " ${RPM_EVAL_OPTFLAGS}")
+    STRING_APPEND(CMAKE_CXX_FLAGS " ${RPM_EVAL_OPTFLAGS}")
+    SET(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}" PARENT_SCOPE)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
   ELSE()
     MESSAGE(FATAL_ERROR
       "WITH_PACKAGE_FLAGS=on but rpm --eval %optflags failed")
   ENDIF()
-ENDFUNCTION()
+ENDFUNCTION(ADD_LINUX_RPM_FLAGS)
 
 # Set CMAKE_C_FLAGS and CMAKE_CXX_FLAGS to
 #   dpkg-buildflags --get <lang>FLAGS CPPFLAGS
@@ -125,10 +127,43 @@ FUNCTION(ADD_LINUX_DEB_FLAGS)
       MESSAGE(FATAL_ERROR
         "WITH_PACKAGE_FLAGS=on but dpkg-buildflags --get failed")
     ENDIF()
+
+    # remove "-flto=auto -ffat-lto-objects" returned on Ubuntu 22.04
+    REMOVE_CMAKE_COMPILER_FLAGS(GET_CFLAGS   "-flto(=[0-9a-z]+)?|-ffat-lto-objects")
+    REMOVE_CMAKE_COMPILER_FLAGS(GET_CXXFLAGS "-flto(=[0-9a-z]+)?|-ffat-lto-objects")
+    REMOVE_CMAKE_COMPILER_FLAGS(GET_LDFLAGS  "-flto(=[0-9a-z]+)?|-ffat-lto-objects")
+
     SET(CMAKE_C_FLAGS   "${GET_CFLAGS}   ${GET_CPPFLAGS}" PARENT_SCOPE)
     SET(CMAKE_CXX_FLAGS "${GET_CXXFLAGS} ${GET_CPPFLAGS}" PARENT_SCOPE)
     SET(CMAKE_EXE_LINKER_FLAGS    "${GET_LDFLAGS}" PARENT_SCOPE)
     SET(CMAKE_MODULE_LINKER_FLAGS "${GET_LDFLAGS}" PARENT_SCOPE)
     SET(CMAKE_SHARED_LINKER_FLAGS "${GET_LDFLAGS}" PARENT_SCOPE)
   ENDFOREACH()
-ENDFUNCTION()
+ENDFUNCTION(ADD_LINUX_DEB_FLAGS)
+
+# See if we can do "-fuse-ld=${LINKER}" for gcc/clang on Linux.
+# If compilation/linking succeeds, we extend misc cmake LINKER_FLAGS,
+# and set OUTPUT_RESULT to 1.
+FUNCTION(CHECK_ALTERNATIVE_LINKER LINKER OUTPUT_RESULT)
+  CMAKE_PUSH_CHECK_STATE(RESET)
+
+  SET(CMAKE_REQUIRED_LIBRARIES "-fuse-ld=${LINKER}")
+  CHECK_C_SOURCE_COMPILES("int main() {}" C_LD_${LINKER}_RESULT)
+  CHECK_CXX_SOURCE_COMPILES("int main() {}" CXX_LD_${LINKER}_RESULT)
+  IF(C_LD_${LINKER}_RESULT AND CXX_LD_${LINKER}_RESULT)
+    FOREACH(flag
+        CMAKE_EXE_LINKER_FLAGS
+        CMAKE_MODULE_LINKER_FLAGS
+        CMAKE_SHARED_LINKER_FLAGS
+        )
+      STRING_APPEND(${flag} " -fuse-ld=${LINKER}")
+      SET(${flag} ${${flag}} PARENT_SCOPE)
+    ENDFOREACH()
+    SET(${OUTPUT_RESULT} 1 PARENT_SCOPE)
+  ELSE()
+    SET(${OUTPUT_RESULT} 0 PARENT_SCOPE)
+    MESSAGE(STATUS "Cannot use ${LINKER} on this platform")
+  ENDIF()
+
+  CMAKE_POP_CHECK_STATE()
+ENDFUNCTION(CHECK_ALTERNATIVE_LINKER)

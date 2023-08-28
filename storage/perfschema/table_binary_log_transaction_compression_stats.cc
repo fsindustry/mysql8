@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+  Copyright (c) 2019, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,7 @@ struct st_binary_log_transaction_compression_stats {
   std::vector<binlog::monitoring::Compression_stats *> stats;
 
   void clear() {
-    for (auto x : stats) delete x;
+    for (auto *x : stats) delete x;
     stats.clear();
   }
 
@@ -133,7 +133,7 @@ PFS_engine_table_share table_binary_log_transaction_compression_stats::m_share =
     {
         &pfs_truncatable_acl,
         &table_binary_log_transaction_compression_stats::create,
-        NULL, /* write_row */
+        nullptr, /* write_row */
         table_binary_log_transaction_compression_stats::delete_all_rows,
         table_binary_log_transaction_compression_stats::get_row_count,
         sizeof(pos_t), /* ref length */
@@ -157,7 +157,7 @@ table_binary_log_transaction_compression_stats::
 table_binary_log_transaction_compression_stats::
     ~table_binary_log_transaction_compression_stats() = default;
 
-void table_binary_log_transaction_compression_stats::reset_position(void) {
+void table_binary_log_transaction_compression_stats::reset_position() {
   m_pos.m_index = 0;
   m_next_pos.m_index = 0;
 }
@@ -171,9 +171,9 @@ int table_binary_log_transaction_compression_stats::delete_all_rows() {
   return 0;
 }
 
-int table_binary_log_transaction_compression_stats::rnd_next(void) {
+int table_binary_log_transaction_compression_stats::rnd_next() {
   m_rows.update();
-  uint row_count = get_row_count();
+  const uint row_count = get_row_count();
   for (m_pos.set_at(&m_next_pos); m_pos.m_index < row_count; m_pos.next()) {
     m_next_pos.set_after(&m_pos);
     return 0;
@@ -220,10 +220,10 @@ int table_binary_log_transaction_compression_stats::read_row_values(
         }
         case 1: /** COMPRESSION_TYPE */
         {
-          std::string s_type =
+          const std::string s_type =
               binary_log::transaction::compression::type_to_string(
                   row->get_type());
-          set_field_varchar_utf8(f, s_type.c_str(), s_type.size());
+          set_field_varchar_utf8mb4(f, s_type.c_str(), s_type.size());
           break;
         }
         case 2: /** TRANSACTION_COUNTER */

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2001, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,7 @@
   Note that we can't have assertion on file descriptors;  The reason for
   this is that during mysql shutdown, another thread can close a file
   we are working on.  In this case we should just return read errors from
-  the file descriptior.
+  the file descriptor.
 */
 
 #include "my_config.h"
@@ -52,9 +52,13 @@
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_macros.h"
+#include "mysql/service_mysql_alloc.h"
+#include "mysys_err.h"
 #include "template_utils.h"
 #include "vio/vio_priv.h"
-
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
 #ifdef FIONREAD_IN_SYS_FILIO
 #include <sys/filio.h>
 #endif
@@ -69,6 +73,33 @@
 #endif
 
 #include "mysql/psi/mysql_socket.h"
+
+/* Network io wait callbacks  for threadpool */
+static void (*before_io_wait)(void) = nullptr;
+static void (*after_io_wait)(void) = nullptr;
+
+/* Wait callback macros (both performance schema and threadpool */
+#define START_SOCKET_WAIT(locker, state_ptr, sock, which, timeout) \
+  do {                                                             \
+    MYSQL_START_SOCKET_WAIT(locker, state_ptr, sock, which, 0);    \
+    if (timeout && before_io_wait) before_io_wait();               \
+  } while (0)
+
+#define END_SOCKET_WAIT(locker, timeout)           \
+  do {                                             \
+    MYSQL_END_SOCKET_WAIT(locker, 0);              \
+    if (timeout && after_io_wait) after_io_wait(); \
+  } while (0)
+
+void vio_set_wait_callback(void (*before_wait)(void),
+                           void (*after_wait)(void)) {
+  before_io_wait = before_wait;
+  after_io_wait = after_wait;
+}
+
+/* Array of networks which have the proxy protocol activated */
+static struct st_vio_network *vio_pp_networks = nullptr;
+static size_t vio_pp_networks_nb = 0;
 
 int vio_errno(Vio *vio [[maybe_unused]]) {
 /* These transport types are not Winsock based. */
@@ -242,6 +273,43 @@ size_t vio_write(Vio *vio, const uchar *buf, size_t size) {
   return ret;
 }
 
+#ifdef _WIN32
+static void CALLBACK cancel_io_apc(ULONG_PTR data) { CancelIo((HANDLE)data); }
+
+/*
+  Cancel IO on Windows.
+
+  On XP, issue CancelIo as asynchronous procedure call to the thread that
+  started IO. On Vista+, simpler cancelation is done with CancelIoEx.
+*/
+
+int cancel_io(HANDLE handle, DWORD thread_id) {
+  static BOOL(WINAPI * fp_CancelIoEx)(HANDLE, OVERLAPPED *);
+  static volatile int first_time = 1;
+  int rc;
+  HANDLE thread_handle;
+
+  if (first_time) {
+    /* Try to load CancelIoEx using GetProcAddress */
+    InterlockedCompareExchangePointer(
+        (volatile void *)&fp_CancelIoEx,
+        GetProcAddress(GetModuleHandle("kernel32"), "CancelIoEx"), NULL);
+    first_time = 0;
+  }
+
+  if (fp_CancelIoEx) {
+    return fp_CancelIoEx(handle, NULL) ? 0 : -1;
+  }
+
+  thread_handle = OpenThread(THREAD_SET_CONTEXT, FALSE, thread_id);
+  if (thread_handle) {
+    rc = QueueUserAPC(cancel_io_apc, thread_handle, (ULONG_PTR)handle);
+    CloseHandle(thread_handle);
+  }
+  return rc;
+}
+#endif
+
 // WL#4896: Not covered
 int vio_set_blocking(Vio *vio, bool status) {
   DBUG_TRACE;
@@ -311,6 +379,7 @@ int vio_socket_timeout(Vio *vio, uint which [[maybe_unused]], bool old_mode) {
   DBUG_TRACE;
 
 #if defined(_WIN32)
+  (void)old_mode;  // maybe_unused
   {
     int optname;
     DWORD timeout = 0;
@@ -457,24 +526,26 @@ static void vio_wait_until_woken(Vio *vio) {
 }
 #endif
 
-int vio_shutdown(Vio *vio) {
-  int r = 0;
+int vio_shutdown(Vio *vio, int how) {
   DBUG_TRACE;
 
-  if (vio->inactive == false) {
-    assert(vio->type == VIO_TYPE_TCPIP || vio->type == VIO_TYPE_SOCKET ||
-           vio->type == VIO_TYPE_SSL);
+  int r = vio_cancel(vio, how);
 
-    assert(mysql_socket_getfd(vio->mysql_socket) >= 0);
-    if (mysql_socket_shutdown(vio->mysql_socket, SHUT_RDWR)) r = -1;
-
+  if (!vio->inactive) {
 #ifdef USE_PPOLL_IN_VIO
-    if (vio->thread_id != 0 && vio->poll_shutdown_flag.test_and_set()) {
+    assert(vio->thread_id.has_value());
+    if (vio->thread_id.value() != 0 && vio->poll_shutdown_flag.test_and_set()) {
       // Send signal to wake up from poll.
-      if (pthread_kill(vio->thread_id, SIGALRM) == 0)
+      int en = pthread_kill(vio->thread_id.value(), SIGALRM);
+      if (en == 0)
         vio_wait_until_woken(vio);
-      else
-        perror("Error in pthread_kill");
+      else {
+        char buf[512];
+        my_message_local(WARNING_LEVEL, EE_PTHREAD_KILL_FAILED,
+                         vio->thread_id.value(), "SIGALRM",
+                         strerror_r(en, buf, sizeof(buf)));
+        assert("pthread_kill failure" == nullptr);
+      }
     }
 #elif defined HAVE_KQUEUE
     if (vio->kq_fd != -1 && vio->kevent_wakeup_flag.test_and_set())
@@ -497,11 +568,44 @@ int vio_shutdown(Vio *vio) {
   return r;
 }
 
+int vio_cancel(Vio *vio, int how) {
+  int r = 0;
+  DBUG_ENTER("vio_cancel");
+
+  if (!vio->inactive) {
+    assert(vio->type == VIO_TYPE_TCPIP || vio->type == VIO_TYPE_SOCKET ||
+           vio->type == VIO_TYPE_SSL);
+
+    assert(mysql_socket_getfd(vio->mysql_socket) >= 0);
+    if (mysql_socket_shutdown(vio->mysql_socket, how)) r = -1;
+#ifdef _WIN32
+    /* Cancel possible IO in progress (shutdown does not do that on
+       Windows). */
+    (void)cancel_io((HANDLE)vio->mysql_socket, vio->thread_id);
+#endif
+  }
+
+  DBUG_RETURN(r);
+}
+
 #ifndef NDEBUG
+
+#ifdef _WIN32
+#ifdef _WIN64
+#define SOCKET_PRINTF_FORMAT "%llu"
+#else
+#define SOCKET_PRINTF_FORMAT "%lu"
+#endif
+
+#else  // _WIN32
+
+#define SOCKET_PRINTF_FORMAT "%d"
+#endif
+
 void vio_description(Vio *vio, char *buf) {
   switch (vio->type) {
     case VIO_TYPE_SOCKET:
-      snprintf(buf, VIO_DESCRIPTION_SIZE, "socket (%d)",
+      snprintf(buf, VIO_DESCRIPTION_SIZE, "socket (" SOCKET_PRINTF_FORMAT ")",
                mysql_socket_getfd(vio->mysql_socket));
       break;
 #ifdef _WIN32
@@ -513,7 +617,7 @@ void vio_description(Vio *vio, char *buf) {
       break;
 #endif
     default:
-      snprintf(buf, VIO_DESCRIPTION_SIZE, "TCP/IP (%d)",
+      snprintf(buf, VIO_DESCRIPTION_SIZE, "socket (" SOCKET_PRINTF_FORMAT ")",
                mysql_socket_getfd(vio->mysql_socket));
       break;
   }
@@ -556,13 +660,13 @@ static void vio_get_normalized_ip(const struct sockaddr *src, size_t src_length,
       break;
 
     case AF_INET6: {
-      const struct sockaddr_in6 *src_addr6 = (const struct sockaddr_in6 *)src;
+      const auto *src_addr6 = (const struct sockaddr_in6 *)src;
       const struct in6_addr *src_ip6 = &(src_addr6->sin6_addr);
       const uint32 *src_ip6_int32 =
           pointer_cast<const uint32 *>(src_ip6->s6_addr);
 
       if (IN6_IS_ADDR_V4MAPPED(src_ip6) || IN6_IS_ADDR_V4COMPAT(src_ip6)) {
-        struct sockaddr_in *dst_ip4 = (struct sockaddr_in *)dst;
+        auto *dst_ip4 = (struct sockaddr_in *)dst;
 
         /*
           This is an IPv4-mapped or IPv4-compatible IPv6 address. It should
@@ -617,8 +721,8 @@ static void vio_get_normalized_ip(const struct sockaddr *src, size_t src_length,
 bool vio_get_normalized_ip_string(const struct sockaddr *addr,
                                   size_t addr_length, char *ip_string,
                                   size_t ip_string_size) {
-  struct sockaddr_storage norm_addr_storage;
-  struct sockaddr *norm_addr = (struct sockaddr *)&norm_addr_storage;
+  struct sockaddr_storage norm_addr_storage {};
+  auto *norm_addr = (struct sockaddr *)&norm_addr_storage;
   size_t norm_addr_length;
   int err_code;
 
@@ -632,6 +736,237 @@ bool vio_get_normalized_ip_string(const struct sockaddr *addr,
   DBUG_PRINT("error", ("getnameinfo() failed with %d (%s).", (int)err_code,
                        (const char *)gai_strerror(err_code)));
   return true;
+}
+
+/* Add a network to the proxied network list. */
+void vio_proxy_protocol_add(const struct st_vio_network &net) noexcept {
+  /* Grow the vio_pp_networks array. Calling realloc for every single element
+     is not particularly efficient, but this is done once per server startup
+     with relatively few allowed networks. */
+  vio_pp_networks_nb++;
+  vio_pp_networks = static_cast<struct st_vio_network *>(
+      my_realloc(key_memory_vio_proxy_networks, vio_pp_networks,
+                 vio_pp_networks_nb * sizeof(net),
+                 MYF(MY_ALLOW_ZERO_PTR | MY_FAE | MY_WME)));
+  memcpy(&vio_pp_networks[vio_pp_networks_nb - 1], &net, sizeof(net));
+}
+
+void vio_proxy_cleanup() noexcept { my_free(vio_pp_networks); }
+
+void vio_force_skip_proxy(Vio *vio) { vio->force_skip_proxy = true; }
+
+/* Check whether a connection from this source address must provide the proxy
+   protocol header */
+static bool vio_client_must_be_proxied(const struct sockaddr *p_addr) noexcept {
+  size_t i;
+  for (i = 0; i < vio_pp_networks_nb; i++)
+    if (vio_pp_networks[i].family == p_addr->sa_family) {
+      if (vio_pp_networks[i].family == AF_INET) {
+        const struct in_addr *check =
+            &((const struct sockaddr_in *)p_addr)->sin_addr;
+        struct in_addr *addr = &vio_pp_networks[i].addr.in;
+        struct in_addr *mask = &vio_pp_networks[i].mask.in;
+        if ((check->s_addr & mask->s_addr) == addr->s_addr) return true;
+      } else {
+        const struct in6_addr *check =
+            &((const struct sockaddr_in6 *)p_addr)->sin6_addr;
+        struct in6_addr *addr = &vio_pp_networks[i].addr.in6;
+        struct in6_addr *mask = &vio_pp_networks[i].mask.in6;
+        assert(vio_pp_networks[i].family == AF_INET6);
+        if ((check->s6_addr32[0] & mask->s6_addr32[0]) == addr->s6_addr32[0] &&
+            ((check->s6_addr32[1] & mask->s6_addr32[1]) ==
+             addr->s6_addr32[1]) &&
+            ((check->s6_addr32[2] & mask->s6_addr32[2]) ==
+             addr->s6_addr32[2]) &&
+            ((check->s6_addr32[3] & mask->s6_addr32[3]) == addr->s6_addr32[3]))
+          return true;
+      }
+    }
+  return false;
+}
+
+/* Process the proxy protocol header. Return true on an error. */
+static bool vio_process_proxy_header(int socket_fd, struct sockaddr *addr,
+                                     socket_len_t *addr_length) noexcept {
+  /* The ip source network matches an expected proxy protocol network. */
+  static const char v2sig[13] =
+      "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+  union {
+    struct {
+      char line[108];
+    } v1;
+    struct {
+      uint8_t sig[12];
+      uint8_t ver_cmd;
+      uint8_t fam;
+      uint16_t len;
+      union {
+        struct { /* for TCP/UDP over IPv4, len = 12 */
+          uint32_t src_addr;
+          uint32_t dst_addr;
+          uint16_t src_port;
+          uint16_t dst_port;
+        } MY_ATTRIBUTE((packed)) ip4;
+        struct { /* for TCP/UDP over IPv6, len = 36 */
+          uint8_t src_addr[16];
+          uint8_t dst_addr[16];
+          uint16_t src_port;
+          uint16_t dst_port;
+        } MY_ATTRIBUTE((packed)) ip6;
+      } addr;
+    } MY_ATTRIBUTE((packed)) v2;
+  } hdr;
+
+  int size;
+  struct sockaddr_storage from;
+  int from_len;
+  ssize_t ret;
+
+  do {
+    ret = recv(socket_fd, &hdr, sizeof(hdr), MSG_PEEK);
+  } while (ret == -1 && errno == EINTR);
+
+  /* if the recv returns an error, the proxy protocol is ignored. */
+  if (ret == -1) return true;
+
+  memset(&from, 0x00, sizeof(struct sockaddr_storage));
+
+  if (ret >= 16 && memcmp(&hdr.v2, v2sig, 12) == 0 &&
+      (hdr.v2.ver_cmd & 0xF0) == 0x20) {
+    /* proxy-protocool v2. */
+
+    size = 16 + ntohs(hdr.v2.len);
+
+    /* truncated or too large header */
+    if (ret < size) return true;
+
+    switch (hdr.v2.ver_cmd & 0xF) {
+      case 0x01: /* PROXY command */
+        switch (hdr.v2.fam) {
+          case 0x11: /* TCPv4 */
+            ((struct sockaddr_in *)&from)->sin_family = AF_INET;
+            ((struct sockaddr_in *)&from)->sin_addr.s_addr =
+                hdr.v2.addr.ip4.src_addr;
+            ((struct sockaddr_in *)&from)->sin_port = hdr.v2.addr.ip4.src_port;
+            from_len = sizeof(struct sockaddr_in);
+            goto pp_done;
+          case 0x21: /* TCPv6 */
+            ((struct sockaddr_in6 *)&from)->sin6_family = AF_INET6;
+            memcpy(&((struct sockaddr_in6 *)&from)->sin6_addr,
+                   hdr.v2.addr.ip6.src_addr, 16);
+            ((struct sockaddr_in6 *)&from)->sin6_port =
+                hdr.v2.addr.ip6.src_port;
+            from_len = sizeof(struct sockaddr_in6);
+            goto pp_done;
+          case 0x00: /* Unspec */
+            /* unknown protocol, keep local connection address */
+            goto pp_flush;
+          default:
+            return true;
+        }
+        return true;
+      case 0x00: /* LOCAL command */
+        /* keep local connection address for LOCAL */
+        goto pp_flush;
+      default:
+        /* not a supported command. Abort connexion */
+        return true;
+    }
+
+    return true;
+  }
+
+  if (ret >= 8 && memcmp(hdr.v1.line, "PROXY ", 6) == 0) {
+    /* proxy-protocol v1. */
+
+    int port;
+    char *p, *end = static_cast<char *>(memchr(hdr.v1.line, '\r', ret - 1));
+    if (!end || *(end + 1) != '\n') return true; /* partial or invalid header */
+
+    *end = '\0';                  /* terminate the string to ease parsing */
+    size = end + 2 - hdr.v1.line; /* skip header + CRLF */
+    /* parse the V1 header using favorite address parsers like inet_pton.
+     * return -1 upon error, or simply fall through to accept.
+     */
+    p = hdr.v1.line + strlen("PROXY ");
+    if (memcmp(p, "TCP4 ", 5) == 0) {
+      /* Parse IPv4. */
+      p += strlen("TCP4 ");
+      end = strchr(p, ' ');
+      if (!end || end[0] != ' ')
+        return true; /* malformatted pp. Abort connection. */
+      *end = '\0';
+      ((struct sockaddr_in *)&from)->sin_family = AF_INET;
+      if (!inet_pton(AF_INET, p, &((struct sockaddr_in *)&from)->sin_addr))
+        return true; /* malformatted pp. Abort connection. */
+      from_len = sizeof(struct sockaddr_in);
+    } else if (memcmp(p, "TCP6 ", 5) == 0) {
+      /* Parse IPv6. */
+      p += strlen("TCP6 ");
+      end = strchr(p, ' ');
+      if (!end || end[0] != ' ')
+        return true; /* malformatted pp. Abort connection. */
+      *end = '\0';
+      ((struct sockaddr_in6 *)&from)->sin6_family = AF_INET6;
+      if (!inet_pton(AF_INET6, p, &((struct sockaddr_in6 *)&from)->sin6_addr))
+        return true; /* malformatted pp. Abort connection. */
+      from_len = sizeof(struct sockaddr_in6);
+    } else if (memcmp(p, "UNKNOWN", 7) == 0)
+      /* unknown protocol, keep local connection address */
+      goto pp_flush;
+
+    else
+      /* Unknown data, ignore the proxy protocol. */
+      return true;
+
+    /* Check port. */
+    p = end + 1;
+    end = strchr(p, ' ');
+    if (!end || end[0] != ' ')
+      return true; /* malformatted pp. Abort connection. */
+
+    p = end + 1;
+    end = strchr(p, ' ');
+    if (!end || end[0] != ' ')
+      return true; /* malformatted pp. Abort connection. */
+
+    // FIXME: atoi here does not full protocol conformity validity (no
+    // leading zeros, sign, non-numeric characters etc)
+    *end = 0;
+    port = atoi(p);
+    if (port < 0 || port > 65535)
+      return true; /* malformatted pp. Abort connection. */
+
+    if (from.ss_family == AF_INET)
+      ((struct sockaddr_in *)&from)->sin_port = htons((uint16_t)port);
+    if (from.ss_family == AF_INET6)
+      ((struct sockaddr_in6 *)&from)->sin6_port = htons((uint16_t)port);
+  } else {
+    /* Wrong protocol. Abort connection */
+    return true;
+  }
+
+pp_done:
+  /* Proxying localhost is forbidden */
+  if (from.ss_family == AF_INET &&
+      (((struct sockaddr_in *)&from)->sin_addr.s_addr ==
+       htonl(INADDR_LOOPBACK)))
+    return true;
+  else if (from.ss_family == AF_INET6 &&
+           !memcmp(&((struct sockaddr_in6 *)&from)->sin6_addr,
+                   &in6addr_loopback, sizeof(struct in6_addr)))
+    return true;
+
+  /* Copy the decoded address. */
+  memcpy(addr, &from, from_len);
+  *addr_length = from_len;
+
+pp_flush:
+  /* we need to consume the appropriate amount of data from the socket */
+  do {
+    ret = recv(socket_fd, &hdr, size, 0);
+  } while (ret == -1 && errno == EINTR);
+  return ret == -1;
 }
 
 /**
@@ -670,8 +1005,8 @@ bool vio_peer_addr(Vio *vio, char *ip_buffer, uint16 *port,
     int err_code;
     char port_buffer[NI_MAXSERV];
 
-    struct sockaddr_storage addr_storage;
-    struct sockaddr *addr = (struct sockaddr *)&addr_storage;
+    struct sockaddr_storage addr_storage {};
+    auto *addr = (struct sockaddr *)&addr_storage;
     socket_len_t addr_length = sizeof(addr_storage);
 
     /* Get sockaddr by socked fd. */
@@ -682,6 +1017,17 @@ bool vio_peer_addr(Vio *vio, char *ip_buffer, uint16 *port,
       DBUG_PRINT("exit", ("getpeername() gave error: %d", socket_errno));
       return true;
     }
+
+    /* If the proxy protocol is activated for this listener and if the client
+       address is in a proxy protocol network, try to read proxy protocol and
+       determine the real source IP.
+
+       The proxy protocol source ip replace it the ip returned by
+       mysql_socket_getpeername(). */
+    if (!vio->force_skip_proxy && vio_client_must_be_proxied(addr))
+      if (vio_process_proxy_header(mysql_socket_getfd(vio->mysql_socket), addr,
+                                   &addr_length))
+        return true;
 
     /* Normalize IP address. */
 
@@ -815,12 +1161,15 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
       break;
   }
 
-  MYSQL_START_SOCKET_WAIT(locker, &state, vio->mysql_socket, PSI_SOCKET_SELECT,
-                          0);
+  START_SOCKET_WAIT(locker, &state, vio->mysql_socket, PSI_SOCKET_SELECT,
+                    timeout);
 
 #ifdef USE_PPOLL_IN_VIO
   // Check if shutdown is in progress, if so return -1
-  if (vio->poll_shutdown_flag.test_and_set()) return -1;
+  if (vio->poll_shutdown_flag.test_and_set()) {
+    MYSQL_END_SOCKET_WAIT(locker, 0);
+    return -1;
+  }
 
   timespec ts;
   timespec *ts_ptr = nullptr;
@@ -838,12 +1187,14 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
   do {
 #ifdef USE_PPOLL_IN_VIO
     /*
-      vio->signal_mask is only useful when thread_id != 0.
-      thread_id is only set for servers, so signal_mask is unused for client
-      libraries.
+      thread_id is only set to std::nullopt or a non-zero value for servers, so
+      signal_mask is unused for client libraries. A valid value for thread_id
+      is not assigned until there is attempt to shut down the connection.
     */
     ret = ppoll(&pfd, 1, ts_ptr,
-                vio->thread_id != 0 ? &vio->signal_mask : nullptr);
+                !vio->thread_id.has_value() || (vio->thread_id.value() != 0)
+                    ? &vio->signal_mask
+                    : nullptr);
 #else
     ret = poll(&pfd, 1, timeout);
 #endif
@@ -871,7 +1222,7 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
       break;
   }
 
-  MYSQL_END_SOCKET_WAIT(locker, 0);
+  END_SOCKET_WAIT(locker, timeout);
   return ret;
 }
 
@@ -914,8 +1265,8 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
       break;
   }
 
-  MYSQL_START_SOCKET_WAIT(locker, &state, vio->mysql_socket, PSI_SOCKET_SELECT,
-                          0);
+  START_SOCKET_WAIT(locker, &state, vio->mysql_socket, PSI_SOCKET_SELECT,
+                    timeout);
 
   /* The first argument is ignored on Windows. */
   do {
@@ -924,7 +1275,7 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
   } while (ret < 0 && vio_should_retry(vio) &&
            (retry_count++ < vio->retry_count));
 
-  MYSQL_END_SOCKET_WAIT(locker, 0);
+  END_SOCKET_WAIT(locker, timeout);
 
   /* Set error code to indicate a timeout error. */
   if (ret == 0) WSASetLastError(SOCKET_ETIMEDOUT);
@@ -984,7 +1335,10 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout) {
                  (static_cast<long>(timeout) % 1000) * 1000000};
 
   // Check if shutdown is in progress, if so return -1.
-  if (vio->kevent_wakeup_flag.test_and_set()) return -1;
+  if (vio->kevent_wakeup_flag.test_and_set()) {
+    MYSQL_END_SOCKET_WAIT(locker, 0);
+    return -1;
+  }
 
   int retry_count = 0;
   do {
@@ -1115,9 +1469,8 @@ bool vio_socket_connect(Vio *vio, struct sockaddr *addr, socklen_t len,
   if (nonblocking && wait) {
     if (connect_done) *connect_done = false;
     return false;
-  } else {
-    return (ret != 0);
   }
+  return (ret != 0);
 }
 
 /**
@@ -1160,7 +1513,7 @@ bool vio_is_connected(Vio *vio) {
   if (!bytes && vio->type == VIO_TYPE_SSL)
     bytes = SSL_pending((SSL *)vio->ssl_arg);
 
-  return bytes ? true : false;
+  return bytes != 0;
 }
 
 #ifndef NDEBUG

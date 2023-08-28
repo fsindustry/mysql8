@@ -1,4 +1,4 @@
-# Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -20,18 +20,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-# Destination of generated protobuf files.
-SET(GR_GENERATE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-
-IF(WIN32)
-  # Activate necessary dllexport/dllimport declarations.
-  ADD_DEFINITIONS(-DPROTOBUF_USE_DLLS)
-ENDIF()
-
-DISABLE_MISSING_PROFILE_WARNING()
-
-ADD_SUBDIRECTORY(libmysqlgcs)
-ADD_SUBDIRECTORY(protobuf)
+MSVC_CPPCHECK_DISABLE()
 
 SET(GROUP_REPLICATION_SOURCES
   src/applier.cc
@@ -54,6 +43,7 @@ SET(GROUP_REPLICATION_SOURCES
   src/group_actions/group_action_coordinator.cc
   src/group_actions/multi_primary_migration_action.cc
   src/group_actions/primary_election_action.cc
+  src/group_actions/group_actions_transaction_controller.cc
   src/handlers/applier_handler.cc
   src/handlers/certification_handler.cc
   src/handlers/event_cataloger.cc
@@ -78,7 +68,6 @@ SET(GROUP_REPLICATION_SOURCES
   src/plugin_handlers/member_actions_handler.cc
   src/plugin_handlers/member_actions_handler_configuration.cc
   src/plugin_handlers/offline_mode_handler.cc
-  src/plugin_handlers/persistent_variables_handler.cc
   src/plugin_handlers/primary_election_invocation_handler.cc
   src/plugin_handlers/primary_election_primary_process.cc
   src/plugin_handlers/primary_election_secondary_process.cc
@@ -108,11 +97,13 @@ SET(GROUP_REPLICATION_SOURCES
   src/recovery_channel_state_observer.cc
   src/recovery_state_transfer.cc
   src/replication_threads_api.cc
-  src/services/get_system_variable/get_system_variable.cc
   src/services/message_service/message_service.cc
   src/services/notification/notification.cc
   src/services/status_service/status_service.cc
+  src/services/system_variable/get_system_variable.cc
+  src/services/system_variable/set_system_variable.cc
   src/services/registry.cc
+  src/services/server_services_references.cc
   src/sql_service/sql_command_test.cc
   src/sql_service/sql_resultset.cc
   src/sql_service/sql_service_command.cc
@@ -131,52 +122,98 @@ SET(GROUP_REPLICATION_SOURCES
 
 SET(GMS_LISTENER_SERVICE_TEST_SOURCES
   src/services/notification/impl/gms_listener_test.cc
-  )
-
-ADD_DEFINITIONS(-DMYSQL_SERVER)
-ADD_DEFINITIONS(-DLOG_SUBSYSTEM_TAG="Repl")
-ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="group_replication")
-
-IF(WITH_UNIT_TESTS)
-  ADD_LIBRARY(gr_unit_test_resource STATIC
-    src/gcs_plugin_messages.cc
-    src/member_info.cc
-    src/member_version.cc
-    src/compatibility_module.cc
-    src/mysql_version_gcs_protocol_map.cc
-    src/gcs_mysql_network_provider.cc
-    src/replication_threads_api.cc
-    src/plugin_psi.cc
-  )
-  SET_TARGET_PROPERTIES(gr_unit_test_resource
-    PROPERTIES COMPILE_DEFINITIONS "DISABLE_PSI_MUTEX"
-    )
-  ADD_DEPENDENCIES(gr_unit_test_resource GenError)
-ENDIF()
-
-ADD_COMPILE_FLAGS(${GROUP_REPLICATION_SOURCES}
-  COMPILE_FLAGS "${GR_PROTOBUF_FLAGS}"
 )
 
-### Configuration ###
+# Allow both WITHOUT_GROUP_REPLICATION=1 and WITH_GROUP_REPLICATION=0 to be
+# specified.
+# Furthermore, the MYSQL_ADD_PLUGIN will replace them with
+# WITHOUT_GROUP_REPLICATION variant. This is because the plugin is defined with
+# the MODULE_ONLY flag.
+# This causes for all other GR-related directories that will be included later,
+# to see only the WITHOUT_GROUP_REPLICATION variant, making the expression to
+# test the flag much easier.
+IF ((NOT (DEFINED WITHOUT_GROUP_REPLICATION AND WITHOUT_GROUP_REPLICATION)) AND
+    (NOT (DEFINED WITH_GROUP_REPLICATION AND NOT WITH_GROUP_REPLICATION)))
+  # Destination of generated protobuf files.
+  SET(GR_GENERATE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
-IF(WIN32)
-  ADD_DEFINITIONS(-DIMPORT_UNKNOWN_SQLSTATE)
+  IF(WIN32)
+    # Activate necessary dllexport/dllimport declarations.
+    ADD_DEFINITIONS(-DPROTOBUF_USE_DLLS)
+  ENDIF()
+
+  DISABLE_MISSING_PROFILE_WARNING()
+
+  ADD_SUBDIRECTORY(libmysqlgcs)
+  ADD_SUBDIRECTORY(protobuf)
+
+  ADD_DEFINITIONS(-DMYSQL_SERVER)
+  ADD_DEFINITIONS(-DLOG_SUBSYSTEM_TAG="Repl")
+  ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="group_replication")
+
+  IF(GROUP_REPLICATION_WITH_ROCKSDB)
+    ADD_COMPILE_DEFINITIONS(src/observer_trans.cc src/asynchronous_channels_state_observer.cc
+      COMPILE_DEFINITIONS "GROUP_REPLICATION_WITH_ROCKSDB")
+    MESSAGE(STATUS "GROUP_REPLICATION_WITH_ROCKSDB is turned on")
+  ELSE()
+    MESSAGE(STATUS "GROUP_REPLICATION_WITH_ROCKSDB is turned off")
+  ENDIF()
+
+  IF(WITH_UNIT_TESTS)
+    ADD_LIBRARY(gr_unit_test_resource STATIC
+      src/gcs_plugin_messages.cc
+      src/member_info.cc
+      src/member_version.cc
+      src/compatibility_module.cc
+      src/mysql_version_gcs_protocol_map.cc
+      src/gcs_mysql_network_provider.cc
+      src/replication_threads_api.cc
+      src/plugin_psi.cc
+    )
+    SET_TARGET_PROPERTIES(gr_unit_test_resource
+      PROPERTIES COMPILE_DEFINITIONS "DISABLE_PSI_MUTEX"
+      )
+    TARGET_LINK_LIBRARIES(gr_unit_test_resource extra::rapidjson)
+    TARGET_LINK_LIBRARIES(gr_unit_test_resource ext::zlib)
+    ADD_DEPENDENCIES(gr_unit_test_resource GenError)
+  ENDIF()
+
+  ADD_COMPILE_FLAGS(${GROUP_REPLICATION_SOURCES}
+    COMPILE_FLAGS "${GR_PROTOBUF_FLAGS}"
+  )
+
+  ### Configuration ###
+
+  IF(WIN32)
+    ADD_DEFINITIONS(-DIMPORT_UNKNOWN_SQLSTATE)
+  ENDIF()
 ENDIF()
+
+
+ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="group_replication")
 
 # declare the plugin itself
 MYSQL_ADD_PLUGIN(group_replication
   ${GROUP_REPLICATION_SOURCES}
   ${GMS_LISTENER_SERVICE_TEST_SOURCES}
   LINK_LIBRARIES
-  ${LZ4_LIBRARY}
+  ext::lz4
+  ext::zlib
   ${SSL_LIBRARIES}
   ${PROTOBUF_LITE_LIBRARY}
   ${GR_PROTOBUF_LITE_LIB}
   mysqlgcs
+  extra::rapidjson
   MODULE_ONLY
   MODULE_OUTPUT_NAME "group_replication"
   )
+
+# At this point the MYSQL_ADD_PLUGIN macro made the value of
+# WITHOUT_GROUP_REPLICATION consistent. If it is true, then there are no
+# targets and we don't need to do anymore in this file.
+IF (DEFINED WITHOUT_GROUP_REPLICATION AND WITHOUT_GROUP_REPLICATION)
+  RETURN()
+ENDIF()
 
 IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR)
   ADD_INSTALL_RPATH_FOR_PROTOBUF(group_replication)

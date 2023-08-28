@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -74,7 +74,10 @@ bool IO_CACHE_ostream::truncate(my_off_t offset) {
 
   if (my_chsize(m_io_cache.file, offset, 0, MYF(MY_WME))) return true;
 
-  reinit_io_cache(&m_io_cache, WRITE_CACHE, offset, false, true);
+  [[maybe_unused]]
+  const auto reinit_res =
+      reinit_io_cache(&m_io_cache, WRITE_CACHE, offset, false, true);
+  assert(reinit_res == 0);
   return false;
 }
 

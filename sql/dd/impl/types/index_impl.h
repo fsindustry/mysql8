@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -122,6 +122,14 @@ class Index_impl : public Entity_object_impl, public Index {
   bool is_hidden() const override { return m_hidden; }
 
   void set_hidden(bool hidden) override { m_hidden = hidden; }
+
+  /////////////////////////////////////////////////////////////////////////
+  // is_disabled.
+  /////////////////////////////////////////////////////////////////////////
+
+  bool is_disabled() const noexcept override { return m_disabled; }
+
+  void set_disabled(bool disable) noexcept override { m_disabled = disable; }
 
   /////////////////////////////////////////////////////////////////////////
   // comment.
@@ -265,6 +273,7 @@ class Index_impl : public Entity_object_impl, public Index {
   // Fields.
 
   bool m_hidden;
+  bool m_disabled;  // in-memory only attribute
   bool m_is_generated;
 
   uint m_ordinal_position;

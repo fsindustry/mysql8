@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,7 +63,8 @@ class Sdi_wcontext;
 class Table;
 
 static const std::set<String_type> default_valid_option_keys = {
-    "block_size", "flags", "parser_name"};
+    "block_size", "flags", "parser_name","gipk" /* generated implicit primary key */,
+    "clustering_key"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Index_impl implementation.
@@ -71,6 +72,7 @@ static const std::set<String_type> default_valid_option_keys = {
 
 Index_impl::Index_impl()
     : m_hidden(false),
+      m_disabled(false),
       m_is_generated(false),
       m_ordinal_position(0),
       m_options(default_valid_option_keys),
@@ -85,6 +87,7 @@ Index_impl::Index_impl()
 
 Index_impl::Index_impl(Table_impl *table)
     : m_hidden(false),
+      m_disabled(false),
       m_is_generated(false),
       m_ordinal_position(0),
       m_options(default_valid_option_keys),
@@ -387,6 +390,7 @@ Index_impl::Index_impl(const Index_impl &src, Table_impl *parent)
     : Weak_object(src),
       Entity_object_impl(src),
       m_hidden(src.m_hidden),
+      m_disabled(src.m_disabled),
       m_is_generated(src.m_is_generated),
       m_ordinal_position(src.m_ordinal_position),
       m_comment(src.m_comment),

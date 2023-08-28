@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -330,6 +330,8 @@ MYSQL_LOCK *mysql_lock_tables(THD *thd, TABLE **tables, size_t count,
   if (!(thd->state_flags & Open_tables_state::SYSTEM_TABLES))
     THD_STAGE_INFO(thd, stage_system_lock);
 
+  ulonglong lock_start_usec = my_micro_time();
+
   DBUG_PRINT("info", ("thd->proc_info %s", thd->proc_info()));
   if (sql_lock->table_count &&
       lock_external(thd, sql_lock->table, sql_lock->table_count)) {
@@ -368,7 +370,9 @@ end:
   if (thd->variables.session_track_transaction_info > TX_TRACK_NONE)
     track_table_access(thd, tables, count);
 
-  thd->set_time_after_lock();
+  ulonglong lock_end_usec = my_micro_time();
+  thd->inc_lock_usec(lock_end_usec - lock_start_usec);
+
   return sql_lock;
 }
 
@@ -734,6 +738,7 @@ static MYSQL_LOCK *get_lock_data(THD *thd, TABLE **table_ptr, size_t count,
 bool lock_schema_name(THD *thd, const char *db) {
   MDL_request_list mdl_requests;
   MDL_request global_request;
+  MDL_request backup_request;
   MDL_request mdl_request;
   MDL_request backup_lock_request;
 
@@ -745,12 +750,17 @@ bool lock_schema_name(THD *thd, const char *db) {
   if (thd->global_read_lock.can_acquire_protection()) return true;
   MDL_REQUEST_INIT(&global_request, MDL_key::GLOBAL, "", "",
                    MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
+  if (thd->backup_tables_lock.abort_if_acquired()) return true;
+  thd->backup_tables_lock.init_protection_request(&backup_request,
+                                                  MDL_STATEMENT);
+
   MDL_REQUEST_INIT(&mdl_request, MDL_key::SCHEMA, db, "", MDL_EXCLUSIVE,
                    MDL_TRANSACTION);
   MDL_REQUEST_INIT(&backup_lock_request, MDL_key::BACKUP_LOCK, "", "",
                    MDL_INTENTION_EXCLUSIVE, MDL_TRANSACTION);
 
   mdl_requests.push_front(&mdl_request);
+  mdl_requests.push_front(&backup_request);
   mdl_requests.push_front(&global_request);
   mdl_requests.push_front(&backup_lock_request);
 
@@ -1007,7 +1017,7 @@ std::atomic<int32> Global_read_lock::m_atomic_active_requests;
 
 bool acquire_shared_global_read_lock(THD *thd,
                                      unsigned long lock_wait_timeout) {
-  // If we cannot acuqire protection against GRL, err out.
+  // If we cannot acquire protection against GRL, err out.
   if (thd->global_read_lock.can_acquire_protection()) return true;
 
   MDL_request grl_request;
@@ -1047,6 +1057,12 @@ bool Global_read_lock::lock_global_read_lock(THD *thd) {
 
     assert(!thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::GLOBAL, "",
                                                          "", MDL_SHARED));
+    /*
+      Do not allow upgrading table backup lock to FTWRL. Otherwise we can end
+      up with deadlocks being reported for queries previously blocked on a
+      backup lock.
+    */
+    if (thd->backup_tables_lock.abort_if_acquired()) return true;
     MDL_REQUEST_INIT(&mdl_request, MDL_key::GLOBAL, "", "", MDL_SHARED,
                      MDL_EXPLICIT);
 
@@ -1117,7 +1133,7 @@ bool Global_read_lock::make_global_read_lock_block_commit(THD *thd) {
   MDL_request mdl_request;
   DBUG_TRACE;
   /*
-    If we didn't succeed lock_global_read_lock(), or if we already suceeded
+    If we didn't succeed lock_global_read_lock(), or if we already succeeded
     make_global_read_lock_block_commit(), do nothing.
   */
   if (m_state != GRL_ACQUIRED) return false;
@@ -1146,6 +1162,104 @@ void Global_read_lock::set_explicit_lock_duration(THD *thd) {
     thd->mdl_context.set_lock_duration(m_mdl_global_shared_lock, MDL_EXPLICIT);
   if (m_mdl_blocks_commits_lock)
     thd->mdl_context.set_lock_duration(m_mdl_blocks_commits_lock, MDL_EXPLICIT);
+}
+
+/**
+   Acquire a global backup lock. Wait until all protection requests are
+   released.
+
+  @param thd     Reference to connection.
+
+  @retval false  Success, global backup lock set.
+  @retval true   Failure, thread was killed or lock wait timed out.
+*/
+
+bool Global_backup_lock::acquire(THD *thd) {
+  MDL_request mdl_request;
+
+  DBUG_ENTER("Global_backup_lock::acquire");
+
+  assert(m_lock == nullptr);
+  assert(!thd->mdl_context.owns_equal_or_stronger_lock(m_namespace, "", "",
+                                                       MDL_SHARED));
+
+  MDL_REQUEST_INIT(&mdl_request, m_namespace, "", "", MDL_SHARED, MDL_EXPLICIT);
+
+  if (thd->mdl_context.acquire_lock(&mdl_request,
+                                    thd->variables.lock_wait_timeout))
+    DBUG_RETURN(true);
+
+  m_lock = mdl_request.ticket;
+
+  DBUG_RETURN(false);
+}
+
+/**
+   Release a global backup lock.
+
+   @param thd     Reference to connection.
+*/
+
+void Global_backup_lock::release(THD *thd) noexcept {
+  DBUG_ENTER("Global_backup_lock::release");
+
+  assert(m_lock != nullptr);
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(m_namespace, "", "",
+                                                      MDL_SHARED));
+
+  thd->mdl_context.release_lock(m_lock);
+
+  m_lock = nullptr;
+
+  DBUG_VOID_RETURN;
+}
+
+/**
+   Acquire protection against a global backup lock. Wait if a global backup lock
+   is active.
+
+   @param thd               Reference to connection.
+   @param duration          MDL lock duration
+   @param lock_wait_timeout Lock wait timeout
+
+   @retval false  Success, protection was acquired.
+   @retval true   Failure, thread was killed or lock wait timed out.
+*/
+
+bool Global_backup_lock::acquire_protection(THD *thd,
+                                            enum_mdl_duration duration,
+                                            ulong lock_wait_timeout) {
+  MDL_request mdl_request;
+
+  DBUG_ENTER("Global_backup_lock::acquire_protection");
+
+  assert(duration != MDL_EXPLICIT ||
+         !thd->mdl_context.owns_equal_or_stronger_lock(
+             m_namespace, "", "", MDL_INTENTION_EXCLUSIVE));
+
+  init_protection_request(&mdl_request, duration);
+
+  if (thd->mdl_context.acquire_lock(&mdl_request, lock_wait_timeout))
+    DBUG_RETURN(true);
+
+  DBUG_RETURN(false);
+}
+
+/**
+   Initialize a protection request to be acquired later.
+
+   @param mdl_request       Pointer to request to initialize
+   @param duration          MDL lock duration
+*/
+
+void Global_backup_lock::init_protection_request(
+    MDL_request *mdl_request, enum_mdl_duration duration) const {
+  DBUG_ENTER("Global_backup_lock::init_protection_request");
+
+  MDL_REQUEST_INIT(mdl_request, m_namespace, "", "", MDL_INTENTION_EXCLUSIVE,
+                   duration);
+
+  DBUG_VOID_RETURN;
 }
 
 /**

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2021, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2020, 2023, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -145,7 +145,7 @@ struct Builder {
   [[nodiscard]] dberr_t init(Cursor &cursor, size_t n_threads) noexcept;
 
   /** Add a row to the merge buffer.
-  @param[in,out]	cursor        Current scan cursor.
+  @param[in,out]        cursor        Current scan cursor.
   @param[in,out] row            Row to add.
   @param[in] thread_id          ID of current thread.
   @param[in,out] latch_release  Called when a log free check is required.
@@ -194,8 +194,8 @@ struct Builder {
   @param[in,out] file           File handle.
   @param[in] file_buffer        Write the buffer contents to disk.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t append(ddl::file_t &file,
-                               IO_buffer file_buffer) noexcept;
+  [[nodiscard]] dberr_t append(ddl::file_t &file, IO_buffer file_buffer,
+                               void *crypt_buffer, uint32_t space_id) noexcept;
 
   /** @return the path for temporary files. */
   const char *tmpdir() const noexcept { return m_tmpdir; }
@@ -216,15 +216,13 @@ struct Builder {
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t check_state_of_online_build_log() noexcept;
 
-  /** Destroy a merge file.
-  @param[in,out] file           Merge file to delete. */
-  static void file_destroy(ddl::file_t *file) noexcept;
-
   /** Write an MLOG_INDEX_LOAD record to indicate in the redo-log
   that redo-logging of individual index pages was disabled, and
   the flushing of such pages to the data files was completed.
   @param[in] index              Index on which redo logging was disabled */
   static void write_redo(const dict_index_t *index) noexcept;
+
+  [[nodiscard]] space_id_t get_space_id();
 
  private:
   /** State of a cluster index reader thread. */
@@ -254,11 +252,17 @@ struct Builder {
     /** Buffer to use for file writes. */
     Aligned_buffer m_aligned_buffer{};
 
+    /** Buffer to use for file writes. */
+    Aligned_buffer m_aligned_buffer_crypt{};
+
     /** Record list starting offset in the output file. */
     Merge_offsets m_offsets{};
 
     /** For spatial/Rtree rows handling. */
     RTree_inserter *m_rtree_inserter{};
+
+    /** For compressing operations. It is lazy initialized. */
+    mem_heap_t *m_compress_heap;
   };
 
   using Allocator = ut::allocator<Thread_ctx *>;
@@ -270,27 +274,26 @@ struct Builder {
   [[nodiscard]] dberr_t create_merge_sort_tasks() noexcept;
 
   /** Flush all dirty pages, apply the row log and write the redo log record.
+  @param[in] apply_log apply the row log
   @return DB_SUCCESS or error code. */
-  dberr_t finalize() noexcept;
+  dberr_t finalize(bool apply_log) noexcept;
 
   /** Convert the field data from compact to redundant format.
-  @param[in]	trx		            Current transaction
-  @param[in]	clust_index	      Clustered index being built
-  @param[in]	row_field	        Field to copy from
-  @param[out]	field		          Field to copy to
-  @param[in]	len		            Length of the field data
-  @param[in]	page_size	        Compressed BLOB page size
-  @param[in]	is_sdi		        true for SDI Indexes
-  @param[in,out]	heap		      Memory heap where to allocate
+  @param[in]    clust_index           Clustered index being built
+  @param[in]    row_field               Field to copy from
+  @param[out]   field                     Field to copy to
+  @param[in]    len                         Length of the field data
+  @param[in]    page_size               Compressed BLOB page size
+  @param[in]    is_sdi                  true for SDI Indexes
+  @param[in,out]        heap                  Memory heap where to allocate
                                 data when converting to ROW_FORMAT=REDUNDANT,
                                 or nullptr */
-  static void convert(trx_t *trx, const dict_index_t *clust_index,
+  static void convert(const dict_index_t *clust_index,
                       const dfield_t *row_field, dfield_t *field, ulint len,
                       const page_size_t &page_size,
                       IF_DEBUG(bool is_sdi, ) mem_heap_t *heap) noexcept;
 
   /** Copy externally stored columns to the data tuple.
-  @param[in] trx                Current transaction
   @param[in] index              Index dictionary object.
   @param[in] mrec               Record containing BLOB pointers, or
                                 nullptr to use tuple instead.
@@ -299,9 +302,9 @@ struct Builder {
   @param[in,out] tuple          Data tuple.
   @param[in] is_sdi             True for SDI Indexes
   @param[in,out] heap           Memory heap */
-  static void copy_blobs(trx_t *trx, const dict_index_t *index,
-                         const mrec_t *mrec, const ulint *offsets,
-                         const page_size_t &page_size, dtuple_t *tuple,
+  static void copy_blobs(const dict_index_t *index, const mrec_t *mrec,
+                         const ulint *offsets, const page_size_t &page_size,
+                         dtuple_t *tuple,
                          IF_DEBUG(bool is_sdi, ) mem_heap_t *heap) noexcept;
 
   /** Cache a row for batch inserts. Currently used by spatial indexes.
@@ -311,7 +314,7 @@ struct Builder {
   [[nodiscard]] dberr_t batch_add_row(Row &row, size_t thread_id) noexcept;
 
   /** Add a row to the merge buffer.
-  @param[in,out]	cursor        Current scan cursor.
+  @param[in,out]        cursor        Current scan cursor.
   @param[in,out] row            Row to add.
   @param[in] thread_id          ID of current thread.
   @param[in,out] latch_release  Called when a log free check is required.
@@ -381,17 +384,15 @@ struct Builder {
 
   /** Sort the buffer in memory and insert directly in the BTree loader,
   don't write to a temporary file.
-  @param[in,out]	cursor        Current scan cursor.
-  @param[in,out] row            Row to add.
+  @param[in,out]        cursor        Current scan cursor.
   @param[in] thread_id          ID of current thread.
   @return DB_SUCCESS or error code. */
-  dberr_t insert_direct(Cursor &cursor, const Row &row,
-                        size_t thread_id) noexcept;
+  dberr_t insert_direct(Cursor &cursor, size_t thread_id) noexcept;
 
-  /** Create the file, if needed.
+  /** Create the merge file, if needed.
   @param[in,out] file           File handle.
-  @return file handle for the merge file. */
-  [[nodiscard]] os_fd_t create_file(ddl::file_t &file) noexcept;
+  @return true if file was opened successfully . */
+  [[nodiscard]] bool create_file(ddl::file_t &file) noexcept;
 
   /** Check for duplicates in the first block
   @param[in] dupcheck           Files to check for duplicates.
@@ -446,6 +447,8 @@ struct Builder {
 
   /** Stage per builder. */
   Alter_stage *m_local_stage{};
+
+  row_prebuilt_t *m_prebuilt;
 };
 
 struct Load_cursor : Btree_load::Cursor {
