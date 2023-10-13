@@ -83,6 +83,7 @@
 #include "pfs_thread_provider.h"
 #include "prealloced_array.h"
 #include "sql/auth/sql_security_ctx.h"  // Security_context
+#include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/current_thd.h"
 #include "sql/dd/string_type.h"      // dd::string_type
 #include "sql/discrete_interval.h"   // Discrete_interval
@@ -93,7 +94,7 @@
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
 #include "sql/resourcegroups/resource_group_basic_types.h"
-#include "sql/rpl_context.h"  // Rpl_thd_context
+#include "sql/rpl_context.h"      // Rpl_thd_context
 #include "sql/rpl_gtid.h"
 #include "sql/session_tracker.h"  // Session_tracker
 #include "sql/sql_connect.h"
@@ -154,6 +155,8 @@ class Time_zone;
 class sp_cache;
 struct Binlog_user_var_event;
 struct LOG_INFO;
+
+extern ulong kill_idle_transaction_timeout;
 
 typedef struct user_conn USER_CONN;
 struct MYSQL_LOCK;
@@ -878,6 +881,44 @@ class Global_read_lock {
   MDL_ticket *m_mdl_blocks_commits_lock;
 };
 
+/**
+  An instance of a global backup lock in a connection.
+*/
+
+class Global_backup_lock final {
+ public:
+  Global_backup_lock(MDL_key::enum_mdl_namespace mdl_namespace) noexcept
+      : m_namespace(mdl_namespace), m_lock(nullptr) {}
+
+  bool acquire(THD *thd);
+  void release(THD *thd) noexcept;
+
+  bool acquire_protection(THD *thd, enum_mdl_duration duration,
+                          ulong lock_wait_timeout);
+  void init_protection_request(MDL_request *mdl_request,
+                               enum_mdl_duration duration) const;
+
+  /**
+    Throw the ER_CANT_EXECUTE_WITH_BACKUP_LOCK error and return 'true', if the
+    current connection has already acquired the lock. Otherwise return
+    'false'.
+  */
+  bool abort_if_acquired() const noexcept {
+    if (is_acquired()) {
+      my_error(ER_CANT_EXECUTE_WITH_BACKUP_LOCK, MYF(0));
+      return true;
+    }
+
+    return false;
+  }
+
+  bool is_acquired() const noexcept { return m_lock != nullptr; }
+
+ private:
+  const MDL_key::enum_mdl_namespace m_namespace;
+  MDL_ticket *m_lock;
+};
+
 extern "C" void my_message_sql(uint error, const char *str, myf MyFlags);
 
 /**
@@ -1094,6 +1135,10 @@ class THD : public MDL_context_owner,
 
   /** Additional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
+  /** Thread scheduler callbacks for this connection per-thread and one-thread
+  scheduler callbacks are no-ops, so nullptr works for them, threadpool
+  scheduler will change this for its THDs */
+  THD_event_functions *scheduler{nullptr};
   /**
     Hash for user variables.
     User variables are per session,
@@ -1593,6 +1638,17 @@ class THD : public MDL_context_owner,
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
 
+  /* Do not set socket timeouts for wait_timeout (used with threadpool) */
+  bool skip_wait_timeout{false};
+
+  inline ulong get_wait_timeout(void) const noexcept {
+    if (in_active_multi_stmt_transaction() &&
+        kill_idle_transaction_timeout > 0 &&
+        kill_idle_transaction_timeout < variables.net_wait_timeout)
+      return kill_idle_transaction_timeout;
+    return variables.net_wait_timeout;
+  }
+
   /**
     Used by fill_status() to avoid acquiring LOCK_status mutex twice
     when this function is called recursively (e.g. queries
@@ -2052,6 +2108,8 @@ class THD : public MDL_context_owner,
   void set_transaction(Transaction_ctx *transaction_ctx);
 
   Global_read_lock global_read_lock;
+
+  Global_backup_lock backup_tables_lock{MDL_key::BACKUP_TABLES};
 
   Vio *active_vio = {nullptr};
 
@@ -3915,7 +3973,7 @@ class THD : public MDL_context_owner,
     return copy_db_to(const_cast<char const **>(p_db), p_db_length);
   }
 
-  thd_scheduler scheduler;
+  thd_scheduler event_scheduler;
 
   /**
     Get resource group context.

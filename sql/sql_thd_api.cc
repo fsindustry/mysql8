@@ -84,7 +84,7 @@ using std::min;
   @retval               Scheduler data object on THD
 */
 
-void *thd_get_scheduler_data(THD *thd) { return thd->scheduler.data; }
+void *thd_get_scheduler_data(THD *thd) { return thd->event_scheduler.data; }
 
 /**
   Set reference to Scheduler data object for THD object
@@ -94,7 +94,7 @@ void *thd_get_scheduler_data(THD *thd) { return thd->scheduler.data; }
 */
 
 void thd_set_scheduler_data(THD *thd, void *data) {
-  thd->scheduler.data = data;
+  thd->event_scheduler.data = data;
 }
 
 /**
