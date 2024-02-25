@@ -4455,6 +4455,13 @@ class handler {
   Item *pushed_idx_cond;
   uint pushed_idx_cond_keyno; /* The index which the above condition is for */
 
+  // started by fzx @20231207 about offset pushdown
+  /**
+   * store offset value pushed down from server layer
+   */
+  ha_rows offset_limit_cnt;
+  // ended by fzx @20231207 about offset pushdown
+
   /**
     next_insert_id is the next value which should be inserted into the
     auto_increment column: in a inserting-multi-row statement (like INSERT
@@ -4607,6 +4614,11 @@ class handler {
         pushed_cond(nullptr),
         pushed_idx_cond(nullptr),
         pushed_idx_cond_keyno(MAX_KEY),
+
+        // started by fzx @20231207 about offset pushdown
+        offset_limit_cnt(0),
+        // ended by fzx @20231207 about offset pushdown
+
         next_insert_id(0),
         insert_id_for_cur_row(0),
         auto_inc_intervals_count(0),

@@ -101,8 +101,19 @@ bool LimitOffsetIterator::Init() {
     return true;
   }
   if (m_offset > 0) {
-    m_seen_rows = m_limit;
-    m_needs_offset = true;
+    // started by fzx @20231207 about offset pushdown
+    // If the offset clause needs to be pushed down to the engine layer, then the
+    //  server layer does not need to skip the number of rows specified by offset.
+    Query_expression *unit = thd()->lex->unit;
+    if (m_join && m_join->pushed_offset && unit && unit->select_limit_cnt > 0 && unit->offset_limit_cnt > 0) {
+      m_seen_rows = 0;
+      m_limit = m_limit - m_offset;
+      m_needs_offset = false;
+    } else {
+      m_seen_rows = m_limit;
+      m_needs_offset = true;
+    }
+    // ended by fzx @20231207 about offset pushdown
   } else {
     m_seen_rows = 0;
     m_needs_offset = false;

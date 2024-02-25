@@ -120,12 +120,15 @@ class LimitOffsetIterator final : public RowIterator {
       offset or limit.
    */
   LimitOffsetIterator(THD *thd, unique_ptr_destroy_only<RowIterator> source,
-                      ha_rows limit, ha_rows offset, bool count_all_rows,
+                      ha_rows limit, ha_rows offset, JOIN *join, bool count_all_rows,
                       bool reject_multiple_rows, ha_rows *skipped_rows)
       : RowIterator(thd),
         m_source(std::move(source)),
         m_limit(limit),
         m_offset(offset),
+        // started by fzx @20231207 about offset pushdown
+        m_join(join),
+        // ended by fzx @20231207 about offset pushdown
         m_count_all_rows(count_all_rows),
         m_reject_multiple_rows(reject_multiple_rows),
         m_skipped_rows(skipped_rows) {
@@ -161,7 +164,11 @@ class LimitOffsetIterator final : public RowIterator {
    */
   bool m_needs_offset;
 
-  const ha_rows m_limit, m_offset;
+  // started by fzx @20231207 about offset pushdown
+  ha_rows m_limit;
+  const ha_rows m_offset;
+  const JOIN *m_join;
+  // ended by fzx @20231207 about offset pushdown
   const bool m_count_all_rows;
   const bool m_reject_multiple_rows;
   ha_rows *m_skipped_rows;

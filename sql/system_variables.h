@@ -568,6 +568,11 @@ struct System_status_var {
   /* Number of statements sent from the client. */
   ulonglong questions;
 
+  // started by fzx @20231207 about offset pushdown
+  /* How many times has the offset been pushed down */
+  ulonglong offset_pushdown_count;
+  // ended by fzx @20231207 about offset pushdown
+
   /// How many queries have been executed on a secondary storage engine.
   ulonglong secondary_engine_execution_count;
 

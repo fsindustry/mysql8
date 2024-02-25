@@ -208,7 +208,8 @@ static constexpr const unsigned long long OPTIMIZER_SWITCH_DEFAULT{
     OPTIMIZER_SWITCH_COND_FANOUT_FILTER | OPTIMIZER_SWITCH_DERIVED_MERGE |
     OPTIMIZER_SKIP_SCAN | OPTIMIZER_SWITCH_HASH_JOIN |
     OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX |
-    OPTIMIZER_SWITCH_DERIVED_CONDITION_PUSHDOWN};
+    OPTIMIZER_SWITCH_DERIVED_CONDITION_PUSHDOWN |
+    OPTIMIZER_SWITCH_OFFSET_PUSHDOWN};
 
 static constexpr const unsigned long MYSQLD_NET_RETRY_COUNT{10};
 
@@ -3423,6 +3424,9 @@ static const char *optimizer_switch_names[] = {
     "prefer_ordering_index",
     "hypergraph_optimizer",  // Deliberately not documented below.
     "derived_condition_pushdown",
+    // started by fzx @20231207 about offset pushdown
+    "offset_pushdown",
+    // ended by fzx @20231207 about offset pushdown
     "default",
     NullS};
 static Sys_var_flagset Sys_optimizer_switch(
@@ -3436,7 +3440,7 @@ static Sys_var_flagset Sys_optimizer_switch(
     " block_nested_loop, batched_key_access, use_index_extensions,"
     " condition_fanout_filter, derived_merge, hash_join,"
     " subquery_to_derived, prefer_ordering_index,"
-    " derived_condition_pushdown} and val is one of "
+    " derived_condition_pushdown, offset_pushdown} and val is one of "
     "{on, off, default}",
     HINT_UPDATEABLE SESSION_VAR(optimizer_switch), CMD_LINE(REQUIRED_ARG),
     optimizer_switch_names, DEFAULT(OPTIMIZER_SWITCH_DEFAULT), NO_MUTEX_GUARD,
@@ -7701,3 +7705,16 @@ static Sys_var_enum Sys_explain_format(
     SESSION_VAR(explain_format), CMD_LINE(OPT_ARG), explain_format_names,
     DEFAULT(static_cast<ulong>(Explain_format_type::TRADITIONAL)),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+// started by fzx @20231207 about offset pushdown
+static Sys_var_bool Sys_enable_offset_pushdown(
+    "enable_offset_pushdown",
+    "Whether offset pushdown is enabled",
+    GLOBAL_VAR(opt_enable_offset_pushdown),
+    CMD_LINE(OPT_ARG),
+    DEFAULT(TRUE),
+    NO_MUTEX_GUARD,
+    NOT_IN_BINLOG,
+    ON_CHECK(0),
+    ON_UPDATE(0));
+// ended by fzx @20231207 about offset pushdown

@@ -922,7 +922,7 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         }
         iterator = NewIterator<LimitOffsetIterator>(
             thd, mem_root, std::move(job.children[0]), param.limit,
-            param.offset, param.count_all_rows, param.reject_multiple_rows,
+            param.offset, join, param.count_all_rows, param.reject_multiple_rows,
             send_records);
         break;
       }

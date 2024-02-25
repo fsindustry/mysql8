@@ -28,6 +28,8 @@
 */
 
 #include <sys/types.h>
+#include <cmath>
+#include <cfloat>
 
 #include "m_ctype.h" /* CHARSET_INFO */
 #include "my_inttypes.h"
@@ -129,5 +131,32 @@ template <class T>
 int compare_numbers(T val1, T val2) {
   return val1 < val2 ? -1 : (val1 == val2 ? 0 : 1);
 }
+
+// started by fzx @20231207 about offset pushdown
+
+/**
+  Compare two float numbers of the same type.
+  @param val1 the first float number
+  @param val2 the second float number
+  @retval -1 if val1 is less than val2,
+  @retval 0 if val1 is almost equal to val2,
+  @retval 1 if val1 is greater than val2
+*/
+template<typename T>
+int almost_equals(T val1, T val2) {
+  return val1 < val2 ? -1 : (val1 == val2 ? 0 : 1);
+}
+
+template<>
+inline int almost_equals(float val1, float val2) {
+  return fabs(val1 - val2) < FLT_EPSILON ? 0 : (val1 > val2 ? 1 : -1);
+}
+
+template<>
+inline int almost_equals(double val1, double val2) {
+  return fabs(val1 - val2) < DBL_EPSILON ? 0 : (val1 > val2 ? 1 : -1);
+}
+
+// ended by fzx @20231207 about offset pushdown
 
 #endif /* _my_compare_h */

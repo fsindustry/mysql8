@@ -234,6 +234,12 @@ class JOIN {
   bool streaming_aggregation{false};
   /// If query contains GROUP BY clause
   bool grouped;
+
+  // started by fzx @20231207 about offset pushdown
+  /// True if pushed down offset
+  bool pushed_offset{false};
+  // ended by fzx @20231207 about offset pushdown
+
   /// If true, send produced rows using query_result
   bool do_send_rows{true};
   /// Set of tables contained in query
@@ -765,6 +771,15 @@ class JOIN {
   */
   bool fts_index_access(JOIN_TAB *tab);
 
+  // started by fzx @20231207 about offset pushdown
+  /**
+   * check if statement query multiple tables
+   * @return true, query multiple tables;
+   *         false, query single table;
+   */
+  bool has_multi_tables();
+  // ended by fzx @20231207 about offset pushdown
+
   QEP_TAB::enum_op_type get_end_select_func();
   /**
      Propagate dependencies between tables due to outer join relations.
@@ -1099,6 +1114,12 @@ class Switch_ref_item_slice {
 
 bool uses_index_fields_only(Item *item, TABLE *tbl, uint keyno,
                             bool other_tbls_ok);
+
+// started by fzx @20231207 about offset pushdown
+bool is_cond_match_ranges(Item* item, TABLE* tbl, int keyno, AccessPath* ap);
+bool no_extra_where_conds(Item* item, TABLE* tbl, int keyno, AccessPath* ap);
+// ended by fzx @20231207 about offset pushdown
+
 bool remove_eq_conds(THD *thd, Item *cond, Item **retcond,
                      Item::cond_result *cond_value);
 bool optimize_cond(THD *thd, Item **conds, COND_EQUAL **cond_equal,

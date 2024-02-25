@@ -216,6 +216,10 @@ enum enum_slave_rows_search_algorithms {
 extern ulonglong slave_rows_search_algorithms_options;
 extern bool opt_require_secure_transport;
 
+// started by fzx @20231207 about offset pushdown
+extern bool opt_enable_offset_pushdown;
+// ended by fzx @20231207 about offset pushdown
+
 extern bool opt_replica_preserve_commit_order;
 
 #ifndef NDEBUG

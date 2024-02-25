@@ -84,6 +84,9 @@ enum opt_hints_enum {
   GROUP_INDEX_HINT_ENUM,
   ORDER_INDEX_HINT_ENUM,
   DERIVED_CONDITION_PUSHDOWN_HINT_ENUM,
+  // started by fzx @20231207 about offset pushdown
+  OFFSET_PUSHDOWN_HINT_ENUM,
+  // ended by fzx @20231207 about offset pushdown
   MAX_HINT_ENUM
 };
 

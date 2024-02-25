@@ -1263,6 +1263,11 @@ bool opt_myisam_use_mmap = false;
 std::atomic<bool> offline_mode;
 uint opt_large_page_size = 0;
 uint default_password_lifetime = 0;
+
+// started by fzx @20231207 about offset pushdown
+bool opt_enable_offset_pushdown = 1;
+// ended by fzx @20231207 about offset pushdown
+
 bool password_require_current = false;
 std::atomic<bool> partial_revokes;
 bool opt_partial_revokes;  // Initialized through Sys_var
@@ -9782,6 +9787,10 @@ SHOW_VAR status_vars[] = {
     {"Queries", (char *)&show_queries, SHOW_FUNC, SHOW_SCOPE_ALL},
     {"Questions", (char *)offsetof(System_status_var, questions),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
+    // started by fzx @20231207 about offset pushdown
+    {"Offset_pushdown", (char *)offsetof(System_status_var, offset_pushdown_count),
+     SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
+    // ended by fzx @20231207 about offset pushdown
     {"Secondary_engine_execution_count",
      (char *)offsetof(System_status_var, secondary_engine_execution_count),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},

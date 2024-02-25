@@ -4426,6 +4426,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   byte *next_buf = nullptr;
   bool spatial_search = false;
   ulint end_loop = 0;
+  bool is_sec_idx_invisible = false;
 
   rec_offs_init(offsets_);
 
@@ -4485,6 +4486,10 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     prebuilt->n_fetch_cached = 0;
     prebuilt->fetch_cache_first = 0;
     prebuilt->m_end_range = false;
+    // started by fzx @20231207 about offset pushdown
+    prebuilt->n_offset_rows = 0;
+    // ended by fzx @20231207 about offset pushdown
+
     if (record_buffer != nullptr) {
       record_buffer->reset();
     }
@@ -4513,6 +4518,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       prebuilt->n_fetch_cached = 0;
       prebuilt->fetch_cache_first = 0;
       prebuilt->m_end_range = false;
+      // started by fzx @20231207 about offset pushdown
+      prebuilt->n_offset_rows = 0;
+      // ended by fzx @20231207 about offset pushdown
 
       /* A record buffer is not used for scroll cursors.
       Otherwise, it would have to be reset here too. */
@@ -5324,6 +5332,7 @@ rec_loop:
             err = DB_RECORD_NOT_FOUND;
             goto idx_cond_failed;
           case ICP_MATCH:
+            is_sec_idx_invisible = true;
             goto requires_clust_rec;
         }
 
@@ -5389,6 +5398,29 @@ rec_loop:
     case ICP_MATCH:
       break;
   }
+
+  // started by fzx @20231207 about offset pushdown
+  /*
+    If the server layer pushed down offset, the number of rows specified in the
+    offset clause needs to be skipped here.
+  */
+  if (prebuilt->m_mysql_handler && prebuilt->m_mysql_handler->offset_limit_cnt > 0)
+  {
+    if (prebuilt->n_offset_rows < prebuilt->m_mysql_handler->offset_limit_cnt)
+    {
+      prebuilt->n_offset_rows++;
+      if (did_semi_consistent_read)
+      {
+        prebuilt->try_unlock(true);
+      }
+      goto next_rec;
+    }
+    else
+    {
+      prebuilt->m_mysql_handler->offset_limit_cnt = 0;
+    }
+  }
+  // ended by fzx @20231207 about offset pushdown
 
   /* Get the clustered index record if needed, if we did not do the
   search using the clustered index. */
@@ -5462,6 +5494,25 @@ rec_loop:
 
     result_rec = clust_rec;
     ut_ad(rec_offs_validate(result_rec, clust_index, offsets));
+
+    // started by fzx @20231207 about offset pushdown
+    /*
+      If the server layer pushed down offset, the number of rows specified in the
+      offset clause needs to be skipped here.
+    */
+    if (prebuilt->m_mysql_handler && prebuilt->m_mysql_handler->offset_limit_cnt > 0) {
+      if (prebuilt->n_offset_rows < prebuilt->m_mysql_handler->offset_limit_cnt && is_sec_idx_invisible) {
+        prebuilt->n_offset_rows++;
+        if (did_semi_consistent_read) {
+          prebuilt->try_unlock(true);
+        }
+        is_sec_idx_invisible = false;
+        goto next_rec;
+      } else {
+        prebuilt->m_mysql_handler->offset_limit_cnt = 0;
+      }
+    }
+    // ended by fzx @20231207 about offset pushdown
 
     if (prebuilt->idx_cond) {
       /* Convert the record to MySQL format. We were
